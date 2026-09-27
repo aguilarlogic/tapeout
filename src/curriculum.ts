@@ -1,0 +1,158 @@
+// The campaign: six acts that take a player from electrons to architecture. Every lesson, lab and
+// review lives here, in the order TAPEOUT recommends them.
+import { SCENARIOS } from './games/coverage/scenarios';
+import { LOGIC_LEVELS } from './games/logic/levels';
+import { PCB_LEVELS } from './games/pcb/levels';
+import { DEBUG_LEVELS, RTL_LEVELS } from './games/rtl/levels';
+import { TIMING_LEVELS } from './games/timing/levels';
+import { UVM_PUZZLES } from './games/uvm/puzzles';
+import { FINAL_ID, FINAL_XP, findLesson } from './lessons';
+import { levelRecord, profile } from './state';
+
+export type ModKind = 'lesson' | 'logic' | 'cmos' | 'rtl' | 'debug' | 'cov' | 'uvm' | 'sta' | 'pcb' | 'drills' | 'final';
+
+export interface Module {
+  id: string;
+  kind: ModKind;
+  title: string;
+  concept: string;
+  xp: number;
+  route: string;
+}
+export interface Chapter { name: string; modules: Module[] }
+export interface Act { id: string; n: number; name: string; tagline: string; region: string; chapters: Chapter[] }
+
+export const KIND_LABEL: Record<ModKind, string> = {
+  lesson: 'Lesson', logic: 'Logic lab', cmos: 'Transistor lab', rtl: 'Verilog', debug: 'Bug hunt', cov: 'Coverage',
+  uvm: 'UVM', sta: 'Timing', pcb: 'Board', drills: 'Interview', final: 'Final review',
+};
+
+/** The desktop app a module opens in. */
+export const KIND_APP: Record<ModKind, string> = {
+  lesson: 'terminal', logic: 'Logic Lab', cmos: 'Logic Lab', rtl: 'Verilog IDE', debug: 'Verilog IDE', cov: 'Coverage',
+  uvm: 'UVM Builder', sta: 'Timing', pcb: 'Board Router', drills: 'Flashcards', final: 'terminal',
+};
+
+const lesson = (id: string): Module => {
+  const l = findLesson(id);
+  if (!l) throw new Error(`unknown lesson ${id}`);
+  return { id, kind: 'lesson', title: l.title, concept: l.concept, xp: l.xp, route: `#/learn/${id}` };
+};
+const mods = <T extends { id: string; title: string; concept: string; xp: number }>(xs: T[], kind: ModKind, prefix: string, only?: (x: T) => boolean): Module[] =>
+  xs.filter(only ?? (() => true)).map((x) => ({ id: x.id, kind, title: x.title, concept: x.concept, xp: x.xp, route: `#/${prefix}/${x.id}` }));
+const logic = (ids: string[]) => ids.map((id) => {
+  const l = LOGIC_LEVELS.find((x) => x.id === id)!;
+  return { id, kind: (l.mode === 'cmos' ? 'cmos' : 'logic') as ModKind, title: l.title, concept: l.concept, xp: l.xp, route: `#/logic/${id}` };
+});
+
+export const ACTS: Act[] = [
+  {
+    id: 'foundations', n: 1, name: 'Foundations', tagline: 'Numbers, circuits, the math and physics under every chip', region: 'STD CELLS',
+    chapters: [
+      { name: 'Numbers', modules: [lesson('bits'), lesson('twos')] },
+      { name: 'Circuits', modules: [lesson('ohm'), lesson('rc')] },
+      { name: 'Engineering math', modules: [lesson('calc'), lesson('linalg'), lesson('ode')] },
+      { name: 'Semiconductor physics', modules: [lesson('semi'), lesson('mosphys')] },
+      { name: 'Transistors', modules: [lesson('mos'), ...logic(['cmos-inv', 'cmos-nand', 'cmos-nor', 'cmos-and', 'cmos-aoi'])] },
+    ],
+  },
+  {
+    id: 'systems', n: 2, name: 'Systems & Software', tagline: 'C, C++, algorithms, compilers and operating systems', region: 'FIRMWARE',
+    chapters: [
+      { name: 'Programming', modules: [lesson('c'), lesson('cpp')] },
+      { name: 'Algorithms', modules: [lesson('dsa')] },
+      { name: 'Hardware/software interface', modules: [lesson('asm')] },
+      { name: 'Operating systems', modules: [lesson('os')] },
+    ],
+  },
+  {
+    id: 'digital', n: 3, name: 'Digital Design', tagline: 'Logic, state, Verilog, datapaths and clocking', region: 'CPU CORE',
+    chapters: [
+      { name: 'Logic', modules: [lesson('bool'), ...logic(['logic-not', 'logic-and', 'logic-or', 'logic-xor'])] },
+      { name: 'Building blocks', modules: [lesson('comb'), ...logic(['logic-mux', 'logic-half', 'logic-full'])] },
+      { name: 'Memory & state', modules: [lesson('seq'), ...logic(['logic-latch', 'logic-counter']), lesson('fsm')] },
+      { name: 'Verilog', modules: [lesson('verilog'), ...mods(RTL_LEVELS, 'rtl', 'rtl')] },
+      { name: 'Microarchitecture', modules: [lesson('alu')] },
+      { name: 'Clocks & resets', modules: [lesson('clk')] },
+    ],
+  },
+  {
+    id: 'impl', n: 4, name: 'VLSI & Implementation', tagline: 'Timing, circuits, power and the board', region: 'CLOCKS · PHY',
+    chapters: [
+      { name: 'Static timing', modules: [lesson('sta'), ...mods(TIMING_LEVELS, 'sta', 'sta')] },
+      { name: 'Circuit design', modules: [lesson('vlsi')] },
+      { name: 'Low power', modules: [lesson('power')] },
+      { name: 'Board', modules: [lesson('pcb'), ...mods(PCB_LEVELS, 'pcb', 'pcb')] },
+    ],
+  },
+  {
+    id: 'verif', n: 5, name: 'Verification & Test', tagline: 'Debug, coverage, UVM, assertions, formal and DFT', region: 'DV SIGNOFF',
+    chapters: [
+      { name: 'Debug', modules: [lesson('dv'), ...mods(DEBUG_LEVELS, 'debug', 'rtl')] },
+      { name: 'Coverage', modules: [lesson('crv'), ...mods(SCENARIOS, 'cov', 'cov')] },
+      { name: 'UVM', modules: [lesson('uvm'), ...mods(UVM_PUZZLES, 'uvm', 'uvm')] },
+      { name: 'Assertions & formal', modules: [lesson('sva'), lesson('formal')] },
+      { name: 'Design for test', modules: [lesson('dft')] },
+    ],
+  },
+  {
+    id: 'arch', n: 6, name: 'Architecture', tagline: 'Out-of-order cores, memory systems, interconnect and modeling', region: 'CACHE · NOC',
+    chapters: [
+      { name: 'Cores', modules: [lesson('pipe'), lesson('ooo')] },
+      { name: 'Memory hierarchy', modules: [lesson('cache'), lesson('coherence'), lesson('dram')] },
+      { name: 'Interconnect', modules: [lesson('bus'), lesson('noc'), lesson('serdes')] },
+      { name: 'Modeling', modules: [lesson('perf')] },
+      {
+        name: 'Tapeout', modules: [
+          { id: 'drills', kind: 'drills', title: 'Interview Gauntlet', concept: 'spaced-repetition interview questions', xp: 150, route: '#/drills' },
+          { id: FINAL_ID, kind: 'final', title: 'Tapeout Review', concept: 'questions from every act', xp: FINAL_XP, route: `#/learn/${FINAL_ID}` },
+        ],
+      },
+    ],
+  },
+];
+
+export const ALL_MODULES: Module[] = ACTS.flatMap((a) => a.chapters.flatMap((c) => c.modules));
+
+export interface Found { act: Act; chapter: Chapter; module: Module; index: number }
+
+export function findModule(id: string): Found | undefined {
+  for (const act of ACTS) for (const chapter of act.chapters) {
+    const module = chapter.modules.find((m) => m.id === id);
+    if (module) return { act, chapter, module, index: ALL_MODULES.indexOf(module) };
+  }
+  return undefined;
+}
+
+export const isDone = (m: Module) => !!levelRecord(m.id);
+
+export function actProgress(a: Act) {
+  const ms = a.chapters.flatMap((c) => c.modules);
+  const done = ms.filter(isDone).length;
+  return { done, total: ms.length, frac: done / ms.length };
+}
+
+/** Where a player should start, based on onboarding answers. */
+export function startAct(): number {
+  const p = profile();
+  if (!p || p.background === 'new') return 0;
+  if (p.background === 'student') return 2;
+  return { design: 2, verif: 4, pd: 3, board: 3, arch: 5, unsure: 2 }[p.goal];
+}
+
+/** The next unfinished module, starting at the player's entry act and wrapping around. */
+export function recommended(): Module | undefined {
+  const start = ACTS[startAct()].chapters[0].modules[0];
+  const i0 = ALL_MODULES.indexOf(start);
+  const order = [...ALL_MODULES.slice(i0), ...ALL_MODULES.slice(0, i0)];
+  return order.find((m) => !isDone(m));
+}
+
+export function neighbours(id: string): { prev?: Module; next?: Module } {
+  const i = ALL_MODULES.findIndex((m) => m.id === id);
+  return { prev: ALL_MODULES[i - 1], next: ALL_MODULES[i + 1] };
+}
+
+export function readiness(): number {
+  return Math.round((ALL_MODULES.filter(isDone).length / ALL_MODULES.length) * 100);
+}

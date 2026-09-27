@@ -1,3 +1,4 @@
+import { mentorSay } from '../../os/mentor';
 import { complete, levelRecord, loadDraft, saveDraft } from '../../state';
 import { h, svg, toast } from '../../ui/dom';
 import { celebrate, levelHeader, nextHref } from '../../ui/layout';
@@ -211,6 +212,7 @@ export function timingPage(id: string): HTMLElement {
     if (!rep.passed) {
       const why = rep.wns < 0 ? 'setup is still violated' : rep.whs < 0 ? 'hold is still violated' : rep.conflicts.length ? 'the pipeline is inconsistent' : 'you are over the area or leakage budget';
       toast(`Can't sign off: ${why}.`, 'err');
+      mentorSay(`Not yet: ${why}. Click the worst path in the table and read its report from the top.`, 'concerned');
       return;
     }
     const gained = complete(level.id, level.xp, rep.stars);

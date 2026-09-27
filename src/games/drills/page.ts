@@ -1,4 +1,5 @@
-import { load, updateCard } from '../../state';
+import { complete, load, updateCard } from '../../state';
+import { mentorSay } from '../../os/mentor';
 import { h } from '../../ui/dom';
 import { Card, CARDS, DECKS } from './cards';
 
@@ -19,7 +20,7 @@ export function drillsPage(deckParam?: string): HTMLElement {
     const all = mastery();
     root.replaceChildren(
       h('header', { class: 'level-head' },
-        h('nav', { class: 'crumbs' }, h('a', { href: '#/' }, 'Home'), ' / Interview Prep'),
+        h('nav', { class: 'crumbs' }, h('a', { href: '#/map' }, 'Map'), ' / Interview Prep'),
         h('div', { class: 'title-row' }, h('h2', null, 'Interview Prep'))),
       h('p', { class: 'lede' }, 'Spaced repetition: cards you miss come back in a minute, cards you know come back in 1, 3, 7, then 21 days. A card counts as mastered after three correct answers in a row.'),
       h('div', { class: 'deck-grid' },
@@ -53,12 +54,16 @@ export function drillsPage(deckParam?: string): HTMLElement {
       ask(session[i], (ok) => { if (ok) right++; i++; show(); }, i, session.length, deck);
     };
     const summary = () => {
+      const frac = right / session.length;
+      const gained = complete('drills', 150, frac >= 0.9 ? 3 : frac >= 0.7 ? 2 : 1);
+      mentorSay(frac >= 0.9 ? `${right} of ${session.length}. Interviewers would be impressed, {name}.` : `${right} of ${session.length}. The misses come back soon: that is how they stick.`, frac >= 0.9 ? 'proud' : 'happy');
       root.replaceChildren(
-        h('header', { class: 'level-head' }, h('nav', { class: 'crumbs' }, h('a', { href: '#/' }, 'Home'), ' / ', h('a', { href: '#/drills' }, 'Interview Prep')),
+        h('header', { class: 'level-head' }, h('nav', { class: 'crumbs' }, h('a', { href: '#/map' }, 'Map'), ' / ', h('a', { href: '#/drills', onclick: (e: Event) => { e.preventDefault(); home(); } }, 'Interview Prep')),
           h('div', { class: 'title-row' }, h('h2', null, 'Session complete'))),
         h('div', { class: 'panel center' },
           h('p', { class: 'big' }, `${right} / ${session.length} correct`),
           h('p', { class: 'dim' }, right === session.length ? 'Flawless. Those cards move up a box.' : 'Missed cards will come back soon - that is the point.'),
+          gained ? h('p', { class: 'gain' }, `+${gained} XP`) : null,
           h('div', { class: 'modal-actions' },
             h('button', { class: 'btn ghost', onclick: home }, 'All decks'),
             h('button', { class: 'btn primary', onclick: () => start(deck) }, 'Another round'))),
@@ -94,7 +99,7 @@ export function drillsPage(deckParam?: string): HTMLElement {
     }, card.c[j]));
     root.replaceChildren(
       h('header', { class: 'level-head' },
-        h('nav', { class: 'crumbs' }, h('a', { href: '#/' }, 'Home'), ' / ', h('a', { href: '#/drills' }, 'Interview Prep'), ` / ${deck ? DECKS.find((d) => d.id === deck)!.name : 'Mixed'}`),
+        h('nav', { class: 'crumbs' }, h('a', { href: '#/map' }, 'Map'), ' / ', h('a', { href: '#/drills', onclick: (e: Event) => { e.preventDefault(); home(); } }, 'Interview Prep'), ` / ${deck ? DECKS.find((d) => d.id === deck)!.name : 'Mixed'}`),
         h('div', { class: 'title-row' }, h('h2', null, `Question ${n + 1} of ${total}`), h('span', { class: 'tag' }, deckName))),
       h('div', { class: 'panel card-q' }, h('p', { class: 'q' }, card.q), h('div', { class: 'choices' }, ...buttons), explain, h('div', { class: 'modal-actions' }, nextBtn)),
     );

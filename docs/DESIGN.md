@@ -12,9 +12,11 @@ apprenticeship. There is no Duolingo or Factorio for it. **Tapeout** is a browse
 - You don't read about timing closure, you **close timing** on a netlist with a real (miniature) static timing analyzer.
 - You don't memorize "keep the return path unbroken", you **route a board** and the DRC tells you when you've cut the plane under a clock.
 
-The meta-story: you join a chip startup as an intern. Every level you sign off fills in a region of your first chip's
-die. When every region is signed off, your chip is ready to tape out — and the game points you at real tools (and
-[Tiny Tapeout](https://tinytapeout.com)) to do it for real.
+The meta-story: you boot an old engineering workstation, **TAPE-OS**, and meet **TAPEOUT**, the AI that lives in it.
+TAPEOUT asks your name and what you know, then trains you from electrons to out-of-order cores. It teaches in the
+terminal and, when it is time to practise, pops open windows on the desktop: labs, simulators, minigames. Every
+module you sign off lights up a block of your chip's die. When every block is lit, your chip is ready to tape out, and
+the game points you at real tools (and [Tiny Tapeout](https://tinytapeout.com)) to do it for real.
 
 ### Design pillars
 
@@ -27,6 +29,27 @@ die. When every region is signed off, your chip is ready to tape out — and the
 4. **Industry-shaped curriculum.** Tracks map to job roles (design, verification, physical design, hardware/board) and to
    what interviews actually ask.
 5. **Zero install.** Runs entirely in the browser, offline, no accounts. Progress lives in localStorage.
+
+### The experience: a mentor in a terminal
+
+- **TAPEOUT is a character, not a menu.** It greets you, asks your name, background (new / student / industry) and goal
+  (design, verification, physical design, board, architecture), and picks your starting act. It remembers you:
+  "Welcome back, Ada. Next up: Caches and the Memory Wall."
+- **Lessons are conversations.** TAPEOUT types explanations out (skippable; speed is a preference), draws ASCII
+  diagrams, and asks questions you answer by typing. Answers are parsed the way engineers write them: `0x1F`, `8'h1f`,
+  `4.7k`, `2500ps`, `1e4`, boolean expressions checked by truth table (`a'b + ab'` passes for XOR). Wrong answers get
+  a hint, then a second try, then the answer and the reasoning. You can ask back mid-lesson (`what is a TLB?`).
+- **The AI opens windows.** Labs (Verilog IDE, Logic Lab, Timing, Board Router, Coverage, UVM Builder), the map and
+  flashcards are windows on a desktop with a taskbar and start menu. Minigames pop open in the middle of lessons
+  ("Let me pull up a little toy I made...") and the lesson waits for you to finish.
+- **TAPEOUT follows you into the labs.** A speech bubble reacts to your runs: the first waveform mismatch, a DRC error,
+  a timing violation, the hint you asked for, the star rating when you sign off. Everything it says is also logged in
+  the terminal.
+- **A face with moods.** The avatar is a small chip with LED eyes: neutral, happy, excited, thinking, concerned, proud,
+  wink. It blinks, and its mouth moves while it types.
+- **A real shell.** `help`, `next`, `map`, `ls 3`, `learn cache`, `play mesi`, `quiz`, `what is metastability`,
+  `status`, `speed fast`, `name`, `clear`, plus a few easter eggs (`sudo`, `make`, `vim`). Unknown input is looked up in
+  the glossary before TAPEOUT admits it does not know.
 
 ## 2. Target players
 
@@ -52,11 +75,62 @@ die. When every region is signed off, your chip is ready to tape out — and the
  sign off → stars (quality) → XP → rank → die region fills in
 ```
 
-Every track follows the same loop; only the "build" and "check" differ.
+Every lab follows the same loop; only the "build" and "check" differ. Lessons wrap it in a conversation:
 
-## 4. Tracks and mechanics
+```
+ TAPEOUT explains (typed out, ASCII diagram) ─► asks (typed answer / choice) ─► hint ─► retry ─► reasoning
+        │                                           │
+        └─ opens a minigame window mid-lesson ◄─────┘            stars = first-try answers
+```
 
-### 4.1 RTL Design (Design Engineer) — *built*
+## 4. Curriculum: fundamentals to mastery
+
+Six acts, each a block of the chip. Everything is open (you can jump anywhere); TAPEOUT recommends a path based on
+onboarding and always offers the next unfinished module.
+
+| Act | Chapters | Modules |
+| --- | --- | --- |
+| 1 · Foundations | Numbers · Circuits · Engineering math · Semiconductor physics · Transistors | 10 lessons, 5 transistor labs |
+| 2 · Systems & Software | Programming · Algorithms · Hardware/software interface · Operating systems | 5 lessons |
+| 3 · Digital Design | Logic · Building blocks · Memory & state · Verilog · Microarchitecture · Clocks & resets | 6 lessons, 9 gate labs, 14 Verilog labs |
+| 4 · VLSI & Implementation | Static timing · Circuit design · Low power · Board | 4 lessons, 5 STA labs, 5 PCB labs |
+| 5 · Verification & Test | Debug · Coverage · UVM · Assertions & formal · Design for test | 6 lessons, 7 bug hunts, 2 coverage, 3 UVM |
+| 6 · Architecture | Cores · Memory hierarchy · Interconnect · Modeling · Tapeout | 9 lessons, interview gauntlet, final review |
+
+### Syllabus coverage
+
+Where each topic of a competitive semiconductor engineer's syllabus is taught (L = terminal lesson, lab = hands-on
+window, game = minigame):
+
+| Area | Topic | Where |
+| --- | --- | --- |
+| Math & science | Multivariable calculus: partials, gradients, multiple integrals, div/curl/Stokes, optimization, Lagrange | L `calc` |
+| | Linear algebra: nodal analysis, transformations, determinants, eigenvalues, LU, SVD, independence | L `linalg` |
+| | ODEs (RC, RLC, damping, numerical integration) and PDEs (diffusion, wave, telegrapher) | L `ode`, L `rc`, game RC Scope |
+| | Semiconductor physics: band gaps, doping, mass action, PN junctions, mobility | L `semi` |
+| | MOSFET physics, short-channel effects (velocity saturation, DIBL, roll-off), leakage mechanisms, FinFET/GAA | L `mosphys`, L `mos`, 5 CMOS labs |
+| CS & systems | Procedural C (pointers, bit manipulation, volatile, memory, UB) and OO C++ (virtual dispatch, RAII, templates, move) | L `c`, L `cpp` |
+| | Data structures & algorithms, Big-O, graph algorithms in EDA | L `dsa` |
+| | Hardware/software interface: RISC-V assembly, compiler pipeline, linker/loader, ABI, endianness | L `asm` |
+| | Operating systems: scheduling, virtual memory and paging, concurrency and deadlock, I/O (polling/IRQ/DMA) | L `os` |
+| Digital design | Boolean algebra, combinational and sequential logic, latches, flip-flops, FSMs | L `bool` `comb` `seq` `fsm`, 9 gate labs, games Truth Table and Flip-Flop Trace |
+| | Verilog / SystemVerilog RTL | L `verilog`, 14 RTL labs |
+| | Microarchitecture: ALUs and flags, carry-lookahead/prefix adders, multipliers (Booth, Wallace), control, pipelines | L `alu`, adder/FIFO RTL labs |
+| | Clocking & resets: clock trees, skew/jitter, reset synchronizers, CDC, MTBF, Gray codes, async FIFOs | L `clk`, Gray/FIFO RTL labs |
+| VLSI | STA: setup/hold, skew, jitter, critical paths, corners, false and multicycle paths (SDC) | L `sta`, 5 timing labs |
+| | Circuit design: inverter VTC and noise margins, parasitics, RC and Elmore delay, logical effort, DRC/LVS | L `vlsi` |
+| | Low power: αCV²f, clock gating, power gating, multi-voltage, DVFS | L `power` |
+| Verification & test | Testbench architecture, constrained random, functional coverage | L `dv` `crv`, bug hunts, coverage labs |
+| | UVM, SVA, formal (model checking, BMC, assumptions, LEC) | L `uvm` `sva` `formal`, UVM labs |
+| | DFT: fault models, scan chains, ATPG, BIST (MBIST/LBIST), JTAG | L `dft` |
+| Architecture | Advanced pipelining, superscalar, OoO, register renaming, branch prediction, speculation (Spectre) | L `pipe` `ooo`, game Branch Predictor |
+| | Memory hierarchy: caches, TLBs, line states, MESI/MOESI, consistency models, DDR5, HBM, memory controllers | L `cache` `coherence` `dram`, games Cache Sim and Coherence Lab |
+| | Interconnects: bus topologies, AXI, flow control, NoCs, SerDes, PCIe, CXL | L `bus` `noc` `serdes`, game Handshake |
+| | Modeling: discrete-event simulation, cycle-accurate vs approximate models, gem5, benchmarks, Amdahl, Little, roofline | L `perf` |
+
+## 5. Mechanics
+
+### 5.1 RTL Design (Design Engineer) — *built*
 
 - **Mechanic:** a code editor with Verilog/SystemVerilog highlighting. "Run" compiles the player's module with the
   built-in simulator and runs it cycle-by-cycle next to a golden reference on the same stimulus. The harness compares
@@ -69,7 +143,7 @@ Every track follows the same loop; only the "build" and "check" differ.
   decoder → register with enable → BCD counter → shift register → edge detector (Mealy) → overlapping sequence detector
   (FSM) → popcount (loop unrolling) → Gray code (CDC motivation) → synchronous FIFO (capstone).
 
-### 4.2 Verification (DV Engineer) — *built*
+### 5.2 Verification (DV Engineer) — *built*
 
 Three mechanics that mirror the three halves of the job:
 
@@ -87,7 +161,7 @@ Three mechanics that mirror the three halves of the job:
    subscriber/DUT), order the phases, and fill in the blanks of a real driver/sequence/test with objections.
    Stars = fewer wrong attempts.
 
-### 4.3 Timing Closure (Physical Design / STA Engineer) — *built*
+### 5.3 Timing Closure (Physical Design / STA Engineer) — *built*
 
 - **Mechanic:** a schematic of flops and gates with delays. Click a gate to change drive strength (X1/X2/X4) or
   threshold voltage (SVT/LVT); click a flop to adjust clock latency (useful skew); click a wire to add hold buffers or a
@@ -99,7 +173,7 @@ Three mechanics that mirror the three halves of the job:
   skew → useful skew (fixes setup, creates hold) → pipelining with latency balance.
 - **Stars:** meet timing at or under the par area.
 
-### 4.4 Board Design (Hardware / PCB Engineer) — *built*
+### 5.4 Board Design (Hardware / PCB Engineer) — *built*
 
 - **Mechanic:** a 2-layer grid router. Drag from a pad to draw copper on the current layer; drop vias; move parts that
   are placeable. Ratsnest lines show missing connections.
@@ -110,44 +184,92 @@ Three mechanics that mirror the three halves of the job:
   USB differential pair with serpentine length matching.
 - **Stars:** DRC clean + total length at par + vias at par.
 
-### 4.5 Interview Prep (every role) — *built*
+### 5.5 Interview Prep (every role) — *built*
 
 60 multiple-choice cards across 7 decks (digital logic & CDC, Verilog/SV, verification/UVM/SVA, STA & PD, CMOS, PCB & SI,
 architecture & protocols). Choices are shuffled, every card has an interview-quality explanation, and a Leitner scheduler
 (1 minute / 1 / 3 / 7 / 21 days) brings back what you miss. Mastered = box ≥ 3.
 
-## 5. Progression
+### 5.6 Terminal lessons (41) — *built*
+
+- Authored as data: `say`, `art`, `ask` (typed answer with a checker), `mc`, `gen` (a function of an RNG that returns a
+  fresh question each run, so lessons are replayable) and `app` (open a minigame and wait for it).
+- Checkers: integers in any base, binary/hex with prefixes, physical quantities with SI prefixes and units
+  (`qty(1592, 'Hz')` accepts `1.59k`), free text with alternatives, and boolean expressions compared by truth table.
+- Stars: 3 for no first-try misses, 2 for up to two, 1 otherwise. Hints count as a miss. Every lesson ends with a
+  recap card.
+- **Final review:** 15 questions drawn from 15 different lessons, no hints; 60% to pass, 90% for 3 stars.
+
+### 5.7 Logic Lab (14 levels) — *built*
+
+- A schematic editor: parts bin, drag to place, drag from pin to pin to wire, click input switches, live signal
+  colours (green = 1, blue = 0, red = unknown or short, dashed = floating), a live truth table and a DFF clock button.
+- **One solver for gates and transistors.** Pins are unioned into nets; each iteration evaluates gate outputs, merges
+  nets through conducting transistors (NMOS on at 1, PMOS on at 0) and resolves each group's drivers with 4-state
+  values. It detects shorts (VDD fighting GND), floating outputs and oscillating loops, and holds state through
+  feedback, so an SR latch built from two NANDs really remembers.
+- Levels: NOT/AND/OR/XOR from NANDs, a mux, half and full adders, an SR latch, a 2-bit counter with enable; then CMOS
+  inverter, NAND2, NOR2, AND2 (why it costs 6) and AOI21. Stars: parts at or under par.
+
+### 5.8 Minigames (9) — *built*
+
+Short, replayable, opened by TAPEOUT mid-lesson or from the arcade (`play`). Each awards XP once (by score) and keeps a
+personal best.
+
+| Game | Skill |
+| --- | --- |
+| Bit Flipper | binary and hex conversions against the clock |
+| Truth Table | reading boolean expressions |
+| Divider Designer | choosing E12 resistors for a target voltage |
+| RC Scope | tuning R and C to hit τ, cutoff or rise-time specs on a live plot |
+| Flip-Flop Trace | predicting Q for plain, enabled and reset flops from a timing diagram |
+| Cache Sim | calling hits and misses on a direct-mapped cache |
+| Branch Predictor | stepping a 2-bit saturating counter |
+| Coherence Lab | MESI state transitions for two cores |
+| Handshake | spotting AXI VALID/READY transfers on a waveform |
+
+## 6. Progression
 
 - **XP:** level base XP × (0.6 + 0.2 × stars): 80% / 100% / 120%. Only improvements award XP. Drill cards award XP per
   Leitner box.
-- **Ranks:** Intern → Junior Engineer (500) → Design Engineer (1500) → Senior (3000) → Staff (4500) → Principal (6000) →
-  Fellow (7500). Promotion is announced on the completion modal.
-- **The die:** the home screen shows your chip's floorplan. CPU core = RTL, DV signoff = Verification, Clocks = STA,
-  SRAM = Interview Prep, the package pad ring = Board Design. Standard-cell rows light up with progress.
-- **Tapeout readiness %:** the average completion of all tracks.
+- **Ranks:** Intern → Junior Engineer (1000) → Design Engineer (3000) → Senior (6000) → Staff (9000) → Principal
+  (11500) → Fellow (13500), out of about 16k available. TAPEOUT announces promotions.
+- **The die:** the map shows your chip's floorplan with one block per act (standard cells, firmware, CPU core,
+  clocks/PHY, DV signoff, cache/NoC). Standard-cell rows light up as modules are signed off; the pad ring tracks overall
+  readiness.
+- **Tapeout readiness %:** the share of all 93 modules signed off.
 
-## 6. Technical architecture
+## 7. Technical architecture
 
 ```
 src/
+  os/         TAPE-OS: desktop + router, window manager, taskbar, avatar (moods), mentor bubble, map, game launcher
+  term/       terminal widget (async say/ask/choose), shell (commands, onboarding, lesson runner)
+  lessons/    41 lessons as data, answer checkers, final exam builder
+  minigames/  pure game logic (tested) + window UIs
+  curriculum.ts  6 acts → chapters → modules, recommendations, progress
+  glossary.ts    110+ terms TAPEOUT can define (typo tolerant)
   sim/        Verilog subset: lexer → parser (AST) → Design (elaboration, lint, event scheduling)
               harness.ts: player vs golden co-simulation, mismatch report, seeded PRNG
   games/
+    logic/    4-state net solver (gates + switch-level CMOS) + levels + schematic editor
     rtl/      levels (lesson, starter, golden, stimulus, hints) + editor/waveform page
     coverage/ scenarios (knobs, bins, model DUT with planted bug) + phase builder page
     uvm/      puzzle data (arch / order / code) + page
     timing/   sta.ts (mini STA engine) + levels + schematic page
     pcb/      board.ts (routing model + DRC) + levels + canvas page
     drills/   cards + Leitner session page
-  ui/         dom helpers, editor, waveform canvas, layout (header, completion modal), home
-  tracks.ts   track registry (ordering, routes, next-level navigation)
-  state.ts    progress + drafts in localStorage
+  ui/         dom helpers, editor, waveform canvas, level header, completion modal
+  state.ts    profile, prefs, progress, drafts, best scores in localStorage
 ```
 
-- **No framework, no runtime dependencies.** Vanilla TypeScript + Vite. The bundle is ~60 kB gzipped.
+- **No framework, no runtime dependencies.** Vanilla TypeScript + Vite; about 160 kB gzipped, most of it lesson text.
 - **Every engine is pure and unit-tested**, independent of the DOM. Tests prove, for every level, that the reference
-  solution passes with the maximum star rating and that the lesson can't be bypassed (e.g. timing levels are brute-forced
-  over all sizings; coverage levels fail under pure random across seeds; each bug-hunt starter compiles and fails).
+  solution passes with the maximum star rating and that the lesson can't be bypassed; that every lesson question
+  (including randomized ones, over 60 seeds) accepts its own answer; that every minigame target is achievable with
+  standard parts; and that the curriculum covers every lesson exactly once.
+- **The terminal is async.** Lessons read top to bottom (`await t.say(...); const v = await t.ask(...)`). Navigating
+  elsewhere interrupts the pending prompt cleanly.
 
 ### The simulator
 
@@ -162,7 +284,7 @@ reported with teaching-oriented messages.
 **Known simplifications:** 2-state (no X/Z; registers start at 0), unsigned vectors (no `signed`), one module per
 file (no hierarchy), no functions/tasks/generate. These are called out in-game where they matter.
 
-## 7. Roadmap
+## 8. Roadmap
 
 ### Near term
 - **More RTL content:** round-robin arbiter, UART TX/RX, SPI master, async FIFO (with a two-clock harness), ALU with
@@ -174,24 +296,27 @@ file (no hierarchy), no functions/tasks/generate. These are called out in-game w
 - **Timing:** multicycle and false path constraints (SDC-like), OCV derates, clock gating checks.
 - **Board:** 4-layer stackups, impedance calculator mini-game, length tuning for DDR byte lanes, thermal vias.
 
-### New tracks
-- **Physical layout / custom design:** draw an inverter and a NAND2 in a Magic-like grid editor with DRC (spacing,
-  enclosure) and LVS against the schematic.
-- **Analog / mixed-signal:** interactive small-signal MOSFET sandbox, a SPICE-lite for RC and common-source stages,
-  comparator offset and sampling, PLL loop intuition.
-- **DFT:** scan chain insertion, stuck-at fault coverage, ATPG intuition, MBIST.
-- **Computer architecture:** pipeline hazard puzzles, cache hit-rate optimization, AXI handshake debugging.
+### More hands-on labs for the newer lessons
+- **Physical layout / custom design:** draw the CMOS gates from the transistor labs in a Magic-like grid editor with
+  DRC (spacing, enclosure) and LVS against the schematic.
+- **Analog / mixed-signal:** a SPICE-lite (nodal analysis + LU from the linear algebra lesson) for RC, RLC and
+  common-source stages; comparator offset and sampling; PLL loop intuition.
+- **DFT lab:** insert a scan chain, run ATPG on a small netlist, chase fault coverage.
+- **Architecture labs:** a pipeline diagram editor for hazards and forwarding, an OoO scheduler puzzle (rename table,
+  ROB), a set-associative cache tuner, a NoC router sandbox, and a tiny gem5-style model you can configure.
+- **Systems labs:** a RISC-V assembly sandbox on a small ISS, and a page-table walker.
 
 ### Platform
 - **Real toolchain mode:** compile Verilator or Icarus to WebAssembly, or add an optional backend, so players can run
   cocotb and full UVM testbenches and see real tool output.
-- **AI mentor:** a Claude-powered reviewer that reads the player's RTL and waveform and gives Socratic hints instead of
-  answers, and a mock-interview mode that asks follow-up questions.
+- **Live AI mode for TAPEOUT:** today TAPEOUT is fully scripted and offline (with a glossary for open questions). An
+  optional Claude-powered mode could let it answer free-form questions, review the player's RTL and waveforms with
+  Socratic hints, and run mock interviews with follow-up questions.
 - **Accounts and sync, daily challenges, leaderboards** for area/length/transaction-count optimizations.
 - **Career mode:** multi-level "projects" with a deadline and a spec change mid-way, mirroring real schedules.
 - **Tiny Tapeout export:** package a finished design into a Tiny Tapeout project template.
 
-## 8. Success metrics
+## 9. Success metrics
 
 - Level completion and retry rates (a good level has >70% eventual completion with 1–4 attempts).
 - Hint usage per level (spikes mean the brief needs work).

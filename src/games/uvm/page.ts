@@ -1,3 +1,4 @@
+import { mentorSay } from '../../os/mentor';
 import { complete, levelRecord } from '../../state';
 import { h, svg, toast } from '../../ui/dom';
 import { celebrate, levelHeader, nextHref } from '../../ui/layout';
@@ -12,7 +13,7 @@ export function uvmPage(id: string): HTMLElement {
     const gained = complete(pz.id, pz.xp, stars);
     celebrate(stars, gained, mistakes ? [`${mistakes} wrong attempt${mistakes > 1 ? 's' : ''} - a perfect run earns 3 stars.`] : [], nextHref(pz.id));
   };
-  const miss = () => { mistakes++; };
+  const miss = () => { mistakes++; if (mistakes === 3) mentorSay('Three misses. Think about who talks to whom: sequences make items, drivers drive pins, monitors only watch.', 'thinking'); };
 
   const body = pz.kind === 'arch' ? archView(pz, miss, finish) : pz.kind === 'order' ? orderView(pz, miss, finish) : codeView(pz, miss, finish);
 

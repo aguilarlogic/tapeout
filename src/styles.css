@@ -84,7 +84,6 @@ body {
   display: flex;
   flex-direction: column;
 }
-main { flex: 1; width: 100%; max-width: 1440px; margin: 0 auto; padding: 16px 20px 40px; }
 a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
 code, pre, kbd { font-family: var(--mono); font-size: 0.9em; }
@@ -99,14 +98,7 @@ h4 { margin-top: 1em; font-size: 0.8rem; text-transform: uppercase; letter-spaci
 .lede { color: var(--text-dim); max-width: 70ch; }
 
 /* ---------------------------------------------------------------- chrome */
-.topbar { position: sticky; top: 0; z-index: 20; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(8px); border-bottom: 1px solid var(--border); }
-.topbar-inner { max-width: 1440px; margin: 0 auto; padding: 10px 20px; display: flex; align-items: center; gap: 16px; }
-.logo { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 1.15rem; letter-spacing: 0.02em; color: var(--text); }
-.logo:hover { text-decoration: none; }
 .logo-mark { width: 18px; height: 18px; border-radius: 4px; background: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent); }
-.career { display: flex; align-items: center; gap: 10px; font-size: 0.9rem; }
-.rank-title { font-weight: 700; }
-.footer { border-top: 1px solid var(--border); padding: 14px 20px; display: flex; gap: 12px; align-items: center; justify-content: space-between; color: var(--text-dim); font-size: 0.85rem; flex-wrap: wrap; }
 
 .track { height: 6px; background: var(--panel-2); border-radius: 99px; overflow: hidden; flex: 1; min-width: 60px; }
 .track.small { width: 110px; flex: none; }
@@ -323,6 +315,7 @@ select.blank.wrong { border-color: var(--err); color: var(--err); }
 .deck-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; margin-top: 12px; }
 .deck { font: inherit; text-align: left; display: flex; flex-direction: column; gap: 6px; padding: 14px; border-radius: 12px; border: 1px solid var(--border); background: var(--panel); color: var(--text); cursor: pointer; }
 .deck:hover { border-color: var(--accent); }
+.deck .track { flex: none; width: 100%; }
 .card-q { max-width: 760px; }
 .card-q .q { font-size: 1.15rem; font-weight: 600; }
 .choices { display: flex; flex-direction: column; gap: 8px; }
@@ -335,15 +328,11 @@ select.blank.wrong { border-color: var(--err); color: var(--err); }
 .big { font-size: 2rem; font-weight: 800; margin: 8px 0; }
 
 /* ---------------------------------------------------------------- home */
-.hero { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 32px; align-items: center; padding: 24px 0 16px; }
-.hero h1 { font-size: clamp(2rem, 4vw, 3.1rem); letter-spacing: -0.02em; }
 .kicker { color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; font-size: 0.8rem; margin: 0 0 8px; }
-.hero-actions { display: flex; gap: 10px; flex-wrap: wrap; margin: 18px 0; }
 .ranks { display: flex; flex-wrap: wrap; gap: 4px; }
 .rank { font-size: 0.72rem; padding: 2px 8px; border-radius: 99px; border: 1px solid var(--border); color: var(--text-dim); }
 .rank.past { color: var(--text); }
 .rank.on { background: var(--gold); color: #1b1300; border-color: var(--gold); font-weight: 700; }
-.hero-die { display: flex; justify-content: center; }
 .die { width: 100%; max-width: 380px; height: auto; }
 .die .pkg { fill: var(--panel-2); stroke: var(--border); stroke-width: 2; }
 .die .pkg.done { stroke: var(--gold); }
@@ -356,26 +345,6 @@ select.blank.wrong { border-color: var(--err); color: var(--err); }
 .die .row.lit { fill: var(--accent); opacity: 0.85; }
 .die .blk-label { fill: var(--text-dim); font-size: 8.5px; font-family: var(--mono); letter-spacing: 0.04em; }
 .die .region:hover .blk { stroke: var(--accent); }
-.section-title { margin-top: 18px; }
-.track-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
-.track-card { display: flex; flex-direction: column; gap: 6px; padding: 16px; border-radius: 14px; border: 1px solid var(--border); background: var(--panel); color: var(--text); }
-.track-card:hover { border-color: var(--accent); text-decoration: none; }
-.track-card p { margin: 0; color: var(--text-dim); font-size: 0.9rem; flex: 1; }
-.tc-head { display: flex; justify-content: space-between; font-size: 1.1rem; }
-.role { font-size: 0.78rem; color: var(--accent); font-weight: 600; }
-.skills { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0; }
-.skill { font-size: 0.7rem; padding: 1px 7px; border-radius: 99px; background: var(--panel-2); color: var(--text-dim); }
-.track-card .track, .deck .track { flex: none; width: 100%; }
-.next-steps { margin-top: 20px; }
-.next-steps p { color: var(--text-dim); margin: 0; }
-.level-list { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 8px; max-width: 900px; }
-.level-list a { display: flex; align-items: center; gap: 14px; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--border); background: var(--panel); color: var(--text); }
-.level-list a:hover { border-color: var(--accent); text-decoration: none; }
-.level-list a.done { border-left: 4px solid var(--ok); }
-.level-list .num { font-family: var(--mono); color: var(--text-dim); }
-.lvl-main { display: flex; flex-direction: column; flex: 1; min-width: 0; }
-.lvl-main .dim { font-size: 0.85rem; }
-.kind { font-size: 0.72rem; text-transform: uppercase; color: var(--text-dim); letter-spacing: 0.05em; }
 
 /* ---------------------------------------------------------------- responsive */
 @media (max-width: 1180px) {
@@ -383,13 +352,10 @@ select.blank.wrong { border-color: var(--err); color: var(--err); }
   .pcb-grid > .brief, .sta-grid > .brief, .cov-grid > .brief { grid-column: 1 / -1; }
 }
 @media (max-width: 820px) {
-  main { padding: 12px 16px 32px; }
-  .level-grid, .pcb-grid, .sta-grid, .cov-grid, .hero { grid-template-columns: minmax(0, 1fr); }
+  .level-grid, .pcb-grid, .sta-grid, .cov-grid { grid-template-columns: minmax(0, 1fr); }
   .editor { height: 360px; }
   .wave-names { width: 96px; }
   .wave-values { display: none; }
-  .career .track.small { display: none; }
   .uvm-diagram { height: 460px; }
   .wire-label { display: none; }
-  .level-list a { flex-wrap: wrap; }
 }

@@ -1,3 +1,4 @@
+import { mentorSay } from '../../os/mentor';
 import { complete, levelRecord, loadDraft, saveDraft } from '../../state';
 import { h, toast } from '../../ui/dom';
 import { celebrate, levelHeader, nextHref } from '../../ui/layout';
@@ -78,6 +79,8 @@ export function pcbPage(id: string): HTMLElement {
     renderSide();
     if (!analysis.passed) {
       toast('DRC failed - fix the errors listed on the right.', 'err');
+      const first = analysis.issues.find((i) => i.severity === 'error') ?? analysis.issues[0];
+      mentorSay(first ? `DRC says: ${first.message}` : 'Some nets are still open. Follow the white ratsnest lines.', 'concerned');
       return;
     }
     const gained = complete(level.id, level.xp, analysis.stars);
@@ -347,7 +350,9 @@ export function pcbPage(id: string): HTMLElement {
 
   const onKey = (ev: KeyboardEvent) => {
     if (!document.body.contains(canvas)) { window.removeEventListener('keydown', onKey); return; }
-    if ((ev.target as HTMLElement)?.tagName === 'INPUT') return;
+    if (['INPUT', 'TEXTAREA', 'SELECT'].includes((ev.target as HTMLElement)?.tagName)) return;
+    const win = canvas.closest('.win');
+    if (win && !win.classList.contains('focused')) return; // another window has the keyboard
     if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'z') { ev.preventDefault(); doUndo(); return; }
     const k = ev.key.toLowerCase();
     if (k === 'r') setTool('route');

@@ -13,16 +13,30 @@ export interface CardRecord {
   correct: number;
 }
 
+export interface Profile {
+  name: string;
+  background: 'new' | 'student' | 'pro';
+  goal: 'design' | 'verif' | 'pd' | 'board' | 'arch' | 'unsure';
+  since: number;
+}
+
+export interface Prefs {
+  speed: 'slow' | 'normal' | 'fast' | 'instant';
+}
+
 export interface Progress {
   levels: Record<string, LevelRecord>;
   cards: Record<string, CardRecord>;
+  profile?: Profile;
+  prefs: Prefs;
+  best: Record<string, number>; // minigame high scores
 }
 
 const KEY = 'tapeout.progress.v1';
 let cache: Progress | null = null;
 
 function blank(): Progress {
-  return { levels: {}, cards: {} };
+  return { levels: {}, cards: {}, prefs: { speed: 'normal' }, best: {} };
 }
 
 export function load(): Progress {
@@ -30,6 +44,7 @@ export function load(): Progress {
   try {
     const raw = localStorage.getItem(KEY);
     cache = raw ? { ...blank(), ...JSON.parse(raw) } : blank();
+    cache!.prefs = { ...blank().prefs, ...cache!.prefs };
   } catch {
     cache = blank();
   }
@@ -94,12 +109,12 @@ export function totalXp(): number {
 
 export const RANKS = [
   { xp: 0, title: 'Intern' },
-  { xp: 500, title: 'Junior Engineer' },
-  { xp: 1500, title: 'Design Engineer' },
-  { xp: 3000, title: 'Senior Engineer' },
-  { xp: 4500, title: 'Staff Engineer' },
-  { xp: 6000, title: 'Principal Engineer' },
-  { xp: 7500, title: 'Fellow' },
+  { xp: 1000, title: 'Junior Engineer' },
+  { xp: 3000, title: 'Design Engineer' },
+  { xp: 6000, title: 'Senior Engineer' },
+  { xp: 9000, title: 'Staff Engineer' },
+  { xp: 11500, title: 'Principal Engineer' },
+  { xp: 13500, title: 'Fellow' },
 ];
 
 export function rank(xp = totalXp()) {
@@ -108,6 +123,39 @@ export function rank(xp = totalXp()) {
   const cur = RANKS[i];
   const next = RANKS[i + 1];
   return { title: cur.title, index: i, next, progress: next ? (xp - cur.xp) / (next.xp - cur.xp) : 1 };
+}
+
+export function profile(): Profile | undefined {
+  return load().profile;
+}
+
+export function setProfile(p: Profile) {
+  load().profile = p;
+  save();
+}
+
+/** The player's name, or a friendly fallback before onboarding. */
+export function playerName(): string {
+  return load().profile?.name ?? 'engineer';
+}
+
+export function prefs(): Prefs {
+  return load().prefs;
+}
+
+export function setPrefs(p: Partial<Prefs>) {
+  const s = load();
+  s.prefs = { ...s.prefs, ...p };
+  save();
+}
+
+/** Record a minigame score; returns true if it's a new personal best. */
+export function recordBest(game: string, score: number): boolean {
+  const s = load();
+  if ((s.best[game] ?? -1) >= score) return false;
+  s.best[game] = score;
+  save();
+  return true;
 }
 
 export function resetAll() {
