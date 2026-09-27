@@ -87,10 +87,10 @@ export class Shell {
     prof.background = (['new', 'student', 'pro'] as const)[bg];
     await t.say(['Perfect. Everybody starts somewhere, and zero is a great place to start.', 'Great, then you know the basics. We can move fast and fill the gaps.', 'Excellent. Then I will skip the pleasantries and aim for the hard stuff.'][bg], 'happy');
     await t.say('And what do you want to become?');
-    const goal = await t.choose(['Digital design engineer (RTL)', 'Verification engineer (DV)', 'Physical design / timing engineer', 'Hardware / board engineer', 'Computer architect', 'Not sure yet, show me everything']);
-    prof.goal = (['design', 'verif', 'pd', 'board', 'arch', 'unsure'] as const)[goal];
+    const goal = await t.choose(['Digital design engineer (RTL)', 'Verification engineer (DV)', 'Physical design / timing engineer', 'Hardware / board engineer', 'Computer architect', 'A specialist: analog, RF, memory, AI chips, security, quantum...', 'Not sure yet, show me everything']);
+    prof.goal = (['design', 'verif', 'pd', 'board', 'arch', 'special', 'unsure'] as const)[goal];
     setProfile(prof);
-    await t.say('Here is the plan. The curriculum has six acts, from electrons all the way up to out-of-order cores:');
+    await t.say('Here is the plan. Six core acts take you from electrons all the way up to out-of-order cores, and a seventh covers the specialist roles, from analog and RF to quantum computers:');
     this.printActs();
     const act = ACTS[startAct()];
     const first = recommended()!;
@@ -213,7 +213,7 @@ export class Shell {
 
   private printAct(arg: string) {
     const a = ACTS.find((x) => String(x.n) === arg || x.id === arg.toLowerCase() || x.name.toLowerCase().startsWith(arg.toLowerCase()));
-    if (!a) return this.term.print(`No act "${arg}". Acts are 1-6.`, 'err');
+    if (!a) return this.term.print(`No act "${arg}". Acts are 1-${ACTS.length}.`, 'err');
     this.term.print(`ACT ${a.n} · ${a.name.toUpperCase()}`, 'hl');
     for (const c of a.chapters) {
       this.term.block(h('div', { class: 'term-ch' }, h('div', { class: 'dim' }, `  ${c.name}`), ...c.modules.map((m) => {

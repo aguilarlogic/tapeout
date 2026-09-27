@@ -16,7 +16,7 @@ export interface CardRecord {
 export interface Profile {
   name: string;
   background: 'new' | 'student' | 'pro';
-  goal: 'design' | 'verif' | 'pd' | 'board' | 'arch' | 'unsure';
+  goal: 'design' | 'verif' | 'pd' | 'board' | 'arch' | 'special' | 'unsure';
   since: number;
 }
 

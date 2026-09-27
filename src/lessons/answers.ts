@@ -38,6 +38,8 @@ const UNIT_ALIASES: Record<string, string[]> = {
   s: ['s', 'sec', 'secs', 'second', 'seconds'],
   '%': ['%', 'percent'],
   x: ['x', 'times'],
+  K: ['k', 'kelvin'],
+  '°C': ['°c', 'c', 'degc', 'deg', 'degrees'],
   '': [''],
 };
 

@@ -1,5 +1,5 @@
-// The campaign: six acts that take a player from electrons to architecture. Every lesson, lab and
-// review lives here, in the order TAPEOUT recommends them.
+// The campaign: six core acts that take a player from electrons to architecture, then a seventh act of
+// specialist roles. Every lesson, lab and review lives here, in the order TAPEOUT recommends them.
 import { SCENARIOS } from './games/coverage/scenarios';
 import { LOGIC_LEVELS } from './games/logic/levels';
 import { PCB_LEVELS } from './games/pcb/levels';
@@ -110,6 +110,16 @@ export const ACTS: Act[] = [
       },
     ],
   },
+  {
+    id: 'roles', n: 7, name: 'Specializations', tagline: 'The roles beyond RTL and DV: analog, RF, physical design, memory, fab, AI, security, quantum', region: 'SPECIALTY IP',
+    chapters: [
+      { name: 'Circuits & signals', modules: [lesson('analog'), lesson('rf'), lesson('pmic'), lesson('sipi')] },
+      { name: 'Silicon & manufacturing', modules: [lesson('pnr'), lesson('sram'), lesson('fab'), lesson('pkg')] },
+      { name: 'Bring-up & production', modules: [lesson('postsi'), lesson('ate'), lesson('emu')] },
+      { name: 'Domain chips', modules: [lesson('npu'), lesson('hwsec'), lesson('fusa'), lesson('photonics')] },
+      { name: 'Quantum', modules: [lesson('qubit'), lesson('qctrl')] },
+    ],
+  },
 ];
 
 export const ALL_MODULES: Module[] = ACTS.flatMap((a) => a.chapters.flatMap((c) => c.modules));
@@ -136,6 +146,7 @@ export function actProgress(a: Act) {
 export function startAct(): number {
   const p = profile();
   if (!p || p.background === 'new') return 0;
+  if (p.goal === 'special') return 6;
   if (p.background === 'student') return 2;
   return { design: 2, verif: 4, pd: 3, board: 3, arch: 5, unsure: 2 }[p.goal];
 }

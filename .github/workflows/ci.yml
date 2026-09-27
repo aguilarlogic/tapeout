@@ -16,3 +16,8 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+      # The whole game is one HTML file; download it from the run's summary page and double-click it.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tapeout-game
+          path: dist/index.html

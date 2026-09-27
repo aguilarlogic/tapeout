@@ -1,0 +1,56 @@
+name: Release
+
+# Publishes a GitHub release with the game attached: a single Tapeout.html you can double-click, and a zip of it.
+# Run it from the Actions tab ("Release" > "Run workflow"), or push a tag like v0.2.0.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Version tag to create, e.g. v0.2.0 (defaults to the version in package.json)'
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - name: Package
+        id: pkg
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then tag="$GITHUB_REF_NAME"
+          elif [ -n "$INPUT_TAG" ]; then tag="$INPUT_TAG"
+          else tag="v$(node -p 'require("./package.json").version')"; fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          mkdir -p out/tapeout
+          cp dist/index.html out/Tapeout.html
+          cp dist/index.html out/tapeout/Tapeout.html
+          printf '%s\r\n' 'TAPEOUT' '' 'Double-click Tapeout.html to play. It opens in your web browser;' \
+            'no install, no internet connection and no account needed.' '' \
+            'Your progress is saved in that browser. Use the same browser each time,' \
+            'and keep the file somewhere permanent (moving it can reset progress in some browsers).' > out/tapeout/README.txt
+          (cd out && zip -r "tapeout-$tag.zip" tapeout)
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.pkg.outputs.tag }}
+        run: |
+          cat > notes.md <<'NOTES'
+          **To play:** download `Tapeout.html` below and double-click it. It runs in your browser, offline, with nothing to install.
+          The zip holds the same file plus a short readme.
+          NOTES
+          gh release create "$TAG" out/Tapeout.html "out/tapeout-$TAG.zip" \
+            --target "$GITHUB_SHA" --title "Tapeout $TAG" --notes-file notes.md --generate-notes

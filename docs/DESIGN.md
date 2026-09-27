@@ -85,8 +85,9 @@ Every lab follows the same loop; only the "build" and "check" differ. Lessons wr
 
 ## 4. Curriculum: fundamentals to mastery
 
-Six acts, each a block of the chip. Everything is open (you can jump anywhere); TAPEOUT recommends a path based on
-onboarding and always offers the next unfinished module.
+Six core acts plus a seventh act of specialist roles, each a block of the chip. Everything is open (you can jump
+anywhere); TAPEOUT recommends a path based on onboarding and always offers the next unfinished module. Players who pick
+"a specialist" during onboarding start at Act 7.
 
 | Act | Chapters | Modules |
 | --- | --- | --- |
@@ -96,6 +97,12 @@ onboarding and always offers the next unfinished module.
 | 4 · VLSI & Implementation | Static timing · Circuit design · Low power · Board | 4 lessons, 5 STA labs, 5 PCB labs |
 | 5 · Verification & Test | Debug · Coverage · UVM · Assertions & formal · Design for test | 6 lessons, 7 bug hunts, 2 coverage, 3 UVM |
 | 6 · Architecture | Cores · Memory hierarchy · Interconnect · Modeling · Tapeout | 9 lessons, interview gauntlet, final review |
+| 7 · Specializations | Circuits & signals · Silicon & manufacturing · Bring-up & production · Domain chips · Quantum | 17 lessons, each opening with what the role does day to day |
+
+The final review draws only from Acts 1-6, so it never quizzes a specialization the player skipped.
+
+[CURRICULUM-AUDIT.md](CURRICULUM-AUDIT.md) cross-checks this curriculum against what the industry expects, rates the
+depth of every topic, and ranks the gaps.
 
 ### Syllabus coverage
 
@@ -127,6 +134,23 @@ window, game = minigame):
 | | Memory hierarchy: caches, TLBs, line states, MESI/MOESI, consistency models, DDR5, HBM, memory controllers | L `cache` `coherence` `dram`, games Cache Sim and Coherence Lab |
 | | Interconnects: bus topologies, AXI, flow control, NoCs, SerDes, PCIe, CXL | L `bus` `noc` `serdes`, game Handshake |
 | | Modeling: discrete-event simulation, cycle-accurate vs approximate models, gem5, benchmarks, Amdahl, Little, roofline | L `perf` |
+| Specializations | Analog/mixed-signal: op-amps, gm, phase margin, kT/C, Pelgrom, ADC SNR/ENOB, PLLs, RNM | L `analog` |
+| | RF: dBm, wavelength, matching and Γ, S-parameters, Friis noise figure, phased arrays | L `rf` |
+| | Power electronics: LDO vs buck, duty cycle, ripple, GaN/SiC, load transients | L `pmic` |
+| | Signal and power integrity: IR drop, L·di/dt, target impedance, reflections, PAM4 and Nyquist, crosstalk | L `sipi` |
+| | Physical design: flow, utilization, wire delay and repeaters, CTS, DRC/LVS, EM, antenna, ECOs | L `pnr` |
+| | Memory design: 6T SRAM, read/write margins, sense amps, DRAM charge sharing and refresh, NAND levels, repair | L `sram` |
+| | Process and yield: FEOL/BEOL, lithography (Rayleigh, EUV), Poisson yield, dies per wafer, corners, aging | L `fab` |
+| | Packaging: interposers, HBM, chiplet yield, bump and hybrid-bond density, thermals, CTE | L `pkg` |
+| | Post-silicon validation: bring-up order, shmoo plots, speed paths, design-for-debug, steppings | L `postsi` |
+| | Test and product engineering: sort vs final test, test cost, DPPM, binning, burn-in | L `ate` |
+| | FPGAs, prototyping and emulation: LUTs, speed trade-offs, gated clocks, co-emulation | L `emu` |
+| | AI accelerators: MAC counts, systolic arrays, TOPS, quantization, memory-bound LLM decode | L `npu` |
+| | Hardware security: timing leaks, DPA, fault injection, roots of trust, Spectre, PUFs | L `hwsec` |
+| | Functional safety: ISO 26262 and ASIL, FIT, SECDED, lockstep, fault campaigns | L `fusa` |
+| | Silicon photonics: band-gap cutoff, lasers vs detectors, ring modulators, WDM, pJ/bit, link budgets | L `photonics` |
+| | Quantum hardware: qubits, measurement, decoherence, fidelity, transmons, platforms, surface code | L `qubit` |
+| | Quantum control and cryo-electronics: IQ mixing, Rabi and π pulses, attenuation, readout chains, heat budgets, decoders | L `qctrl` |
 
 ## 5. Mechanics
 
@@ -190,7 +214,7 @@ Three mechanics that mirror the three halves of the job:
 architecture & protocols). Choices are shuffled, every card has an interview-quality explanation, and a Leitner scheduler
 (1 minute / 1 / 3 / 7 / 21 days) brings back what you miss. Mastered = box ≥ 3.
 
-### 5.6 Terminal lessons (41) — *built*
+### 5.6 Terminal lessons (58) — *built*
 
 - Authored as data: `say`, `art`, `ask` (typed answer with a checker), `mc`, `gen` (a function of an RNG that returns a
   fresh question each run, so lessons are replayable) and `app` (open a minigame and wait for it).
@@ -233,11 +257,11 @@ personal best.
 - **XP:** level base XP × (0.6 + 0.2 × stars): 80% / 100% / 120%. Only improvements award XP. Drill cards award XP per
   Leitner box.
 - **Ranks:** Intern → Junior Engineer (1000) → Design Engineer (3000) → Senior (6000) → Staff (9000) → Principal
-  (11500) → Fellow (13500), out of about 16k available. TAPEOUT announces promotions.
+  (11500) → Fellow (13500), out of about 17k available. TAPEOUT announces promotions.
 - **The die:** the map shows your chip's floorplan with one block per act (standard cells, firmware, CPU core,
-  clocks/PHY, DV signoff, cache/NoC). Standard-cell rows light up as modules are signed off; the pad ring tracks overall
+  clocks/PHY, DV signoff, cache/NoC, specialty IP). Standard-cell rows light up as modules are signed off; the pad ring tracks overall
   readiness.
-- **Tapeout readiness %:** the share of all 93 modules signed off.
+- **Tapeout readiness %:** the share of all 110 modules signed off.
 
 ## 7. Technical architecture
 
@@ -245,10 +269,10 @@ personal best.
 src/
   os/         TAPE-OS: desktop + router, window manager, taskbar, avatar (moods), mentor bubble, map, game launcher
   term/       terminal widget (async say/ask/choose), shell (commands, onboarding, lesson runner)
-  lessons/    41 lessons as data, answer checkers, final exam builder
+  lessons/    58 lessons as data, answer checkers, final exam builder
   minigames/  pure game logic (tested) + window UIs
-  curriculum.ts  6 acts → chapters → modules, recommendations, progress
-  glossary.ts    110+ terms TAPEOUT can define (typo tolerant)
+  curriculum.ts  7 acts → chapters → modules, recommendations, progress
+  glossary.ts    180+ terms TAPEOUT can define (typo tolerant)
   sim/        Verilog subset: lexer → parser (AST) → Design (elaboration, lint, event scheduling)
               harness.ts: player vs golden co-simulation, mismatch report, seeded PRNG
   games/
@@ -263,7 +287,11 @@ src/
   state.ts    profile, prefs, progress, drafts, best scores in localStorage
 ```
 
-- **No framework, no runtime dependencies.** Vanilla TypeScript + Vite; about 160 kB gzipped, most of it lesson text.
+- **No framework, no runtime dependencies.** Vanilla TypeScript + Vite; about 200 kB gzipped, most of it lesson text.
+- **One file.** A small Vite plugin (`vite.config.ts`) inlines the script and styles into `dist/index.html`, so the
+  build is a single self-contained page. It works from any static host and also when double-clicked from disk
+  (browsers refuse to load separate module scripts from `file://`, but inline ones run). CI uploads that file as an
+  artifact on every run, and the Release workflow attaches it, plus a zip, to a GitHub release.
 - **Every engine is pure and unit-tested**, independent of the DOM. Tests prove, for every level, that the reference
   solution passes with the maximum star rating and that the lesson can't be bypassed; that every lesson question
   (including randomized ones, over 60 seeds) accepts its own answer; that every minigame target is achievable with
@@ -295,6 +323,11 @@ file (no hierarchy), no functions/tasks/generate. These are called out in-game w
   "find the bug with an assertion" level type.
 - **Timing:** multicycle and false path constraints (SDC-like), OCV derates, clock gating checks.
 - **Board:** 4-layer stackups, impedance calculator mini-game, length tuning for DDR byte lanes, thermal vias.
+
+### Depth: see the audit
+[CURRICULUM-AUDIT.md](CURRICULUM-AUDIT.md) ranks the biggest gaps: a SystemVerilog/UVM lab track, workflow skills
+(Linux, git, Python, regression triage), signals & systems and probability, circuits I/II, capstone projects, and a
+four-tier mastery ladder (Learn → Practice → Master → Boss) for every topic.
 
 ### More hands-on labs for the newer lessons
 - **Physical layout / custom design:** draw the CMOS gates from the transistor labs in a Magic-like grid editor with

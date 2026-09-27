@@ -86,9 +86,16 @@ describe('answer parsing', () => {
 });
 
 describe('curriculum', () => {
-  it('has six acts and unique module ids', () => {
-    expect(ACTS.length).toBe(6);
+  it('has six core acts plus specializations, and unique module ids', () => {
+    expect(ACTS.map((a) => a.n)).toEqual([1, 2, 3, 4, 5, 6, 7]);
     expect(new Set(ALL_MODULES.map((m) => m.id)).size).toBe(ALL_MODULES.length);
+  });
+  it('starts specialists at Act 7 and keeps the final review to the core acts', () => {
+    expect(ACTS[6].chapters.flatMap((c) => c.modules).every((m) => m.kind === 'lesson')).toBe(true);
+    for (let seed = 1; seed < 20; seed++) {
+      const titles = finalExam(rng(seed)).steps.filter((s) => s.t === 'say').map((s) => (s as { text: string }).text);
+      for (const m of ACTS[6].chapters.flatMap((c) => c.modules)) expect(titles).not.toContain(`**${m.title}**`);
+    }
   });
   it('covers every lesson exactly once', () => {
     const lessonMods = ALL_MODULES.filter((m) => m.kind === 'lesson').map((m) => m.id).sort();
@@ -103,6 +110,10 @@ describe('glossary', () => {
     expect(lookup('MESI')?.lesson).toBe('coherence');
     expect(lookup('metastabilty')?.lesson).toBe('clk'); // typo
     expect(lookup('eigenvalues')?.lesson).toBe('linalg');
+    expect(lookup('what is a transmon')?.lesson).toBe('qubit');
+    expect(lookup('shmoo plot')?.lesson).toBe('postsi');
+    expect(lookup('What is ISO 26262?')?.lesson).toBe('fusa');
+    expect(lookup('dilution fridge')?.lesson).toBe('qctrl');
     expect(lookup('pizza')).toBeUndefined();
   });
 });

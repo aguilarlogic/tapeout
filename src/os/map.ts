@@ -1,4 +1,4 @@
-// Map.app: the campaign as a chip. Six acts are six blocks of the die; every module is a node on a trace.
+// Map.app: the campaign as a chip. Each act is a block of the die; every module is a node on a trace.
 import { ACTS, Act, actProgress, KIND_LABEL, ModKind, readiness, recommended } from '../curriculum';
 import { levelRecord, rank, RANKS, totalXp } from '../state';
 import { h, stars, svg } from '../ui/dom';
@@ -7,7 +7,7 @@ const ICON: Record<ModKind, string> = {
   lesson: '›_', logic: '⊼', cmos: '⊥', rtl: '{}', debug: '⚑', cov: '◎', uvm: '⧉', sta: '⏱', pcb: '▦', drills: '?!', final: '★',
 };
 
-/** The die floorplan: six blocks whose standard-cell rows light up with progress. */
+/** The die floorplan: one block per act, whose standard-cell rows light up with progress. */
 export function die(onPick?: (a: Act) => void): SVGSVGElement {
   const root = svg('svg', { viewBox: '0 0 320 320', class: 'die', role: 'img', 'aria-label': 'Your chip: each block fills in as you complete an act' });
   root.append(svg('rect', { x: 4, y: 4, width: 312, height: 312, rx: 10, class: `pkg${readiness() === 100 ? ' done' : ''}` }));
@@ -18,7 +18,8 @@ export function die(onPick?: (a: Act) => void): SVGSVGElement {
   }
   root.append(svg('rect', { x: 32, y: 32, width: 256, height: 256, class: 'diebody' }));
   const boxes: [number, number, number, number][] = [
-    [40, 40, 116, 76], [164, 40, 116, 76], [40, 124, 150, 88], [198, 124, 82, 88], [40, 220, 116, 60], [164, 220, 116, 60],
+    [40, 40, 116, 66], [164, 40, 116, 66], [40, 114, 150, 80], [198, 114, 82, 80], [40, 202, 116, 42], [164, 202, 116, 42],
+    [40, 252, 240, 30],
   ];
   ACTS.forEach((a, i) => {
     const [x, y, w, hh] = boxes[i];
@@ -64,7 +65,7 @@ export function mapApp(): HTMLElement {
       h('div', { class: 'map-summary' },
         h('p', { class: 'kicker' }, `Tapeout readiness ${readiness()}%`),
         h('h2', null, 'From electrons to architecture'),
-        h('p', { class: 'dim' }, 'Six acts, each a block of your chip. Lessons run in the terminal with TAPEOUT; labs open their own windows. Everything is open: skip ahead whenever you like.'),
+        h('p', { class: 'dim' }, 'Six core acts and a block of specialist roles, each a region of your chip. Lessons run in the terminal with TAPEOUT; labs open their own windows. Everything is open: skip ahead whenever you like.'),
         next ? h('a', { class: 'btn primary', href: next.route }, `▶ Next: ${next.title}`) : h('p', { class: 'promo' }, 'Everything signed off. Your chip is ready to tape out.'),
         h('div', { class: 'ranks' }, ...RANKS.map((rk, i) => h('span', { class: `rank${i === r.index ? ' on' : i < r.index ? ' past' : ''}`, title: `${rk.xp} XP` }, rk.title))))),
     ...acts,
