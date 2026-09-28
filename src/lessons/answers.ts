@@ -63,7 +63,7 @@ function splitUnit(unit: string): [number, string] {
 export function parseQuantity(input: string, unit = ''): number | null {
   const s = input.trim().replace(/,/g, '').replace(/\s+/g, '')
     .replace(/^(-?\d*\.?\d+)[x×*]10\^/, '$1e').replace(/^10\^/, '1e');
-  const m = s.match(/^(-?\d*\.?\d+(?:e-?\d+)?)(.*)$/);
+  const m = s.match(/^(-?\d*\.?\d+(?:e[-+]?\d+)?)(.*)$/);
   if (!m) return null;
   const n = parseFloat(m[1]);
   const rest = m[2];
@@ -113,10 +113,19 @@ export function hexa(value: number, width = 0): Answer {
   };
 }
 
+/** "10000000 Hz" reads better as "10 MHz": add an SI prefix to very large or small values of a base unit. */
+function withPrefix(value: number, unit: string): string {
+  const a = Math.abs(value);
+  const base = ['Ω', 'V', 'A', 'W', 'F', 'Hz', 's', 'C', 'J', 'S'].includes(unit);
+  if (!base || a === 0 || (a >= 0.1 && a < 1e4)) return `${+value.toPrecision(3)} ${unit}`.trim();
+  const [k, p] = a >= 1e9 ? [1e-9, 'G'] : a >= 1e6 ? [1e-6, 'M'] : a >= 1e3 ? [1e-3, 'k'] : a >= 1e-3 ? [1e3, 'm'] : a >= 1e-6 ? [1e6, 'µ'] : a >= 1e-9 ? [1e9, 'n'] : [1e12, 'p'];
+  return `${+(value * k).toPrecision(3)} ${p}${unit}`;
+}
+
 /** Real-valued answer in `unit`, with relative tolerance. SI prefixes and unit spellings are accepted. */
 export function qty(value: number, unit: string, tol = 0.03, display?: string): Answer {
   return {
-    canonical: display ?? `${+value.toPrecision(3)} ${unit}`.trim(),
+    canonical: display ?? withPrefix(value, unit),
     check: (s) => {
       const v = parseQuantity(s, unit);
       if (v === null) return false;

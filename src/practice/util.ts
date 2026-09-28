@@ -10,6 +10,9 @@ export const eng = (x: number, unit: string) => {
   return `${+(x * k).toPrecision(3)} ${p}${unit}`;
 };
 
+/** Scientific notation without the plus sign: sci(1e15) = "1e15". */
+export const sci = (x: number, digits = 0) => x.toExponential(digits).replace('e+', 'e');
+
 /** A number rounded to 3 significant figures, as text. */
 export const sig = (x: number, n = 3) => String(+x.toPrecision(n));
 
