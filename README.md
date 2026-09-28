@@ -16,6 +16,10 @@ From there it teaches you in the terminal: short explanations, ASCII diagrams, a
 (any notation works: `0x1F`, `8'h1f`, `4.7k`, `a^b`...). When it's time to practise, it opens windows on the desktop:
 labs, simulators and minigames. Everything you finish lights up a block of your chip on the map.
 
+TAPEOUT types everything it says, with short pauses between sentences, so you can read along. Press any key or click
+to finish a line early. Pick slow, normal, fast or instant in **Settings.app** on the desktop (or type `speed fast`);
+instant, and your system's reduced-motion setting, turn the typing and loading animations off.
+
 ## Play it
 
 **No install needed.** Download `Tapeout.html` from the [latest release](https://github.com/aguilarlogic/tapeout/releases/latest) and double-click it. It
@@ -44,7 +48,7 @@ Designer, RC Scope, Flip-Flop Trace, Cache Sim, Branch Predictor, Coherence Lab 
 VALID/READY).
 
 Things to type in the terminal: `next`, `map`, `ls 3`, `learn cache`, `play`, `quiz`, `what is metastability`,
-`status`, `speed fast`, `help`.
+`status`, `speed fast`, `settings`, `help`.
 
 See [docs/DESIGN.md](docs/DESIGN.md) for the full design.
 

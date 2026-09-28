@@ -17,6 +17,7 @@ import { h } from '../ui/dom';
 import { avatar } from './avatar';
 import { launchGame } from './launch';
 import { mapApp } from './map';
+import { settingsApp } from './settings';
 import { bindMentorLog } from './mentor';
 import { getWindow, initWM, openWindow } from './wm';
 
@@ -42,11 +43,11 @@ function openTerminal() {
 }
 
 function openMap() {
-  openWindow({ id: 'map', title: 'Map.app — campaign', icon: '◈', content: mapApp(), w: 980, h: 720, onClose: home });
+  openWindow({ id: 'map', title: 'Map.app — campaign', icon: '◈', content: mapApp(), w: 980, h: 720, onClose: home, loading: getWindow('map') ? undefined : 'Map.app' });
 }
 
 function openSkills(focus?: string) {
-  openWindow({ id: 'skills', title: 'Skills.app — the audit, live', icon: '◉', content: skillsApp(focus), w: 1040, h: 740, onClose: home });
+  openWindow({ id: 'skills', title: 'Skills.app — the audit, live', icon: '◉', content: skillsApp(focus), w: 1040, h: 740, onClose: home, loading: getWindow('skills') ? undefined : 'Skills.app' });
 }
 
 function home() {
@@ -73,8 +74,12 @@ function route() {
     if (profile()) shell.run(`practice ${id}`);
     return;
   }
+  if (section === 'settings') {
+    openWindow({ id: 'settings', title: 'Settings.app', icon: '⚙', content: settingsApp(), w: 640, h: 760, onClose: home, loading: getWindow('settings') ? undefined : 'Settings.app' });
+    return;
+  }
   if (section === 'drills') {
-    openWindow({ id: 'drills', title: 'Flashcards.app — interview gauntlet', icon: '?!', content: drillsPage(id), w: 860, h: 680, onClose: home });
+    openWindow({ id: 'drills', title: 'Flashcards.app — interview gauntlet', icon: '?!', content: drillsPage(id), w: 860, h: 680, onClose: home, loading: 'Flashcards.app' });
     return;
   }
   if (section === 'play') {
@@ -85,7 +90,7 @@ function route() {
   if (lab && id) {
     const m = findModule(id);
     const app = m ? KIND_APP[m.module.kind] : 'Lab';
-    openWindow({ id: 'lab', title: `${app} — ${m?.module.title ?? id}`, icon: '▣', content: lab(id), maximized: true, onClose: home });
+    openWindow({ id: 'lab', title: `${app} — ${m?.module.title ?? id}`, icon: '▣', content: lab(id), maximized: true, onClose: home, loading: `${app}: ${m?.module.title ?? id}` });
     return;
   }
   home();
@@ -122,6 +127,7 @@ function taskbar(): HTMLElement {
     item('◈', 'Campaign map', () => (location.hash = '#/map')),
     item('◉', 'Skills & job readiness', () => (location.hash = '#/skills')),
     item('?!', 'Interview flashcards', () => (location.hash = '#/drills')),
+    item('⚙', 'Settings: typing speed', () => (location.hash = '#/settings')),
     h('div', { class: 'start-sep' }, 'Arcade'),
     ...MINIGAMES.map((g) => item(g.icon, g.title, () => void launchGame(g.id))),
     h('div', { class: 'start-sep' }),
@@ -146,7 +152,8 @@ function icons(): HTMLElement {
     icon('◈', 'Map', () => (location.hash = '#/map')),
     icon('◉', 'Skills', () => (location.hash = '#/skills')),
     icon('?!', 'Flashcards', () => (location.hash = '#/drills')),
-    icon('▶', 'Arcade', () => { (getWindow('term') ?? openTerminal()).focus(); shell.run('play'); }));
+    icon('▶', 'Arcade', () => { (getWindow('term') ?? openTerminal()).focus(); shell.run('play'); }),
+    icon('⚙', 'Settings', () => (location.hash = '#/settings')));
 }
 
 async function bootScreen(first: boolean) {

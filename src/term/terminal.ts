@@ -1,9 +1,12 @@
 // A terminal widget with an async API, so conversations read top to bottom:
 //   await term.say('Hello'); const name = await term.ask({ prompt: 'name>' });
+// Everything printed goes through one output queue and is typed out (see typewriter.ts). A key press or a click
+// finishes the message being typed; the answer input only unlocks once the question has finished typing.
 import type { Mood } from '../lessons/types';
 import { setMood, setTalking } from '../os/avatar';
 import { playerName, prefs } from '../state';
 import { h } from '../ui/dom';
+import { animate, heldKey, Output, type Pace, paceFor, prefersReducedMotion, progressBar, revealPre, revealRows, spinFrame, type Token, typeInto, wait } from './typewriter';
 
 export class Interrupted extends Error {
   constructor() { super('interrupted'); }
@@ -12,8 +15,7 @@ export class Interrupted extends Error {
 /** The player typed a command at a menu instead of picking an option; the shell runs it next. */
 export class Redirect extends Interrupted {}
 
-const SPEED: Record<string, number> = { slow: 0.035, normal: 0.08, fast: 0.22, instant: Infinity }; // chars per ms
-const reducedMotion = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+export const pace = (): Pace => paceFor(prefs().speed, prefersReducedMotion());
 
 /** Inline markup for TAPEOUT's lines: **bold**, `code`, {name}. */
 export function rich(text: string): Node[] {
@@ -32,6 +34,15 @@ export function rich(text: string): Node[] {
 
 export interface AskOpts { prompt?: string; chips?: (string | { label: string; value: string })[]; placeholder?: string }
 
+/** How a block appears: typed character by character, revealed row by row, or at once. */
+export type BlockMode = 'type' | 'rows' | 'instant';
+
+/** Rows for row-by-row reveal: table rows, list items and menu entries, else the block's children. */
+function rowsOf(node: HTMLElement): HTMLElement[] {
+  const rows = [...node.querySelectorAll<HTMLElement>('tr, li, .term-mod, .term-act, .term-ch > .dim')];
+  return rows.length ? rows : [...node.children] as HTMLElement[];
+}
+
 export class Terminal {
   el: HTMLElement;
   private out: HTMLElement;
@@ -40,36 +51,67 @@ export class Terminal {
   private chipsEl: HTMLElement;
   private resolver: ((v: string) => void) | null = null;
   private rejecter: ((e: Error) => void) | null = null;
-  private skipTyping = false;
+  private askGen = 0;
+  /** An interrupt arrived while nothing was waiting for input: the next ask() gives way at once. */
+  private interruptPending = false;
+  private accepting = false;
+  /** The next thing TAPEOUT says is a reply to the player: show "thinking…" first. */
+  private afterInput = false;
+  /** TAPEOUT has output something since the last prompt: pause for a beat before the next one. */
+  private spoke = false;
   private history: string[] = [];
   private hIndex = 0;
+  private q: Output;
 
   constructor() {
     this.out = h('div', { class: 'term-out', role: 'log', 'aria-live': 'polite' });
     this.promptEl = h('span', { class: 'term-prompt' });
     this.input = h('input', { class: 'term-input', type: 'text', autocomplete: 'off', spellcheck: 'false', 'aria-label': 'Terminal input', autocapitalize: 'off' }) as HTMLInputElement;
+    this.input.readOnly = true;
     this.chipsEl = h('div', { class: 'term-chips' });
     const line = h('div', { class: 'term-line' }, this.promptEl, this.input);
-    this.el = h('div', { class: 'term' }, this.out, line, this.chipsEl);
+    this.el = h('div', { class: 'term', tabindex: '-1' }, this.out, line, this.chipsEl);
+    this.q = new Output((busy) => this.onBusy(busy), () => !this.el.isConnected);
     this.el.addEventListener('click', (e) => {
       if ((e.target as HTMLElement).closest('button, a')) return;
       if (window.getSelection()?.toString()) return;
-      this.skipTyping = true;
+      this.q.skip();
       this.focus();
     });
-    this.input.addEventListener('keydown', (e) => this.onKey(e));
+    this.el.addEventListener('keydown', (e) => this.onKey(e));
   }
 
+  /** Focus the input if a question is waiting; otherwise the terminal itself, so key presses still skip. */
   focus() {
-    this.input.focus({ preventScroll: true });
+    (this.accepting ? this.input : this.el).focus({ preventScroll: true });
+  }
+
+  /** True while TAPEOUT is typing something. */
+  get typing() { return this.q.busy; }
+
+  private onBusy(busy: boolean) {
+    this.el.classList.toggle('typing', busy);
+    if (busy && !this.accepting) {
+      if (document.activeElement === this.input) this.el.focus({ preventScroll: true });
+      if (!this.input.value) this.input.placeholder = 'any key or click finishes the line';
+    } else if (!busy && !this.accepting && this.input.placeholder === 'any key or click finishes the line') this.input.placeholder = '';
   }
 
   private onKey(e: KeyboardEvent) {
+    if (this.accepting && e.target === this.input) return this.onInputKey(e);
+    // TAPEOUT is typing (or busy elsewhere): a key finishes the current message. Typed characters are kept for the
+    // answer, and Enter never submits.
+    const act = heldKey(e.key, { ctrl: e.ctrlKey, meta: e.metaKey, alt: e.altKey }, this.input.value);
+    if (!act) return;
+    this.q.skip();
+    if (act.prevent) e.preventDefault();
+    if (act.value !== this.input.value) { this.input.value = act.value; this.input.placeholder = ''; }
+  }
+
+  private onInputKey(e: KeyboardEvent) {
     if (e.key === 'Enter') {
       e.preventDefault();
-      const v = this.input.value;
-      if (!this.resolver) { this.skipTyping = true; return; }
-      this.submit(v);
+      this.submit(this.input.value);
     } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
       if (!this.history.length) return;
       e.preventDefault();
@@ -83,103 +125,171 @@ export class Terminal {
 
   private submit(v: string) {
     const res = this.resolver;
-    if (!res) return;
+    if (!res || !this.accepting) return;
     this.resolver = this.rejecter = null;
-    this.echo(v);
+    this.accepting = false;
+    this.input.readOnly = true;
+    this.el.classList.remove('waiting');
+    this.append(h('div', { class: 'tl' }, h('span', { class: 'term-prompt' }, this.promptEl.textContent ?? ''), h('span', { class: 'you' }, ` ${v}`)));
     if (v.trim()) { this.history.push(v); this.hIndex = this.history.length; }
     this.input.value = '';
+    this.input.placeholder = '';
     this.chipsEl.replaceChildren();
+    this.afterInput = true;
     res(v);
-  }
-
-  private echo(v: string) {
-    this.line(h('span', { class: 'term-prompt' }, this.promptEl.textContent ?? ''), h('span', { class: 'you' }, ` ${v}`));
   }
 
   private scroll() {
     requestAnimationFrame(() => (this.out.scrollTop = this.out.scrollHeight));
   }
 
-  line(...content: (Node | string)[]): HTMLElement {
-    const l = h('div', { class: 'tl' }, ...content);
-    this.out.append(l);
-    this.scroll();
-    return l;
-  }
-
-  print(text: string, cls = 'sys') {
-    return this.line(h('span', { class: cls }, ...rich(text)));
-  }
-
-  block(node: Node) {
+  private append(node: Node) {
     this.out.append(node);
     this.scroll();
   }
 
-  art(text: string, caption?: string) {
-    this.block(h('figure', { class: 'term-art' }, h('pre', null, text), caption ? h('figcaption', null, caption) : null));
+  private readonly step = () => this.scroll();
+
+  private push(task: (tk: Token) => Promise<void> | void): Promise<void> {
+    this.spoke = true;
+    return this.q.push(task);
   }
 
-  clear() {
-    this.out.replaceChildren();
+  // ---------------------------------------------------------------- output (all queued, all typed)
+
+  /** A line of arbitrary content (buttons, chips), shown as soon as its turn comes. */
+  line(...content: (Node | string)[]): Promise<void> {
+    return this.push(() => this.append(h('div', { class: 'tl' }, ...content)));
   }
 
-  /** A line from TAPEOUT, typed out. Enter or a click finishes it instantly. */
-  async say(text: string, mood: Mood = 'neutral') {
-    setMood(mood);
-    const body = h('span', { class: 'ai-text' });
-    this.line(h('span', { class: 'ai-name' }, 'tapeout'), h('span', { class: 'ai-sep' }, '› '), body);
-    const nodes = rich(text);
-    const speed = reducedMotion() ? Infinity : SPEED[prefs().speed] ?? SPEED.normal;
-    if (speed === Infinity) { body.append(...nodes); this.scroll(); return; }
-    // Build the DOM with empty text, then reveal characters over time.
-    const targets: { node: Text; full: string }[] = [];
-    for (const n of nodes) {
-      if (n instanceof Text) { const t = document.createTextNode(''); body.append(t); targets.push({ node: t, full: n.data }); }
-      else { const el = n as HTMLElement; const full = el.textContent ?? ''; el.textContent = ''; const t = document.createTextNode(''); el.append(t); body.append(el); targets.push({ node: t, full }); }
-    }
-    const total = targets.reduce((a, t) => a + t.full.length, 0);
-    this.skipTyping = false;
-    setTalking(true);
-    await new Promise<void>((resolve) => {
-      const t0 = performance.now();
-      const frame = (now: number) => {
-        let budget = this.skipTyping || !this.el.isConnected ? total : Math.floor((now - t0) * speed);
-        for (const t of targets) {
-          const n = Math.min(t.full.length, Math.max(0, budget));
-          if (t.node.data.length !== n) t.node.data = t.full.slice(0, n);
-          budget -= t.full.length;
-        }
-        this.scroll();
-        if (budget >= 0) resolve();
-        else requestAnimationFrame(frame);
-      };
-      requestAnimationFrame(frame);
+  /** System output, typed faster than TAPEOUT's speech. */
+  print(text: string, cls = 'sys'): Promise<void> {
+    return this.push(async (tk) => {
+      const span = h('span', { class: cls }, ...rich(text));
+      this.append(h('div', { class: 'tl' }, span));
+      await typeInto(span, pace(), tk, { rate: cls === 'ai-aside' ? 1 : 2.5, onStep: this.step });
     });
-    setTalking(false);
   }
 
-  /** Wait for one line of input. Chips are clickable shortcuts that submit their value. */
+  /** A block of UI. Menus and tables appear row by row; banners and cards are typed. */
+  block(node: HTMLElement, mode: BlockMode = 'rows', rate = 2): Promise<void> {
+    return this.push(async (tk) => {
+      this.afterInput = false;
+      this.append(node);
+      if (mode === 'type') await typeInto(node, pace(), tk, { rate, onStep: this.step });
+      else if (mode === 'rows') await revealRows(rowsOf(node), pace(), tk, this.step);
+    });
+  }
+
+  /** Code, logs and diagrams: revealed line by line. */
+  art(text: string, caption?: string): Promise<void> {
+    return this.push(async (tk) => {
+      const pre = h('pre', null, text);
+      const cap = caption ? h('figcaption', null, caption) : null;
+      this.append(h('figure', { class: 'term-art' }, pre, cap));
+      await revealPre(pre, pace(), tk, this.step);
+      if (cap) await typeInto(cap, pace(), tk, { rate: 2, onStep: this.step });
+    });
+  }
+
+  clear(): Promise<void> {
+    return this.q.push(() => this.out.replaceChildren());
+  }
+
+  /** A pause (before a question, between beats of a story). Skippable like everything else. */
+  beat(ms?: number): Promise<void> {
+    return this.q.push((tk) => wait(ms ?? pace().beat, tk));
+  }
+
+  /** A line from TAPEOUT, typed out. A reply to the player starts with a short "thinking…". */
+  say(text: string, mood: Mood = 'neutral'): Promise<void> {
+    return this.push(async (tk) => {
+      const p = pace();
+      setMood(mood);
+      const body = h('span', { class: 'ai-text' });
+      this.append(h('div', { class: 'tl' }, h('span', { class: 'ai-name' }, 'tapeout'), h('span', { class: 'ai-sep' }, '› '), body));
+      if (this.afterInput && p.think > 0) {
+        const dots = h('span', { class: 'ai-think' }, 'thinking');
+        body.append(dots);
+        await animate(p.think, (ms) => (dots.textContent = `thinking${'.'.repeat(1 + (Math.floor(ms / 180) % 3))}`), tk);
+        dots.remove();
+      }
+      this.afterInput = false;
+      const nodes = rich(text);
+      body.append(...nodes);
+      setTalking(true);
+      try { await typeInto(body, p, tk, { onStep: this.step }); } finally { setTalking(false); }
+    });
+  }
+
+  /** A spinner and progress bar ("generating problems", "loading level"). */
+  progress(label: string): Promise<void> {
+    return this.push(async (tk) => {
+      this.afterInput = false;
+      const p = pace();
+      const spin = h('span', { class: 'spin' }, spinFrame(0));
+      const barEl = h('span', { class: 'pbar' }, progressBar(0));
+      this.append(h('div', { class: 'tl term-progress' }, spin, ' ', h('span', { class: 'dim' }, label), ' ', barEl));
+      await animate(p.load, (ms) => { spin.textContent = spinFrame(ms); barEl.textContent = progressBar(p.load ? ms / p.load : 1); }, tk);
+      spin.textContent = '✓';
+      spin.classList.add('ok');
+      barEl.textContent = progressBar(1);
+    });
+  }
+
+  /** The TAPE-OS "entering boss" sequence. */
+  bossIntro(title: string): Promise<void> {
+    return this.push(async (tk) => {
+      this.afterInput = false;
+      const p = pace();
+      const rows = ['loading boss.ko ............ ok', 'hints ...................... disabled', 'second attempts ............ disabled', 'grader ..................... armed']
+        .map((t) => h('div', null, `> ${t}`));
+      const enter = h('div', { class: 'enter' }, `ENTERING BOSS: ${title.toUpperCase()}`);
+      const box = h('div', { class: 'boss-intro' }, ...rows, enter);
+      this.append(box);
+      await revealRows([...rows, enter], { ...p, line: p.load / 5 }, tk, this.step);
+      if (!tk.skip && p.load) enter.classList.add('flash');
+      await wait(p.load / 3, tk);
+    });
+  }
+
+  // ---------------------------------------------------------------- input
+
+  /** Wait for one line of input. The prompt unlocks after everything queued before it has been typed. */
   ask(opts: AskOpts = {}): Promise<string> {
-    this.promptEl.textContent = opts.prompt ?? '>';
-    this.input.placeholder = opts.placeholder ?? '';
-    this.chipsEl.replaceChildren(...(opts.chips ?? []).map((c) => {
-      const { label, value } = typeof c === 'string' ? { label: c, value: c } : c;
-      return h('button', { class: 'term-chip', onclick: () => this.submit(value) }, label);
-    }));
-    this.el.classList.add('waiting');
+    const gen = ++this.askGen;
+    const spoke = this.spoke;
+    this.spoke = false;
+    if (this.interruptPending) { this.interruptPending = false; return Promise.reject(new Interrupted()); }
     return new Promise<string>((res, rej) => {
-      this.resolver = (v) => { this.el.classList.remove('waiting'); res(v); };
-      this.rejecter = (e) => { this.el.classList.remove('waiting'); rej(e); };
-      if (document.activeElement === document.body || this.el.contains(document.activeElement)) this.focus();
+      this.resolver = res;
+      this.rejecter = (e) => { this.accepting = false; this.input.readOnly = true; this.el.classList.remove('waiting'); this.askGen++; rej(e); };
+      if (spoke) void this.q.push((tk) => wait(pace().beat, tk));
+      void this.q.push(() => {
+        if (gen !== this.askGen || !this.resolver) return;
+        this.promptEl.textContent = opts.prompt ?? '>';
+        this.input.placeholder = opts.placeholder ?? '';
+        this.chipsEl.replaceChildren(...(opts.chips ?? []).map((c) => {
+          const { label, value } = typeof c === 'string' ? { label: c, value: c } : c;
+          return h('button', { class: 'term-chip', onclick: () => this.submit(value) }, label);
+        }));
+        this.accepting = true;
+        this.input.readOnly = false;
+        this.el.classList.add('waiting');
+        const a = document.activeElement;
+        if (a === document.body || a === null || this.el.contains(a)) {
+          this.input.focus({ preventScroll: true });
+          this.input.setSelectionRange(this.input.value.length, this.input.value.length);
+        }
+      });
     });
   }
 
-  /** Numbered choices; answer by number, by clicking, or by typing the option text. */
+  /** Numbered choices, typed out; answer by number, by clicking, or by typing the option text. */
   /** `passthrough`: called with anything typed that is not an option (then the menu is abandoned via Redirect). */
   async choose(options: string[], prompt = 'choose>', passthrough?: (text: string) => void): Promise<number> {
     const list = h('ol', { class: 'term-choices' }, ...options.map((o, i) => h('li', null, h('button', { class: 'term-opt', onclick: () => this.submit(String(i + 1)) }, ...rich(o)))));
-    this.block(list);
+    void this.block(list, 'type', 1.6);
     for (;;) {
       const v = (await this.ask({ prompt, placeholder: `1-${options.length}` })).trim().toLowerCase();
       const n = parseInt(v, 10);
@@ -196,7 +306,7 @@ export class Terminal {
         passthrough(v);
         throw new Redirect();
       }
-      this.print(`Pick 1-${options.length}.`, 'dim');
+      void this.print(`Pick 1-${options.length}.`, 'dim');
     }
   }
 
@@ -204,14 +314,20 @@ export class Terminal {
   async pause() {
     await this.ask({ prompt: '↵', chips: [{ label: 'continue ↵', value: '' }] });
     this.out.lastElementChild?.remove(); // drop the empty echo line
+    this.afterInput = false;
+    this.spoke = false;
   }
 
   /** Abort whatever the terminal is waiting for (used when the player navigates elsewhere). */
   interrupt() {
-    this.skipTyping = true;
+    this.q.skipAll();
     const rej = this.rejecter;
     this.resolver = this.rejecter = null;
     this.chipsEl.replaceChildren();
-    rej?.(new Interrupted());
+    // Nobody is waiting yet (TAPEOUT is mid-sentence): make the next question give way instead.
+    if (rej) rej(new Interrupted());
+    else this.interruptPending = true;
   }
 }
+
+export type { Token };

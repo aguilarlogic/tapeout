@@ -1,5 +1,7 @@
 import { complete, load, updateCard } from '../../state';
 import { mentorSay } from '../../os/mentor';
+import { pace } from '../../term/terminal';
+import { typeOnPage } from '../../term/typewriter';
 import { h } from '../../ui/dom';
 import { Card, CARDS, DECKS } from './cards';
 
@@ -92,17 +94,23 @@ export function drillsPage(deckParam?: string): HTMLElement {
           (b as HTMLButtonElement).disabled = true;
         });
         explain.replaceChildren(h('p', null, h('b', null, ok ? 'Correct. ' : 'Not quite. '), card.why));
-        nextBtn.style.display = '';
         nextBtn.onclick = () => done(ok);
-        nextBtn.focus();
+        // The explanation types out first; "Next" appears once it has (any key or click finishes it).
+        void typeOnPage(explain, pace(), root).then(() => {
+          nextBtn.style.display = '';
+          nextBtn.focus();
+        });
       },
     }, card.c[j]));
+    // The question and its options type out; clicks meanwhile only finish the typing, never answer.
+    const posed = h('div', null, h('p', { class: 'q' }, card.q), h('div', { class: 'choices' }, ...buttons));
     root.replaceChildren(
       h('header', { class: 'level-head' },
         h('nav', { class: 'crumbs' }, h('a', { href: '#/map' }, 'Map'), ' / ', h('a', { href: '#/drills', onclick: (e: Event) => { e.preventDefault(); home(); } }, 'Interview Prep'), ` / ${deck ? DECKS.find((d) => d.id === deck)!.name : 'Mixed'}`),
         h('div', { class: 'title-row' }, h('h2', null, `Question ${n + 1} of ${total}`), h('span', { class: 'tag' }, deckName))),
-      h('div', { class: 'panel card-q' }, h('p', { class: 'q' }, card.q), h('div', { class: 'choices' }, ...buttons), explain, h('div', { class: 'modal-actions' }, nextBtn)),
+      h('div', { class: 'panel card-q' }, posed, explain, h('div', { class: 'modal-actions' }, nextBtn)),
     );
+    void typeOnPage(posed, pace(), root);
   };
 
   if (deckParam && DECKS.some((d) => d.id === deckParam)) start(deckParam);

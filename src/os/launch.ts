@@ -21,7 +21,7 @@ export function launchGame(id: string, opts: { rounds?: number; fromLesson?: boo
       h('div', { class: 'mg-intro' }, h('span', { class: 'mg-icon' }, game.icon), h('div', null, h('b', null, game.title), h('p', { class: 'dim' }, game.blurb))),
       host);
     const win = openWindow({
-      id: 'mini', title: `${game.title}.app`, icon: game.icon, content, w: 620, h: 600,
+      id: 'mini', title: `${game.title}.app`, icon: game.icon, content, w: 620, h: 600, loading: `${game.title}.app`,
       onClose: () => settle(last),
     });
     const run = () => game.play({

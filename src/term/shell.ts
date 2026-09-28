@@ -31,7 +31,10 @@ export class Shell {
   }
 
   async start() {
-    await this.boot();
+    try { await this.boot(); } catch (e) {
+      // The player navigated away mid-onboarding: carry on with whatever they asked for.
+      if (!(e instanceof Interrupted)) throw e;
+    }
     for (;;) {
       try {
         const cmd = this.queue.shift() ?? (await this.term.ask({ prompt: `${playerName().toLowerCase().replace(/\s+/g, '')}@tapeout:~$`, chips: this.idleChips() }));
@@ -123,6 +126,7 @@ export class Shell {
       }
       case 'map':
         t.print('opening Map.app ...', 'dim');
+        await t.beat(0);
         return this.go('#/map');
       case 'ls': case 'lessons': case 'acts': case 'curriculum':
         return arg ? this.printAct(arg) : this.printActs();
@@ -165,10 +169,14 @@ export class Shell {
         return t.say(`Okay, ${arg.slice(0, 24)} it is.`, 'wink');
       case 'speed': {
         const v = arg as Prefs['speed'];
-        if (!['slow', 'normal', 'fast', 'instant'].includes(v)) return t.print(`usage: speed slow|normal|fast|instant (now: ${prefs().speed})`, 'dim');
+        if (!['slow', 'normal', 'fast', 'instant'].includes(v)) return t.print(`usage: speed slow|normal|fast|instant (now: ${prefs().speed}), or open Settings.app with \`settings\``, 'dim');
         setPrefs({ speed: v });
-        return t.say(`Talking speed set to ${v}.`);
+        return t.say(`Typing speed set to ${v}. You can change it any time in **Settings.app** too.`);
       }
+      case 'settings': case 'prefs': case 'options': case 'config':
+        void t.print('opening Settings.app ...', 'dim');
+        await t.beat(0);
+        return this.go('#/settings');
       case 'clear': case 'cls':
         return t.clear();
       case 'reset':
@@ -217,7 +225,8 @@ export class Shell {
       ['boss [name]', 'list or start boss fights (no hints)'],
       ['what is <term>', `look up any of ${GLOSSARY.length} terms`],
       ['status', 'your rank, XP and progress'],
-      ['speed <s>', 'how fast I talk: slow | normal | fast | instant'],
+      ['speed <s>', 'how fast I type: slow | normal | fast | instant'],
+      ['settings', 'open Settings.app (typing speed, with a preview)'],
       ['name <n>', 'change your name'],
       ['clear', 'clear the screen'],
     ];
@@ -334,9 +343,10 @@ export class Shell {
 
   private async practiceRun(sets: PracticeSet[], o: { id: string; title: string; concept: string; xp: number; endless: boolean; mix?: boolean }) {
     const t = this.term;
-    t.block(h('div', { class: 'term-banner practice' },
+    void t.progress(o.endless ? 'spinning up endless practice' : `generating ${PRACTICE_COUNT} problems`);
+    void t.block(h('div', { class: 'term-banner practice' },
       h('span', { class: 'dim' }, o.endless ? 'ENDLESS PRACTICE · type quit to stop' : `PRACTICE · ${PRACTICE_COUNT} problems · difficulty climbs as you get them right`),
-      h('b', null, o.title), h('span', { class: 'dim' }, o.concept)));
+      h('b', null, o.title), h('span', { class: 'dim' }, o.concept)), 'type', 2.5);
     if (!o.endless) t.print(`To pass: ${PRACTICE_PASS}/${PRACTICE_COUNT} right on the first try, with at least ${PRACTICE_HARD} at ◆◆◆ hard.`, 'dim');
     let d: Difficulty = 1, run = 0, streak = 0, bestStreak = 0, lastSet = -1, lastGen = -1;
     const results: { ok: boolean; d: Difficulty }[] = [];
@@ -363,15 +373,15 @@ export class Shell {
     if (o.endless) {
       const prev = best()[`streak.${o.id}`] ?? 0;
       recordBest(`streak.${o.id}`, bestStreak);
-      t.block(h('div', { class: 'term-done' }, h('div', null, h('b', null, 'ENDLESS RUN OVER')),
-        h('div', { class: 'dim' }, `${ok}/${results.length} first try · best streak ${bestStreak}${bestStreak > prev ? ' (new record!)' : ` (record ${prev})`}`)));
+      void t.block(h('div', { class: 'term-done' }, h('div', null, h('b', null, 'ENDLESS RUN OVER')),
+        h('div', { class: 'dim' }, `${ok}/${results.length} first try · best streak ${bestStreak}${bestStreak > prev ? ' (new record!)' : ` (record ${prev})`}`)), 'type', 2);
       return;
     }
     const grade = gradePractice(results);
     const gained = grade ? complete(o.id, o.xp, grade) : 0;
-    t.block(h('div', { class: 'term-done' },
+    void t.block(h('div', { class: 'term-done' },
       h('div', null, h('b', null, grade ? 'PRACTICE PASSED' : 'PRACTICE RUN COMPLETE'), ' ', grade ? starEls(grade) : null),
-      h('div', { class: 'dim' }, `${ok}/${PRACTICE_COUNT} first try · ${hard} at hard${grade ? ` · ${gained ? `+${gained} XP` : 'no new XP'}` : ` · need ${PRACTICE_PASS} with ${PRACTICE_HARD} hard to pass`}`)));
+      h('div', { class: 'dim' }, `${ok}/${PRACTICE_COUNT} first try · ${hard} at hard${grade ? ` · ${gained ? `+${gained} XP` : 'no new XP'}` : ` · need ${PRACTICE_PASS} with ${PRACTICE_HARD} hard to pass`}`)), 'type', 2);
     await t.say(grade === 3 ? 'Near perfect at full difficulty. This topic is yours.' : grade ? 'Passed. That is practised, not just aware: it counts toward your skill level.' : ok >= 6 ? 'Close. The hard ones are where it counts; run it again.' : 'Keep at it. Every miss came with an explanation; a second run always goes better.', grade ? 'proud' : 'thinking');
     const next = grade && !o.mix ? neighbours(o.id).next : undefined;
     const opts = [...(next ? [`Continue: **${next.title}** (${KIND_LABEL[next.kind].toLowerCase()})`] : []), 'Run it again', 'Endless mode', 'Back to the shell'];
@@ -473,9 +483,11 @@ export class Shell {
     const f = findModule(l.id);
     const exam = mode !== 'lesson';
     const bossDef = mode === 'boss' ? (l as Boss) : undefined;
-    t.block(h('div', { class: `term-banner${bossDef ? ' boss' : ''}` },
+    if (bossDef) void t.bossIntro(l.title);
+    else void t.progress(mode === 'final' ? 'assembling the tapeout review' : `loading level: ${l.title}`);
+    void t.block(h('div', { class: `term-banner${bossDef ? ' boss' : ''}` },
       h('span', { class: 'dim' }, bossDef ? `BOSS · no hints · one attempt per question · ${Math.round(bossDef.pass * 100)}% to win` : f ? `ACT ${f.act.n} · ${f.chapter.name.toUpperCase()}` : 'LESSON'),
-      h('b', null, l.title), h('span', { class: 'dim' }, l.concept)));
+      h('b', null, l.title), h('span', { class: 'dim' }, l.concept)), 'type', 2.5);
     const rnd = Math.random;
     let asked = 0, firstTry = 0;
     for (let i = 0; i < l.steps.length; i++) {
@@ -485,7 +497,7 @@ export class Shell {
         await t.say(s.text, s.mood);
         if (!nextIsQuestion) await t.pause();
       } else if (s.t === 'art') {
-        t.art(s.text, s.caption);
+        void t.art(s.text, s.caption);
         if (!nextIsQuestion) await t.pause();
       } else if (s.t === 'app') {
         await t.say(s.text, 'excited');
@@ -522,7 +534,7 @@ export class Shell {
       h('div', null, h('b', null, bossDef ? 'BOSS DEFEATED' : exam ? 'TAPEOUT REVIEW PASSED' : 'LESSON COMPLETE'), ' ', starEls(st)),
       h('div', { class: 'dim' }, `${firstTry}/${asked} first try · ${gained ? `+${gained} XP` : 'no new XP (you already did better)'}`),
       l.recap.length ? h('ul', { class: 'recap' }, ...l.recap.map((r) => h('li', null, ...rich(r)))) : null);
-    t.block(card);
+    void t.block(card, 'type', 1.6);
     const mood: Mood = st === 3 ? 'proud' : st === 2 ? 'happy' : 'neutral';
     if (after.index > before) await t.say(`And that means a promotion. You are now a **${after.title}**, {name}!`, 'excited');
     if (bossDef) await t.say(pickOne(['Boss down. That is job-level work, {name}: no hints, no second tries.', 'Defeated. Somewhere a senior engineer just nodded approvingly.', 'That is the real thing. You earned that level.']), 'proud');
@@ -537,11 +549,12 @@ export class Shell {
 
   /** Say a question; a ```fenced``` part is shown as a code block (logs, source, schematics). */
   private async pose(text: string) {
+    void this.term.beat();
     const parts = text.split('```');
     for (let i = 0; i < parts.length; i++) {
       const p = parts[i].replace(/^\n+|\n+$/g, '');
       if (!p) continue;
-      if (i % 2) this.term.art(p);
+      if (i % 2) void this.term.art(p);
       else await this.term.say(p, 'thinking');
     }
   }

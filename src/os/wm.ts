@@ -1,4 +1,6 @@
 // A tiny window manager: draggable, resizable, minimizable windows plus taskbar buttons.
+import { pace } from '../term/terminal';
+import { animate, progressBar, spinFrame, type Token } from '../term/typewriter';
 import { h } from '../ui/dom';
 
 export interface WinOpts {
@@ -13,6 +15,8 @@ export interface WinOpts {
   maximized?: boolean;
   /** Called when the user closes the window (not when it is replaced). */
   onClose?: () => void;
+  /** Show a short TAPE-OS loading screen ("loading Map.app") over the content first. */
+  loading?: string;
 }
 
 export interface Win {
@@ -55,6 +59,25 @@ export function focusedWindow(): string | undefined {
   return best?.[0];
 }
 
+/** A spinner and progress bar over a window's content for well under a second. Any key or click skips it. */
+function loadingScreen(body: HTMLElement, label: string) {
+  const ms = Math.min(600, pace().load * 0.7);
+  if (!ms) return;
+  const spin = h('span', { class: 'spin' }, spinFrame(0));
+  const barEl = h('div', { class: 'pbar' }, progressBar(0, 22));
+  const ov = h('div', { class: 'win-loading', role: 'status' }, h('div', null, spin, ' ', `loading ${label}`), barEl);
+  body.append(ov);
+  const tk: Token = { skip: false };
+  const skip = () => (tk.skip = true);
+  ov.addEventListener('click', skip);
+  window.addEventListener('keydown', skip, true);
+  void animate(ms, (t) => { spin.textContent = spinFrame(t); barEl.textContent = progressBar(t / ms, 22); }, tk).then(() => {
+    window.removeEventListener('keydown', skip, true);
+    ov.classList.add('bye');
+    setTimeout(() => ov.remove(), 160);
+  });
+}
+
 export function openWindow(o: WinOpts): Win {
   const existing = wins.get(o.id);
   if (existing) {
@@ -63,6 +86,7 @@ export function openWindow(o: WinOpts): Win {
     existing.onClose = o.onClose;
     existing.el.classList.remove('min');
     existing.focus();
+    if (o.loading) loadingScreen(existing.body, o.loading);
     return existing;
   }
   const titleEl = h('span', { class: 'win-title' }, o.title);
@@ -141,6 +165,7 @@ export function openWindow(o: WinOpts): Win {
   tasks.append(taskBtn);
   wins.set(o.id, win);
   win.focus();
+  if (o.loading) loadingScreen(body, o.loading);
   return win;
 }
 
