@@ -120,10 +120,10 @@ export const ACTS: Act[] = [
   {
     id: 'arch', n: 6, name: 'Architecture', tagline: 'Out-of-order cores, memory systems, interconnect and modeling', region: 'CACHE · NOC',
     chapters: [
-      { name: 'Cores', modules: [lesson('pipe'), lesson('ooo')] },
-      { name: 'Memory hierarchy', modules: [lesson('cache'), lesson('coherence'), lesson('dram')] },
-      { name: 'Interconnect', modules: [lesson('bus'), lesson('noc'), lesson('serdes')] },
-      { name: 'Modeling', modules: [lesson('perf')] },
+      { name: 'Cores', modules: [...drill('pipe', 'ooo'), bossMod('boss-cpu')] },
+      { name: 'Memory hierarchy', modules: [...drill('cache', 'coherence', 'dram'), bossMod('boss-mem')] },
+      { name: 'Interconnect', modules: [...drill('bus'), bossMod('boss-protocols'), ...drill('noc', 'serdes'), bossMod('boss-interconnect')] },
+      { name: 'Modeling', modules: [...drill('perf'), bossMod('boss-perf')] },
       {
         name: 'Tapeout', modules: [
           { id: 'drills', kind: 'drills', title: 'Interview Gauntlet', concept: 'spaced-repetition interview questions', xp: 150, route: '#/drills' },
