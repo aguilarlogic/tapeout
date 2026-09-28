@@ -162,8 +162,10 @@ export function expr(canonical: string, vars: string[], fn: (v: Record<string, b
 /**
  * Compile a boolean expression written the way people type them:
  * a&b, a*b, ab (adjacent single letters), a|b, a+b, ~a, !a, a', a^b, parentheses, 0/1.
+ * Multi-character names (cin, s2, a0) are matched longest-first.
  */
 export function compileBool(src: string, vars: string[]): ((env: Record<string, boolean>) => boolean) | null {
+  const names = [...vars].sort((x, y) => y.length - x.length);
   const s = src.replace(/\s+/g, '').toLowerCase().replace(/\band\b/g, '&').replace(/\bor\b/g, '|').replace(/\bnot\b/g, '!');
   let i = 0;
   const peek = () => s[i];
@@ -219,10 +221,12 @@ export function compileBool(src: string, vars: string[]): ((env: Record<string, 
       i++;
       const k = c === '1';
       base = () => k;
-    } else if (c && vars.includes(c)) {
-      i++;
-      base = (e) => e[c];
-    } else return null;
+    } else {
+      const v = names.find((n) => s.startsWith(n, i));
+      if (!v) return null;
+      i += v.length;
+      base = (e) => e[v];
+    }
     while (peek() === "'") {
       i++;
       const b = base!;

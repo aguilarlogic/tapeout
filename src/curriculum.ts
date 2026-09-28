@@ -91,11 +91,11 @@ export const ACTS: Act[] = [
     id: 'digital', n: 3, name: 'Digital Design', tagline: 'Logic, state, Verilog, datapaths and clocking', region: 'CPU CORE',
     chapters: [
       { name: 'Logic', modules: [...drill('bool'), ...logic(['logic-not', 'logic-and', 'logic-or', 'logic-xor'])] },
-      { name: 'Building blocks', modules: [lesson('comb'), ...logic(['logic-mux', 'logic-half', 'logic-full'])] },
-      { name: 'Memory & state', modules: [lesson('seq'), ...logic(['logic-latch', 'logic-counter']), lesson('fsm')] },
-      { name: 'Verilog', modules: [lesson('verilog'), ...mods(RTL_LEVELS, 'rtl', 'rtl')] },
-      { name: 'Microarchitecture', modules: [lesson('alu')] },
-      { name: 'Clocks & resets', modules: [lesson('clk')] },
+      { name: 'Building blocks', modules: [...drill('comb'), ...logic(['logic-mux', 'logic-half', 'logic-full'])] },
+      { name: 'Memory & state', modules: [...drill('seq'), ...logic(['logic-latch', 'logic-counter']), ...drill('fsm'), bossMod('boss-logic')] },
+      { name: 'Verilog', modules: [...drill('verilog'), ...mods(RTL_LEVELS, 'rtl', 'rtl'), bossMod('boss-hdl')] },
+      { name: 'Microarchitecture', modules: [...drill('alu'), bossMod('boss-uarch')] },
+      { name: 'Clocks & resets', modules: [...drill('clk'), bossMod('boss-cdc')] },
     ],
   },
   {
