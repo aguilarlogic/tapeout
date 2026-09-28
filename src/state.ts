@@ -149,6 +149,8 @@ export function setPrefs(p: Partial<Prefs>) {
   save();
 }
 
+export const best = (): Record<string, number> => load().best;
+
 /** Record a minigame score; returns true if it's a new personal best. */
 export function recordBest(game: string, score: number): boolean {
   const s = load();

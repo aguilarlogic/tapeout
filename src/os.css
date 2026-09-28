@@ -343,3 +343,56 @@ table.tt th.exp, table.tt td.exp { color: var(--wave-exp); }
 @media (prefers-reduced-motion: reduce) {
   .win, .mentor-bubble, .node.next, .av-eyes, .avatar.talking .av-mouth { animation: none !important; }
 }
+
+/* ---------------------------------------------------------------- skills (the audit, live) */
+.skills { display: flex; flex-direction: column; gap: 14px; }
+.skills-head { display: flex; justify-content: space-between; gap: 18px; flex-wrap: wrap; align-items: flex-start; }
+.skills-head h2 { margin: 0 0 6px; font-size: 1.5rem; }
+.skills-head p { max-width: 720px; margin: 0 0 8px; }
+.skills-head .btn { margin-top: 8px; }
+.skills-role { display: flex; flex-direction: column; gap: 4px; min-width: 240px; }
+.role-select { padding: 7px 9px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel-2); color: var(--text); font: inherit; }
+.skills-counts { display: flex; flex-wrap: wrap; gap: 8px; font-size: 0.85rem; }
+.skills-counts .cnt { padding: 3px 9px; border-radius: 99px; border: 1px solid var(--border); background: var(--panel-2); }
+.skills-counts .l3 { border-color: var(--gold); }
+.skills-counts .l3 b { color: var(--gold); }
+.skills-counts .l2 b { color: var(--accent); }
+.skills-counts .l1 b { color: var(--text); }
+.skills-body { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 16px; align-items: start; }
+.skill-area { border: 1px solid var(--border); border-radius: 12px; padding: 8px 12px; background: var(--panel); margin-bottom: 12px; }
+.skill-area h3 { margin: 4px 0 6px; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-dim); }
+.skill-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+.skill-table td { padding: 6px 4px; border-top: 1px dashed var(--border); vertical-align: middle; }
+.skill-table tr:first-child td { border-top: 0; }
+.sk-name { width: 55%; }
+.wip-note { color: var(--text-dim); font-size: 0.75rem; }
+.pips { display: inline-flex; gap: 4px; }
+.pip { width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid var(--border); background: transparent; }
+.pip.on { background: var(--accent); border-color: var(--accent); }
+.lv3 .pip.on { background: var(--gold); border-color: var(--gold); }
+.pip.wip { border-style: dashed; opacity: 0.5; }
+.tiers { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.tier { font-size: 0.75rem; padding: 3px 9px; border-radius: 99px; border: 1px solid var(--border); color: var(--text); background: var(--panel-2); white-space: nowrap; }
+a.tier:hover { border-color: var(--accent); text-decoration: none; }
+.tier.done { border-color: color-mix(in srgb, var(--ok) 60%, var(--border)); color: var(--ok); }
+.tier.wip { opacity: 0.45; border-style: dashed; cursor: help; }
+.role-list { border: 1px solid var(--border); border-radius: 12px; padding: 8px 10px; background: var(--panel); position: sticky; top: 0; }
+.role-list h3 { margin: 4px 0 8px; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-dim); }
+.role-row { display: grid; grid-template-columns: 22px minmax(0, 1fr) 60px 36px; gap: 6px; align-items: center; padding: 4px 4px; border-radius: 6px; color: var(--text); font-size: 0.8rem; }
+.role-row:hover { background: var(--panel-2); text-decoration: none; }
+.role-row.on { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.role-row .ri { text-align: center; color: var(--accent); font-family: var(--mono); font-size: 0.75rem; }
+.role-row .rn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.role-row .track.small { width: 60px; }
+.role-row .fill { display: block; }
+.role-row .rp { text-align: right; color: var(--text-dim); font-family: var(--mono); font-size: 0.72rem; }
+.term-banner.boss { border-left-color: var(--gold); background: color-mix(in srgb, var(--gold) 8%, #0a161c); }
+.term-banner.boss b { color: var(--gold); }
+.term-banner.practice { border-left-color: #a78bfa; }
+@media (max-width: 900px) {
+  .skills-body { grid-template-columns: minmax(0, 1fr); }
+  .role-list { position: static; }
+  .sk-name { width: auto; }
+  .skill-table tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
+  .skill-table td.tiers { grid-column: 1 / -1; justify-content: flex-start; border-top: 0; padding-top: 0; }
+}

@@ -4,12 +4,15 @@ import { CARDS, DECKS } from '../games/drills/cards';
 import { GLOSSARY, lookup } from '../glossary';
 import { finalExam, FINAL_ID, findLesson } from '../lessons';
 import type { Lesson, Mood, Question } from '../lessons/types';
+import { findSkill, LEVEL_NAME, nextStep, roleReadiness, ROLES, SKILLS, skillCeiling, skillLevel, type RoleId } from '../mastery/skills';
 import { MINIGAMES } from '../minigames/apps';
+import { BOSSES, findBoss, findPractice, PRACTICE, problem } from '../practice';
+import { gradePractice, nextDifficulty, PRACTICE_COUNT, PRACTICE_HARD, PRACTICE_PASS, type Boss, type Difficulty, type PracticeSet } from '../practice/types';
 import { setMood } from '../os/avatar';
 import { launchGame, randomGame } from '../os/launch';
-import { complete, levelRecord, load, playerName, prefs, Prefs, Profile, profile, rank, RANKS, resetAll, setPrefs, setProfile, totalXp, updateCard } from '../state';
+import { best, complete, levelRecord, load, playerName, prefs, Prefs, Profile, profile, rank, RANKS, recordBest, resetAll, setPrefs, setProfile, totalXp, updateCard } from '../state';
 import { h, stars as starEls } from '../ui/dom';
-import { Interrupted, rich, Terminal } from './terminal';
+import { Interrupted, Redirect, rich, Terminal } from './terminal';
 
 const pickOne = <T>(xs: T[]) => xs[Math.floor(Math.random() * xs.length)];
 const PRAISE = ['Correct.', 'Yes.', 'Exactly.', 'Nice.', 'Right on.', 'That\'s it.'];
@@ -47,6 +50,8 @@ export class Shell {
     return [
       ...(next ? [{ label: `▶ next: ${next.title}`, value: 'next' }] : []),
       { label: 'map', value: 'map' },
+      { label: 'skills', value: 'skills' },
+      { label: 'practice mix', value: 'practice' },
       { label: 'play a game', value: 'play' },
       { label: 'quiz me', value: 'quiz' },
       { label: 'help', value: 'help' },
@@ -136,6 +141,20 @@ export class Shell {
       }
       case 'quiz': case 'drill': case 'interview':
         return this.quiz();
+      case 'practice': case 'train': case 'mix': case 'daily':
+        return this.practiceCmd(arg);
+      case 'endless':
+        return this.practiceCmd(arg, true);
+      case 'skills': case 'skill': case 'matrix': case 'audit':
+        return this.skillsCmd(arg);
+      case 'roles': case 'role': case 'careers': case 'career': case 'jobs':
+        return this.rolesCmd(arg);
+      case 'boss': case 'bosses': {
+        if (!arg) return this.printBosses();
+        const b = findBoss(arg) ?? findBoss(`boss-${arg}`);
+        if (!b) return t.print(`No boss "${arg}". Type \`boss\` to list them.`, 'err');
+        return this.runLesson(b.id);
+      }
       case 'define': case 'explain': case 'whatis': case 'what': case 'who':
         return this.define(cmd.toLowerCase() === 'what' || cmd.toLowerCase() === 'who' ? line : arg);
       case 'status': case 'whoami': case 'stats': case 'progress':
@@ -192,6 +211,10 @@ export class Shell {
       ['learn <name>', 'open any lesson or lab (e.g. `learn cache`)'],
       ['play [game]', 'the arcade: minigames TAPEOUT built'],
       ['quiz', 'a quick interview question'],
+      ['practice [skill]', 'endless generated problems; no argument = a daily mix'],
+      ['skills [role]', 'your skill matrix: every topic, levels 0-3'],
+      ['roles [role]', 'job readiness for every role (DV, PD, quantum…)'],
+      ['boss [name]', 'list or start boss fights (no hints)'],
       ['what is <term>', `look up any of ${GLOSSARY.length} terms`],
       ['status', 'your rank, XP and progress'],
       ['speed <s>', 'how fast I talk: slow | normal | fast | instant'],
@@ -236,8 +259,9 @@ export class Shell {
       ?? ALL_MODULES.find((m) => m.kind === 'lesson' && (m.title.toLowerCase().includes(q) || m.concept.toLowerCase().split(/[ ,/]+/).includes(q)));
   }
 
-  async openModule(m: Module) {
-    if (m.kind === 'lesson' || m.kind === 'final') return this.runLesson(m.id);
+  async openModule(m: Module): Promise<void> {
+    if (m.kind === 'lesson' || m.kind === 'final' || m.kind === 'boss') { await this.runLesson(m.id); return; }
+    if (m.kind === 'practice') return this.practiceCmd(m.id);
     await this.term.say(pickOne([`Opening **${KIND_APP[m.kind]}** for **${m.title}**.`, `Let me pull up **${KIND_APP[m.kind]}**. This one is **${m.title}**.`, `**${m.title}**. I will open ${KIND_APP[m.kind]} for you.`]), 'excited');
     this.go(m.route);
   }
@@ -277,18 +301,166 @@ export class Shell {
     this.term.print('Type `quiz` for another, or open the Interview Gauntlet on the map for a full session.', 'dim');
   }
 
+  // ---------------------------------------------------------------- mastery: practice, skills, roles, bosses
+
+  private async practiceCmd(arg: string, endless = false): Promise<void> {
+    const t = this.term;
+    const q = arg.trim().toLowerCase().replace(/^--?endless\s*/, '');
+    if (/--?endless/.test(arg)) endless = true;
+    if (!q || q === 'mix' || q === 'daily') {
+      const learned = PRACTICE.filter((p) => SKILLS.some((s) => s.practice.includes(p.id) && (skillLevel(s) >= 1 || !!levelRecord(p.id))));
+      if (!learned.length) return t.say('The daily mix draws from topics you have already learned. Finish a lesson first (try `next`), then come back.', 'thinking');
+      const day = new Date().toISOString().slice(0, 10);
+      return this.guarded(() => this.practiceRun(learned, { id: `mix-${day}`, title: 'Daily Mix', concept: `${learned.length} topics you have learned`, xp: 40, endless, mix: true }));
+    }
+    const skill = findSkill(q);
+    const set = findPractice(q) ?? findPractice(`practice-${q}`) ?? (skill ? skill.practice.map(findPractice).find(Boolean) : undefined);
+    if (!set) {
+      const lab = skill?.practice[0];
+      if (lab) { const m = findModule(lab); if (m) return this.openModule(m.module); }
+      return t.say(`I have no practice set for "${arg}" yet. Type \`skills\` to see what exists, or \`practice\` for a mix.`, 'thinking');
+    }
+    return this.guarded(() => this.practiceRun([set], { id: set.id, title: set.title, concept: set.concept, xp: set.xp, endless }));
+  }
+
+  private async guarded(fn: () => Promise<void>) {
+    if (this.busy) return;
+    this.busy = true;
+    try { await fn(); } catch (e) {
+      if (e instanceof Interrupted) { if (!(e instanceof Redirect)) this.term.print('(paused, run it again any time)', 'dim'); }
+      else throw e;
+    } finally { this.busy = false; setMood('neutral'); }
+  }
+
+  private async practiceRun(sets: PracticeSet[], o: { id: string; title: string; concept: string; xp: number; endless: boolean; mix?: boolean }) {
+    const t = this.term;
+    t.block(h('div', { class: 'term-banner practice' },
+      h('span', { class: 'dim' }, o.endless ? 'ENDLESS PRACTICE · type quit to stop' : `PRACTICE · ${PRACTICE_COUNT} problems · difficulty climbs as you get them right`),
+      h('b', null, o.title), h('span', { class: 'dim' }, o.concept)));
+    if (!o.endless) t.print(`To pass: ${PRACTICE_PASS}/${PRACTICE_COUNT} right on the first try, with at least ${PRACTICE_HARD} at ◆◆◆ hard.`, 'dim');
+    let d: Difficulty = 1, run = 0, streak = 0, bestStreak = 0, lastSet = -1, lastGen = -1;
+    const results: { ok: boolean; d: Difficulty }[] = [];
+    try {
+      for (let i = 0; o.endless || i < PRACTICE_COUNT; i++) {
+        const si = Math.floor(Math.random() * sets.length);
+        const { q, gen } = problem(sets[si], Math.random, d, si === lastSet ? lastGen : -1);
+        lastSet = si; lastGen = gen;
+        t.print(`${o.endless ? `#${i + 1}` : `[${i + 1}/${PRACTICE_COUNT}]`}  ${'◆'.repeat(d)}${'◇'.repeat(3 - d)} ${['warm-up', 'standard', 'hard'][d - 1]}${o.mix ? ` · ${sets[si].title}` : ''}${o.endless ? ` · streak ${streak}` : ''}`, 'dim');
+        const ok = await this.question(q, false);
+        results.push({ ok, d });
+        streak = ok ? streak + 1 : 0;
+        bestStreak = Math.max(bestStreak, streak);
+        if (o.endless && streak > 0 && streak % 5 === 0) await t.say(pickOne([`${streak} in a row!`, `Streak of ${streak}. You are on fire, {name}.`, `${streak} straight. The simulator is scared of you.`]), 'excited');
+        run = ok ? run + 1 : 0;
+        const nd = nextDifficulty(d, ok, run);
+        if (nd !== d) { run = 0; if (nd > d) t.print(`▲ difficulty up: ${['warm-up', 'standard', 'hard'][nd - 1]}`, 'ok'); }
+        d = nd;
+      }
+    } catch (e) {
+      if (!(e instanceof Interrupted) || !o.endless) throw e;
+    }
+    const ok = results.filter((x) => x.ok).length, hard = results.filter((x) => x.ok && x.d === 3).length;
+    if (o.endless) {
+      const prev = best()[`streak.${o.id}`] ?? 0;
+      recordBest(`streak.${o.id}`, bestStreak);
+      t.block(h('div', { class: 'term-done' }, h('div', null, h('b', null, 'ENDLESS RUN OVER')),
+        h('div', { class: 'dim' }, `${ok}/${results.length} first try · best streak ${bestStreak}${bestStreak > prev ? ' (new record!)' : ` (record ${prev})`}`)));
+      return;
+    }
+    const grade = gradePractice(results);
+    const gained = grade ? complete(o.id, o.xp, grade) : 0;
+    t.block(h('div', { class: 'term-done' },
+      h('div', null, h('b', null, grade ? 'PRACTICE PASSED' : 'PRACTICE RUN COMPLETE'), ' ', grade ? starEls(grade) : null),
+      h('div', { class: 'dim' }, `${ok}/${PRACTICE_COUNT} first try · ${hard} at hard${grade ? ` · ${gained ? `+${gained} XP` : 'no new XP'}` : ` · need ${PRACTICE_PASS} with ${PRACTICE_HARD} hard to pass`}`)));
+    await t.say(grade === 3 ? 'Near perfect at full difficulty. This topic is yours.' : grade ? 'Passed. That is practised, not just aware: it counts toward your skill level.' : ok >= 6 ? 'Close. The hard ones are where it counts; run it again.' : 'Keep at it. Every miss came with an explanation; a second run always goes better.', grade ? 'proud' : 'thinking');
+    const next = grade && !o.mix ? neighbours(o.id).next : undefined;
+    const opts = [...(next ? [`Continue: **${next.title}** (${KIND_LABEL[next.kind].toLowerCase()})`] : []), 'Run it again', 'Endless mode', 'Back to the shell'];
+    const pick = await t.choose(opts, 'next>', (v) => this.queue.push(v));
+    const k = opts[pick];
+    if (next && pick === 0) this.queue.push(`learn ${next.id}`);
+    else if (k === 'Run it again') this.queue.push(o.mix ? 'practice' : `practice ${o.id}`);
+    else if (k === 'Endless mode') this.queue.push(o.mix ? 'endless mix' : `endless ${o.id}`);
+  }
+
+  private async skillsCmd(arg: string) {
+    const t = this.term;
+    const q = arg.trim().toLowerCase();
+    const skill = q ? findSkill(q) ?? SKILLS.find((s) => s.name.toLowerCase().includes(q)) : undefined;
+    if (skill) return this.printSkill(skill.id);
+    const role = q ? ROLES.find((r) => r.id === q || r.name.toLowerCase().includes(q)) : undefined;
+    this.go(role ? `#/skills/${role.id}` : '#/skills');
+    const lv = [0, 0, 0, 0];
+    SKILLS.forEach((s) => lv[skillLevel(s)]++);
+    t.print(`${SKILLS.length} skills · ${lv[3]} job-ready · ${lv[2]} practised · ${lv[1]} aware · ${lv[0]} not started`, 'hl');
+    await t.say('Opening **Skills.app**: every row of the curriculum audit, with your level in each. Level 3 means job-ready. Type `skill <name>` for one skill\'s ladder, or `roles` to see how ready you are for each job.', 'happy');
+  }
+
+  private printSkill(id: string) {
+    const t = this.term;
+    const s = findSkill(id)!;
+    const lv = skillLevel(s);
+    t.print(`SKILL · ${s.name}`, 'hl');
+    t.print(`level ${lv}/3 ${'●'.repeat(lv)}${'○'.repeat(3 - lv)} ${LEVEL_NAME[lv]}${skillCeiling(s) < 3 ? ` · levels above ${skillCeiling(s)} are still being built (${s.plan ?? 'planned'})` : ''}`, 'dim');
+    const tiers: ['learn' | 'practice' | 'boss', string][] = [['learn', '1 · Learn'], ['practice', '2 · Practice'], ['boss', '3 · Boss']];
+    for (const [k, label] of tiers) {
+      const ids = s[k];
+      this.term.block(h('div', { class: 'term-ch' }, h('div', { class: 'dim' }, `  ${label}`), ...(ids.length ? ids.map((mid) => {
+        const f = findModule(mid), rec = levelRecord(mid);
+        return h('button', { class: `term-mod${rec ? ' done' : ''}`, onclick: () => this.run(`learn ${mid}`) },
+          h('span', { class: 'chk' }, rec ? '✓' : '·'), h('span', null, f?.module.title ?? mid), h('span', { class: 'dim' }, f ? ` ${KIND_LABEL[f.module.kind].toLowerCase()}` : ''), rec ? starEls(rec.stars) : null);
+      }) : [h('div', { class: 'dim' }, `    in development: ${s.plan ?? 'coming soon'}`)])));
+    }
+    const nx = nextStep(s);
+    if (nx) t.line(h('button', { class: 'term-chip inline', onclick: () => this.run(`learn ${nx.id}`) }, `next step: ${findModule(nx.id)?.module.title ?? nx.id} →`));
+  }
+
+  private async rolesCmd(arg: string) {
+    const t = this.term;
+    const q = arg.trim().toLowerCase();
+    const role = q ? ROLES.find((r) => r.id === q || r.name.toLowerCase().includes(q)) : undefined;
+    if (q && !role) return t.print(`No role "${arg}". Type \`roles\` to list them.`, 'err');
+    if (!role) {
+      t.print('JOB READINESS · every role in the industry', 'hl');
+      this.term.block(h('div', { class: 'term-ch' }, ...ROLES.map((r) => {
+        const pct = roleReadiness(r.id);
+        return h('button', { class: 'term-mod', onclick: () => this.run(`roles ${r.id}`) },
+          h('span', { class: 'chk' }, r.icon), h('span', { class: 'mono' }, `${bar(pct, 10)} ${String(Math.round(pct * 100)).padStart(3)}%  `), h('span', null, r.name));
+      })));
+      return t.print('Click a role, or `roles dv`, for the skills it needs.', 'dim');
+    }
+    const ss = SKILLS.filter((s) => s.roles === 'all' || s.roles.includes(role.id as RoleId));
+    t.print(`${role.icon} ${role.name.toUpperCase()} · ${Math.round(roleReadiness(role.id) * 100)}% job-ready`, 'hl');
+    t.print(role.blurb, 'dim');
+    this.term.block(h('div', { class: 'term-ch' }, ...ss.map((s) => {
+      const lv = skillLevel(s);
+      return h('button', { class: `term-mod${lv === 3 ? ' done' : ''}`, onclick: () => this.run(`skill ${s.id}`) },
+        h('span', { class: 'chk mono' }, `${'●'.repeat(lv)}${'○'.repeat(3 - lv)}`), h('span', null, s.name), h('span', { class: 'dim' }, ` ${s.area.toLowerCase()}`));
+    })));
+    this.go(`#/skills/${role.id}`);
+  }
+
+  private printBosses() {
+    this.term.print('BOSS FIGHTS · realistic tasks, no hints, one attempt per question', 'hl');
+    this.term.block(h('div', { class: 'term-ch' }, ...BOSSES.map((b) => {
+      const rec = levelRecord(b.id);
+      return h('button', { class: `term-mod${rec ? ' done' : ''}`, onclick: () => this.run(`learn ${b.id}`) },
+        h('span', { class: 'chk' }, rec ? '♛' : '·'), h('span', null, b.title), h('span', { class: 'dim' }, ` ${b.concept}`), rec ? starEls(rec.stars) : null);
+    })));
+  }
+
   // ---------------------------------------------------------------- lessons
 
   async runLesson(id: string) {
     const exam = id === FINAL_ID;
-    const lesson: Lesson | undefined = exam ? finalExam(Math.random) : findLesson(id);
+    const bossDef = findBoss(id);
+    const lesson: Lesson | undefined = exam ? finalExam(Math.random) : bossDef ?? findLesson(id);
     if (!lesson) return this.term.print(`unknown lesson ${id}`, 'err');
     if (this.busy) return;
     this.busy = true;
     try {
-      await this.lesson(lesson, exam);
+      await this.lesson(lesson, exam ? 'final' : bossDef ? 'boss' : 'lesson');
     } catch (e) {
-      if (e instanceof Interrupted) this.term.print('(lesson paused, run it again any time)', 'dim');
+      if (e instanceof Interrupted) { if (!(e instanceof Redirect)) this.term.print('(lesson paused, run it again any time)', 'dim'); }
       else throw e;
     } finally {
       this.busy = false;
@@ -296,11 +468,13 @@ export class Shell {
     }
   }
 
-  private async lesson(l: Lesson, exam: boolean) {
+  private async lesson(l: Lesson, mode: 'lesson' | 'final' | 'boss') {
     const t = this.term;
     const f = findModule(l.id);
-    t.block(h('div', { class: 'term-banner' },
-      h('span', { class: 'dim' }, f ? `ACT ${f.act.n} · ${f.chapter.name.toUpperCase()}` : 'LESSON'),
+    const exam = mode !== 'lesson';
+    const bossDef = mode === 'boss' ? (l as Boss) : undefined;
+    t.block(h('div', { class: `term-banner${bossDef ? ' boss' : ''}` },
+      h('span', { class: 'dim' }, bossDef ? `BOSS · no hints · one attempt per question · ${Math.round(bossDef.pass * 100)}% to win` : f ? `ACT ${f.act.n} · ${f.chapter.name.toUpperCase()}` : 'LESSON'),
       h('b', null, l.title), h('span', { class: 'dim' }, l.concept)));
     const rnd = Math.random;
     let asked = 0, firstTry = 0;
@@ -327,7 +501,15 @@ export class Shell {
     // grading
     const misses = asked - firstTry;
     let st: number;
-    if (exam) {
+    if (bossDef) {
+      const pct = asked ? firstTry / asked : 0;
+      st = pct >= 0.95 ? 3 : pct >= bossDef.pass - 1e-9 ? 2 : 0;
+      t.print(`score: ${firstTry}/${asked} (${Math.round(pct * 100)}%) · need ${Math.round(bossDef.pass * 100)}%`, 'hl');
+      if (!st) {
+        await t.say(pickOne(['The boss wins this round. Every miss above tells you exactly what to practise; come back when you are ready.', 'Not this time. That is normal for a boss: go run the practice sets, then come back and take it down.']), 'concerned');
+        return;
+      }
+    } else if (exam) {
       const pct = asked ? firstTry / asked : 0;
       st = pct >= 0.9 ? 3 : pct >= 0.75 ? 2 : pct >= 0.6 ? 1 : 0;
       t.print(`score: ${firstTry}/${asked} (${Math.round(pct * 100)}%)`, 'hl');
@@ -337,17 +519,18 @@ export class Shell {
     const gained = complete(l.id, l.xp, st);
     const after = rank();
     const card = h('div', { class: 'term-done' },
-      h('div', null, h('b', null, exam ? 'TAPEOUT REVIEW PASSED' : 'LESSON COMPLETE'), ' ', starEls(st)),
+      h('div', null, h('b', null, bossDef ? 'BOSS DEFEATED' : exam ? 'TAPEOUT REVIEW PASSED' : 'LESSON COMPLETE'), ' ', starEls(st)),
       h('div', { class: 'dim' }, `${firstTry}/${asked} first try · ${gained ? `+${gained} XP` : 'no new XP (you already did better)'}`),
       l.recap.length ? h('ul', { class: 'recap' }, ...l.recap.map((r) => h('li', null, ...rich(r)))) : null);
     t.block(card);
     const mood: Mood = st === 3 ? 'proud' : st === 2 ? 'happy' : 'neutral';
     if (after.index > before) await t.say(`And that means a promotion. You are now a **${after.title}**, {name}!`, 'excited');
-    if (exam) await t.say('That is it. Every block signed off, every question answered. Your chip is ready for tapeout. For real next steps: put a design on silicon with Tiny Tapeout, and bring these answers to your interviews. I am proud of you, {name}.', 'proud');
+    if (bossDef) await t.say(pickOne(['Boss down. That is job-level work, {name}: no hints, no second tries.', 'Defeated. Somewhere a senior engineer just nodded approvingly.', 'That is the real thing. You earned that level.']), 'proud');
+    else if (mode === 'final') await t.say('That is it. Every block signed off, every question answered. Your chip is ready for tapeout. For real next steps: put a design on silicon with Tiny Tapeout, and bring these answers to your interviews. I am proud of you, {name}.', 'proud');
     else await t.say(st === 3 ? pickOne(['Flawless. Onward.', 'Perfect run. You make this look easy.', 'Every question first try. Nice.']) : st === 2 ? 'Good work. A couple of stumbles, which is exactly how learning is supposed to feel.' : 'Done. This one was tough; come back and replay it for more stars later.', mood);
     const nx = neighbours(l.id).next;
-    if (nx && !exam) {
-      const pick = await t.choose([`Continue: **${nx.title}** (${KIND_LABEL[nx.kind].toLowerCase()})`, 'Back to the shell'], 'next>');
+    if (nx && mode !== 'final') {
+      const pick = await t.choose([`Continue: **${nx.title}** (${KIND_LABEL[nx.kind].toLowerCase()})`, 'Back to the shell'], 'next>', (v) => this.queue.push(v));
       if (pick === 0) this.queue.push(`learn ${nx.id}`);
     }
   }

@@ -9,6 +9,9 @@ export class Interrupted extends Error {
   constructor() { super('interrupted'); }
 }
 
+/** The player typed a command at a menu instead of picking an option; the shell runs it next. */
+export class Redirect extends Interrupted {}
+
 const SPEED: Record<string, number> = { slow: 0.035, normal: 0.08, fast: 0.22, instant: Infinity }; // chars per ms
 const reducedMotion = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -173,7 +176,8 @@ export class Terminal {
   }
 
   /** Numbered choices; answer by number, by clicking, or by typing the option text. */
-  async choose(options: string[], prompt = 'choose>'): Promise<number> {
+  /** `passthrough`: called with anything typed that is not an option (then the menu is abandoned via Redirect). */
+  async choose(options: string[], prompt = 'choose>', passthrough?: (text: string) => void): Promise<number> {
     const list = h('ol', { class: 'term-choices' }, ...options.map((o, i) => h('li', null, h('button', { class: 'term-opt', onclick: () => this.submit(String(i + 1)) }, ...rich(o)))));
     this.block(list);
     for (;;) {
@@ -187,6 +191,11 @@ export class Terminal {
         return idx;
       }
       if (['quit', 'exit', 'q'].includes(v)) throw new Interrupted();
+      if (passthrough && v.length > 1 && !/^\d+$/.test(v)) {
+        list.querySelectorAll('button').forEach((b) => ((b as HTMLButtonElement).disabled = true));
+        passthrough(v);
+        throw new Redirect();
+      }
       this.print(`Pick 1-${options.length}.`, 'dim');
     }
   }

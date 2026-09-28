@@ -8,6 +8,7 @@ import { pcbPage } from '../games/pcb/page';
 import { rtlPage } from '../games/rtl/page';
 import { timingPage } from '../games/timing/page';
 import { uvmPage } from '../games/uvm/page';
+import { skillsApp } from '../mastery/app';
 import { MINIGAMES } from '../minigames/apps';
 import { onChange, profile, rank, resetAll, totalXp } from '../state';
 import { Shell } from '../term/shell';
@@ -44,6 +45,10 @@ function openMap() {
   openWindow({ id: 'map', title: 'Map.app — campaign', icon: '◈', content: mapApp(), w: 980, h: 720, onClose: home });
 }
 
+function openSkills(focus?: string) {
+  openWindow({ id: 'skills', title: 'Skills.app — the audit, live', icon: '◉', content: skillsApp(focus), w: 1040, h: 740, onClose: home });
+}
+
 function home() {
   if (location.hash && location.hash !== '#/') location.hash = '#/';
 }
@@ -62,6 +67,12 @@ function route() {
     return;
   }
   if (section === 'map' || section === 'track') return openMap();
+  if (section === 'skills') return openSkills(id);
+  if (section === 'practice' && id) {
+    (getWindow('term') ?? openTerminal()).focus();
+    if (profile()) shell.run(`practice ${id}`);
+    return;
+  }
   if (section === 'drills') {
     openWindow({ id: 'drills', title: 'Flashcards.app — interview gauntlet', icon: '?!', content: drillsPage(id), w: 860, h: 680, onClose: home });
     return;
@@ -99,6 +110,8 @@ function taskbar(): HTMLElement {
     renderTray();
     const map = getWindow('map');
     if (map) map.setContent(mapApp());
+    const sk = getWindow('skills');
+    if (sk) sk.setContent(skillsApp(location.hash.startsWith('#/skills/') ? location.hash.split('/')[2] : undefined));
   });
 
   const menu = h('div', { class: 'start-menu', hidden: true, role: 'menu' });
@@ -107,6 +120,7 @@ function taskbar(): HTMLElement {
     h('div', { class: 'start-head' }, h('b', null, 'TAPE-OS'), h('span', { class: 'dim' }, profile()?.name ?? '')),
     item('›_', 'Terminal (TAPEOUT)', () => { (getWindow('term') ?? openTerminal()).focus(); term.focus(); }),
     item('◈', 'Campaign map', () => (location.hash = '#/map')),
+    item('◉', 'Skills & job readiness', () => (location.hash = '#/skills')),
     item('?!', 'Interview flashcards', () => (location.hash = '#/drills')),
     h('div', { class: 'start-sep' }, 'Arcade'),
     ...MINIGAMES.map((g) => item(g.icon, g.title, () => void launchGame(g.id))),
@@ -130,6 +144,7 @@ function icons(): HTMLElement {
   return h('div', { class: 'desk-icons' },
     icon('›_', 'Terminal', () => { (getWindow('term') ?? openTerminal()).focus(); term.focus(); }),
     icon('◈', 'Map', () => (location.hash = '#/map')),
+    icon('◉', 'Skills', () => (location.hash = '#/skills')),
     icon('?!', 'Flashcards', () => (location.hash = '#/drills')),
     icon('▶', 'Arcade', () => { (getWindow('term') ?? openTerminal()).focus(); shell.run('play'); }));
 }

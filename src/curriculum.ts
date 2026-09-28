@@ -7,9 +7,10 @@ import { DEBUG_LEVELS, RTL_LEVELS } from './games/rtl/levels';
 import { TIMING_LEVELS } from './games/timing/levels';
 import { UVM_PUZZLES } from './games/uvm/puzzles';
 import { FINAL_ID, FINAL_XP, findLesson } from './lessons';
+import { findBoss, findPractice } from './practice';
 import { levelRecord, profile } from './state';
 
-export type ModKind = 'lesson' | 'logic' | 'cmos' | 'rtl' | 'debug' | 'cov' | 'uvm' | 'sta' | 'pcb' | 'drills' | 'final';
+export type ModKind = 'lesson' | 'practice' | 'boss' | 'logic' | 'cmos' | 'rtl' | 'debug' | 'cov' | 'uvm' | 'sta' | 'pcb' | 'drills' | 'final';
 
 export interface Module {
   id: string;
@@ -23,13 +24,13 @@ export interface Chapter { name: string; modules: Module[] }
 export interface Act { id: string; n: number; name: string; tagline: string; region: string; chapters: Chapter[] }
 
 export const KIND_LABEL: Record<ModKind, string> = {
-  lesson: 'Lesson', logic: 'Logic lab', cmos: 'Transistor lab', rtl: 'Verilog', debug: 'Bug hunt', cov: 'Coverage',
+  lesson: 'Lesson', practice: 'Practice', boss: 'Boss', logic: 'Logic lab', cmos: 'Transistor lab', rtl: 'Verilog', debug: 'Bug hunt', cov: 'Coverage',
   uvm: 'UVM', sta: 'Timing', pcb: 'Board', drills: 'Interview', final: 'Final review',
 };
 
 /** The desktop app a module opens in. */
 export const KIND_APP: Record<ModKind, string> = {
-  lesson: 'terminal', logic: 'Logic Lab', cmos: 'Logic Lab', rtl: 'Verilog IDE', debug: 'Verilog IDE', cov: 'Coverage',
+  lesson: 'terminal', practice: 'terminal', boss: 'terminal', logic: 'Logic Lab', cmos: 'Logic Lab', rtl: 'Verilog IDE', debug: 'Verilog IDE', cov: 'Coverage',
   uvm: 'UVM Builder', sta: 'Timing', pcb: 'Board Router', drills: 'Flashcards', final: 'terminal',
 };
 
@@ -37,6 +38,16 @@ const lesson = (id: string): Module => {
   const l = findLesson(id);
   if (!l) throw new Error(`unknown lesson ${id}`);
   return { id, kind: 'lesson', title: l.title, concept: l.concept, xp: l.xp, route: `#/learn/${id}` };
+};
+const prac = (id: string): Module => {
+  const p = findPractice(id);
+  if (!p) throw new Error(`unknown practice set ${id}`);
+  return { id, kind: 'practice', title: p.title, concept: p.concept, xp: p.xp, route: `#/practice/${id}` };
+};
+const bossMod = (id: string): Module => {
+  const b = findBoss(id);
+  if (!b) throw new Error(`unknown boss ${id}`);
+  return { id, kind: 'boss', title: b.title, concept: b.concept, xp: b.xp, route: `#/learn/${id}` };
 };
 const mods = <T extends { id: string; title: string; concept: string; xp: number }>(xs: T[], kind: ModKind, prefix: string, only?: (x: T) => boolean): Module[] =>
   xs.filter(only ?? (() => true)).map((x) => ({ id: x.id, kind, title: x.title, concept: x.concept, xp: x.xp, route: `#/${prefix}/${x.id}` }));
@@ -49,11 +60,11 @@ export const ACTS: Act[] = [
   {
     id: 'foundations', n: 1, name: 'Foundations', tagline: 'Numbers, circuits, the math and physics under every chip', region: 'STD CELLS',
     chapters: [
-      { name: 'Numbers', modules: [lesson('bits'), lesson('twos')] },
-      { name: 'Circuits', modules: [lesson('ohm'), lesson('rc')] },
+      { name: 'Numbers', modules: [lesson('bits'), prac('practice-bits'), lesson('twos'), prac('practice-twos'), bossMod('boss-numbers')] },
+      { name: 'Circuits', modules: [lesson('ohm'), prac('practice-ohm'), lesson('rc'), prac('practice-rc'), bossMod('boss-circuits1')] },
       { name: 'Engineering math', modules: [lesson('calc'), lesson('linalg'), lesson('ode')] },
       { name: 'Semiconductor physics', modules: [lesson('semi'), lesson('mosphys')] },
-      { name: 'Transistors', modules: [lesson('mos'), ...logic(['cmos-inv', 'cmos-nand', 'cmos-nor', 'cmos-and', 'cmos-aoi'])] },
+      { name: 'Transistors', modules: [lesson('mos'), prac('practice-mos'), ...logic(['cmos-inv', 'cmos-nand', 'cmos-nor', 'cmos-and', 'cmos-aoi'])] },
     ],
   },
   {
@@ -68,7 +79,7 @@ export const ACTS: Act[] = [
   {
     id: 'digital', n: 3, name: 'Digital Design', tagline: 'Logic, state, Verilog, datapaths and clocking', region: 'CPU CORE',
     chapters: [
-      { name: 'Logic', modules: [lesson('bool'), ...logic(['logic-not', 'logic-and', 'logic-or', 'logic-xor'])] },
+      { name: 'Logic', modules: [lesson('bool'), prac('practice-bool'), ...logic(['logic-not', 'logic-and', 'logic-or', 'logic-xor'])] },
       { name: 'Building blocks', modules: [lesson('comb'), ...logic(['logic-mux', 'logic-half', 'logic-full'])] },
       { name: 'Memory & state', modules: [lesson('seq'), ...logic(['logic-latch', 'logic-counter']), lesson('fsm')] },
       { name: 'Verilog', modules: [lesson('verilog'), ...mods(RTL_LEVELS, 'rtl', 'rtl')] },
