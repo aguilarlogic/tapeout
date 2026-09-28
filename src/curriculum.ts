@@ -101,10 +101,10 @@ export const ACTS: Act[] = [
   {
     id: 'impl', n: 4, name: 'VLSI & Implementation', tagline: 'Timing, circuits, power and the board', region: 'CLOCKS · PHY',
     chapters: [
-      { name: 'Static timing', modules: [lesson('sta'), ...mods(TIMING_LEVELS, 'sta', 'sta')] },
-      { name: 'Circuit design', modules: [lesson('vlsi')] },
-      { name: 'Low power', modules: [lesson('power')] },
-      { name: 'Board', modules: [lesson('pcb'), ...mods(PCB_LEVELS, 'pcb', 'pcb')] },
+      { name: 'Static timing', modules: [...drill('sta'), ...mods(TIMING_LEVELS, 'sta', 'sta'), bossMod('boss-sta')] },
+      { name: 'Circuit design', modules: [...drill('vlsi'), bossMod('boss-circuit')] },
+      { name: 'Low power', modules: [...drill('power'), bossMod('boss-lowpower')] },
+      { name: 'Board', modules: [...drill('pcb'), ...mods(PCB_LEVELS, 'pcb', 'pcb'), bossMod('boss-board')] },
     ],
   },
   {
