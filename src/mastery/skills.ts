@@ -89,10 +89,10 @@ export const SKILLS: Skill[] = [
   S('dsa', 'Software', 'Data structures and algorithms', ['eda', 'arch', 'dv', 'firmware'], ['dsa'], [], [], 'Code Lab'),
   S('asm', 'Software', 'Assembly and the hardware/software interface', ['firmware', 'arch', 'rtl', 'dv', 'postsi'], ['asm'], [], [], 'ISA Lab'),
   S('os', 'Software', 'Operating systems', ['firmware', 'arch', 'postsi'], ['os'], [], [], 'OS labs'),
-  S('shell', 'Tooling', 'Linux shell, pipes and regular expressions', 'all', ['shell'], [], [], 'Shell Lab'),
-  S('git', 'Tooling', 'Version control with git', 'all', ['git'], [], [], 'Shell Lab (git)'),
-  S('python', 'Tooling', 'Python scripting', 'all', ['python'], [], [], 'Code Lab (Python)'),
-  S('flows', 'Tooling', 'TCL, Make and EDA flow scripting', ['pd', 'dv', 'rtl', 'eda', 'dft', 'soc', 'libchar'], ['flows'], [], [], 'Shell Lab'),
+  S('shell', 'Tooling', 'Linux shell, pipes and regular expressions', 'all', ['shell'], ['practice-shell'], ['boss-shell']),
+  S('git', 'Tooling', 'Version control with git', 'all', ['git'], ['practice-git'], ['boss-git']),
+  S('python', 'Tooling', 'Python scripting', 'all', ['python'], ['practice-python'], ['boss-python']),
+  S('flows', 'Tooling', 'TCL, Make and EDA flow scripting', ['pd', 'dv', 'rtl', 'eda', 'dft', 'soc', 'libchar'], ['flows'], ['practice-flows'], ['boss-flows']),
 
   // ------------------------------------------------ design verification
   S('tb-arch', 'Verification', 'Testbench architecture, scoreboards, reference models', ['dv'], ['dv'], [], [], 'SV Lab'),

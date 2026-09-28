@@ -535,19 +535,32 @@ export class Shell {
     }
   }
 
+  /** Say a question; a ```fenced``` part is shown as a code block (logs, source, schematics). */
+  private async pose(text: string) {
+    const parts = text.split('```');
+    for (let i = 0; i < parts.length; i++) {
+      const p = parts[i].replace(/^\n+|\n+$/g, '');
+      if (!p) continue;
+      if (i % 2) this.term.art(p);
+      else await this.term.say(p, 'thinking');
+    }
+  }
+
   /** Ask one question. Returns true if answered correctly on the first attempt. */
   private async question(q: Question, exam: boolean): Promise<boolean> {
     const t = this.term;
     if (q.t === 'mc') {
-      await t.say(q.q, 'thinking');
+      await this.pose(q.q);
+      // Shuffle the display order so the answer's position gives nothing away (unless options refer to each other).
       const order = q.options.map((_, i) => i);
+      if (!q.options.some((o) => /\babove\b|\bbelow\b|^(both|neither|none|all) /i.test(o))) for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
       const i = await t.choose(order.map((j) => q.options[j]), 'answer>');
       const ok = order[i] === q.a;
       if (exam) { t.print(ok ? '✓' : `✗ answer: ${q.options[q.a]}`, ok ? 'ok' : 'err'); return ok; }
       await t.say(`${ok ? pickOne(PRAISE) : `Not quite: it is **${q.options[q.a]}**.`} ${q.why}`, ok ? 'happy' : 'concerned');
       return ok;
     }
-    await t.say(q.q, 'thinking');
+    await this.pose(q.q);
     const tries = exam ? 1 : 3;
     let first = true;
     for (let k = 0; k < tries; k++) {

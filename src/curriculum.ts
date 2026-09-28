@@ -76,7 +76,10 @@ export const ACTS: Act[] = [
   {
     id: 'systems', n: 2, name: 'Systems & Software', tagline: 'The shell, git, Python, C, C++, algorithms, compilers and operating systems', region: 'FIRMWARE',
     chapters: [
-      { name: 'Tools of the trade', modules: [lesson('shell'), lesson('git'), lesson('python'), lesson('flows')] },
+      { name: 'The shell', modules: [...drill('shell'), bossMod('boss-shell')] },
+      { name: 'Git', modules: [...drill('git'), bossMod('boss-git')] },
+      { name: 'Python', modules: [...drill('python'), bossMod('boss-python')] },
+      { name: 'Flows & scripting', modules: [...drill('flows'), bossMod('boss-flows')] },
       { name: 'Programming', modules: [lesson('c'), lesson('cpp')] },
       { name: 'Algorithms', modules: [lesson('dsa')] },
       { name: 'Hardware/software interface', modules: [lesson('asm')] },

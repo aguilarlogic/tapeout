@@ -1,4 +1,5 @@
 // Small helpers shared by the practice banks and bosses.
+import type { Answer } from '../lessons/answers';
 import { mc, type McStep } from '../lessons/types';
 
 export const hex = (n: number, w = 2) => '0x' + n.toString(16).toUpperCase().padStart(w, '0');
@@ -61,4 +62,11 @@ export const shuffled = (r: () => number, right: string, wrong: readonly string[
 export const mcs = (r: () => number, q: string, right: string, wrong: readonly string[], why: string): McStep => {
   const [opts, a] = shuffled(r, right, wrong);
   return mc(q, opts, a, why);
+};
+
+/** Exact text answer, ignoring whitespace and quote style: exact("[1, 2]") accepts "[1,2]". */
+export const exact = (canonical: string, ...alts: string[]): Answer => {
+  const n = (s: string) => s.replace(/\s+/g, '').replace(/"/g, "'");
+  const set = [canonical, ...alts].map(n);
+  return { canonical, check: (s) => !!s.trim() && set.includes(n(s)) };
 };

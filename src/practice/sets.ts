@@ -3,7 +3,8 @@ import { CIRCUIT_BOSSES, CIRCUIT_PRACTICE } from './circuits';
 import { FOUNDATION_BOSSES, FOUNDATION_PRACTICE } from './foundations';
 import { MATH_BOSSES, MATH_PRACTICE } from './math';
 import { SIGNAL_BOSSES, SIGNAL_PRACTICE } from './signals';
+import { TOOLING_BOSSES, TOOLING_PRACTICE } from './tooling';
 import type { Boss, PracticeSet } from './types';
 
-export const PRACTICE_LIST: PracticeSet[] = [...FOUNDATION_PRACTICE, ...CIRCUIT_PRACTICE, ...MATH_PRACTICE, ...SIGNAL_PRACTICE];
-export const BOSSES_LIST: Boss[] = [...FOUNDATION_BOSSES, ...CIRCUIT_BOSSES, ...MATH_BOSSES, ...SIGNAL_BOSSES];
+export const PRACTICE_LIST: PracticeSet[] = [...FOUNDATION_PRACTICE, ...CIRCUIT_PRACTICE, ...MATH_PRACTICE, ...SIGNAL_PRACTICE, ...TOOLING_PRACTICE];
+export const BOSSES_LIST: Boss[] = [...FOUNDATION_BOSSES, ...CIRCUIT_BOSSES, ...MATH_BOSSES, ...SIGNAL_BOSSES, ...TOOLING_BOSSES];
