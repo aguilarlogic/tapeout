@@ -49,6 +49,8 @@ const bossMod = (id: string): Module => {
   if (!b) throw new Error(`unknown boss ${id}`);
   return { id, kind: 'boss', title: b.title, concept: b.concept, xp: b.xp, route: `#/learn/${id}` };
 };
+/** A lesson followed by its practice bank (`practice-<id>`), when one exists. */
+const drill = (...ids: string[]): Module[] => ids.flatMap((id) => (findPractice(`practice-${id}`) ? [lesson(id), prac(`practice-${id}`)] : [lesson(id)]));
 const mods = <T extends { id: string; title: string; concept: string; xp: number }>(xs: T[], kind: ModKind, prefix: string, only?: (x: T) => boolean): Module[] =>
   xs.filter(only ?? (() => true)).map((x) => ({ id: x.id, kind, title: x.title, concept: x.concept, xp: x.xp, route: `#/${prefix}/${x.id}` }));
 const logic = (ids: string[]) => ids.map((id) => {
@@ -60,13 +62,15 @@ export const ACTS: Act[] = [
   {
     id: 'foundations', n: 1, name: 'Foundations', tagline: 'Numbers, circuits, signals, the math and physics under every chip', region: 'STD CELLS',
     chapters: [
-      { name: 'Numbers', modules: [lesson('bits'), prac('practice-bits'), lesson('twos'), prac('practice-twos'), bossMod('boss-numbers')] },
-      { name: 'Circuits', modules: [lesson('ohm'), prac('practice-ohm'), lesson('rc'), prac('practice-rc'), bossMod('boss-circuits1'), lesson('kcl'), lesson('ac')] },
-      { name: 'Engineering math', modules: [lesson('calc'), lesson('linalg'), lesson('ode'), lesson('prob'), lesson('numerics')] },
+      { name: 'Numbers', modules: [...drill('bits', 'twos'), bossMod('boss-numbers')] },
+      { name: 'Circuits', modules: [...drill('ohm', 'rc'), bossMod('boss-circuits1'), ...drill('kcl', 'ac')] },
+      { name: 'Calculus & linear algebra', modules: [...drill('calc'), bossMod('boss-calc'), ...drill('linalg'), bossMod('boss-linalg')] },
+      { name: 'Differential equations', modules: [...drill('ode'), bossMod('boss-ode')] },
+      { name: 'Probability & numerics', modules: [...drill('prob'), bossMod('boss-prob'), ...drill('numerics'), bossMod('boss-numerics')] },
       { name: 'Signals & control', modules: [lesson('signals'), lesson('dsp'), lesson('control')] },
       { name: 'Physics', modules: [lesson('semi'), lesson('mosphys'), lesson('em')] },
       { name: 'Electronics', modules: [lesson('electronics')] },
-      { name: 'Transistors', modules: [lesson('mos'), prac('practice-mos'), ...logic(['cmos-inv', 'cmos-nand', 'cmos-nor', 'cmos-and', 'cmos-aoi'])] },
+      { name: 'Transistors', modules: [...drill('mos'), ...logic(['cmos-inv', 'cmos-nand', 'cmos-nor', 'cmos-and', 'cmos-aoi'])] },
     ],
   },
   {
@@ -82,7 +86,7 @@ export const ACTS: Act[] = [
   {
     id: 'digital', n: 3, name: 'Digital Design', tagline: 'Logic, state, Verilog, datapaths and clocking', region: 'CPU CORE',
     chapters: [
-      { name: 'Logic', modules: [lesson('bool'), prac('practice-bool'), ...logic(['logic-not', 'logic-and', 'logic-or', 'logic-xor'])] },
+      { name: 'Logic', modules: [...drill('bool'), ...logic(['logic-not', 'logic-and', 'logic-or', 'logic-xor'])] },
       { name: 'Building blocks', modules: [lesson('comb'), ...logic(['logic-mux', 'logic-half', 'logic-full'])] },
       { name: 'Memory & state', modules: [lesson('seq'), ...logic(['logic-latch', 'logic-counter']), lesson('fsm')] },
       { name: 'Verilog', modules: [lesson('verilog'), ...mods(RTL_LEVELS, 'rtl', 'rtl')] },

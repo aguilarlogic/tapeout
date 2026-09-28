@@ -66,11 +66,11 @@ const S = (id: string, area: string, name: string, roles: RoleId[] | 'all', lear
 export const SKILLS: Skill[] = [
   // ------------------------------------------------ core engineering knowledge
   S('numbers', 'Digital foundations', 'Binary, hex, bit manipulation, signed numbers', 'all', ['bits', 'twos'], ['practice-bits', 'practice-twos'], ['boss-numbers']),
-  S('calc', 'Math', 'Multivariable calculus and optimization', ['analog', 'circuit', 'rf', 'process', 'quantum', 'eda', 'arch'], ['calc'], [], [], 'practice bank + Lagrange sizing boss'),
-  S('linalg', 'Math', 'Linear algebra (LU, eigen, SVD)', ['analog', 'circuit', 'ai', 'quantum', 'eda', 'rf'], ['linalg'], [], [], 'practice bank + nodal-analysis boss'),
-  S('ode', 'Math', 'ODEs and PDEs', ['analog', 'pmic', 'board', 'rf', 'circuit', 'process'], ['ode'], [], [], 'practice bank + Circuit Lab RLC design'),
-  S('prob', 'Math', 'Probability and statistics', ['dv', 'process', 'test', 'analog', 'memory', 'ai', 'quantum', 'fusa', 'circuit', 'arch'], ['prob'], [], [], 'new lesson + practice + Monte Carlo yield boss'),
-  S('numerics', 'Math', 'Numerical methods', ['eda', 'analog', 'circuit', 'arch'], ['numerics'], [], [], 'new lesson + practice + Code Lab solver boss'),
+  S('calc', 'Math', 'Multivariable calculus and optimization', ['analog', 'circuit', 'rf', 'process', 'quantum', 'eda', 'arch'], ['calc'], ['practice-calc'], ['boss-calc']),
+  S('linalg', 'Math', 'Linear algebra (LU, eigen, SVD)', ['analog', 'circuit', 'ai', 'quantum', 'eda', 'rf'], ['linalg'], ['practice-linalg'], ['boss-linalg']),
+  S('ode', 'Math', 'ODEs and PDEs', ['analog', 'pmic', 'board', 'rf', 'circuit', 'process'], ['ode'], ['practice-ode'], ['boss-ode']),
+  S('prob', 'Math', 'Probability and statistics', ['dv', 'process', 'test', 'analog', 'memory', 'ai', 'quantum', 'fusa', 'circuit', 'arch'], ['prob'], ['practice-prob'], ['boss-prob']),
+  S('numerics', 'Math', 'Numerical methods', ['eda', 'analog', 'circuit', 'arch'], ['numerics'], ['practice-numerics'], ['boss-numerics']),
   S('ohm', 'Circuits', "Ohm's law, dividers, RC", ['analog', 'circuit', 'pmic', 'board', 'rf', 'io', 'sensors', 'firmware'], ['ohm', 'rc'], ['practice-ohm', 'practice-rc'], ['boss-circuits1']),
   S('kcl', 'Circuits', 'KCL/KVL, nodal and mesh analysis, Thevenin/Norton', ['analog', 'circuit', 'pmic', 'board', 'rf', 'io'], ['kcl'], [], [], 'new lesson + Circuit Lab'),
   S('ac', 'Circuits', 'AC analysis, phasors, impedance, Bode plots', ['analog', 'rf', 'pmic', 'board', 'clocking', 'sensors'], ['ac'], [], [], 'new lesson + Circuit Lab AC analysis'),

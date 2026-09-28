@@ -2,15 +2,8 @@
 import { bin, expr, hexa, num, qty } from '../lessons/answers';
 import { ask, between, mc, pick } from '../lessons/types';
 import { boss, practice, tier } from './types';
+import { eng, hex, pow2, toSigned } from './util';
 
-const hex = (n: number, w = 2) => '0x' + n.toString(16).toUpperCase().padStart(w, '0');
-const eng = (x: number, unit: string) => {
-  const a = Math.abs(x);
-  const [k, p] = a >= 1e6 ? [1e-6, 'M'] : a >= 1e3 ? [1e-3, 'k'] : a >= 1 || a === 0 ? [1, ''] : a >= 1e-3 ? [1e3, 'm'] : a >= 1e-6 ? [1e6, 'µ'] : a >= 1e-9 ? [1e9, 'n'] : [1e12, 'p'];
-  return `${+(x * k).toPrecision(3)} ${p}${unit}`;
-};
-const pow2 = (n: number) => (n ? n.toString(2).split('').reverse().map((b, i) => (b === '1' ? 2 ** i : 0)).filter(Boolean).reverse().join(' + ') : 'no powers of two at all');
-const toSigned = (v: number, w: number) => (v >= 2 ** (w - 1) ? v - 2 ** w : v);
 
 export const bitsPractice = practice('practice-bits', 'Bit Drills', 'binary, hex, bit manipulation', [
   (r, d) => {
