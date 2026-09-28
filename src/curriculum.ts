@@ -103,18 +103,18 @@ export const ACTS: Act[] = [
     chapters: [
       { name: 'Static timing', modules: [...drill('sta'), ...mods(TIMING_LEVELS, 'sta', 'sta'), bossMod('boss-sta')] },
       { name: 'Circuit design', modules: [...drill('vlsi'), bossMod('boss-circuit')] },
-      { name: 'Low power', modules: [...drill('power'), bossMod('boss-lowpower')] },
+      { name: 'Low power', modules: [...drill('power'), bossMod('boss-lowpower'), bossMod('boss-upf')] },
       { name: 'Board', modules: [...drill('pcb'), ...mods(PCB_LEVELS, 'pcb', 'pcb'), bossMod('boss-board')] },
     ],
   },
   {
     id: 'verif', n: 5, name: 'Verification & Test', tagline: 'Debug, coverage, UVM, assertions, formal and DFT', region: 'DV SIGNOFF',
     chapters: [
-      { name: 'Debug', modules: [lesson('dv'), ...mods(DEBUG_LEVELS, 'debug', 'rtl')] },
-      { name: 'Coverage', modules: [lesson('crv'), ...mods(SCENARIOS, 'cov', 'cov')] },
-      { name: 'UVM', modules: [lesson('uvm'), ...mods(UVM_PUZZLES, 'uvm', 'uvm')] },
-      { name: 'Assertions & formal', modules: [lesson('sva'), lesson('formal')] },
-      { name: 'Design for test', modules: [lesson('dft')] },
+      { name: 'Testbenches & debug', modules: [...drill('dv'), ...mods(DEBUG_LEVELS, 'debug', 'rtl'), bossMod('boss-tb'), bossMod('boss-debug')] },
+      { name: 'Random & coverage', modules: [...drill('crv'), bossMod('boss-crv'), prac('practice-cov'), ...mods(SCENARIOS, 'cov', 'cov'), bossMod('boss-coverage')] },
+      { name: 'UVM', modules: [...drill('uvm'), ...mods(UVM_PUZZLES, 'uvm', 'uvm'), bossMod('boss-uvm')] },
+      { name: 'Assertions & formal', modules: [...drill('sva'), bossMod('boss-sva'), ...drill('formal'), bossMod('boss-formal')] },
+      { name: 'Design for test', modules: [...drill('dft'), bossMod('boss-dft')] },
     ],
   },
   {
