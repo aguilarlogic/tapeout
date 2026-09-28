@@ -135,11 +135,11 @@ export const ACTS: Act[] = [
   {
     id: 'roles', n: 7, name: 'Specializations', tagline: 'The roles beyond RTL and DV: analog, RF, physical design, memory, fab, AI, security, quantum', region: 'SPECIALTY IP',
     chapters: [
-      { name: 'Circuits & signals', modules: [lesson('analog'), lesson('rf'), lesson('pmic'), lesson('sipi')] },
-      { name: 'Silicon & manufacturing', modules: [lesson('pnr'), lesson('sram'), lesson('fab'), lesson('pkg')] },
-      { name: 'Bring-up & production', modules: [lesson('postsi'), lesson('ate'), lesson('emu')] },
-      { name: 'Domain chips', modules: [lesson('npu'), lesson('hwsec'), lesson('fusa'), lesson('photonics')] },
-      { name: 'Quantum', modules: [lesson('qubit'), lesson('qctrl')] },
+      { name: 'Circuits & signals', modules: [...drill('analog'), bossMod('boss-analog'), ...drill('rf'), bossMod('boss-rf'), ...drill('pmic'), bossMod('boss-pmic'), lesson('sipi')] },
+      { name: 'Silicon & manufacturing', modules: [...drill('pnr'), bossMod('boss-pd'), ...drill('sram'), bossMod('boss-memory'), ...drill('fab'), bossMod('boss-process'), ...drill('pkg'), bossMod('boss-pkg')] },
+      { name: 'Bring-up & production', modules: [...drill('postsi'), bossMod('boss-postsi'), ...drill('ate'), bossMod('boss-test'), ...drill('emu'), bossMod('boss-fpga')] },
+      { name: 'Domain chips', modules: [...drill('npu'), bossMod('boss-ai'), ...drill('hwsec'), bossMod('boss-hwsec'), ...drill('fusa'), bossMod('boss-fusa'), ...drill('photonics'), bossMod('boss-photonics')] },
+      { name: 'Quantum', modules: [...drill('qubit'), bossMod('boss-qubit'), ...drill('qctrl'), bossMod('boss-qctrl')] },
     ],
   },
 ];
