@@ -220,3 +220,39 @@ export function compileBool(src: string, vars: string[]): ((env: Record<string, 
   const f = parseOr();
   return f && i === s.length ? f : null;
 }
+
+/**
+ * Regular-expression answer: the player's pattern must match every string in `pos` and none in `neg`.
+ * Accepts bare patterns (`0x[0-9a-f]+`) or slash-delimited ones with flags (`/error/i`).
+ */
+export function rx(canonical: string, pos: string[], neg: string[]): Answer {
+  const compile = (s: string): RegExp | null => {
+    const t = s.trim();
+    if (!t) return null;
+    const m = t.match(/^\/(.*)\/([gimsuy]*)$/);
+    try {
+      return m ? new RegExp(m[1], m[2].replace('g', '')) : new RegExp(t);
+    } catch {
+      return null;
+    }
+  };
+  return {
+    canonical,
+    check: (s) => {
+      const re = compile(s);
+      return !!re && pos.every((p) => re.test(p)) && neg.every((n) => !re.test(n));
+    },
+  };
+}
+
+/** Free-text answer that must contain every one of the required tokens (in any order), ignoring case and spacing. */
+export function has(canonical: string, ...tokens: string[][]): Answer {
+  const norm = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim();
+  return {
+    canonical,
+    check: (s) => {
+      const v = norm(s);
+      return !!v && tokens.every((alts) => alts.some((a) => v.includes(norm(a))));
+    },
+  };
+}

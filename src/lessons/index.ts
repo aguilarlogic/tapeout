@@ -1,4 +1,8 @@
 import { ARCH_LESSONS } from './arch';
+import { CIRCUIT_LESSONS } from './circuits';
+import { SIGNAL_LESSONS } from './signals';
+import { STATS_LESSONS } from './stats';
+import { TOOLING_LESSONS } from './tooling';
 import { DIGITAL_LESSONS } from './digital';
 import { FOUNDATION_LESSONS } from './foundations';
 import { MATH_LESSONS } from './math';
@@ -12,8 +16,8 @@ import { VLSI_LESSONS } from './vlsi';
 
 /** Acts 1-6: the path every chip engineer walks. The final review draws from these. */
 export const CORE_LESSONS: Lesson[] = [
-  ...FOUNDATION_LESSONS, ...MATH_LESSONS, ...PHYSICS_LESSONS, ...SYSTEMS_LESSONS,
-  ...DIGITAL_LESSONS, ...VLSI_LESSONS, ...VERIF_LESSONS, ...ARCH_LESSONS,
+  ...FOUNDATION_LESSONS, ...MATH_LESSONS, ...STATS_LESSONS, ...CIRCUIT_LESSONS, ...SIGNAL_LESSONS, ...PHYSICS_LESSONS,
+  ...TOOLING_LESSONS, ...SYSTEMS_LESSONS, ...DIGITAL_LESSONS, ...VLSI_LESSONS, ...VERIF_LESSONS, ...ARCH_LESSONS,
 ];
 
 export const LESSONS: Lesson[] = [...CORE_LESSONS, ...ROLE_LESSONS, ...QUANTUM_LESSONS];

@@ -58,18 +58,21 @@ const logic = (ids: string[]) => ids.map((id) => {
 
 export const ACTS: Act[] = [
   {
-    id: 'foundations', n: 1, name: 'Foundations', tagline: 'Numbers, circuits, the math and physics under every chip', region: 'STD CELLS',
+    id: 'foundations', n: 1, name: 'Foundations', tagline: 'Numbers, circuits, signals, the math and physics under every chip', region: 'STD CELLS',
     chapters: [
       { name: 'Numbers', modules: [lesson('bits'), prac('practice-bits'), lesson('twos'), prac('practice-twos'), bossMod('boss-numbers')] },
-      { name: 'Circuits', modules: [lesson('ohm'), prac('practice-ohm'), lesson('rc'), prac('practice-rc'), bossMod('boss-circuits1')] },
-      { name: 'Engineering math', modules: [lesson('calc'), lesson('linalg'), lesson('ode')] },
-      { name: 'Semiconductor physics', modules: [lesson('semi'), lesson('mosphys')] },
+      { name: 'Circuits', modules: [lesson('ohm'), prac('practice-ohm'), lesson('rc'), prac('practice-rc'), bossMod('boss-circuits1'), lesson('kcl'), lesson('ac')] },
+      { name: 'Engineering math', modules: [lesson('calc'), lesson('linalg'), lesson('ode'), lesson('prob'), lesson('numerics')] },
+      { name: 'Signals & control', modules: [lesson('signals'), lesson('dsp'), lesson('control')] },
+      { name: 'Physics', modules: [lesson('semi'), lesson('mosphys'), lesson('em')] },
+      { name: 'Electronics', modules: [lesson('electronics')] },
       { name: 'Transistors', modules: [lesson('mos'), prac('practice-mos'), ...logic(['cmos-inv', 'cmos-nand', 'cmos-nor', 'cmos-and', 'cmos-aoi'])] },
     ],
   },
   {
-    id: 'systems', n: 2, name: 'Systems & Software', tagline: 'C, C++, algorithms, compilers and operating systems', region: 'FIRMWARE',
+    id: 'systems', n: 2, name: 'Systems & Software', tagline: 'The shell, git, Python, C, C++, algorithms, compilers and operating systems', region: 'FIRMWARE',
     chapters: [
+      { name: 'Tools of the trade', modules: [lesson('shell'), lesson('git'), lesson('python'), lesson('flows')] },
       { name: 'Programming', modules: [lesson('c'), lesson('cpp')] },
       { name: 'Algorithms', modules: [lesson('dsa')] },
       { name: 'Hardware/software interface', modules: [lesson('asm')] },
