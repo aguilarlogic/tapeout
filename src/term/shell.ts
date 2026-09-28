@@ -2,6 +2,7 @@
 import { ACTS, actProgress, ALL_MODULES, findModule, KIND_APP, KIND_LABEL, Module, neighbours, readiness, recommended, startAct } from '../curriculum';
 import { CARDS, DECKS } from '../games/drills/cards';
 import { GLOSSARY, lookup } from '../glossary';
+import { findIncident, INCIDENTS } from '../incidents';
 import { finalExam, FINAL_ID, findLesson } from '../lessons';
 import type { Lesson, Mood, Question } from '../lessons/types';
 import { findSkill, LEVEL_NAME, nextStep, roleReadiness, ROLES, SKILLS, skillCeiling, skillLevel, type RoleId } from '../mastery/skills';
@@ -12,6 +13,7 @@ import { setMood } from '../os/avatar';
 import { launchGame, randomGame } from '../os/launch';
 import { best, complete, levelRecord, load, playerName, prefs, Prefs, Profile, profile, rank, RANKS, recordBest, resetAll, setPrefs, setProfile, totalXp, updateCard } from '../state';
 import { h, stars as starEls } from '../ui/dom';
+import { runIncident } from './incident';
 import { Interrupted, Redirect, rich, Terminal } from './terminal';
 
 const pickOne = <T>(xs: T[]) => xs[Math.floor(Math.random() * xs.length)];
@@ -159,6 +161,12 @@ export class Shell {
         if (!b) return t.print(`No boss "${arg}". Type \`boss\` to list them.`, 'err');
         return this.runLesson(b.id);
       }
+      case 'incident': case 'incidents': case 'pager': case 'oncall': {
+        if (!arg) return this.printIncidents();
+        const inc = findIncident(arg) ?? findIncident(`inc-${arg}`);
+        if (!inc) return t.print(`No incident "${arg}". Type \`incidents\` to list them.`, 'err');
+        return this.incident(inc.id);
+      }
       case 'define': case 'explain': case 'whatis': case 'what': case 'who':
         return this.define(cmd.toLowerCase() === 'what' || cmd.toLowerCase() === 'who' ? line : arg);
       case 'status': case 'whoami': case 'stats': case 'progress':
@@ -223,6 +231,7 @@ export class Shell {
       ['skills [role]', 'your skill matrix: every topic, levels 0-3'],
       ['roles [role]', 'job readiness for every role (DV, PD, quantum…)'],
       ['boss [name]', 'list or start boss fights (no hints)'],
+      ['incidents [name]', 'on-call investigations: find the root cause against the clock'],
       ['what is <term>', `look up any of ${GLOSSARY.length} terms`],
       ['status', 'your rank, XP and progress'],
       ['speed <s>', 'how fast I type: slow | normal | fast | instant'],
@@ -271,6 +280,7 @@ export class Shell {
   async openModule(m: Module): Promise<void> {
     if (m.kind === 'lesson' || m.kind === 'final' || m.kind === 'boss') { await this.runLesson(m.id); return; }
     if (m.kind === 'practice') return this.practiceCmd(m.id);
+    if (m.kind === 'incident') return this.incident(m.id);
     await this.term.say(pickOne([`Opening **${KIND_APP[m.kind]}** for **${m.title}**.`, `Let me pull up **${KIND_APP[m.kind]}**. This one is **${m.title}**.`, `**${m.title}**. I will open ${KIND_APP[m.kind]} for you.`]), 'excited');
     this.go(m.route);
   }
@@ -458,9 +468,33 @@ export class Shell {
     })));
   }
 
+  private printIncidents() {
+    this.term.print('INCIDENTS · a pager goes off; instruments cost lab time; the root cause is different every run', 'hl');
+    this.term.block(h('div', { class: 'term-ch' }, ...INCIDENTS.map((i) => {
+      const rec = levelRecord(i.id);
+      return h('button', { class: `term-mod${rec ? ' done' : ''}`, onclick: () => this.run(`learn ${i.id}`) },
+        h('span', { class: 'chk' }, rec ? '✓' : '☎'), h('span', null, i.title), h('span', { class: 'dim' }, ` ${i.concept}`), rec ? starEls(rec.stars) : null);
+    })));
+  }
+
+  private async incident(id: string): Promise<void> {
+    const inc = findIncident(id)!;
+    const t = this.term;
+    return this.guarded(async () => {
+      void t.progress(`paging you in: ${inc.title}`);
+      const res = await runIncident(t, inc, { define: (q) => this.define(q) });
+      const next = res.solved ? neighbours(id).next : undefined;
+      const opts = [...(next ? [`Continue: **${next.title}** (${KIND_LABEL[next.kind].toLowerCase()})`] : []), res.solved ? 'Replay (a different root cause)' : 'Try again (a different root cause)', 'Back to the shell'];
+      const pick = await t.choose(opts, 'next>', (v) => this.queue.push(v));
+      if (next && pick === 0) this.queue.push(`learn ${next.id}`);
+      else if (opts[pick].startsWith('Replay') || opts[pick].startsWith('Try')) this.queue.push(`incident ${id}`);
+    });
+  }
+
   // ---------------------------------------------------------------- lessons
 
   async runLesson(id: string) {
+    if (findIncident(id)) return this.incident(id);
     const exam = id === FINAL_ID;
     const bossDef = findBoss(id);
     const lesson: Lesson | undefined = exam ? finalExam(Math.random) : bossDef ?? findLesson(id);

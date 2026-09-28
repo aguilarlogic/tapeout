@@ -389,6 +389,16 @@ a.tier:hover { border-color: var(--accent); text-decoration: none; }
 .term-banner.boss { border-left-color: var(--gold); background: color-mix(in srgb, var(--gold) 8%, #0a161c); }
 .term-banner.boss b { color: var(--gold); }
 .term-banner.practice { border-left-color: #a78bfa; }
+.term-banner.incident { border-left-color: #f59e0b; }
+.term-banner.incident b { color: #f59e0b; }
+.incident-page { margin: 14px 0 4px; padding: 8px 12px; border: 1px solid color-mix(in srgb, #f59e0b 45%, transparent); border-radius: 6px; background: color-mix(in srgb, #f59e0b 7%, var(--term-bg)); color: var(--term-fg); font-size: 0.92em; }
+.incident-page .hdr { margin-bottom: 4px; color: #f59e0b; font-weight: 800; letter-spacing: 0.12em; animation: page-blink 1s steps(2) 3; }
+@keyframes page-blink { 50% { opacity: 0.3; } }
+.incident-tools th { padding: 2px 12px 2px 0; text-align: left; color: var(--term-dim); font-weight: 400; }
+.incident-tools td.num { text-align: right; color: var(--term-dim); }
+.incident-causes { margin: 6px 0; padding-left: 2.4em; }
+.incident-causes li.out { color: var(--term-dim); text-decoration: line-through; }
+.incident-causes li.out span { text-decoration: none; display: inline-block; }
 @media (max-width: 900px) {
   .skills-body { grid-template-columns: minmax(0, 1fr); }
   .role-list { position: static; }
@@ -427,5 +437,6 @@ a.tier:hover { border-color: var(--accent); text-decoration: none; }
 .settings-preview { flex: none; min-height: 120px; margin-top: 6px; border-radius: 8px; background: var(--term-bg); cursor: pointer; }
 @media (prefers-reduced-motion: reduce) {
   .boss-intro .enter.flash { animation: none; }
+  .incident-page .hdr { animation: none; }
   .win-loading { display: none; }
 }

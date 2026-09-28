@@ -4,7 +4,7 @@ import { levelRecord, rank, RANKS, totalXp } from '../state';
 import { h, stars, svg } from '../ui/dom';
 
 const ICON: Record<ModKind, string> = {
-  lesson: '›_', practice: '∞', boss: '♛', logic: '⊼', cmos: '⊥', rtl: '{}', debug: '⚑', cov: '◎', uvm: '⧉', sta: '⏱', pcb: '▦', drills: '?!', final: '★',
+  lesson: '›_', practice: '∞', boss: '♛', incident: '☎', logic: '⊼', cmos: '⊥', rtl: '{}', debug: '⚑', cov: '◎', uvm: '⧉', sta: '⏱', pcb: '▦', drills: '?!', final: '★',
 };
 
 /** The die floorplan: one block per act, whose standard-cell rows light up with progress. */

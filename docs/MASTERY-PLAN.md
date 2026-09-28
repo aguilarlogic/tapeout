@@ -50,10 +50,16 @@ Each phase ships playable content and is committed on its own.
 
 - [x] **Phase 1: mastery framework.** Skills registry (every audit row, every role), practice runner with a difficulty
   ramp, boss exams, Skills.app, and the `skills`, `practice` and `roles` terminal commands.
-- [ ] **Phase 2: practice banks and bosses for every existing topic**, plus new foundation lessons: probability and
+- [x] **Phase 2: practice banks and bosses for every existing topic**, plus new foundation lessons: probability and
   statistics, numerical methods, circuits I/II, signals and systems, DSP, control, electromagnetics, electronics/BJTs,
   and tooling (Linux, git, regex, Python, TCL/Make).
-- [ ] **Phase 3: the incident engine** and incidents for the role skills.
+- [x] **Phase 3: the incident engine** and incidents for the role skills. Twelve incidents (`src/incidents/`): the
+  3 A.M. hang, the final-test yield drop, the wafer map, the field returns, the flaky PCIe link, the ringing rail, the
+  deaf radio, the dark optical channel, the flipping DRAM bits, the leaking key, the limp-mode storm and the qubit that
+  will not behave. Each has 5-6 candidate causes, 7-9 instruments with a lab-time cost, symptom-only fixes as traps,
+  and a random root cause per run. Tests prove every pair of causes can be told apart, that no single reading gives the
+  answer away, and that a careful engineer solves every case within 70% of the budget. The first incident comes with
+  a coach that crosses causes off after each reading; after that the notebook is the player's.
 - [ ] **Phase 4: Circuit Lab.**
 - [ ] **Phase 5: Code Lab and Shell Lab**, with regression triage.
 - [ ] **Phase 6: SV Lab**: SystemVerilog, UVM, SVA, formal, CDC.

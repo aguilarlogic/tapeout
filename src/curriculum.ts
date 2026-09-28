@@ -7,10 +7,11 @@ import { DEBUG_LEVELS, RTL_LEVELS } from './games/rtl/levels';
 import { TIMING_LEVELS } from './games/timing/levels';
 import { UVM_PUZZLES } from './games/uvm/puzzles';
 import { FINAL_ID, FINAL_XP, findLesson } from './lessons';
+import { findIncident } from './incidents';
 import { findBoss, findPractice } from './practice';
 import { levelRecord, profile } from './state';
 
-export type ModKind = 'lesson' | 'practice' | 'boss' | 'logic' | 'cmos' | 'rtl' | 'debug' | 'cov' | 'uvm' | 'sta' | 'pcb' | 'drills' | 'final';
+export type ModKind = 'lesson' | 'practice' | 'boss' | 'incident' | 'logic' | 'cmos' | 'rtl' | 'debug' | 'cov' | 'uvm' | 'sta' | 'pcb' | 'drills' | 'final';
 
 export interface Module {
   id: string;
@@ -24,13 +25,13 @@ export interface Chapter { name: string; modules: Module[] }
 export interface Act { id: string; n: number; name: string; tagline: string; region: string; chapters: Chapter[] }
 
 export const KIND_LABEL: Record<ModKind, string> = {
-  lesson: 'Lesson', practice: 'Practice', boss: 'Boss', logic: 'Logic lab', cmos: 'Transistor lab', rtl: 'Verilog', debug: 'Bug hunt', cov: 'Coverage',
+  lesson: 'Lesson', practice: 'Practice', boss: 'Boss', incident: 'Incident', logic: 'Logic lab', cmos: 'Transistor lab', rtl: 'Verilog', debug: 'Bug hunt', cov: 'Coverage',
   uvm: 'UVM', sta: 'Timing', pcb: 'Board', drills: 'Interview', final: 'Final review',
 };
 
 /** The desktop app a module opens in. */
 export const KIND_APP: Record<ModKind, string> = {
-  lesson: 'terminal', practice: 'terminal', boss: 'terminal', logic: 'Logic Lab', cmos: 'Logic Lab', rtl: 'Verilog IDE', debug: 'Verilog IDE', cov: 'Coverage',
+  lesson: 'terminal', practice: 'terminal', boss: 'terminal', incident: 'terminal', logic: 'Logic Lab', cmos: 'Logic Lab', rtl: 'Verilog IDE', debug: 'Verilog IDE', cov: 'Coverage',
   uvm: 'UVM Builder', sta: 'Timing', pcb: 'Board Router', drills: 'Flashcards', final: 'terminal',
 };
 
@@ -48,6 +49,11 @@ const bossMod = (id: string): Module => {
   const b = findBoss(id);
   if (!b) throw new Error(`unknown boss ${id}`);
   return { id, kind: 'boss', title: b.title, concept: b.concept, xp: b.xp, route: `#/learn/${id}` };
+};
+const incident = (id: string): Module => {
+  const i = findIncident(id);
+  if (!i) throw new Error(`unknown incident ${id}`);
+  return { id, kind: 'incident', title: i.title, concept: i.concept, xp: i.xp, route: `#/learn/${id}` };
 };
 /** A lesson followed by its practice bank (`practice-<id>`), when one exists. */
 const drill = (...ids: string[]): Module[] => ids.flatMap((id) => (findPractice(`practice-${id}`) ? [lesson(id), prac(`practice-${id}`)] : [lesson(id)]));
@@ -104,7 +110,7 @@ export const ACTS: Act[] = [
       { name: 'Static timing', modules: [...drill('sta'), ...mods(TIMING_LEVELS, 'sta', 'sta'), bossMod('boss-sta')] },
       { name: 'Circuit design', modules: [...drill('vlsi'), bossMod('boss-circuit')] },
       { name: 'Low power', modules: [...drill('power'), bossMod('boss-lowpower'), bossMod('boss-upf')] },
-      { name: 'Board', modules: [...drill('pcb'), ...mods(PCB_LEVELS, 'pcb', 'pcb'), bossMod('boss-board')] },
+      { name: 'Board', modules: [...drill('pcb'), ...mods(PCB_LEVELS, 'pcb', 'pcb'), bossMod('boss-board'), incident('inc-link')] },
     ],
   },
   {
@@ -135,11 +141,11 @@ export const ACTS: Act[] = [
   {
     id: 'roles', n: 7, name: 'Specializations', tagline: 'The roles beyond RTL and DV: analog, RF, physical design, memory, fab, AI, security, quantum', region: 'SPECIALTY IP',
     chapters: [
-      { name: 'Circuits & signals', modules: [...drill('analog'), bossMod('boss-analog'), ...drill('rf'), bossMod('boss-rf'), ...drill('pmic'), bossMod('boss-pmic'), lesson('sipi')] },
-      { name: 'Silicon & manufacturing', modules: [...drill('pnr'), bossMod('boss-pd'), ...drill('sram'), bossMod('boss-memory'), ...drill('fab'), bossMod('boss-process'), ...drill('pkg'), bossMod('boss-pkg')] },
-      { name: 'Bring-up & production', modules: [...drill('postsi'), bossMod('boss-postsi'), ...drill('ate'), bossMod('boss-test'), ...drill('emu'), bossMod('boss-fpga')] },
-      { name: 'Domain chips', modules: [...drill('npu'), bossMod('boss-ai'), ...drill('hwsec'), bossMod('boss-hwsec'), ...drill('fusa'), bossMod('boss-fusa'), ...drill('photonics'), bossMod('boss-photonics')] },
-      { name: 'Quantum', modules: [...drill('qubit'), bossMod('boss-qubit'), ...drill('qctrl'), bossMod('boss-qctrl')] },
+      { name: 'Circuits & signals', modules: [...drill('analog'), bossMod('boss-analog'), ...drill('rf'), bossMod('boss-rf'), incident('inc-radio'), ...drill('pmic'), bossMod('boss-pmic'), incident('inc-rail'), lesson('sipi')] },
+      { name: 'Silicon & manufacturing', modules: [...drill('pnr'), bossMod('boss-pd'), ...drill('sram'), bossMod('boss-memory'), incident('inc-bitflip'), ...drill('fab'), bossMod('boss-process'), incident('inc-wafer'), ...drill('pkg'), bossMod('boss-pkg'), incident('inc-package')] },
+      { name: 'Bring-up & production', modules: [...drill('postsi'), bossMod('boss-postsi'), incident('inc-hang'), ...drill('ate'), bossMod('boss-test'), incident('inc-finaltest'), ...drill('emu'), bossMod('boss-fpga')] },
+      { name: 'Domain chips', modules: [...drill('npu'), bossMod('boss-ai'), ...drill('hwsec'), bossMod('boss-hwsec'), incident('inc-key'), ...drill('fusa'), bossMod('boss-fusa'), incident('inc-limp'), ...drill('photonics'), bossMod('boss-photonics'), incident('inc-optical')] },
+      { name: 'Quantum', modules: [...drill('qubit'), bossMod('boss-qubit'), ...drill('qctrl'), bossMod('boss-qctrl'), incident('inc-qubit')] },
     ],
   },
 ];
