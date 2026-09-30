@@ -33,7 +33,7 @@ function checkWalk(q: Question, where: string) {
  */
 const PENDING = new Set([
   
-  'practice-comb', 'practice-seq', 'practice-fsm', 'practice-verilog', 'practice-alu', 'practice-clk', 'practice-sta', 'practice-vlsi',
+  'practice-sta', 'practice-vlsi',
   'practice-power', 'practice-pcb', 'practice-dv', 'practice-crv', 'practice-cov', 'practice-uvm', 'practice-sva', 'practice-formal', 'practice-dft',
   'practice-pipe', 'practice-ooo', 'practice-cache', 'practice-coherence', 'practice-dram', 'practice-bus', 'practice-noc', 'practice-serdes',
   'practice-perf', 'practice-analog', 'practice-rf', 'practice-pmic', 'practice-pnr', 'practice-sram', 'practice-fab', 'practice-pkg',
