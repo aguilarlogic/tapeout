@@ -18,11 +18,16 @@ import { Interrupted, Redirect, rich, Terminal } from './terminal';
 
 const pickOne = <T>(xs: T[]) => xs[Math.floor(Math.random() * xs.length)];
 const PRAISE = ['Correct.', 'Yes.', 'Exactly.', 'Nice.', 'Right on.', 'That\'s it.'];
+/** What a player types (or the chip sends) to have a problem taught instead of hinted. */
+const TEACH_WORDS = /^(teach( me)?( how)?|how|how\?|how do i (do|solve) (this|it)\??|show me how|walk( me through( it)?)?|explain( it| this)?|i don'?t know how|help me)$/;
+const TEACH_OPTION = '🛟 I do not know how to solve this: teach me';
 const bar = (frac: number, n = 16) => '█'.repeat(Math.round(frac * n)) + '░'.repeat(n - Math.round(frac * n));
 
 export class Shell {
   private queue: string[] = [];
   private busy = false;
+  /** Set by `question()` when the player was walked through the problem instead of solving it. */
+  private taught = false;
 
   constructor(public term: Terminal, private go: (route: string) => void) {}
 
@@ -359,14 +364,31 @@ export class Shell {
       h('b', null, o.title), h('span', { class: 'dim' }, o.concept)), 'type', 2.5);
     if (!o.endless) t.print(`To pass: ${PRACTICE_PASS}/${PRACTICE_COUNT} right on the first try, with at least ${PRACTICE_HARD} at ◆◆◆ hard.`, 'dim');
     let d: Difficulty = 1, run = 0, streak = 0, bestStreak = 0, lastSet = -1, lastGen = -1;
+    /** After a walkthrough, the next problem is "your turn": the same kind, at the same difficulty. */
+    let yourTurn: { si: number; gen: number; d: Difficulty; method?: string } | undefined;
     const results: { ok: boolean; d: Difficulty }[] = [];
     try {
-      for (let i = 0; o.endless || i < PRACTICE_COUNT; i++) {
-        const si = Math.floor(Math.random() * sets.length);
-        const { q, gen } = problem(sets[si], Math.random, d, si === lastSet ? lastGen : -1);
+      for (let i = 0; o.endless || i < PRACTICE_COUNT || yourTurn; i++) {
+        // A walkthrough on the last problem still gets its "your turn", as an unscored bonus.
+        const bonus = !o.endless && i >= PRACTICE_COUNT;
+        let si: number, q: Question, gen: number;
+        if (yourTurn) {
+          ({ si, gen } = yourTurn);
+          d = yourTurn.d;
+          // Redraw until the new problem uses the method just taught (generators mix several variants).
+          q = sets[si].gens[gen](Math.random, d);
+          for (let k = 0; k < 30 && q.teach?.method !== yourTurn.method; k++) q = sets[si].gens[gen](Math.random, d);
+          yourTurn = undefined;
+          await t.say(pickOne(['Your turn. Same kind of problem, new numbers: use the same steps.', 'Now you try one like it, on your own. Same method, different numbers.', 'Your turn: same method, fresh numbers. Take it one step at a time.']), 'excited');
+        } else {
+          si = Math.floor(Math.random() * sets.length);
+          ({ q, gen } = problem(sets[si], Math.random, d, si === lastSet ? lastGen : -1));
+        }
         lastSet = si; lastGen = gen;
-        t.print(`${o.endless ? `#${i + 1}` : `[${i + 1}/${PRACTICE_COUNT}]`}  ${'◆'.repeat(d)}${'◇'.repeat(3 - d)} ${['warm-up', 'standard', 'hard'][d - 1]}${o.mix ? ` · ${sets[si].title}` : ''}${o.endless ? ` · streak ${streak}` : ''}`, 'dim');
+        t.print(`${o.endless ? `#${i + 1}` : bonus ? '[bonus, unscored]' : `[${i + 1}/${PRACTICE_COUNT}]`}  ${'◆'.repeat(d)}${'◇'.repeat(3 - d)} ${['warm-up', 'standard', 'hard'][d - 1]}${o.mix ? ` · ${sets[si].title}` : ''}${o.endless ? ` · streak ${streak}` : ''}`, 'dim');
         const ok = await this.question(q, false);
+        if (this.taught && !bonus) yourTurn = { si, gen, d, method: q.teach?.method };
+        if (bonus) continue;
         results.push({ ok, d });
         streak = ok ? streak + 1 : 0;
         bestStreak = Math.max(bestStreak, streak);
@@ -593,36 +615,41 @@ export class Shell {
     }
   }
 
-  /** Ask one question. Returns true if answered correctly on the first attempt. */
+  /** Ask one question. Returns true if answered correctly on the first attempt. Sets `taught` if it was walked through. */
   private async question(q: Question, exam: boolean): Promise<boolean> {
     const t = this.term;
+    this.taught = false;
+    const teach = !exam && q.teach ? q.teach : undefined;
     if (q.t === 'mc') {
       await this.pose(q.q);
       // Shuffle the display order so the answer's position gives nothing away (unless options refer to each other).
-      const order = q.options.map((_, i) => i);
-      if (!q.options.some((o) => /\babove\b|\bbelow\b|^(both|neither|none|all) /i.test(o))) for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
-      const i = await t.choose(order.map((j) => q.options[j]), 'answer>');
+      const order = this.order(q.options);
+      const labels = order.map((j) => q.options[j]);
+      const i = await t.choose(teach ? [...labels, TEACH_OPTION] : labels, 'answer>');
+      if (teach && i === labels.length) { await this.walkThrough(q); return false; }
       const ok = order[i] === q.a;
       if (exam) { t.print(ok ? '✓' : `✗ answer: ${q.options[q.a]}`, ok ? 'ok' : 'err'); return ok; }
       await t.say(`${ok ? pickOne(PRAISE) : `Not quite: it is **${q.options[q.a]}**.`} ${q.why}`, ok ? 'happy' : 'concerned');
+      if (!ok && teach) await this.offerWalk(q);
       return ok;
     }
     await this.pose(q.q);
     const tries = exam ? 1 : 3;
     let first = true;
     for (let k = 0; k < tries; k++) {
-      const v = (await t.ask({ prompt: 'answer>', chips: exam ? [] : [...(q.hint ? ['hint'] : []), 'skip'] })).trim();
+      const v = (await t.ask({ prompt: 'answer>', chips: exam ? [] : [...(q.hint ? ['hint'] : []), ...(teach ? [{ label: 'teach me how', value: 'teach me' }] : []), 'skip'] })).trim();
       const lc = v.toLowerCase();
+      if (teach && TEACH_WORDS.test(lc)) { await this.walkThrough(q); return false; }
       if (!exam && (lc === 'hint' || lc === 'h' || lc === '?')) {
         first = false;
-        await t.say(q.hint ? `Hint: ${q.hint}` : 'No hint for this one, sorry. Give it your best guess.', 'thinking');
+        await t.say(q.hint ? `Hint: ${q.hint}${teach ? ' (Still stuck? Type `teach me` and I will walk you through it.)' : ''}` : 'No hint for this one, sorry. Give it your best guess.', 'thinking');
         k--;
         continue;
       }
       if (['quit', 'exit'].includes(lc)) throw new Interrupted();
       if (!exam && /^(what|who|define|explain|help)\b/.test(lc)) {
         // A question back to TAPEOUT, not an answer: look it up and ask again.
-        if (lc === 'help') this.term.print('Type your answer, or `hint`, `skip`, `quit`. You can also ask me `what is <term>`.', 'dim');
+        if (lc === 'help') this.term.print(`Type your answer, or \`hint\`,${teach ? ' `teach me`,' : ''} \`skip\`, \`quit\`. You can also ask me \`what is <term>\`.`, 'dim');
         else await this.define(v.replace(/^(define|explain)\s+/i, ''));
         k--;
         continue;
@@ -636,10 +663,67 @@ export class Shell {
       }
       first = false;
       if (exam) break;
-      if (k < tries - 1) await t.say(k === 0 ? `Not quite.${q.hint ? ` ${q.hint}` : ' Try again.'}` : 'Still not it. One more try.', 'concerned');
+      if (k < tries - 1) await t.say(k === 0 ? `Not quite.${q.hint ? ` ${q.hint}` : ' Try again.'}${teach ? ' Or type `teach me` and I will walk you through the method.' : ''}` : 'Still not it. One more try.', 'concerned');
     }
-    if (exam) t.print(`✗ answer: ${q.a.canonical}`, 'err');
-    else await t.say(`The answer is **${q.a.canonical}**. ${q.why}`, 'concerned');
+    if (exam) { t.print(`✗ answer: ${q.a.canonical}`, 'err'); return false; }
+    if (teach) { await this.offerWalk(q); if (this.taught) return false; }
+    await t.say(`The answer is **${q.a.canonical}**. ${q.why}`, 'concerned');
     return false;
+  }
+
+  /** Display order for options: shuffled, unless the options refer to each other ("both of the above"). */
+  private order(options: string[]): number[] {
+    const order = options.map((_, i) => i);
+    if (!options.some((o) => /\babove\b|\bbelow\b|^(both|neither|none|all) /i.test(o))) for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
+    return order;
+  }
+
+  /** After a miss: learn the method now, or move on. */
+  private async offerWalk(q: Question) {
+    const pick = await this.term.choose(['Walk me through how to solve it', q.t === 'ask' ? 'Just show me the answer' : 'Got it, next problem'], 'next>');
+    if (pick === 0) await this.walkThrough(q);
+  }
+
+  /** Teach the method on this very problem, one small step at a time. The player does each step. */
+  private async walkThrough(q: Question) {
+    const t = this.term, w = q.teach!;
+    this.taught = true;
+    await t.say(`Let us work it out together. **The method: ${w.method}.** ${w.idea}`, 'thinking');
+    let n = 0;
+    for (const b of w.beats) {
+      if (b.t === 'tell') { await t.say(b.text); continue; }
+      if (b.t === 'show') { void t.art(b.text, b.caption); continue; }
+      n++;
+      if (b.t === 'pick') {
+        await this.pose(`**Step ${n}.** ${b.q}`);
+        const order = this.order(b.options);
+        const i = await t.choose(order.map((j) => b.options[j]), `step ${n}>`);
+        const ok = order[i] === b.a;
+        await t.say(`${ok ? pickOne(PRAISE) : `Not that one: it is **${b.options[b.a]}**.`}${b.why ? ` ${b.why}` : ''}`, ok ? 'happy' : 'thinking');
+        continue;
+      }
+      await this.pose(`**Step ${n}.** ${b.q}`);
+      let done = false;
+      for (let k = 0; k < 2 && !done; k++) {
+        const v = (await t.ask({ prompt: `step ${n}>`, chips: [{ label: 'show me this step', value: 'show' }] })).trim();
+        const lc = v.toLowerCase();
+        if (['quit', 'exit'].includes(lc)) throw new Interrupted();
+        if (!v) { k--; continue; }
+        if (/^(what|who|define)\b/.test(lc)) { await this.define(v.replace(/^define\s+/i, '')); k--; continue; }
+        if (['show', 'show me', 'skip', 'idk', "i don't know", 'hint', 'help'].includes(lc)) break;
+        if (b.a.check(v)) { done = true; await t.say(`${pickOne(PRAISE)}${b.why ? ` ${b.why}` : ''}`, 'happy'); }
+        else if (k === 0) await t.say(b.hint ? `Not quite. ${b.hint}` : 'Not quite. Check the arithmetic and try once more.', 'thinking');
+      }
+      if (!done) await t.say(`It comes to **${b.a.canonical}**.${b.why ? ` ${b.why}` : ''}`, 'thinking');
+    }
+    if (q.t === 'ask') {
+      await t.say(`And that is the answer: **${q.a.canonical}**. ${q.why}`, 'happy');
+    } else {
+      await t.say('Now, with that worked out: which option is it?', 'thinking');
+      const order = this.order(q.options);
+      const i = await t.choose(order.map((j) => q.options[j]), 'answer>');
+      const ok = order[i] === q.a;
+      await t.say(`${ok ? pickOne(PRAISE) : `It is **${q.options[q.a]}**.`} ${q.why}`, ok ? 'happy' : 'thinking');
+    }
   }
 }

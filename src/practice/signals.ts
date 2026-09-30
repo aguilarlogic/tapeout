@@ -1,8 +1,9 @@
 // Practice banks and bosses for signals & systems, DSP, feedback control and electromagnetics.
 import { num, qty } from '../lessons/answers';
+import { calc, choice, count, walk } from '../lessons/teach';
 import { art, ask, between, mc, pick, say } from '../lessons/types';
 import { boss, practice, tier } from './types';
-import { eng, mcs, sig } from './util';
+import { concept, eng, mcs, sig } from './util';
 
 const deg = (rad: number) => (rad * 180) / Math.PI;
 /** Where a tone at f lands after sampling at fs (folded into 0..fs/2). */
@@ -16,56 +17,91 @@ const alias = (f: number, fs: number) => {
 export const signalsPractice = practice('practice-signals', 'Signals Drills', 'sampling, aliasing, harmonics, edges, convolution, poles', [
   (r, d) => {
     const fmax = pick(r, [20e3, 1e6, 5e6, 100e6]);
-    if (d === 1) return ask(`A signal contains frequencies up to ${eng(fmax, 'Hz')}. Minimum sample rate to capture it (Nyquist), in Hz?`, qty(2 * fmax, 'Hz', 0.01), `Nyquist: fs > 2·f_max = ${eng(2 * fmax, 'Hz')}. Real systems add margin for the anti-alias filter's transition band.`, 'Twice the highest frequency.');
+    const idea = 'Sampling at rate fs can only represent frequencies up to fs/2 (the Nyquist frequency). Anything above folds back down: a tone at f shows up at f minus the nearest multiple of fs, and if that lands above fs/2 it reflects to fs minus it. Frequencies just below fs look like low frequencies.';
+    if (d === 1) return walk(ask(`A signal contains frequencies up to ${eng(fmax, 'Hz')}. Minimum sample rate to capture it (Nyquist), in Hz?`, qty(2 * fmax, 'Hz', 0.01), `Nyquist: fs > 2·f_max = ${eng(2 * fmax, 'Hz')}. Real systems add margin for the anti-alias filter's transition band.`, 'Twice the highest frequency.'),
+      'the Nyquist rate', idea,
+      calc('fs must be more than twice the highest frequency:', `2 × ${fmax}`, 2 * fmax, 'Hz', String(2 * fmax), 0.01));
     const fs = pick(r, [48e3, 100e3, 1e6, 10e6]);
     const f = d === 2 ? fs * pick(r, [0.6, 0.7, 0.9]) : fs * pick(r, [1.1, 2.3, 3.8, 5.25]);
+    const m = ((f % fs) + fs) % fs;
     const a = alias(f, fs);
-    return ask(`A ${eng(f, 'Hz')} tone is sampled at ${eng(fs, 'Hz')} with no anti-alias filter. At what frequency does it appear in the sampled data, in Hz?`, qty(a, 'Hz', 0.01), `Fold f into 0..fs/2: ${eng(f, 'Hz')} mod ${eng(fs, 'Hz')} = ${eng(((f % fs) + fs) % fs, 'Hz')}${((f % fs) + fs) % fs > fs / 2 ? `, reflected about fs/2 → ${eng(a, 'Hz')}` : ''}. Once aliased, it is indistinguishable from a real tone there.`, 'Subtract multiples of fs, then reflect about fs/2 if needed.');
+    return walk(ask(`A ${eng(f, 'Hz')} tone is sampled at ${eng(fs, 'Hz')} with no anti-alias filter. At what frequency does it appear in the sampled data, in Hz?`, qty(a, 'Hz', 0.01), `Fold f into 0..fs/2: ${eng(f, 'Hz')} mod ${eng(fs, 'Hz')} = ${eng(((f % fs) + fs) % fs, 'Hz')}${((f % fs) + fs) % fs > fs / 2 ? `, reflected about fs/2 → ${eng(a, 'Hz')}` : ''}. Once aliased, it is indistinguishable from a real tone there.`, 'Subtract multiples of fs, then reflect about fs/2 if needed.'),
+      'aliasing (folding)', idea,
+      calc(`Subtract whole multiples of fs (${eng(fs, 'Hz')}) until it is below fs:`, `${f} mod ${fs}`, m, 'Hz', String(+m.toPrecision(6)), 0.01),
+      choice(`Is ${eng(m, 'Hz')} above fs/2 = ${eng(fs / 2, 'Hz')}?`, m > fs / 2 ? 'Yes: reflect it, fs minus it' : 'No: that is where it lands', [m > fs / 2 ? 'No: that is where it lands' : 'Yes: reflect it, fs minus it']),
+      calc('The frequency it appears at:', m > fs / 2 ? `${fs} - ${+m.toPrecision(6)}` : `${+m.toPrecision(6)}`, a, 'Hz', String(+a.toPrecision(6)), 0.01));
   },
   (r, d) => {
     const k = pick(r, tier(d, [3], [3, 5, 7], [5, 7, 9]));
-    if (d === 1) return ask('A square wave\'s 3rd harmonic has what amplitude relative to the fundamental? (a fraction)', qty(1 / 3, '', 0.02, '0.333'), 'A square wave contains only odd harmonics, with amplitudes 1, 1/3, 1/5, 1/7…: the 3rd is 1/3 of the fundamental.', 'Odd harmonics at 1/n.');
+    const idea = 'A square wave is the sum of sine waves at the fundamental and its ODD multiples (3f, 5f, 7f...). The n-th harmonic has amplitude 1/n of the fundamental. In decibels, an amplitude ratio is 20·log10(ratio).';
+    if (d === 1) return walk(ask('A square wave\'s 3rd harmonic has what amplitude relative to the fundamental? (a fraction)', qty(1 / 3, '', 0.02, '0.333'), 'A square wave contains only odd harmonics, with amplitudes 1, 1/3, 1/5, 1/7…: the 3rd is 1/3 of the fundamental.', 'Odd harmonics at 1/n.'),
+      'harmonics of a square wave', idea,
+      calc('The 3rd harmonic has amplitude 1/3:', '1/3', 1 / 3, '', '0.333', 0.02));
     const db = 20 * Math.log10(1 / k);
-    return ask(`How far below the fundamental is a square wave's ${k}th harmonic, in dB?`, qty(db, '', 0.02, sig(db)), `Amplitude 1/${k} → 20·log10(1/${k}) = ${sig(db)} dB. A 100 MHz clock still has strong energy at ${k}00 MHz: a classic EMI source.`, '20·log10(1/n).');
+    return walk(ask(`How far below the fundamental is a square wave's ${k}th harmonic, in dB?`, qty(db, '', 0.02, sig(db)), `Amplitude 1/${k} → 20·log10(1/${k}) = ${sig(db)} dB. A 100 MHz clock still has strong energy at ${k}00 MHz: a classic EMI source.`, '20·log10(1/n).'),
+      'harmonics in dB', idea,
+      calc(`The ${k}th harmonic's amplitude ratio:`, `1/${k}`, 1 / k, '', sig(1 / k)),
+      calc('In dB, 20·log10(ratio):', `20 × log10(${sig(1 / k)})`, db, '', sig(db), 0.02));
   },
   (r, d) => {
     const tr = pick(r, tier(d, [1e-9, 350e-12], [100e-12, 50e-12, 2e-9], [35e-12, 20e-12, 70e-12]));
     const bw = 0.35 / tr;
-    return ask(`A digital edge has a 10-90% rise time of ${eng(tr, 's')}. Its effective bandwidth (0.35/t_r), in GHz?`, qty(bw / 1e9, 'GHz', 0.02, sig(bw / 1e9)), `0.35/${eng(tr, 's')} = ${eng(bw, 'Hz')}. The edge rate, not the clock frequency, sets how much bandwidth the channel, probe and scope need.`, 'BW ≈ 0.35 / t_r.');
+    return walk(ask(`A digital edge has a 10-90% rise time of ${eng(tr, 's')}. Its effective bandwidth (0.35/t_r), in GHz?`, qty(bw / 1e9, 'GHz', 0.02, sig(bw / 1e9)), `0.35/${eng(tr, 's')} = ${eng(bw, 'Hz')}. The edge rate, not the clock frequency, sets how much bandwidth the channel, probe and scope need.`, 'BW ≈ 0.35 / t_r.'),
+      'edge rate sets bandwidth', 'A fast edge contains high frequencies. For a single-pole response, the 10-90% rise time and the -3 dB bandwidth are tied: BW ≈ 0.35 / t_r. So a 35 ps edge needs about 10 GHz of bandwidth, whatever the clock rate.',
+      calc(`Rise time in seconds (${eng(tr, 's')}):`, eng(tr, 's'), tr, '', String(tr), 0.001),
+      calc('BW = 0.35 / t_r, then ÷ 10^9 for GHz:', `0.35 / ${tr} / 10^9`, bw / 1e9, 'GHz', sig(bw / 1e9), 0.02));
   },
   (r, d) => {
+    const idea = 'Convolution y = x * h slides the filter h across the signal x. Each output is a weighted sum: y[n] = Σ h[k]·x[n - k], over every k where both indexes exist. Flip h, shift it to position n, multiply the overlapping samples, add. A length-N signal convolved with a length-M filter gives N + M - 1 outputs.';
     if (d === 1) {
       const n = between(r, 3, 10), m = between(r, 2, 6);
-      return ask(`Convolving a ${n}-sample signal with a ${m}-tap filter gives how many output samples?`, num(n + m - 1), `Full convolution length is N + M - 1 = ${n + m - 1}.`, 'N + M - 1.');
+      return walk(ask(`Convolving a ${n}-sample signal with a ${m}-tap filter gives how many output samples?`, num(n + m - 1), `Full convolution length is N + M - 1 = ${n + m - 1}.`, 'N + M - 1.'),
+        'convolution length', idea,
+        count('The filter starts overlapping at the first sample and stops after the last one: N + M - 1:', `${n} + ${m} - 1`, n + m - 1));
     }
     const x = Array.from({ length: 4 }, () => between(r, -2, 3)), h = Array.from({ length: tier(d, 2, 2, 3) }, () => between(r, -1, 2));
     const n = between(r, 1, 3);
     let y = 0;
     const terms: string[] = [];
-    for (let k = 0; k < h.length; k++) if (n - k >= 0 && n - k < x.length) { y += h[k] * x[n - k]; terms.push(`${h[k]}·${x[n - k]}`); }
-    return ask(`x = [${x.join(', ')}] (x[0] first), h = [${h.join(', ')}]. What is y[${n}] of y = x * h?`, num(y), `y[${n}] = Σ h[k]·x[${n}-k] = ${terms.join(' + ')} = ${y}. Flip, shift, multiply, add.`, 'y[n] = Σ h[k]·x[n - k].');
+    const prods: [number, number, number][] = [];
+    for (let k = 0; k < h.length; k++) if (n - k >= 0 && n - k < x.length) { y += h[k] * x[n - k]; terms.push(`${h[k]}·${x[n - k]}`); prods.push([k, h[k], x[n - k]]); }
+    return walk(ask(`x = [${x.join(', ')}] (x[0] first), h = [${h.join(', ')}]. What is y[${n}] of y = x * h?`, num(y), `y[${n}] = Σ h[k]·x[${n}-k] = ${terms.join(' + ')} = ${y}. Flip, shift, multiply, add.`, 'y[n] = Σ h[k]·x[n - k].'),
+      'discrete convolution', idea,
+      ...prods.map(([k, hk, xk]) => count(`k = ${k}: h[${k}] × x[${n}-${k}] = h[${k}] × x[${n - k}]:`, `${hk} × ${xk}`, hk * xk)),
+      count('Add the products:', prods.map(([, hk, xk]) => `(${hk * xk})`).join(' + '), y));
   },
   (r, d) => {
     if (d < 3) {
       const a = pick(r, [1e3, 2 * Math.PI * 1e3, 1e6]);
       const f = a / (2 * Math.PI);
-      return ask(`H(s) = 1/(1 + s/${sig(a)}). Where is the pole, as a frequency in Hz?`, qty(f, 'Hz', 0.02), `Pole at s = -${sig(a)} rad/s → f = ${sig(a)}/(2π) = ${eng(f, 'Hz')}. Radians per second versus hertz trips everyone once.`, 'f = ω/(2π).');
+      return walk(ask(`H(s) = 1/(1 + s/${sig(a)}). Where is the pole, as a frequency in Hz?`, qty(f, 'Hz', 0.02), `Pole at s = -${sig(a)} rad/s → f = ${sig(a)}/(2π) = ${eng(f, 'Hz')}. Radians per second versus hertz trips everyone once.`, 'f = ω/(2π).'),
+        'poles in rad/s versus Hz', 'A pole is where the denominator is zero: 1 + s/a = 0 gives s = -a. Its size a is an angular frequency ω in rad/s. To get hertz, divide by 2π: f = ω/(2π).',
+        calc('The pole\'s angular frequency ω (rad/s), from 1 + s/a = 0:', `a`, a, '', sig(a), 0.001),
+        calc('Convert to Hz, ω/(2π):', `${sig(a)} / (2π)`, f, 'Hz', undefined, 0.02));
     }
     const poles = pick(r, [['-2', '-5'], ['-1 ± 3j'], ['+1', '-4'], ['±2j'], ['-3 ± 1j', '+0.5']]);
     const stable = poles.every((p) => p.startsWith('-'));
     const marginal = poles.some((p) => p.startsWith('±'));
-    return mcs(r, `A system has poles at ${poles.join(', ')}. What is its behaviour?`, marginal ? 'Marginally stable: it oscillates forever at constant amplitude' : stable ? 'Stable: every mode decays' : 'Unstable: some mode grows', ['Stable: every mode decays', 'Unstable: some mode grows', 'Marginally stable: it oscillates forever at constant amplitude'].filter((o) => o !== (marginal ? 'Marginally stable: it oscillates forever at constant amplitude' : stable ? 'Stable: every mode decays' : 'Unstable: some mode grows')), 'Left half-plane poles decay, right half-plane poles grow, poles on the imaginary axis oscillate forever. An oscillator is designed to sit right there.');
+    const right = marginal ? 'Marginally stable: it oscillates forever at constant amplitude' : stable ? 'Stable: every mode decays' : 'Unstable: some mode grows';
+    return walk(mcs(r, `A system has poles at ${poles.join(', ')}. What is its behaviour?`, right, ['Stable: every mode decays', 'Unstable: some mode grows', 'Marginally stable: it oscillates forever at constant amplitude'].filter((o) => o !== right), 'Left half-plane poles decay, right half-plane poles grow, poles on the imaginary axis oscillate forever. An oscillator is designed to sit right there.'),
+      'stability from pole positions', 'Each pole p gives a mode e^(p·t). Its REAL part decides the fate: negative decays, positive grows, zero neither grows nor decays (a pure oscillation from the imaginary part). One growing mode makes the whole system unstable.',
+      choice('Is any pole\'s real part positive (a "+" pole)?', poles.some((p) => p.startsWith('+')) ? 'Yes' : 'No', [poles.some((p) => p.startsWith('+')) ? 'No' : 'Yes']),
+      choice('Is any pole exactly on the imaginary axis (real part 0, like ±2j)?', marginal ? 'Yes' : 'No', [marginal ? 'No' : 'Yes']));
   },
-  (r) => {
-    const qs = [
-      ['What fully describes a linear time-invariant (LTI) system?', 'Its impulse response (equivalently its transfer function)', ['Its DC gain', 'Its step response at one amplitude only', 'Its maximum output']],
-      ['Multiplication in the time domain corresponds to what in the frequency domain?', 'Convolution', ['Multiplication', 'Differentiation', 'Nothing']],
-      ['Sampling a signal makes its spectrum…', 'Repeat at every multiple of the sample rate', ['Disappear above fs', 'Shift to DC', 'Double in amplitude']],
-      ['An ideal brick-wall low-pass filter has what impulse response?', 'A sinc, infinitely long and non-causal', ['A single impulse', 'A decaying exponential', 'A square pulse']],
-    ] as const;
-    const [q, right, wrong] = pick(r, qs);
-    return mcs(r, q, right, wrong, `${right}. These dualities are why engineers switch between time and frequency so freely.`);
-  },
+  (r) => concept(r, [
+    ['What fully describes a linear time-invariant (LTI) system?', 'Its impulse response (equivalently its transfer function)', ['Its DC gain', 'Its step response at one amplitude only', 'Its maximum output'],
+      'the impulse response', 'Any input signal can be written as a sum of scaled, shifted impulses. A linear, time-invariant system answers each one with a scaled, shifted copy of its impulse response, so knowing that one response lets you compute the output for any input (by convolution).',
+      ['Any input can be built from:', 'Scaled, shifted impulses', ['A single step', 'Only sine waves at DC']]],
+    ['Multiplication in the time domain corresponds to what in the frequency domain?', 'Convolution', ['Multiplication', 'Differentiation', 'Nothing'],
+      'time-frequency duality', 'The Fourier transform swaps the two operations: convolution in one domain is multiplication in the other, in both directions. A filter convolves in time and multiplies in frequency; mixing (multiplying two signals in time) convolves their spectra.',
+      ['A filter convolves in time. In frequency, it:', 'Multiplies the spectrum by its response', ['Convolves the spectrum', 'Adds a constant']]],
+    ['Sampling a signal makes its spectrum…', 'Repeat at every multiple of the sample rate', ['Disappear above fs', 'Shift to DC', 'Double in amplitude'],
+      'sampling in the frequency domain', 'Sampling multiplies the signal by a train of impulses spaced 1/fs apart. That impulse train\'s spectrum is itself impulses every fs, and multiplying in time convolves in frequency, so copies of the spectrum appear around every multiple of fs.',
+      ['Sampling multiplies the signal in time by:', 'A train of impulses', ['A single sine wave', 'A constant']]],
+    ['An ideal brick-wall low-pass filter has what impulse response?', 'A sinc, infinitely long and non-causal', ['A single impulse', 'A decaying exponential', 'A square pulse'],
+      'the brick-wall filter', 'A perfect low-pass is a rectangle in frequency. The inverse Fourier transform of a rectangle is sin(x)/x, the sinc, which ripples on forever in both directions. You cannot build it: real filters approximate it with a truncated, windowed version.',
+      ['The shape of a brick-wall filter in the frequency domain is:', 'A rectangle', ['A triangle', 'A single spike']]],
+  ], (right) => `${right}. These dualities are why engineers switch between time and frequency so freely.`),
 ]);
 
 // ------------------------------------------------------------------ DSP
@@ -76,52 +112,86 @@ export const dspPractice = practice('practice-dsp', 'DSP Drills', 'FIR/IIR, z-do
     const x = Array.from({ length: 6 }, () => between(r, -3, 4));
     const n = between(r, b.length - 1, 5);
     const y = b.reduce((a, bk, k) => a + bk * x[n - k], 0);
-    return ask(`FIR y[n] = ${b.map((c, k) => `${c}·x[n${k ? `-${k}` : ''}]`).join(' + ')}. Input x = [${x.join(', ')}] (x[0] first). y[${n}]?`, qty(y, '', 0.001, String(y)), `y[${n}] = ${b.map((c, k) => `${c}·${x[n - k]}`).join(' + ')} = ${y}.`, 'Weighted sum of the current and past inputs.');
+    return walk(ask(`FIR y[n] = ${b.map((c, k) => `${c}·x[n${k ? `-${k}` : ''}]`).join(' + ')}. Input x = [${x.join(', ')}] (x[0] first). y[${n}]?`, qty(y, '', 0.001, String(y)), `y[${n}] = ${b.map((c, k) => `${c}·${x[n - k]}`).join(' + ')} = ${y}.`, 'Weighted sum of the current and past inputs.'),
+      'evaluate an FIR filter', 'An FIR filter output is a weighted sum of the current input and a few past inputs: y[n] = b0·x[n] + b1·x[n-1] + ... Look up each x value (x[0] is the first in the list), multiply by its coefficient, add.',
+      ...b.map((c, k) => calc(`Term ${k}: b${k} × x[${n - k}] (x[${n - k}] = ${x[n - k]}):`, `${c} × ${x[n - k]}`, c * x[n - k], '', String(c * x[n - k]), 0.001)),
+      calc('Add the terms:', b.map((c, k) => `(${c * x[n - k]})`).join(' + '), y, '', String(y), 0.001));
   },
   (r, d) => {
     const a = pick(r, tier(d, [0.5, 0.9], [0.8, 0.95, -0.5], [1.1, -1.2, 0.99, 0.999]));
+    const idea = 'The IIR y[n] = a·y[n-1] + x[n] feeds its own output back. Its single pole is at z = a. It is stable only if the pole is inside the unit circle, |a| < 1. At steady state with a constant input, the output stops changing, so y[n] = y[n-1] = y and y = a·y + x, giving y = x/(1 - a).';
     if (d < 3) {
       const X = pick(r, [1, 2, 10]);
-      return ask(`IIR y[n] = ${a}·y[n-1] + x[n]. A constant input x = ${X} is applied forever. Steady-state output?`, qty(X / (1 - a), '', 0.01, sig(X / (1 - a))), `At steady state y = ${a}·y + ${X} → y = ${X}/(1 - ${a}) = ${sig(X / (1 - a))}. DC gain 1/(1 - a).`, 'Set y[n] = y[n-1] = y.');
+      return walk(ask(`IIR y[n] = ${a}·y[n-1] + x[n]. A constant input x = ${X} is applied forever. Steady-state output?`, qty(X / (1 - a), '', 0.01, sig(X / (1 - a))), `At steady state y = ${a}·y + ${X} → y = ${X}/(1 - ${a}) = ${sig(X / (1 - a))}. DC gain 1/(1 - a).`, 'Set y[n] = y[n-1] = y.'),
+        'IIR steady state', idea,
+        calc('1 - a:', `1 - ${a}`, 1 - a, '', sig(1 - a), 0.001),
+        calc('y = x / (1 - a):', `${X} / ${sig(1 - a)}`, X / (1 - a), '', sig(X / (1 - a)), 0.01));
     }
-    return mc(`IIR y[n] = ${a}·y[n-1] + x[n]. Stable?`, ['Stable', 'Unstable'], Math.abs(a) < 1 ? 0 : 1, `The pole is at z = ${a}. Stability needs |z| < 1 (inside the unit circle): ${Math.abs(a) < 1 ? `yes, though at ${a} it decays very slowly and needs many bits to avoid limit cycles` : 'no, the output grows without bound'}.`);
+    return walk(mc(`IIR y[n] = ${a}·y[n-1] + x[n]. Stable?`, ['Stable', 'Unstable'], Math.abs(a) < 1 ? 0 : 1, `The pole is at z = ${a}. Stability needs |z| < 1 (inside the unit circle): ${Math.abs(a) < 1 ? `yes, though at ${a} it decays very slowly and needs many bits to avoid limit cycles` : 'no, the output grows without bound'}.`),
+      'IIR stability', idea,
+      choice(`The pole is at z = ${a}. Is |${a}| less than 1?`, Math.abs(a) < 1 ? 'Yes' : 'No', [Math.abs(a) < 1 ? 'No' : 'Yes'], 'Each step multiplies the feedback by a; |a| ≥ 1 never shrinks.'));
   },
   (r, d) => {
     const fs = pick(r, [48e3, 1e6, 100e6]), N = pick(r, [256, 1024, 4096]);
-    if (d === 1) return ask(`An FFT of N = ${N} points at fs = ${eng(fs, 'Hz')}. Frequency resolution (bin width), in Hz?`, qty(fs / N, 'Hz', 0.01), `Δf = fs/N = ${eng(fs / N, 'Hz')}. Longer captures give finer resolution.`, 'Δf = fs / N.');
+    const idea = 'An N-point FFT at sample rate fs splits 0..fs into N equal bins, each Δf = fs/N wide. Bin k sits at k·fs/N. A tone that fits an exact whole number of cycles M in the N samples lands exactly on bin M, with no leakage (coherent sampling): f = M·fs/N.';
+    if (d === 1) return walk(ask(`An FFT of N = ${N} points at fs = ${eng(fs, 'Hz')}. Frequency resolution (bin width), in Hz?`, qty(fs / N, 'Hz', 0.01), `Δf = fs/N = ${eng(fs / N, 'Hz')}. Longer captures give finer resolution.`, 'Δf = fs / N.'),
+      'FFT bin width', idea,
+      calc('Δf = fs / N:', `${fs} / ${N}`, fs / N, 'Hz', sig(fs / N), 0.01));
     const k = between(r, 5, N / 4);
     const f = (k * fs) / N;
-    if (d === 2) return ask(`N = ${N}, fs = ${eng(fs, 'Hz')}. A tone at ${sig(f, 7)} Hz lands in which bin?`, num(k), `k = f·N/fs = ${sig(f, 6)}·${N}/${fs} = ${k}.`, 'k = f · N / fs.');
-    const cycles = pick(r, [127, 511, 1021]);
-    return ask(`For coherent sampling (no leakage) you want exactly ${cycles} tone cycles in N = ${N > cycles ? N : 4096} samples at fs = ${eng(fs, 'Hz')}. What tone frequency, in Hz?`, qty((cycles * fs) / (N > cycles ? N : 4096), 'Hz', 0.001, sig((cycles * fs) / (N > cycles ? N : 4096), 6)), `f = M·fs/N = ${cycles}·${eng(fs, 'Hz')}/${N > cycles ? N : 4096} = ${eng((cycles * fs) / (N > cycles ? N : 4096), 'Hz')}. A prime M (coprime with N) exercises many different ADC codes: this is how data converters are tested.`, 'f = M·fs/N with M an integer.');
+    if (d === 2) return walk(ask(`N = ${N}, fs = ${eng(fs, 'Hz')}. A tone at ${sig(f, 7)} Hz lands in which bin?`, num(k), `k = f·N/fs = ${sig(f, 6)}·${N}/${fs} = ${k}.`, 'k = f · N / fs.'),
+      'which FFT bin', idea,
+      calc('The bin width fs/N:', `${fs} / ${N}`, fs / N, 'Hz', sig(fs / N, 6), 0.001),
+      count('The bin number is the frequency divided by the bin width:', `${sig(f, 7)} / ${sig(fs / N, 6)}`, k));
+    const NN = N > pick(r, [127, 511, 1021]) ? N : 4096;
+    const cycles = pick(r, [127, 511, 1021].filter((c) => c < NN));
+    return walk(ask(`For coherent sampling (no leakage) you want exactly ${cycles} tone cycles in N = ${NN} samples at fs = ${eng(fs, 'Hz')}. What tone frequency, in Hz?`, qty((cycles * fs) / NN, 'Hz', 0.001, sig((cycles * fs) / NN, 6)), `f = M·fs/N = ${cycles}·${eng(fs, 'Hz')}/${NN} = ${eng((cycles * fs) / NN, 'Hz')}. A prime M (coprime with N) exercises many different ADC codes: this is how data converters are tested.`, 'f = M·fs/N with M an integer.'),
+      'coherent sampling', idea,
+      calc('The bin width fs/N:', `${fs} / ${NN}`, fs / NN, 'Hz', sig(fs / NN, 6), 0.001),
+      calc(`${cycles} cycles means bin ${cycles}: f = M × bin width:`, `${cycles} × ${sig(fs / NN, 6)}`, (cycles * fs) / NN, 'Hz', sig((cycles * fs) / NN, 6), 0.001));
   },
   (r, d) => {
     const bits = pick(r, [8, 10, 12, 16]);
     const sqnr = 6.02 * bits + 1.76;
-    if (d < 3) return ask(`Ideal SQNR of a ${bits}-bit quantizer with a full-scale sine, in dB?`, qty(sqnr, '', 0.01, sig(sqnr)), `6.02·N + 1.76 = ${sig(sqnr)} dB. Each bit buys about 6 dB.`, 'SQNR = 6.02N + 1.76 dB.');
+    const idea = 'An ideal N-bit quantizer driven by a full-scale sine has a signal-to-quantization-noise ratio of 6.02·N + 1.76 dB: each extra bit halves the step size and buys about 6 dB. Real converters are worse; ENOB turns their measured SINAD back into an equivalent bit count: ENOB = (SINAD - 1.76)/6.02.';
+    if (d < 3) return walk(ask(`Ideal SQNR of a ${bits}-bit quantizer with a full-scale sine, in dB?`, qty(sqnr, '', 0.01, sig(sqnr)), `6.02·N + 1.76 = ${sig(sqnr)} dB. Each bit buys about 6 dB.`, 'SQNR = 6.02N + 1.76 dB.'),
+      'quantization noise', idea,
+      calc('6.02 × N:', `6.02 × ${bits}`, 6.02 * bits, '', sig(6.02 * bits, 4), 0.005),
+      calc('Plus 1.76 dB:', `${sig(6.02 * bits, 4)} + 1.76`, sqnr, '', sig(sqnr), 0.01));
     const sinad = pick(r, [56, 62, 68, 74]);
     const enob = (sinad - 1.76) / 6.02;
-    return ask(`A "12-bit" ADC measures SINAD = ${sinad} dB. Effective number of bits (ENOB)?`, qty(enob, '', 0.02, sig(enob)), `ENOB = (SINAD - 1.76)/6.02 = ${sig(enob)} bits. Noise, distortion and jitter eat the rest.`, 'Invert 6.02N + 1.76.');
+    return walk(ask(`A "12-bit" ADC measures SINAD = ${sinad} dB. Effective number of bits (ENOB)?`, qty(enob, '', 0.02, sig(enob)), `ENOB = (SINAD - 1.76)/6.02 = ${sig(enob)} bits. Noise, distortion and jitter eat the rest.`, 'Invert 6.02N + 1.76.'),
+      'effective number of bits', idea,
+      calc('SINAD - 1.76:', `${sinad} - 1.76`, sinad - 1.76, '', sig(sinad - 1.76, 4), 0.005),
+      calc('Divide by 6.02 dB per bit:', `${sig(sinad - 1.76, 4)} / 6.02`, enob, '', sig(enob), 0.02));
   },
   (r, d) => {
     const M = pick(r, tier(d, [2, 4], [4, 8, 16], [16, 64, 256]));
     if (d < 3) {
       const fs = pick(r, [48e3, 1e6, 96e3]) * M;
-      return ask(`A signal at ${eng(fs, 'Hz')} is decimated by ${M}. New sample rate, in Hz?`, qty(fs / M, 'Hz', 0.01), `${eng(fs, 'Hz')}/${M} = ${eng(fs / M, 'Hz')}. Filter first, or everything above the new fs/2 aliases down.`, 'Divide by M.');
+      return walk(ask(`A signal at ${eng(fs, 'Hz')} is decimated by ${M}. New sample rate, in Hz?`, qty(fs / M, 'Hz', 0.01), `${eng(fs, 'Hz')}/${M} = ${eng(fs / M, 'Hz')}. Filter first, or everything above the new fs/2 aliases down.`, 'Divide by M.'),
+        'decimation', 'Decimating by M keeps one sample out of every M, so the sample rate drops by M. (A low-pass filter must come first, or everything above the new Nyquist frequency aliases down.)',
+        calc('New rate = fs / M:', `${fs} / ${M}`, fs / M, 'Hz', sig(fs / M), 0.01));
     }
     const gain = 10 * Math.log10(M);
-    return ask(`Oversampling by ${M} and filtering white quantization noise gives how much SNR improvement, in dB?`, qty(gain, '', 0.02, sig(gain)), `10·log10(${M}) = ${sig(gain)} dB (½ bit per doubling). Noise shaping in a sigma-delta does far better.`, 'Noise power spreads over M× the bandwidth.');
+    return walk(ask(`Oversampling by ${M} and filtering white quantization noise gives how much SNR improvement, in dB?`, qty(gain, '', 0.02, sig(gain)), `10·log10(${M}) = ${sig(gain)} dB (½ bit per doubling). Noise shaping in a sigma-delta does far better.`, 'Noise power spreads over M× the bandwidth.'),
+      'oversampling gain', 'White quantization noise spreads evenly from 0 to fs/2. Sampling M times faster spreads the same noise power over M times the bandwidth; filtering back to the signal band keeps only 1/M of it. A power ratio of M is 10·log10(M) dB.',
+      calc('10 × log10(M):', `10 × log10(${M})`, gain, '', sig(gain), 0.02));
   },
-  (r) => {
-    const qs = [
-      ['Why do FIR filters stay popular in hardware despite needing more taps?', 'They are always stable and can have exactly linear phase', ['They need no multipliers', 'They have infinite memory', 'They are always shorter than IIRs']],
-      ['What reduces spectral leakage when a tone is not on a bin?', 'A window (Hann, Blackman) or coherent sampling', ['Fewer FFT points', 'A higher clock frequency', 'Removing the DC offset']],
-      ['What does a CIC (cascaded integrator-comb) filter avoid, making it ideal for decimation in hardware?', 'Multipliers: it uses only adders, subtractors and registers', ['Registers', 'Adders', 'Clocks']],
-      ['A fixed-point IIR filter with poles close to z = 1 needs…', 'More internal bits, because small coefficient and rounding errors move the poles a lot', ['Fewer bits', 'No saturation logic', 'A lower sample rate only']],
-    ] as const;
-    const [q, right, wrong] = pick(r, qs);
-    return mcs(r, q, right, wrong, `${right}.`);
-  },
+  (r) => concept(r, [
+    ['Why do FIR filters stay popular in hardware despite needing more taps?', 'They are always stable and can have exactly linear phase', ['They need no multipliers', 'They have infinite memory', 'They are always shorter than IIRs'],
+      'FIR versus IIR', 'An FIR filter has no feedback: its output depends only on a finite window of inputs, so it can never blow up. With symmetric coefficients, every frequency is delayed by the same amount (linear phase), which keeps pulse shapes intact. IIRs use feedback: fewer taps, but stability and phase need care.',
+      ['An FIR filter has feedback from its output:', 'No, never', ['Yes, always']]],
+    ['What reduces spectral leakage when a tone is not on a bin?', 'A window (Hann, Blackman) or coherent sampling', ['Fewer FFT points', 'A higher clock frequency', 'Removing the DC offset'],
+      'spectral leakage', 'The FFT assumes the capture repeats forever. If the tone does not fit a whole number of cycles, the repeat has a jump at the seam, and that jump spreads energy into every bin. Fix it by making it fit (coherent sampling) or by tapering the ends to zero (a window).',
+      ['Leakage comes from:', 'A discontinuity where the capture wraps around', ['Too many FFT points', 'The DC offset']]],
+    ['What does a CIC (cascaded integrator-comb) filter avoid, making it ideal for decimation in hardware?', 'Multipliers: it uses only adders, subtractors and registers', ['Registers', 'Adders', 'Clocks'],
+      'the CIC filter', 'A CIC is a moving average built cleverly: integrators (running sums) at the high rate, then combs (differences) at the low rate. All coefficients are 1, so there is nothing to multiply: just adders, subtractors and registers, which is cheap in silicon.',
+      ['A CIC filter\'s coefficients are all:', '1', ['Random', 'Powers of π']]],
+    ['A fixed-point IIR filter with poles close to z = 1 needs…', 'More internal bits, because small coefficient and rounding errors move the poles a lot', ['Fewer bits', 'No saturation logic', 'A lower sample rate only'],
+      'IIR precision', 'A pole near z = 1 means feedback of almost exactly 1: the filter remembers for a very long time and its DC gain 1/(1 - a) is huge. A tiny rounding of a changes 1 - a by a large fraction, and internal values grow big, so it needs extra bits.',
+      ['If a = 0.999, the DC gain 1/(1 - a) is:', '1000', ['1', '0.999']]],
+  ], (right) => `${right}.`),
 ]);
 
 // ------------------------------------------------------------------ control
@@ -130,20 +200,37 @@ export const controlPractice = practice('practice-control', 'Loop Drills', 'loop
   (r, d) => {
     const K = pick(r, tier(d, [9, 99, 1], [19, 49, 999], [4, 24, 199]));
     const e = 1 / (1 + K);
-    return ask(`A proportional loop with DC loop gain K = ${K} and a step input. Steady-state error, in %?`, qty(e * 100, '%', 0.02, sig(e * 100)), `e_ss = 1/(1 + K) = ${sig(e * 100)}%. An integrator (infinite DC gain) would drive it to zero.`, 'e = 1/(1 + K).');
+    return walk(ask(`A proportional loop with DC loop gain K = ${K} and a step input. Steady-state error, in %?`, qty(e * 100, '%', 0.02, sig(e * 100)), `e_ss = 1/(1 + K) = ${sig(e * 100)}%. An integrator (infinite DC gain) would drive it to zero.`, 'e = 1/(1 + K).'),
+      'steady-state error', 'A proportional controller only pushes when there is an error, so some error must remain to keep it pushing. With loop gain K, the output settles where the error is 1/(1 + K) of the step. More gain, less error; an integrator (infinite DC gain) removes it entirely.',
+      count('1 + K:', `1 + ${K}`, 1 + K),
+      calc('Error = 1/(1 + K), as a %:', `100 / ${1 + K}`, e * 100, '%', sig(e * 100), 0.02));
   },
   (r, d) => {
     const A = pick(r, tier(d, [1000, 1e5], [100, 1e4], [10, 50])), beta = pick(r, [0.1, 0.5, 1]);
     const G = A / (1 + A * beta);
     const err = ((1 / beta - G) / (1 / beta)) * 100;
-    if (d < 3) return ask(`Open-loop gain A = ${A}, feedback factor β = ${beta}. Closed-loop gain A/(1 + Aβ)?`, qty(G, '', 0.005, sig(G, 4)), `${A}/(1 + ${A * beta}) = ${sig(G, 4)} ≈ 1/β = ${sig(1 / beta)}. Feedback trades excess gain for precision.`, 'A / (1 + Aβ).');
-    return ask(`A = ${A}, β = ${beta}. The ideal gain is 1/β = ${sig(1 / beta)}. How far below ideal is the actual closed-loop gain, in %?`, qty(err, '%', 0.02, sig(err)), `Actual = ${sig(G, 4)}; error ≈ 1/(1 + Aβ) = ${sig(err)}%. Low loop gain (Aβ = ${A * beta}) means a big gain error.`, 'Relative error = 1/(1 + Aβ).');
+    const idea = 'With negative feedback, the closed-loop gain is A/(1 + A·β), where A is the amplifier\'s own gain and β the fraction of the output fed back. The product A·β is the LOOP GAIN. When it is large, the result is almost exactly 1/β, set by resistors, not by the amplifier. The relative shortfall is 1/(1 + Aβ).';
+    if (d < 3) return walk(ask(`Open-loop gain A = ${A}, feedback factor β = ${beta}. Closed-loop gain A/(1 + Aβ)?`, qty(G, '', 0.005, sig(G, 4)), `${A}/(1 + ${A * beta}) = ${sig(G, 4)} ≈ 1/β = ${sig(1 / beta)}. Feedback trades excess gain for precision.`, 'A / (1 + Aβ).'),
+      'the feedback equation', idea,
+      calc('The loop gain A × β:', `${A} × ${beta}`, A * beta, '', sig(A * beta, 5), 0.001),
+      calc('Closed-loop gain A / (1 + Aβ):', `${A} / (1 + ${sig(A * beta, 5)})`, G, '', sig(G, 4), 0.005));
+    return walk(ask(`A = ${A}, β = ${beta}. The ideal gain is 1/β = ${sig(1 / beta)}. How far below ideal is the actual closed-loop gain, in %?`, qty(err, '%', 0.02, sig(err)), `Actual = ${sig(G, 4)}; error ≈ 1/(1 + Aβ) = ${sig(err)}%. Low loop gain (Aβ = ${A * beta}) means a big gain error.`, 'Relative error = 1/(1 + Aβ).'),
+      'gain error from finite loop gain', idea,
+      calc('The loop gain A × β:', `${A} × ${beta}`, A * beta, '', sig(A * beta, 5), 0.001),
+      calc('Relative error = 1/(1 + Aβ), as a %:', `100 / (1 + ${sig(A * beta, 5)})`, err, '%', sig(err), 0.02));
   },
   (r, d) => {
     const gbw = pick(r, [1e6, 10e6, 100e6]), G = pick(r, tier(d, [1, 10], [10, 100], [5, 20, 50]));
-    if (d < 3) return ask(`An op-amp with GBW = ${eng(gbw, 'Hz')} is set to a closed-loop gain of ${G}. Bandwidth, in Hz?`, qty(gbw / G, 'Hz', 0.01), `${eng(gbw, 'Hz')}/${G} = ${eng(gbw / G, 'Hz')}.`, 'BW = GBW / G.');
+    const idea = 'An op-amp\'s gain-bandwidth product (GBW) is fixed: set a closed-loop gain G and the bandwidth becomes GBW/G. The closed loop then behaves like a single pole with τ = 1/(2π·BW), and settling to a fraction ε of the step takes τ·ln(1/ε).';
+    if (d < 3) return walk(ask(`An op-amp with GBW = ${eng(gbw, 'Hz')} is set to a closed-loop gain of ${G}. Bandwidth, in Hz?`, qty(gbw / G, 'Hz', 0.01), `${eng(gbw, 'Hz')}/${G} = ${eng(gbw / G, 'Hz')}.`, 'BW = GBW / G.'),
+      'gain-bandwidth product', idea,
+      calc('BW = GBW / G:', `${gbw} / ${G}`, gbw / G, 'Hz', sig(gbw / G), 0.01));
     const tau = 1 / (2 * Math.PI * (gbw / G));
-    return ask(`Same op-amp (GBW = ${eng(gbw, 'Hz')}) at gain ${G}. Single-pole closed loop: how long to settle to 0.1% after a step, in ns?`, qty(tau * Math.log(1000) * 1e9, 'ns', 0.03), `f_-3dB = ${eng(gbw / G, 'Hz')} → τ = 1/(2πf) = ${eng(tau, 's')}; 0.1% takes ln(1000) ≈ 6.9τ = ${eng(tau * Math.log(1000), 's')}. This is how ADC driver amps are chosen.`, 'τ = 1/(2π·BW), then ln(1/error) time constants.');
+    return walk(ask(`Same op-amp (GBW = ${eng(gbw, 'Hz')}) at gain ${G}. Single-pole closed loop: how long to settle to 0.1% after a step, in ns?`, qty(tau * Math.log(1000) * 1e9, 'ns', 0.03), `f_-3dB = ${eng(gbw / G, 'Hz')} → τ = 1/(2πf) = ${eng(tau, 's')}; 0.1% takes ln(1000) ≈ 6.9τ = ${eng(tau * Math.log(1000), 's')}. This is how ADC driver amps are chosen.`, 'τ = 1/(2π·BW), then ln(1/error) time constants.'),
+      'settling time of a closed loop', idea,
+      calc('BW = GBW / G (Hz):', `${gbw} / ${G}`, gbw / G, 'Hz'),
+      calc('τ = 1/(2π·BW), in ns:', `1 / (2π × ${sig(gbw / G)}) × 10^9`, tau * 1e9, 'ns'),
+      calc('0.1% = 1/1000, so ln(1000) ≈ 6.91 time constants:', `6.91 × ${sig(tau * 1e9)}`, tau * Math.log(1000) * 1e9, 'ns', undefined, 0.03));
   },
   (r, d) => {
     const p1 = pick(r, [1e3, 10e3]), A0 = pick(r, [1000, 10000]);
@@ -153,31 +240,56 @@ export const controlPractice = practice('practice-control', 'Loop Drills', 'loop
     const fc = solveCrossover(A0, p1, p2);
     const pm = 180 - deg(Math.atan(fc / p1)) - deg(Math.atan(fc / p2));
     const approx = 90 - deg(Math.atan(fu / p2));
-    if (d === 1) return ask(`A loop has a dominant pole and a second pole ${sig(p2 / fu)}× above the unity-gain frequency. Roughly what phase margin, in degrees? (90° minus atan(1/${sig(p2 / fu)}))`, qty(approx, '', 0.03, sig(approx)), `The dominant pole contributes ~90° at crossover, the second atan(1/${sig(p2 / fu)}) = ${sig(90 - approx)}°: PM ≈ ${sig(approx)}°. 45-60° is the usual target; a second pole at 2-3× crossover gives about that.`, 'PM = 180° - Σ phase lags at crossover.');
-    return ask(`Loop gain: A0 = ${A0}, poles at ${eng(p1, 'Hz')} and ${eng(p2, 'Hz')}. Phase margin, in degrees? (find where |L| = 1 first)`, qty(pm, '', 0.04, sig(pm)), `|L| = 1 at f_c ≈ ${eng(fc, 'Hz')}; PM = 180 - atan(f_c/p1) - atan(f_c/p2) = ${sig(pm)}°. ${pm < 45 ? 'Too low: expect ringing. Compensate by lowering p1 or pushing p2 out.' : 'Healthy.'}`, 'Solve |L(f)| = 1, then add the phase lags there.');
+    const idea = 'Phase margin is how far the loop\'s phase is from -180° at the crossover frequency (where |loop gain| = 1). Each pole at p lags the phase by atan(f/p): the dominant pole, far below crossover, contributes almost 90°. PM = 180° - (sum of the lags at crossover). 45-60° gives a well-damped loop.';
+    if (d === 1) return walk(ask(`A loop has a dominant pole and a second pole ${sig(p2 / fu)}× above the unity-gain frequency. Roughly what phase margin, in degrees? (90° minus atan(1/${sig(p2 / fu)}))`, qty(approx, '', 0.03, sig(approx)), `The dominant pole contributes ~90° at crossover, the second atan(1/${sig(p2 / fu)}) = ${sig(90 - approx)}°: PM ≈ ${sig(approx)}°. 45-60° is the usual target; a second pole at 2-3× crossover gives about that.`, 'PM = 180° - Σ phase lags at crossover.'),
+      'phase margin', idea,
+      calc(`The second pole's lag at crossover, atan(f_c/p2) = atan(1/${sig(p2 / fu)}), in degrees:`, `atan(1/${sig(p2 / fu)})`, 90 - approx, '', sig(90 - approx), 0.03),
+      calc('PM ≈ 180 - 90 (dominant pole) - that:', `90 - ${sig(90 - approx)}`, approx, '', sig(approx), 0.03));
+    const l1 = deg(Math.atan(fc / p1)), l2 = deg(Math.atan(fc / p2));
+    return walk(ask(`Loop gain: A0 = ${A0}, poles at ${eng(p1, 'Hz')} and ${eng(p2, 'Hz')}. Phase margin, in degrees? (find where |L| = 1 first)`, qty(pm, '', 0.04, sig(pm)), `|L| = 1 at f_c ≈ ${eng(fc, 'Hz')}; PM = 180 - atan(f_c/p1) - atan(f_c/p2) = ${sig(pm)}°. ${pm < 45 ? 'Too low: expect ringing. Compensate by lowering p1 or pushing p2 out.' : 'Healthy.'}`, 'Solve |L(f)| = 1, then add the phase lags there.'),
+      'phase margin with two poles', idea,
+      `First find crossover: solve A0 / (√(1 + (f/p1)²)·√(1 + (f/p2)²)) = 1. Without the second pole it would be at A0·p1 = ${eng(fu, 'Hz')}; the second pole pulls it lower. Solving numerically gives f_c ≈ ${eng(fc, 'Hz')}.`,
+      calc('Lag from the first pole, atan(f_c/p1), in degrees:', `atan(${sig(fc)} / ${p1})`, l1, '', sig(l1, 4), 0.01),
+      calc('Lag from the second pole, atan(f_c/p2):', `atan(${sig(fc)} / ${sig(p2)})`, l2, '', sig(l2, 4), 0.01),
+      calc('PM = 180 - both lags:', `180 - ${sig(l1, 4)} - ${sig(l2, 4)}`, pm, '', sig(pm), 0.04));
   },
   (r, d) => {
-    if (d < 3) {
-      const qs = [
-        ['Which PID term removes steady-state error?', 'I (integral)', ['P (proportional)', 'D (derivative)', 'None of them']],
-        ['Which PID term adds phase lead to damp overshoot, but amplifies noise?', 'D (derivative)', ['I (integral)', 'P (proportional)', 'The setpoint']],
-        ['Phase margin is measured where?', 'At the frequency where loop gain magnitude = 1 (0 dB)', ['At DC', 'Where phase = -90°', 'At the highest pole']],
-        ['A loop has 10° of phase margin. Its step response will…', 'Ring heavily with large overshoot', ['Be perfectly flat', 'Be overdamped and slow', 'Have no output']],
-      ] as const;
-      const [q, right, wrong] = pick(r, qs);
-      return mcs(r, q, right, wrong, `${right}. PM ≈ 100·ζ for ζ below ~0.7: low margin means low damping.`);
-    }
+    if (d < 3) return concept(r, [
+      ['Which PID term removes steady-state error?', 'I (integral)', ['P (proportional)', 'D (derivative)', 'None of them'],
+        'the three PID terms', 'P reacts to the error now, I to the error accumulated over time, D to how fast the error is changing. A P controller needs some error to keep pushing; an integrator keeps growing as long as ANY error is left, so it only stops when the error is exactly zero.',
+        ['An integrator\'s output keeps changing while the error is:', 'Anything but zero', ['Exactly zero', 'Negative only']]],
+      ['Which PID term adds phase lead to damp overshoot, but amplifies noise?', 'D (derivative)', ['I (integral)', 'P (proportional)', 'The setpoint'],
+        'the three PID terms', 'P reacts to the error now, I to the accumulated error, D to its rate of change. Reacting to the rate of change anticipates overshoot (phase lead), but a derivative multiplies each frequency by f, so high-frequency noise gets amplified.',
+        ['A derivative multiplies a signal at frequency f by a factor proportional to:', 'f', ['1/f', 'Nothing: it is flat']]],
+      ['Phase margin is measured where?', 'At the frequency where loop gain magnitude = 1 (0 dB)', ['At DC', 'Where phase = -90°', 'At the highest pole'],
+        'phase margin', 'A feedback loop oscillates if a signal can go around it and come back with the same size (|gain| = 1) and inverted twice (-180°). Phase margin asks: at the frequency where |gain| = 1, how far is the phase from -180°?',
+        ['Oscillation needs a loop gain magnitude of:', '1 (0 dB) with -180° of phase', ['0', '1000']]],
+      ['A loop has 10° of phase margin. Its step response will…', 'Ring heavily with large overshoot', ['Be perfectly flat', 'Be overdamped and slow', 'Have no output'],
+        'phase margin and damping', 'Phase margin maps to damping: roughly ζ ≈ PM/100 below about 70°. Low margin means the loop is close to oscillating, so a step makes it overshoot and ring before settling.',
+        ['10° of phase margin corresponds to a damping ratio ζ of about:', '0.1 (very lightly damped)', ['1 (critically damped)', '5 (overdamped)']]],
+    ], (right) => `${right}. PM ≈ 100·ζ for ζ below ~0.7: low margin means low damping.`);
     const pm = pick(r, [30, 45, 60, 70]);
     const z = pm / 100;
-    const os = Math.exp((-Math.PI * z) / Math.sqrt(1 - z * z)) * 100;
-    return ask(`A loop has ${pm}° phase margin. Using ζ ≈ PM/100, estimate the step overshoot, in %.`, qty(os, '%', 0.05, sig(os)), `ζ ≈ ${z}; %OS = e^(-πζ/√(1-ζ²)) = ${sig(os)}%.`, 'ζ ≈ PM/100, then the overshoot formula.');
+    const ex = (-Math.PI * z) / Math.sqrt(1 - z * z);
+    const os = Math.exp(ex) * 100;
+    return walk(ask(`A loop has ${pm}° phase margin. Using ζ ≈ PM/100, estimate the step overshoot, in %.`, qty(os, '%', 0.05, sig(os)), `ζ ≈ ${z}; %OS = e^(-πζ/√(1-ζ²)) = ${sig(os)}%.`, 'ζ ≈ PM/100, then the overshoot formula.'),
+      'from phase margin to overshoot', 'Phase margin maps to the damping ratio: ζ ≈ PM/100 (in degrees) up to about 70°. The second-order step response then overshoots by e^(-πζ/√(1-ζ²)).',
+      calc('ζ ≈ PM / 100:', `${pm} / 100`, z, '', String(z), 0.001),
+      calc('The exponent -πζ/√(1-ζ²):', `-π × ${z} / √(1 - ${z}²)`, ex, '', sig(ex, 4), 0.005),
+      calc('%OS = e^(exponent) × 100:', `e^(${sig(ex, 4)}) × 100`, os, '%', sig(os), 0.05));
   },
   (r, d) => {
     const Kv = pick(r, [50, 100, 200]), N = pick(r, [10, 40, 100]);
-    if (d < 3) return ask(`A PLL's VCO has K_VCO = ${Kv} MHz/V and the divider is N = ${N}. With a 25 MHz reference, what output frequency does it lock to, in MHz?`, qty(25 * N, 'MHz', 0.01), `f_out = N·f_ref = ${N} × 25 MHz = ${25 * N} MHz. The loop adjusts the VCO control voltage until the divided output matches the reference.`, 'f_out = N × f_ref.');
+    const idea = 'A PLL compares its divided-down output (f_out / N) with a reference and steers the VCO until the two match. So at lock, f_out = N × f_ref: the divider sets the multiplication. A fractional-N PLL makes N non-integer on average by switching the divider between neighbouring integers.';
+    if (d < 3) return walk(ask(`A PLL's VCO has K_VCO = ${Kv} MHz/V and the divider is N = ${N}. With a 25 MHz reference, what output frequency does it lock to, in MHz?`, qty(25 * N, 'MHz', 0.01), `f_out = N·f_ref = ${N} × 25 MHz = ${25 * N} MHz. The loop adjusts the VCO control voltage until the divided output matches the reference.`, 'f_out = N × f_ref.'),
+      'PLL lock frequency', idea,
+      choice('K_VCO tells you how the VCO responds to its control voltage. Does it change the frequency the loop locks to?', 'No: only N and the reference set it', ['Yes: f_out = K_VCO × N']),
+      calc('f_out = N × f_ref:', `${N} × 25`, 25 * N, 'MHz', String(25 * N), 0.01));
     const ref = pick(r, [10, 25, 50]), fo = pick(r, [2400, 3200, 5000]);
     const Nf = fo / ref;
-    return ask(`A fractional-N PLL makes ${fo} MHz from a ${ref} MHz reference. What (average) divide ratio N?`, qty(Nf, '', 0.001, sig(Nf, 5)), `N = ${fo}/${ref} = ${sig(Nf, 5)}. ${Number.isInteger(Nf) ? 'An integer, so a plain integer-N PLL would do.' : 'Not an integer: the divider dithers between neighbours with a sigma-delta modulator.'}`, 'N = f_out / f_ref.');
+    return walk(ask(`A fractional-N PLL makes ${fo} MHz from a ${ref} MHz reference. What (average) divide ratio N?`, qty(Nf, '', 0.001, sig(Nf, 5)), `N = ${fo}/${ref} = ${sig(Nf, 5)}. ${Number.isInteger(Nf) ? 'An integer, so a plain integer-N PLL would do.' : 'Not an integer: the divider dithers between neighbours with a sigma-delta modulator.'}`, 'N = f_out / f_ref.'),
+      'divide ratio', idea,
+      calc('N = f_out / f_ref:', `${fo} / ${ref}`, Nf, '', sig(Nf, 5), 0.001));
   },
 ]);
 
@@ -199,49 +311,92 @@ export const emPractice = practice('practice-em', 'Field & Wave Drills', 'capaci
   (r, d) => {
     const er = pick(r, [3.9, 4.2, 11.7]), A = pick(r, [1, 10, 100]), dd = pick(r, [0.01, 0.1, 1]); // µm², µm
     const C = (8.854e-12 * er * A * 1e-12) / (dd * 1e-6);
-    return ask(`Parallel plates: area ${A} µm², gap ${dd} µm, εr = ${er}. Capacitance, in fF?`, qty(C * 1e15, 'fF', 0.02, sig(C * 1e15)), `C = ε₀εr·A/d = 8.854e-12 × ${er} × ${A}e-12 / ${dd}e-6 = ${eng(C, 'F')}.${d === 3 ? ' Wire capacitance on chips is mostly fringing and coupling to neighbours, so real extractors use field solvers.' : ''}`, 'C = ε₀ εr A / d.');
+    return walk(ask(`Parallel plates: area ${A} µm², gap ${dd} µm, εr = ${er}. Capacitance, in fF?`, qty(C * 1e15, 'fF', 0.02, sig(C * 1e15)), `C = ε₀εr·A/d = 8.854e-12 × ${er} × ${A}e-12 / ${dd}e-6 = ${eng(C, 'F')}.${d === 3 ? ' Wire capacitance on chips is mostly fringing and coupling to neighbours, so real extractors use field solvers.' : ''}`, 'C = ε₀ εr A / d.'),
+      'parallel-plate capacitance', 'Two plates of area A separated by a gap d hold C = ε₀·εr·A/d: bigger plates or a thinner gap store more charge per volt. Use SI units: ε₀ = 8.854e-12 F/m, area in m² (1 µm² = 1e-12 m²), gap in m (1 µm = 1e-6 m). 1 fF = 1e-15 F.',
+      calc('ε = ε₀ × εr (F/m):', `8.854e-12 × ${er}`, 8.854e-12 * er, '', sig(8.854e-12 * er)),
+      calc(`Times the area in m² (${A}e-12):`, `${sig(8.854e-12 * er)} × ${A}e-12`, 8.854e-12 * er * A * 1e-12, '', sig(8.854e-12 * er * A * 1e-12)),
+      calc(`Divide by the gap in m (${dd}e-6), then convert to fF (× 1e15):`, `${sig(8.854e-12 * er * A * 1e-12)} / ${dd}e-6 × 1e15`, C * 1e15, 'fF', sig(C * 1e15), 0.02));
   },
   (r, d) => {
     const er = pick(r, [4, 4.3, 3.5, 9]);
     const v = 3e8 / Math.sqrt(er);
-    if (d === 1) return ask(`Signals travel in a dielectric with εr = ${er}. What fraction of the speed of light?`, qty(1 / Math.sqrt(er), '', 0.02, sig(1 / Math.sqrt(er))), `v/c = 1/√εr = ${sig(1 / Math.sqrt(er))}.`, 'v = c/√εr.');
+    const idea = 'Signals on a PCB or chip travel at the speed of light divided by √εr of the insulator around them: v = c/√εr, with c = 3e8 m/s. Delay = length / v. A trace must be treated as a transmission line when its delay exceeds about 1/6 of the edge rise time.';
+    if (d === 1) return walk(ask(`Signals travel in a dielectric with εr = ${er}. What fraction of the speed of light?`, qty(1 / Math.sqrt(er), '', 0.02, sig(1 / Math.sqrt(er))), `v/c = 1/√εr = ${sig(1 / Math.sqrt(er))}.`, 'v = c/√εr.'),
+      'propagation velocity', idea,
+      calc('√εr:', `√${er}`, Math.sqrt(er), '', sig(Math.sqrt(er), 4), 0.005),
+      calc('v/c = 1/√εr:', `1 / ${sig(Math.sqrt(er), 4)}`, 1 / Math.sqrt(er), '', sig(1 / Math.sqrt(er)), 0.02));
     const len = pick(r, [5, 10, 30]); // cm
     const t = (len / 100 / v) * 1e12;
-    if (d === 2) return ask(`A ${len} cm stripline in εr = ${er}. Propagation delay, in ps?`, qty(t, 'ps', 0.02), `v = c/√${er} = ${sig(v / 1e8)}e8 m/s; t = ${len / 100} m / v = ${sig(t)} ps (${sig(t / len)} ps/cm).`, 'Delay = length / v.');
+    if (d === 2) return walk(ask(`A ${len} cm stripline in εr = ${er}. Propagation delay, in ps?`, qty(t, 'ps', 0.02), `v = c/√${er} = ${sig(v / 1e8)}e8 m/s; t = ${len / 100} m / v = ${sig(t)} ps (${sig(t / len)} ps/cm).`, 'Delay = length / v.'),
+      'propagation delay', idea,
+      calc('v = 3e8 / √εr (m/s):', `3e8 / √${er}`, v, '', sig(v)),
+      calc(`Delay = ${len / 100} m / v, in ps (× 1e12):`, `${len / 100} / ${sig(v)} × 1e12`, t, 'ps', undefined, 0.02));
     const tr = pick(r, [50, 100, 200]); // ps
     const crit = ((tr / 6) * 1e-12 * v) * 100;
-    return ask(`Edges have t_r = ${tr} ps in εr = ${er}. Beyond what trace length (delay > t_r/6) must you treat it as a transmission line, in cm?`, qty(crit, '', 0.03, sig(crit)), `t_r/6 = ${sig(tr / 6)} ps; × v = ${sig(crit)} cm. Longer than that, reflections shape the waveform and you must terminate.`, 'Critical length = v × t_r / 6.');
+    return walk(ask(`Edges have t_r = ${tr} ps in εr = ${er}. Beyond what trace length (delay > t_r/6) must you treat it as a transmission line, in cm?`, qty(crit, '', 0.03, sig(crit)), `t_r/6 = ${sig(tr / 6)} ps; × v = ${sig(crit)} cm. Longer than that, reflections shape the waveform and you must terminate.`, 'Critical length = v × t_r / 6.'),
+      'critical length', idea,
+      calc('t_r / 6, in ps:', `${tr} / 6`, tr / 6, 'ps', sig(tr / 6)),
+      calc('v = 3e8/√εr, in cm per ps (m/s × 100 × 1e-12):', `3e8 / √${er} × 1e-10`, v * 1e-10, '', sig(v * 1e-10, 4), 0.005),
+      calc('Length = v × (t_r / 6), in cm:', `${sig(v * 1e-10, 4)} × ${sig(tr / 6)}`, crit, '', sig(crit), 0.03));
   },
   (r, d) => {
     const L = pick(r, [250, 300, 400]), C = pick(r, [100, 120, 160]); // nH/m, pF/m
     const Z = Math.sqrt((L * 1e-9) / (C * 1e-12));
-    if (d < 3) return ask(`A line has L' = ${L} nH/m and C' = ${C} pF/m. Characteristic impedance, in Ω?`, qty(Z, 'Ω', 0.02), `Z₀ = √(L'/C') = √(${L}e-9/${C}e-12) = ${sig(Z)} Ω.`, 'Z₀ = √(L/C).');
+    const idea = 'A transmission line is inductance and capacitance spread along its length (L\' and C\' per metre). A wave travelling on it sees a fixed ratio of voltage to current, the characteristic impedance Z₀ = √(L\'/C\'), and moves at v = 1/√(L\'·C\').';
+    if (d < 3) return walk(ask(`A line has L' = ${L} nH/m and C' = ${C} pF/m. Characteristic impedance, in Ω?`, qty(Z, 'Ω', 0.02), `Z₀ = √(L'/C') = √(${L}e-9/${C}e-12) = ${sig(Z)} Ω.`, 'Z₀ = √(L/C).'),
+      'characteristic impedance', idea,
+      calc(`L'/C' in SI units (${L}e-9 / ${C}e-12):`, `${L}e-9 / ${C}e-12`, (L * 1e-9) / (C * 1e-12), '', sig((L * 1e-9) / (C * 1e-12))),
+      calc('Z₀ = square root, in ohms:', `√${sig((L * 1e-9) / (C * 1e-12))}`, Z, 'Ω', undefined, 0.02));
     const v = 1 / Math.sqrt(L * 1e-9 * C * 1e-12);
-    return ask(`Same line (L' = ${L} nH/m, C' = ${C} pF/m). Propagation velocity, as a fraction of c?`, qty(v / 3e8, '', 0.02, sig(v / 3e8)), `v = 1/√(L'C') = ${sig(v / 1e8)}e8 m/s = ${sig(v / 3e8)}c.`, 'v = 1/√(LC).');
+    return walk(ask(`Same line (L' = ${L} nH/m, C' = ${C} pF/m). Propagation velocity, as a fraction of c?`, qty(v / 3e8, '', 0.02, sig(v / 3e8)), `v = 1/√(L'C') = ${sig(v / 1e8)}e8 m/s = ${sig(v / 3e8)}c.`, 'v = 1/√(LC).'),
+      'propagation velocity from L and C', idea,
+      calc(`L' × C' (${L}e-9 × ${C}e-12):`, `${L}e-9 × ${C}e-12`, L * 1e-9 * C * 1e-12, '', sig(L * 1e-9 * C * 1e-12)),
+      calc('v = 1/√(that), in m/s:', `1 / √${sig(L * 1e-9 * C * 1e-12)}`, v, '', sig(v)),
+      calc('As a fraction of c = 3e8:', `${sig(v)} / 3e8`, v / 3e8, '', sig(v / 3e8), 0.02));
   },
   (r, d) => {
     const Z0 = pick(r, [50, 50, 100, 75]);
     const ZL = d === 1 ? pick(r, [0, Infinity, Z0]) : pick(r, [25, 75, 100, 150, 30, 60].filter((z) => z !== Z0));
     const G = ZL === Infinity ? 1 : (ZL - Z0) / (ZL + Z0);
     const shown = ZL === Infinity ? 'an open circuit' : ZL === 0 ? 'a short circuit' : `${ZL} Ω`;
-    if (d < 3) return ask(`A ${Z0} Ω line ends in ${shown}. Reflection coefficient Γ?`, qty(G, '', 0.01, sig(G)), `Γ = (Z_L - Z₀)/(Z_L + Z₀) = ${sig(G)}.${G === 0 ? ' Matched: no reflection.' : G === 1 ? ' Open: full reflection, same polarity (the voltage doubles).' : G === -1 ? ' Short: full inverted reflection.' : ''}`, 'Γ = (Z_L - Z₀) / (Z_L + Z₀).');
+    const idea = 'When a wave reaches a load that does not match the line, part of it bounces back. The reflection coefficient is Γ = (Z_L - Z₀)/(Z_L + Z₀): 0 when matched, +1 for an open (Z_L = ∞), -1 for a short. On a TDR, the voltage after the reflection returns is V_incident × (1 + Γ), and a matched source launches half the step.';
+    const gStep = ZL === Infinity
+      ? choice('For an open circuit Z_L → ∞, (Z_L - Z₀)/(Z_L + Z₀) approaches:', '1', ['0', '-1'])
+      : calc('Γ = (Z_L - Z₀)/(Z_L + Z₀):', `(${ZL} - ${Z0}) / (${ZL} + ${Z0})`, G, '', sig(G), 0.01);
+    if (d < 3) return walk(ask(`A ${Z0} Ω line ends in ${shown}. Reflection coefficient Γ?`, qty(G, '', 0.01, sig(G)), `Γ = (Z_L - Z₀)/(Z_L + Z₀) = ${sig(G)}.${G === 0 ? ' Matched: no reflection.' : G === 1 ? ' Open: full reflection, same polarity (the voltage doubles).' : G === -1 ? ' Short: full inverted reflection.' : ''}`, 'Γ = (Z_L - Z₀) / (Z_L + Z₀).'),
+      'reflection coefficient', idea, gStep,
+      ZL === Infinity && calc('So Γ is:', 'Γ', 1, '', '1', 0.01));
     const V = pick(r, [1, 0.8]);
-    return ask(`A ${V} V step launched down a ${Z0} Ω line hits a ${ZL} Ω load. On a TDR at the source, what voltage do you see after the reflection returns, in V? (source is matched)`, qty((V / 2) * (1 + G), 'V', 0.02, sig((V / 2) * (1 + G))), `The matched source launches V/2 = ${V / 2} V. Γ = ${sig(G)}, so the step settles at ${V / 2}·(1 + Γ) = ${sig((V / 2) * (1 + G))} V. ${ZL > Z0 ? 'Up: the load is higher impedance.' : 'Down: the load is lower impedance.'}`, 'V_TDR = V_incident × (1 + Γ).');
+    return walk(ask(`A ${V} V step launched down a ${Z0} Ω line hits a ${ZL} Ω load. On a TDR at the source, what voltage do you see after the reflection returns, in V? (source is matched)`, qty((V / 2) * (1 + G), 'V', 0.02, sig((V / 2) * (1 + G))), `The matched source launches V/2 = ${V / 2} V. Γ = ${sig(G)}, so the step settles at ${V / 2}·(1 + Γ) = ${sig((V / 2) * (1 + G))} V. ${ZL > Z0 ? 'Up: the load is higher impedance.' : 'Down: the load is lower impedance.'}`, 'V_TDR = V_incident × (1 + Γ).'),
+      'reading a TDR', idea, gStep,
+      calc('The matched source launches half the step:', `${V} / 2`, V / 2, 'V', String(V / 2), 0.001),
+      calc('After the reflection returns: V_incident × (1 + Γ):', `${V / 2} × (1 + ${sig(G)})`, (V / 2) * (1 + G), 'V', sig((V / 2) * (1 + G)), 0.02));
   },
   (r, d) => {
     const f = pick(r, tier(d, [1e6, 1e9], [100e6, 10e9], [28e9, 56e9, 2.4e9]));
     const rho = 1.68e-8, mu = 4 * Math.PI * 1e-7;
-    const delta = Math.sqrt(rho / (Math.PI * f * mu));
-    return ask(`Skin depth in copper (ρ = 1.68e-8 Ω·m) at ${eng(f, 'Hz')}, in µm?`, qty(delta * 1e6, 'um', 0.02, sig(delta * 1e6)), `δ = √(ρ/(πfµ₀)) = ${sig(delta * 1e6)} µm. ${f >= 1e9 ? 'Thinner than the copper roughness on many boards, which is why smooth copper matters at high speed.' : 'Current crowds into this outer layer, so AC resistance rises as √f.'}`, 'δ = √(ρ / (π f µ₀)).');
+    const den = Math.PI * f * mu;
+    const delta = Math.sqrt(rho / den);
+    return walk(ask(`Skin depth in copper (ρ = 1.68e-8 Ω·m) at ${eng(f, 'Hz')}, in µm?`, qty(delta * 1e6, 'um', 0.02, sig(delta * 1e6)), `δ = √(ρ/(πfµ₀)) = ${sig(delta * 1e6)} µm. ${f >= 1e9 ? 'Thinner than the copper roughness on many boards, which is why smooth copper matters at high speed.' : 'Current crowds into this outer layer, so AC resistance rises as √f.'}`, 'δ = √(ρ / (π f µ₀)).'),
+      'skin depth', 'At high frequency, current crowds into a thin outer layer of a conductor. That layer\'s thickness, the skin depth, is δ = √(ρ / (π·f·µ₀)), with µ₀ = 4π×10⁻⁷ H/m. It shrinks as 1/√f, so AC resistance grows as √f.',
+      calc('π × f × µ₀:', `π × ${f} × 4π×10⁻⁷`, den, '', sig(den)),
+      calc('ρ divided by that:', `1.68e-8 / ${sig(den)}`, rho / den, '', sig(rho / den)),
+      calc('Square root, in µm (× 10⁶):', `√${sig(rho / den)} × 10^6`, delta * 1e6, 'um', sig(delta * 1e6), 0.02));
   },
   (r, d) => {
     if (d === 1) {
       const f = pick(r, [1e9, 2.4e9, 5e9]);
-      return ask(`Wavelength of a ${eng(f, 'Hz')} signal in free space, in cm?`, qty((3e8 / f) * 100, '', 0.02, sig((3e8 / f) * 100)), `λ = c/f = ${sig((3e8 / f) * 100)} cm. Antennas and resonances scale with λ.`, 'λ = c / f.');
+      return walk(ask(`Wavelength of a ${eng(f, 'Hz')} signal in free space, in cm?`, qty((3e8 / f) * 100, '', 0.02, sig((3e8 / f) * 100)), `λ = c/f = ${sig((3e8 / f) * 100)} cm. Antennas and resonances scale with λ.`, 'λ = c / f.'),
+        'wavelength', 'A wave travels one wavelength per cycle: λ = c / f, with c = 3e8 m/s. Multiply metres by 100 for centimetres.',
+        calc('λ = 3e8 / f, in metres:', `3e8 / ${f}`, 3e8 / f, '', sig(3e8 / f)),
+        calc('In cm:', `${sig(3e8 / f)} × 100`, (3e8 / f) * 100, '', sig((3e8 / f) * 100), 0.02));
     }
     const G = pick(r, [0.1, 0.2, 0.33, 0.05]);
     const rl = -20 * Math.log10(G);
-    return ask(`|Γ| = ${G}. Return loss, in dB?`, qty(rl, '', 0.02, sig(rl)), `RL = -20·log10|Γ| = ${sig(rl)} dB. Specs often ask for > 10-15 dB.${d === 3 ? ` VSWR = (1 + |Γ|)/(1 - |Γ|) = ${sig((1 + G) / (1 - G))}.` : ''}`, 'RL = -20 log10 |Γ|.');
+    return walk(ask(`|Γ| = ${G}. Return loss, in dB?`, qty(rl, '', 0.02, sig(rl)), `RL = -20·log10|Γ| = ${sig(rl)} dB. Specs often ask for > 10-15 dB.${d === 3 ? ` VSWR = (1 + |Γ|)/(1 - |Γ|) = ${sig((1 + G) / (1 - G))}.` : ''}`, 'RL = -20 log10 |Γ|.'),
+      'return loss', 'Return loss says how far below the incident wave the reflection is, in dB. Γ is a voltage ratio, so RL = -20·log10|Γ|. Bigger return loss is better: less reflected.',
+      calc('log10 of |Γ|:', `log10(${G})`, Math.log10(G), '', sig(Math.log10(G))),
+      calc('Times -20:', `-20 × ${sig(Math.log10(G))}`, rl, '', sig(rl), 0.02));
   },
 ]);
 

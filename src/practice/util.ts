@@ -1,6 +1,7 @@
 // Small helpers shared by the practice banks and bosses.
 import type { Answer } from '../lessons/answers';
-import { mc, type McStep } from '../lessons/types';
+import { choice, walk } from '../lessons/teach';
+import { mc, pick, type McStep } from '../lessons/types';
 
 export const hex = (n: number, w = 2) => '0x' + n.toString(16).toUpperCase().padStart(w, '0');
 
@@ -62,6 +63,15 @@ export const shuffled = (r: () => number, right: string, wrong: readonly string[
 export const mcs = (r: () => number, q: string, right: string, wrong: readonly string[], why: string): McStep => {
   const [opts, a] = shuffled(r, right, wrong);
   return mc(q, opts, a, why);
+};
+
+/** A concept question with its walkthrough: [question, right, wrong, method, idea, [step question, step right, step wrong]]. */
+export type ConceptQ = readonly [string, string, readonly string[], string, string, readonly [string, string, readonly string[]]];
+
+/** Pick one concept question and attach its walkthrough: the method, the idea, and one reasoning step to work. */
+export const concept = (r: () => number, qs: readonly ConceptQ[], why: (right: string) => string) => {
+  const [q, right, wrong, method, idea, [sq, sr, sw]] = pick(r, qs);
+  return walk(mcs(r, q, right, wrong, why(right)), method, idea, choice(sq, sr, sw));
 };
 
 /** Exact text answer, ignoring whitespace and quote style: exact("[1, 2]") accepts "[1,2]". */
