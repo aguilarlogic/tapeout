@@ -32,7 +32,7 @@ function checkWalk(q: Question, where: string) {
  * every one of its generators is taught; the list must end up empty, and then this set and its guard go away.
  */
 const PENDING = new Set([
-  'practice-c', 'practice-cpp', 'practice-dsa', 'practice-asm', 'practice-os',
+  
   'practice-comb', 'practice-seq', 'practice-fsm', 'practice-verilog', 'practice-alu', 'practice-clk', 'practice-sta', 'practice-vlsi',
   'practice-power', 'practice-pcb', 'practice-dv', 'practice-crv', 'practice-cov', 'practice-uvm', 'practice-sva', 'practice-formal', 'practice-dft',
   'practice-pipe', 'practice-ooo', 'practice-cache', 'practice-coherence', 'practice-dram', 'practice-bus', 'practice-noc', 'practice-serdes',
