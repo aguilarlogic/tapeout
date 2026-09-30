@@ -60,6 +60,12 @@ Each phase ships playable content and is committed on its own.
   and a random root cause per run. Tests prove every pair of causes can be told apart, that no single reading gives the
   answer away, and that a careful engineer solves every case within 70% of the budget. The first incident comes with
   a coach that crosses causes off after each reading; after that the notebook is the player's.
+- [x] **Teach-me walkthroughs on every practice question.** Stuck on a practice question? Say "teach me how" (or pick
+  the lifebuoy option on a multiple-choice question) and the mentor names the method, says when and why it applies,
+  then walks the problem one small step at a time with the numbers already in place. After a walkthrough you get the
+  same kind of problem with new numbers. Every practice generator in every set has one, and
+  `src/practice/teach.test.ts` checks seeds 1-25 at all three difficulties: each walkthrough's steps must accept their
+  own canonical answer, and a worked calculation must end on the question's answer.
 - [ ] **Phase 4: Circuit Lab.**
 - [ ] **Phase 5: Code Lab and Shell Lab**, with regression triage.
 - [ ] **Phase 6: SV Lab**: SystemVerilog, UVM, SVA, formal, CDC.

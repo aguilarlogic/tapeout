@@ -1,5 +1,7 @@
 # Teach-me walkthroughs: handoff plan
 
+> **Status: done.** Every practice set has walkthroughs and the `PENDING` list is gone. This file stays as the reference for how walkthroughs are written (sections 2 to 6), for new practice sets.
+
 This is a self-contained plan for finishing the "teach me" feature. Any engineer or model can pick it up from here without the conversation that started it.
 
 ## 1. The problem being fixed

@@ -27,31 +27,12 @@ function checkWalk(q: Question, where: string) {
   if (q.t === 'ask' && last.t === 'do') expect(q.a.check(last.a.canonical), `${where}: last step "${last.a.canonical}" must be the answer (${q.a.canonical})`).toBe(true);
 }
 
-/**
- * Sets whose walkthroughs are still being written (see docs/TEACH-ME-PLAN.md). Remove a set's id as soon as
- * every one of its generators is taught; the list must end up empty, and then this set and its guard go away.
- */
-const PENDING = new Set([
-  
-  
-  'practice-dft',
-  'practice-serdes',
-  'practice-pkg',
-  'practice-npu', 'practice-hwsec', 'practice-fusa', 'practice-photonics', 'practice-qubit',
-  'practice-qctrl',
-]);
-
 describe('practice walkthroughs', () => {
   for (const p of PRACTICE) {
-    if (PENDING.has(p.id)) { it.todo(`${p.id}: every problem can be taught step by step`); continue; }
     it(`${p.id}: every problem can be taught step by step`, () => {
       for (const d of [1, 2, 3] as Difficulty[]) for (let seed = 1; seed <= 25; seed++) {
         p.gens.forEach((g, i) => checkWalk(g(rng(seed * 7 + i), d), `${p.id} gen${i} d${d} seed${seed}`));
       }
     });
   }
-  it('the pending list names only real sets', () => {
-    const ids = new Set(PRACTICE.map((p) => p.id));
-    for (const id of PENDING) expect(ids.has(id), id).toBe(true);
-  });
 });

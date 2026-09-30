@@ -16,6 +16,9 @@ From there it teaches you in the terminal: short explanations, ASCII diagrams, a
 (any notation works: `0x1F`, `8'h1f`, `4.7k`, `a^b`...). When it's time to practise, it opens windows on the desktop:
 labs, simulators and minigames. Everything you finish lights up a block of your chip on the map.
 
+Stuck on a practice question? Type `teach me how` (on multiple choice, pick the lifebuoy option) and TAPEOUT walks you
+through the method one small step at a time, then gives you a fresh problem to try it on.
+
 TAPEOUT types everything it says, with short pauses between sentences, so you can read along. Press any key or click
 to finish a line early. Pick slow, normal, fast or instant in **Settings.app** on the desktop (or type `speed fast`);
 instant, and your system's reduced-motion setting, turn the typing and loading animations off.
