@@ -35,8 +35,8 @@ const PENDING = new Set([
   
   
   'practice-dft',
-  'practice-pipe', 'practice-ooo', 'practice-cache', 'practice-coherence', 'practice-dram', 'practice-bus', 'practice-noc', 'practice-serdes',
-  'practice-perf', 'practice-analog', 'practice-rf', 'practice-pmic', 'practice-pnr', 'practice-sram', 'practice-fab', 'practice-pkg',
+  'practice-serdes',
+  'practice-analog', 'practice-rf', 'practice-pmic', 'practice-pnr', 'practice-sram', 'practice-fab', 'practice-pkg',
   'practice-postsi', 'practice-ate', 'practice-emu', 'practice-npu', 'practice-hwsec', 'practice-fusa', 'practice-photonics', 'practice-qubit',
   'practice-qctrl',
 ]);

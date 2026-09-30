@@ -1,9 +1,10 @@
 // Practice banks and bosses for computer architecture: pipelines, out-of-order cores, caches, coherence,
 // DRAM, buses, NoCs, SerDes and performance modeling. Most questions come from small simulators.
 import { hexa, num, qty } from '../lessons/answers';
-import { art, ask, between, mc, pick, say, type Rng } from '../lessons/types';
+import { calc, choice, count, show, step, walk } from '../lessons/teach';
+import { art, ask, between, mc, pick, say, type Beat, type Rng } from '../lessons/types';
 import { boss, practice, tier } from './types';
-import { hex, mcs, sig } from './util';
+import { concept, hex, mcs, sig } from './util';
 
 const code = (s: string) => '\n```\n' + s + '\n```\n';
 
@@ -34,7 +35,7 @@ export function program(r: Rng, n: number, loads = 0.35): Instr[] {
  * Stall cycles in a classic 5-stage pipeline (IF ID EX MEM WB). With forwarding only load-use stalls (1 cycle);
  * without it a consumer's ID must wait for the producer's WB (register file writes in the first half-cycle).
  */
-export function stalls(prog: Instr[], forwarding: boolean): number {
+export function idTimes(prog: Instr[], forwarding: boolean): number[] {
   const id: number[] = [];
   const last: Record<number, number> = {};
   prog.forEach((ins, i) => {
@@ -48,6 +49,11 @@ export function stalls(prog: Instr[], forwarding: boolean): number {
     id.push(t);
     if (ins.op !== 'sw' && ins.rd !== 0) last[ins.rd] = i;
   });
+  return id;
+}
+
+export function stalls(prog: Instr[], forwarding: boolean): number {
+  const id = idTimes(prog, forwarding);
   return id[id.length - 1] + 3 - (prog.length + 4);
 }
 
@@ -69,7 +75,14 @@ export const pipePractice = practice('practice-pipe', 'Pipeline Drills', 'hazard
     let prog = program(r, n), fwd = d !== 2;
     for (let k = 0; k < 20 && stalls(prog, fwd) === 0 && r() < 0.8; k++) prog = program(r, n);
     const s = stalls(prog, fwd);
-    return ask(`5-stage pipeline (IF ID EX MEM WB), ${fwd ? 'full forwarding' : 'NO forwarding (the register file writes in the first half of a cycle and reads in the second)'}. How many stall cycles does this code need?${code(prog.map((x) => x.text).join('\n'))}`, num(s), `${fwd ? 'With forwarding only a load feeding the very next instruction stalls (1 cycle: the value exists after MEM).' : 'Without forwarding a consumer waits in ID until its producer reaches WB: 2 stalls at distance 1, 1 at distance 2.'} Total: ${s}. Runtime = ${prog.length} + 4 + ${s} = ${prog.length + 4 + s} cycles.`, fwd ? 'Look for lw followed immediately by a use of its result.' : 'Check every read against producers 1 and 2 instructions earlier (after stalls shift things).');
+    const id = idTimes(prog, fwd);
+    const waits = id.map((t, i) => (i === 0 ? 0 : t - (id[i - 1] + 1)));
+    const rule = fwd ? 'With FULL FORWARDING, a result is passed straight to the next instruction\'s ALU, so ALU results cost nothing. Only a LOAD is too slow: its data exists only after the MEM stage, one stage later than an ALU result. So a load followed IMMEDIATELY by an instruction that uses its result costs exactly 1 stall; anything else costs none.'
+      : 'With NO forwarding, a result only reaches the register file at the WB stage, so a consumer has to wait in ID until its producer has finished WB. The register file writes in the first half of a cycle and reads in the second, so the consumer can read in the same cycle as the WB. Directly after its producer that means 2 stalls; one instruction later, 1 stall; two or more later, none. Stalls push everything behind them back, which can change later distances.';
+    return walk(ask(`5-stage pipeline (IF ID EX MEM WB), ${fwd ? 'full forwarding' : 'NO forwarding (the register file writes in the first half of a cycle and reads in the second)'}. How many stall cycles does this code need?${code(prog.map((x) => x.text).join('\n'))}`, num(s), `${fwd ? 'With forwarding only a load feeding the very next instruction stalls (1 cycle: the value exists after MEM).' : 'Without forwarding a consumer waits in ID until its producer reaches WB: 2 stalls at distance 1, 1 at distance 2.'} Total: ${s}. Runtime = ${prog.length} + 4 + ${s} = ${prog.length + 4 + s} cycles.`, fwd ? 'Look for lw followed immediately by a use of its result.' : 'Check every read against producers 1 and 2 instructions earlier (after stalls shift things).'),
+      fwd ? 'counting load-use stalls' : 'counting stalls without forwarding', `A stall is a cycle where an instruction has to wait because an earlier one has not produced its input yet. To count them, find each instruction's inputs, find who produced them, and ask whether the value is ready in time. ${rule}`,
+      show(prog.map((x, i) => `${i + 1}. ${x.text.padEnd(20)} waits ${waits[i]} cycle${waits[i] === 1 ? '' : 's'}`).join('\n'), 'each instruction, with the stalls it has to wait'),
+      count('Total stall cycles is the sum of all the waits:', waits.join(' + '), s));
   },
   (r, d) => {
     const n = pick(r, [4, 5, 8]), loops = tier(d, 2, 3, 3);
@@ -77,24 +90,38 @@ export const pipePractice = practice('practice-pipe', 'Pipeline Drills', 'hazard
     const bits = d === 1 ? 1 : 2;
     const start = bits === 1 ? 1 : d === 3 ? 0 : 3;
     const m = predict(pattern, bits as 1 | 2, start);
-    return ask(`A loop branch goes ${pattern} (T = taken). A ${bits}-bit predictor starts ${bits === 1 ? '"taken"' : start === 3 ? 'strongly taken' : 'strongly NOT taken'}. How many mispredictions?`, num(m), `${bits === 1 ? 'A 1-bit predictor flips on every surprise, so it mispredicts twice per loop exit: the N and the T after it (except at the very start).' : 'A 2-bit counter needs two surprises in a row to change its mind, so a loop exit costs only one misprediction.'}${start === 0 ? ' Starting at strongly not-taken costs 2 extra warm-up misses.' : ''} Total ${m}.`, 'Simulate it: predict, compare, update.');
+    const max = bits === 1 ? 1 : 3, thr = bits === 1 ? 1 : 2;
+    let s = start;
+    const rows: string[] = [];
+    for (const c of pattern) {
+      const taken = c === 'T', pr = s >= thr;
+      rows.push(`${c}  predict ${pr ? 'T' : 'N'}  ${pr === taken ? 'ok  ' : 'MISS'}  counter ${s} → ${taken ? Math.min(max, s + 1) : Math.max(0, s - 1)}`);
+      s = taken ? Math.min(max, s + 1) : Math.max(0, s - 1);
+    }
+    return walk(ask(`A loop branch goes ${pattern} (T = taken). A ${bits}-bit predictor starts ${bits === 1 ? '"taken"' : start === 3 ? 'strongly taken' : 'strongly NOT taken'}. How many mispredictions?`, num(m), `${bits === 1 ? 'A 1-bit predictor flips on every surprise, so it mispredicts twice per loop exit: the N and the T after it (except at the very start).' : 'A 2-bit counter needs two surprises in a row to change its mind, so a loop exit costs only one misprediction.'}${start === 0 ? ' Starting at strongly not-taken costs 2 extra warm-up misses.' : ''} Total ${m}.`, 'Simulate it: predict, compare, update.'),
+      'simulating a branch predictor', bits === 1 ? 'A 1-bit predictor remembers only the last outcome and predicts the same again (counter 1 = predict taken, 0 = predict not taken). For each branch, compare the prediction with what really happened (a mismatch is a MISPREDICTION), then update the counter to the outcome.'
+        : 'A 2-bit predictor is a counter from 0 to 3: 0-1 predict not-taken, 2-3 predict taken. For each branch, compare the prediction with what really happened (a mismatch is a MISPREDICTION), then move the counter one step toward the outcome (up if taken, down if not), never past 0 or 3. One surprise only nudges it, so it takes two in a row to change its mind.',
+      show(rows.join('\n'), 'the predictor, one branch at a time'),
+      count('Count the MISS lines:', 'number of MISS rows', m));
   },
   (r, d) => {
     const br = pick(r, [0.15, 0.2, 0.25]), mis = pick(r, [0.05, 0.1]), pen = tier(d, 3, pick(r, [10, 15]), pick(r, [15, 20]));
     const ld = pick(r, [0.2, 0.3]), use = pick(r, [0.2, 0.4]), l1m = d === 3 ? pick(r, [0.02, 0.05]) : 0, memp = 100;
-    const cpi = 1 + br * mis * pen + (d > 1 ? ld * use : 0) + ld * l1m * memp;
-    return ask(`Base CPI 1. ${br * 100}% branches, ${mis * 100}% mispredicted, ${pen}-cycle penalty.${d > 1 ? ` ${ld * 100}% loads, ${use * 100}% of them followed by a dependent instruction (1-cycle stall).` : ''}${l1m ? ` ${l1m * 100}% of loads miss to memory (${memp} cycles).` : ''} CPI?`, qty(cpi, '', 0.01, sig(cpi)), `CPI = 1 + ${br}×${mis}×${pen}${d > 1 ? ` + ${ld}×${use}` : ''}${l1m ? ` + ${ld}×${l1m}×${memp}` : ''} = ${sig(cpi)}. That breakdown is a CPI stack: it tells you where to spend area.`, 'Add each penalty weighted by how often it happens.');
+    const t1 = br * mis * pen, t2 = d > 1 ? ld * use : 0, t3 = ld * l1m * memp;
+    const cpi = 1 + t1 + t2 + t3;
+    return walk(ask(`Base CPI 1. ${br * 100}% branches, ${mis * 100}% mispredicted, ${pen}-cycle penalty.${d > 1 ? ` ${ld * 100}% loads, ${use * 100}% of them followed by a dependent instruction (1-cycle stall).` : ''}${l1m ? ` ${l1m * 100}% of loads miss to memory (${memp} cycles).` : ''} CPI?`, qty(cpi, '', 0.01, sig(cpi)), `CPI = 1 + ${br}×${mis}×${pen}${d > 1 ? ` + ${ld}×${use}` : ''}${l1m ? ` + ${ld}×${l1m}×${memp}` : ''} = ${sig(cpi)}. That breakdown is a CPI stack: it tells you where to spend area.`, 'Add each penalty weighted by how often it happens.'),
+      'building a CPI stack', 'CPI is cycles per instruction. An ideal pipeline finishes one instruction per cycle (CPI 1). Every kind of trouble adds extra cycles to SOME instructions, so its contribution to the average is (how often it happens per instruction) × (extra cycles each time). Work out each contribution, then add them all to the base CPI.',
+      calc('Branch penalty per instruction: (fraction of branches) × (fraction mispredicted) × (penalty cycles):', `${br} × ${mis} × ${pen}`, t1, '', sig(t1, 4), 0.005),
+      ...(d > 1 ? [calc('Load-use stalls per instruction: (fraction of loads) × (fraction followed by a user) × 1 cycle:', `${ld} × ${use}`, t2, '', sig(t2, 4), 0.005)] : []),
+      ...(l1m ? [calc('Memory stalls per instruction: (fraction of loads) × (miss rate) × (memory cycles):', `${ld} × ${l1m} × ${memp}`, t3, '', sig(t3, 4), 0.005)] : []),
+      calc('CPI = the base 1 plus all the contributions:', ['1', sig(t1, 4), d > 1 ? sig(t2, 4) : '', l1m ? sig(t3, 4) : ''].filter(Boolean).join(' + '), cpi, '', sig(cpi), 0.01));
   },
-  (r) => {
-    const qs = [
-      ['What does forwarding (bypassing) do?', 'Routes a result from EX/MEM or MEM/WB straight to a later instruction\'s ALU input, before it is written to the register file', ['Predicts branches', 'Reorders instructions', 'Writes the register file twice per cycle']],
-      ['Why do deeper pipelines make branch mispredictions more expensive?', 'More stages of wrong-path work must be flushed before the branch resolves', ['They do not', 'Deeper pipelines have smaller predictors', 'Because of forwarding']],
-      ['What is a structural hazard?', 'Two instructions need the same hardware resource in the same cycle (e.g. one memory port for fetch and load)', ['A data dependence', 'A branch', 'A cache miss']],
-      ['What does a BTB (branch target buffer) provide?', 'The predicted target address at fetch time, before the branch is even decoded', ['The branch direction only', 'The return address stack', 'Cache tags']],
-    ] as const;
-    const [q, right, wrong] = pick(r, qs);
-    return mcs(r, q, right, wrong, `${right}.`);
-  },
+  (r) => concept(r, [
+    ['What does forwarding (bypassing) do?', 'Routes a result from EX/MEM or MEM/WB straight to a later instruction\'s ALU input, before it is written to the register file', ['Predicts branches', 'Reorders instructions', 'Writes the register file twice per cycle'], 'forwarding', 'Without forwarding, an instruction has to wait until the result of the one before it is written back to the register file. Forwarding adds extra wires that carry the result straight from a later pipeline stage to the ALU input of the instruction that needs it, so it does not have to wait.', ['Forwarding shortens the wait by:', 'Sending the result directly to where it is needed', ['Guessing the result', 'Skipping the instruction']]],
+    ['Why do deeper pipelines make branch mispredictions more expensive?', 'More stages of wrong-path work must be flushed before the branch resolves', ['They do not', 'Deeper pipelines have smaller predictors', 'Because of forwarding'], 'misprediction penalty', 'After a wrongly predicted branch, the pipeline has been fetching instructions from the wrong path. When the branch finally resolves, all of those are thrown away. The deeper the pipeline, the later in it the branch resolves, and the more wrong instructions there are to throw away.', ['The misprediction penalty is about:', 'The number of stages before the branch resolves', ['The size of the cache', 'The clock speed']]],
+    ['What is a structural hazard?', 'Two instructions need the same hardware resource in the same cycle (e.g. one memory port for fetch and load)', ['A data dependence', 'A branch', 'A cache miss'], 'kinds of hazard', 'There are three kinds of pipeline hazard. DATA hazards: an instruction needs a value a previous one has not produced yet. CONTROL hazards: a branch changes where to fetch from. STRUCTURAL hazards: two instructions need the same piece of hardware in the same cycle.', ['Two instructions wanting the one memory port in the same cycle is a:', 'Structural hazard', ['Data hazard', 'Control hazard']]],
+    ['What does a BTB (branch target buffer) provide?', 'The predicted target address at fetch time, before the branch is even decoded', ['The branch direction only', 'The return address stack', 'Cache tags'], 'branch target buffer', 'At fetch time the processor does not even know an instruction is a branch yet, let alone where it goes. A BTB is a small table, indexed by the instruction address, that remembers where each branch went last time, so fetch can jump there on the very next cycle.', ['A BTB is looked up using:', 'The address of the instruction being fetched', ['The result of the branch', 'The register values']]],
+  ], (why) => `${why}.`),
 ]);
 
 // ------------------------------------------------------------------ out-of-order
@@ -107,35 +134,46 @@ export const oooPractice = practice('practice-ooo', 'Out-of-Order Drills', 'data
     const ops = tier(d, ['add', 'mul'], ['add', 'mul', 'lw'], ['add', 'mul', 'lw', 'div']);
     const done: Record<number, number> = {};
     const lines: string[] = [];
+    const beats: Beat[] = [];
+    const times: number[] = [];
     let end = 0;
     for (let i = 0; i < n; i++) {
       const op = pick(r, ops), rd = between(r, 1, 5), a = between(r, 1, 5), b = between(r, 1, 5);
-      const t = (op === 'lw' ? done[a] ?? 0 : Math.max(done[a] ?? 0, done[b] ?? 0)) + LAT[op];
-      done[rd] = t; end = Math.max(end, t);
-      lines.push(op === 'lw' ? `lw   r${rd}, 0(r${a})` : `${op.padEnd(4)} r${rd}, r${a}, r${b}`);
+      const ra = done[a] ?? 0, rb = done[b] ?? 0;
+      const ready = op === 'lw' ? ra : Math.max(ra, rb);
+      const t = ready + LAT[op];
+      done[rd] = t; end = Math.max(end, t); times.push(t);
+      const text = op === 'lw' ? `lw   r${rd}, 0(r${a})` : `${op.padEnd(4)} r${rd}, r${a}, r${b}`;
+      lines.push(text);
+      beats.push(count(`\`${text}\`: inputs ready at ${op === 'lw' ? ra : `${ra} and ${rb}`}, so it starts at ${ready}. It takes ${LAT[op]} cycles, so it completes at:`, `${ready} + ${LAT[op]}`, t));
     }
-    return ask(`An ideal out-of-order core (unlimited width and units, perfect renaming) runs this. Latencies: ${ops.map((o) => `${o} ${LAT[o]}`).join(', ')}. All registers are ready at cycle 0. In which cycle does the last result complete?${code(lines.join('\n'))}`, num(end), `With renaming only true (RAW) dependences matter, so the answer is the longest latency chain through the dataflow graph: ${end} cycles. WAR/WAW reuse of registers costs nothing.`, 'Each result is ready at max(its sources) + its latency.');
+    return walk(ask(`An ideal out-of-order core (unlimited width and units, perfect renaming) runs this. Latencies: ${ops.map((o) => `${o} ${LAT[o]}`).join(', ')}. All registers are ready at cycle 0. In which cycle does the last result complete?${code(lines.join('\n'))}`, num(end), `With renaming only true (RAW) dependences matter, so the answer is the longest latency chain through the dataflow graph: ${end} cycles. WAR/WAW reuse of registers costs nothing.`, 'Each result is ready at max(its sources) + its latency.'),
+      'the dataflow limit', 'An ideal out-of-order core runs each instruction the moment all its inputs are ready, in any order, with as many units as needed. So the time is decided only by the chain of true dependences. For each instruction: it starts when the LATER of its two inputs is ready, and its result is ready that many cycles after it starts (its latency). A register that has never been written is ready at cycle 0. The answer is the latest completion time of all.',
+      ...beats,
+      count('The last result to complete is the latest of all the completion times:', `max(${times.join(', ')})`, end));
   },
   (r, d) => {
     const w = pick(r, [2, 4, 6, 8]), lat = pick(r, tier(d, [10, 20], [50, 100], [200, 300]));
-    return ask(`A ${w}-wide core wants to keep issuing during a ${lat}-cycle cache miss at the head of the ROB. Roughly how many ROB entries does it need?`, num(w * lat), `Little's law: in flight = rate × latency = ${w} × ${lat} = ${w * lat}. Real ROBs (a few hundred entries) cover L2 misses, not DRAM, which is why memory-level parallelism matters.`, 'Width × latency.');
+    return walk(ask(`A ${w}-wide core wants to keep issuing during a ${lat}-cycle cache miss at the head of the ROB. Roughly how many ROB entries does it need?`, num(w * lat), `Little's law: in flight = rate × latency = ${w} × ${lat} = ${w * lat}. Real ROBs (a few hundred entries) cover L2 misses, not DRAM, which is why memory-level parallelism matters.`, 'Width × latency.'),
+      "Little's law for window sizing", 'The reorder buffer (ROB) holds every instruction that has been issued but not yet retired, in order. Retirement is blocked while the oldest instruction (here, the missing load) waits. If the core keeps issuing w instructions per cycle for the whole wait, the ROB fills with all of them. Little\'s law: the number in flight = rate × time.',
+      choice('While the miss is outstanding, nothing behind it can retire. So the ROB must hold all the instructions issued:', 'During the whole wait', ['Only in the last cycle', 'Only the branches']),
+      count(`Instructions issued = width × cycles of waiting:`, `${w} × ${lat}`, w * lat));
   },
   (r) => {
     const a = between(r, 1, 3), b = between(r, 4, 6);
     const kind = pick(r, ['RAW', 'WAR', 'WAW'] as const);
     const [i1, i2] = kind === 'RAW' ? [`add r${b}, r${a}, r${a}`, `sub r7, r${b}, r${a}`] : kind === 'WAR' ? [`add r7, r${b}, r${a}`, `sub r${b}, r${a}, r${a}`] : [`add r${b}, r${a}, r${a}`, `sub r${b}, r7, r7`];
-    return mcs(r, `\`${i1}\` then \`${i2}\`. Which dependence links them, and does renaming remove it?`, `${kind}: ${kind === 'RAW' ? 'a true dependence; renaming cannot remove it' : 'a name dependence; renaming removes it'}`, (['RAW', 'WAR', 'WAW'] as const).filter((k) => k !== kind).map((k) => `${k}: ${k === 'RAW' ? 'renaming cannot remove it' : 'renaming removes it'}`).concat(['No dependence']), kind === 'RAW' ? 'The second instruction reads what the first writes.' : kind === 'WAR' ? 'The second writes a register the first reads.' : 'Both write the same register.');
+    return walk(mcs(r, `\`${i1}\` then \`${i2}\`. Which dependence links them, and does renaming remove it?`, `${kind}: ${kind === 'RAW' ? 'a true dependence; renaming cannot remove it' : 'a name dependence; renaming removes it'}`, (['RAW', 'WAR', 'WAW'] as const).filter((k) => k !== kind).map((k) => `${k}: ${k === 'RAW' ? 'renaming cannot remove it' : 'renaming removes it'}`).concat(['No dependence']), kind === 'RAW' ? 'The second instruction reads what the first writes.' : kind === 'WAR' ? 'The second writes a register the first reads.' : 'Both write the same register.'),
+      'classifying dependences', 'Two instructions that share a register can be related in three ways. RAW (read after write): the second READS what the first WRITES: a true dependence, the data really flows. WAR (write after read): the second WRITES what the first READS. WAW (write after write): both write the same register. WAR and WAW are only about reusing a NAME, and renaming gives each write its own physical register, removing them.',
+      choice(`What does the FIRST instruction do with r${b}?`, kind === 'WAR' ? 'Reads it' : 'Writes it', [kind === 'WAR' ? 'Writes it' : 'Reads it', 'Nothing']),
+      choice('And the SECOND instruction uses r' + b + ' as:', kind === 'RAW' ? 'A source: it reads it' : kind === 'WAR' ? 'The destination: it writes it' : 'The destination: it writes it', [kind === 'RAW' ? 'The destination: it writes it' : 'A source: it reads it', 'Not at all']));
   },
-  (r) => {
-    const qs = [
-      ['Why do out-of-order cores still retire in order?', 'So exceptions are precise: the architectural state always matches some point in program order', ['To save power', 'Because caches require it', 'Retirement order does not matter']],
-      ['What does the issue queue (reservation station) do?', 'Holds renamed instructions until their operands are ready, then sends them to a free execution unit', ['Fetches instructions', 'Holds the branch history', 'Writes results to memory']],
-      ['A load executes before an older store whose address was unknown, and they turn out to alias. What happens?', 'The memory-ordering violation is detected and the load (and everything after it) is squashed and replayed', ['Nothing', 'The store is dropped', 'The core hangs']],
-      ['What limits how far ahead an OoO core can look?', 'ROB, issue-queue, load/store-queue and physical-register sizes, plus branch prediction accuracy', ['Only the clock frequency', 'The L3 size', 'The number of architectural registers']],
-    ] as const;
-    const [q, right, wrong] = pick(r, qs);
-    return mcs(r, q, right, wrong, `${right}.`);
-  },
+  (r) => concept(r, [
+    ['Why do out-of-order cores still retire in order?', 'So exceptions are precise: the architectural state always matches some point in program order', ['To save power', 'Because caches require it', 'Retirement order does not matter'], 'in-order retirement', 'An out-of-order core executes instructions in whatever order is convenient, but only makes their results visible (retires them) in the original program order. If something faults, the state is then exactly "everything before the fault, nothing after", which software needs.', ['When an exception happens, software expects to see the effects of:', 'Exactly the instructions before it, in program order', ['Whichever ones happened to finish', 'None of them']]],
+    ['What does the issue queue (reservation station) do?', 'Holds renamed instructions until their operands are ready, then sends them to a free execution unit', ['Fetches instructions', 'Holds the branch history', 'Writes results to memory'], 'the issue queue', 'After renaming, instructions wait in the issue queue. Each entry watches for its input values to be produced. As soon as all inputs are ready and a matching execution unit is free, the instruction is sent off to run, whatever its program order.', ['An instruction leaves the issue queue when:', 'Its operands are ready and a unit is free', ['It is the oldest', 'The branch resolves']]],
+    ['A load executes before an older store whose address was unknown, and they turn out to alias. What happens?', 'The memory-ordering violation is detected and the load (and everything after it) is squashed and replayed', ['Nothing', 'The store is dropped', 'The core hangs'], 'memory disambiguation', 'To go faster, a core may run a load before older stores have worked out their addresses. When a store address is finally known, the core checks whether a younger load that already ran used the same address. If so, that load read a stale value: it and everything after it must be thrown away and run again.', ['The load read old data while the store was still unresolved, so the load must:', 'Be replayed', ['Be kept', 'Wait forever']]],
+    ['What limits how far ahead an OoO core can look?', 'ROB, issue-queue, load/store-queue and physical-register sizes, plus branch prediction accuracy', ['Only the clock frequency', 'The L3 size', 'The number of architectural registers'], 'the instruction window', 'The "window" of instructions the core can have in flight is bounded by the finite size of its structures: the ROB, the issue queue, the load/store queues and the pool of physical registers. Whichever fills first stops new instructions. Branch mispredictions also empty it.', ['When any one of those buffers fills, the core:', 'Stops taking in new instructions', ['Gets faster', 'Speeds up the clock']]],
+  ], (why) => `${why}.`),
 ]);
 
 // ------------------------------------------------------------------ caches
@@ -160,34 +198,56 @@ export const cachePractice = practice('practice-cache', 'Cache Drills', 'simulat
     const addrs = Array.from({ length: tier(d, 8, 10, 12) }, () => pick(r, pool) + pick(r, [0, 4, 8, 12]));
     const hits = cacheHits(addrs, sets, ways, line);
     const n = hits.filter(Boolean).length;
-    return ask(`A ${ways === 1 ? 'direct-mapped' : `${ways}-way LRU`} cache, ${sets} sets, ${line}-byte lines, starts empty. How many HITS for this address trace?${code(addrs.map((a) => hex(a, 3)).join(' '))}`, num(n), `Block = addr / ${line}; set = block mod ${sets}. Results: ${addrs.map((a, i) => `${hex(a, 3)} ${hits[i] ? 'H' : 'M'}`).join(', ')}. ${n} hits.`, 'Drop the low 4 bits (offset), then the next bits pick the set.');
+    const b0 = Math.floor(addrs[0] / line);
+    return walk(ask(`A ${ways === 1 ? 'direct-mapped' : `${ways}-way LRU`} cache, ${sets} sets, ${line}-byte lines, starts empty. How many HITS for this address trace?${code(addrs.map((a) => hex(a, 3)).join(' '))}`, num(n), `Block = addr / ${line}; set = block mod ${sets}. Results: ${addrs.map((a, i) => `${hex(a, 3)} ${hits[i] ? 'H' : 'M'}`).join(', ')}. ${n} hits.`, 'Drop the low 4 bits (offset), then the next bits pick the set.'),
+      'simulating a cache', `A cache stores whole ${line}-byte LINES. For each address: (1) find its block, the address divided by the line size (the low bits just say where in the line); (2) the block number mod the number of sets says which set it must live in; (3) if that block is already in the set it is a HIT, otherwise a MISS and it is brought in${ways === 1 ? ', replacing whatever was in that set' : `, evicting the least recently used block if the set already holds ${ways}`}. Two addresses in the same block share a line.`,
+      count(`The first address is ${addrs[0]} in decimal. Its block is the address divided by ${line}, rounded down:`, `floor(${addrs[0]} / ${line})`, b0),
+      count(`Its set is the block number mod ${sets}:`, `${b0} mod ${sets}`, b0 % sets),
+      show(addrs.map((a, i) => `${hex(a, 3)}  block ${Math.floor(a / line)}  set ${Math.floor(a / line) % sets}  ${hits[i] ? 'HIT' : 'miss'}`).join('\n'), 'the whole trace: a miss brings the block in, so a later access to it can hit'),
+      count('Count the HIT lines:', 'number of hits', n));
   },
   (r, d) => {
     const size = pick(r, [16, 32, 64]), ways = pick(r, tier(d, [1], [2, 4], [4, 8])), line = pick(r, [32, 64]), bits = d === 3 ? 40 : 32;
     const off = Math.log2(line), idx = Math.log2((size * 1024) / line / ways), tag = bits - idx - off;
     const which = pick(r, ['offset', 'index', 'tag'] as const);
     const v = which === 'offset' ? off : which === 'index' ? idx : tag;
-    return ask(`${size} KiB, ${ways === 1 ? 'direct-mapped' : `${ways}-way`}, ${line}-byte lines, ${bits}-bit addresses. How many ${which} bits?`, num(v), `offset = log2(${line}) = ${off}; sets = ${size}K/(${line}×${ways}) = ${2 ** idx} → index ${idx}; tag = ${bits} - ${idx} - ${off} = ${tag}.`, 'Offset from the line, index from the number of sets, tag is the rest.');
+    const nSets = (size * 1024) / line / ways;
+    const steps: Beat[] = [count(`Offset bits choose a byte inside a ${line}-byte line, so offset bits = log2(${line}):`, `log2(${line})`, off)];
+    if (which !== 'offset') {
+      steps.push(count(`Number of sets = cache size ÷ (line size × ways) = ${size * 1024} ÷ (${line} × ${ways}):`, `${size * 1024} / (${line} × ${ways})`, nSets));
+      steps.push(count('Index bits choose the set, so index bits = log2(number of sets):', `log2(${nSets})`, idx));
+    }
+    if (which === 'tag') steps.push(count(`The tag is whatever is left of the ${bits}-bit address:`, `${bits} - ${idx} - ${off}`, tag));
+    return walk(ask(`${size} KiB, ${ways === 1 ? 'direct-mapped' : `${ways}-way`}, ${line}-byte lines, ${bits}-bit addresses. How many ${which} bits?`, num(v), `offset = log2(${line}) = ${off}; sets = ${size}K/(${line}×${ways}) = ${2 ** idx} → index ${idx}; tag = ${bits} - ${idx} - ${off} = ${tag}.`, 'Offset from the line, index from the number of sets, tag is the rest.'),
+      'splitting an address', 'A cache address is cut into three fields, from the bottom: OFFSET (which byte inside the line), INDEX (which set), and TAG (everything above, stored with the line to tell which block is really there). The sizes come from the cache geometry: offset from the line size, index from the number of sets, tag is the remaining bits.',
+      ...steps);
   },
   (r, d) => {
     const h1 = pick(r, [1, 2, 4]), m1 = pick(r, [0.02, 0.05, 0.1]), mem = pick(r, [100, 200]);
-    if (d === 1) { const a = h1 + m1 * mem; return ask(`L1 hit ${h1} cycles, miss rate ${m1 * 100}%, memory ${mem} cycles. AMAT?`, qty(a, '', 0.01, sig(a)), `${h1} + ${m1} × ${mem} = ${sig(a)} cycles.`, 'AMAT = hit + miss rate × miss penalty.'); }
+    const idea = 'AMAT is the average memory access time. Every access pays the hit time. The fraction of accesses that miss pay an extra miss penalty on top. So AMAT = hit time + miss rate × miss penalty. With a second cache level, the L1 miss penalty is itself the average time of the next level: its hit time plus its own misses × the memory time.';
+    if (d === 1) { const a = h1 + m1 * mem; return walk(ask(`L1 hit ${h1} cycles, miss rate ${m1 * 100}%, memory ${mem} cycles. AMAT?`, qty(a, '', 0.01, sig(a)), `${h1} + ${m1} × ${mem} = ${sig(a)} cycles.`, 'AMAT = hit + miss rate × miss penalty.'),
+      'average memory access time', idea,
+      calc('The average extra time from misses is miss rate × miss penalty:', `${m1} × ${mem}`, m1 * mem, '', sig(m1 * mem, 4), 0.005),
+      calc('AMAT = hit time + that:', `${h1} + ${sig(m1 * mem, 4)}`, a, '', sig(a), 0.01)); }
     const h2 = pick(r, [10, 12, 15]), m2 = pick(r, [0.2, 0.3, 0.5]);
     const a = h1 + m1 * (h2 + m2 * mem);
-    if (d === 2) return ask(`L1: ${h1} cycles, ${m1 * 100}% miss. L2: ${h2} cycles, ${m2 * 100}% local miss. Memory ${mem}. AMAT?`, qty(a, '', 0.01, sig(a)), `${h1} + ${m1} × (${h2} + ${m2} × ${mem}) = ${sig(a)} cycles.`, 'Nest the L2 AMAT inside the L1 miss penalty.');
+    const inner = h2 + m2 * mem;
+    if (d === 2) return walk(ask(`L1: ${h1} cycles, ${m1 * 100}% miss. L2: ${h2} cycles, ${m2 * 100}% local miss. Memory ${mem}. AMAT?`, qty(a, '', 0.01, sig(a)), `${h1} + ${m1} × (${h2} + ${m2} × ${mem}) = ${sig(a)} cycles.`, 'Nest the L2 AMAT inside the L1 miss penalty.'),
+      'two-level AMAT', idea,
+      calc('First the L1 miss penalty, which is the average time of L2 (hit + its miss rate × memory):', `${h2} + ${m2} × ${mem}`, inner, '', sig(inner, 4), 0.005),
+      calc('Then AMAT = L1 hit + L1 miss rate × that penalty:', `${h1} + ${m1} × ${sig(inner, 4)}`, a, '', sig(a), 0.01));
     const m1b = m1 / 2, a2 = h1 + 1 + m1b * (h2 + m2 * mem);
-    return ask(`L1: ${h1} cycles, ${m1 * 100}% miss; L2: ${h2} cycles, ${m2 * 100}% local miss; memory ${mem}. Doubling L1 halves its miss rate but adds 1 cycle to the hit time. New AMAT?`, qty(a2, '', 0.01, sig(a2)), `${h1 + 1} + ${m1b} × (${h2} + ${m2} × ${mem}) = ${sig(a2)} vs ${sig(a)} before: ${a2 < a ? 'worth it' : 'not worth it'}. Hit time is on every access; misses are rare.`, 'Recompute with the new hit time and miss rate.');
+    return walk(ask(`L1: ${h1} cycles, ${m1 * 100}% miss; L2: ${h2} cycles, ${m2 * 100}% local miss; memory ${mem}. Doubling L1 halves its miss rate but adds 1 cycle to the hit time. New AMAT?`, qty(a2, '', 0.01, sig(a2)), `${h1 + 1} + ${m1b} × (${h2} + ${m2} × ${mem}) = ${sig(a2)} vs ${sig(a)} before: ${a2 < a ? 'worth it' : 'not worth it'}. Hit time is on every access; misses are rare.`, 'Recompute with the new hit time and miss rate.'),
+      'comparing cache designs with AMAT', `${idea} To judge a change, recompute AMAT with the new numbers and compare. A bigger L1 cuts the miss rate but its hit time, paid on EVERY access, goes up.`,
+      calc('The L1 miss penalty (the L2 average time) does not change:', `${h2} + ${m2} × ${mem}`, inner, '', sig(inner, 4), 0.005),
+      calc(`New AMAT: hit time ${h1} + 1, plus the halved miss rate ${m1b} × the penalty:`, `${h1 + 1} + ${m1b} × ${sig(inner, 4)}`, a2, '', sig(a2), 0.01));
   },
-  (r) => {
-    const qs = [
-      ['Two arrays at addresses exactly 64 KiB apart are read alternately, and a 64 KiB direct-mapped cache misses every time. Which kind of miss?', 'Conflict misses: both map to the same set; associativity fixes it', ['Compulsory misses', 'Capacity misses', 'Coherence misses']],
-      ['Streaming once through a 1 GiB array with a 32 KiB cache: what misses dominate?', 'Compulsory (cold) misses; prefetching helps, a bigger cache does not', ['Conflict misses', 'Coherence misses', 'None, it hits']],
-      ['What does a write-allocate, write-back cache do on a write miss?', 'Fetches the line, writes into it and marks it dirty; memory is updated on eviction', ['Writes straight to memory only', 'Ignores the write', 'Invalidates all caches']],
-      ['Why is L1 usually virtually indexed, physically tagged (VIPT)?', 'The index can be read in parallel with the TLB lookup, while physical tags avoid aliasing problems', ['It is cheaper to build', 'It removes the TLB', 'It avoids cache misses']],
-    ] as const;
-    const [q, right, wrong] = pick(r, qs);
-    return mcs(r, q, right, wrong, `${right}.`);
-  },
+  (r) => concept(r, [
+    ['Two arrays at addresses exactly 64 KiB apart are read alternately, and a 64 KiB direct-mapped cache misses every time. Which kind of miss?', 'Conflict misses: both map to the same set; associativity fixes it', ['Compulsory misses', 'Capacity misses', 'Coherence misses'], 'the three Cs of misses', 'Misses are compulsory (first ever use of a block), capacity (the working set is bigger than the cache) or conflict (too many blocks want the same set, although there is space elsewhere). Addresses that differ by exactly the cache size have the same index, so they collide in one set.', ['Two blocks mapping to the same set, while other sets are empty, cause:', 'Conflict misses', ['Compulsory misses', 'Capacity misses']]],
+    ['Streaming once through a 1 GiB array with a 32 KiB cache: what misses dominate?', 'Compulsory (cold) misses; prefetching helps, a bigger cache does not', ['Conflict misses', 'Coherence misses', 'None, it hits'], 'cold misses', 'If every piece of data is touched only once, each block is a first-time use, so each is a compulsory miss no matter how big the cache is. Only bringing the data in earlier (prefetching) can hide it.', ['A bigger cache does not help data used only once because:', 'Every block is new, so each first access misses', ['The cache cannot hold data', 'It increases conflict misses']]],
+    ['What does a write-allocate, write-back cache do on a write miss?', 'Fetches the line, writes into it and marks it dirty; memory is updated on eviction', ['Writes straight to memory only', 'Ignores the write', 'Invalidates all caches'], 'write policies', 'Write-ALLOCATE means a write miss first loads the line into the cache, then writes it there. Write-BACK means writes change only the cache copy, which is marked dirty; memory is updated later, when the dirty line is evicted.', ['A dirty line is written to memory:', 'Later, when it is evicted', ['On every write', 'Never']]],
+    ['Why is L1 usually virtually indexed, physically tagged (VIPT)?', 'The index can be read in parallel with the TLB lookup, while physical tags avoid aliasing problems', ['It is cheaper to build', 'It removes the TLB', 'It avoids cache misses'], 'VIPT caches', 'Translating the address takes a TLB lookup. If the cache\'s index bits come from the page offset (which translation does not change), the cache can read the set at the same time as the TLB translates, and then compare against the physical tag. That saves a cycle.', ['The cache set is read in parallel with:', 'The TLB translation', ['The branch prediction', 'The tag compare']]],
+  ], (why) => `${why}.`),
 ]);
 
 // ------------------------------------------------------------------ coherence
@@ -221,24 +281,26 @@ export const coherencePractice = practice('practice-coherence', 'Coherence Drill
     const ops = Array.from({ length: n }, () => [between(r, 0, cores - 1), r() < 0.45 ? 'W' : 'R'] as [number, 'R' | 'W']);
     const { st } = mesi(ops, cores);
     const c = between(r, 0, cores - 1);
-    return mcs(r, `MESI, one cache line, all caches start Invalid. Operations in order: ${ops.map(([k, o]) => `C${k} ${o === 'R' ? 'reads' : 'writes'}`).join(', ')}. Final state of the line in C${c}?`, st[c], (['M', 'E', 'S', 'I'] as const).filter((s) => s !== st[c]), `Final states: ${st.map((s, i) => `C${i}=${s}`).join(', ')}. A read with no other copies gives E; with other copies, S (an M owner writes back and drops to S). A write gives M and invalidates everyone else.`);
+    return walk(mcs(r, `MESI, one cache line, all caches start Invalid. Operations in order: ${ops.map(([k, o]) => `C${k} ${o === 'R' ? 'reads' : 'writes'}`).join(', ')}. Final state of the line in C${c}?`, st[c], (['M', 'E', 'S', 'I'] as const).filter((s) => s !== st[c]), `Final states: ${st.map((s, i) => `C${i}=${s}`).join(', ')}. A read with no other copies gives E; with other copies, S (an M owner writes back and drops to S). A write gives M and invalidates everyone else.`),
+      'tracing MESI', 'MESI labels each cache\'s copy of a line: Modified (only copy, changed), Exclusive (only copy, clean), Shared (maybe others have it, clean), Invalid (no copy). Rules: a READ miss gives E if nobody else has it, otherwise S (and any other copy becomes S; a Modified owner writes its data back first). A WRITE makes the writer M and Invalidates every other copy. A read or write that already hits keeps its state (a hit in E/M stays quiet; a write to S or E goes to M). Update the states after each operation.',
+      show(ops.map((_, i) => `${`C${ops[i][0]} ${ops[i][1]}`}  →  ${mesi(ops.slice(0, i + 1), cores).st.map((s, k) => `C${k}=${s}`).join(' ')}`).join('\n'), 'the states after each operation'),
+      choice(`So the final state in C${c} is:`, st[c], (['M', 'E', 'S', 'I'] as const).filter((s) => s !== st[c])));
   },
   (r, d) => {
     const cores = 2 + (d > 1 ? 1 : 0), n = tier(d, 4, 6, 8);
     const ops = Array.from({ length: n }, () => [between(r, 0, cores - 1), r() < 0.5 ? 'W' : 'R'] as [number, 'R' | 'W']);
     const { wb } = mesi(ops, cores);
-    return ask(`MESI, ${cores} cores, one line, all start Invalid: ${ops.map(([k, o]) => `C${k}${o}`).join(' ')} (R = read, W = write). How many times must a Modified copy be written back (or forwarded) because ANOTHER core accessed the line?`, num(wb), `Each access by another core to a line held in M forces the owner to supply the dirty data: ${wb} time${wb === 1 ? '' : 's'}. Ping-ponging writes between cores is expensive for exactly this reason.`, 'Track who holds M; count every other-core access that finds it there.');
+    return walk(ask(`MESI, ${cores} cores, one line, all start Invalid: ${ops.map(([k, o]) => `C${k}${o}`).join(' ')} (R = read, W = write). How many times must a Modified copy be written back (or forwarded) because ANOTHER core accessed the line?`, num(wb), `Each access by another core to a line held in M forces the owner to supply the dirty data: ${wb} time${wb === 1 ? '' : 's'}. Ping-ponging writes between cores is expensive for exactly this reason.`, 'Track who holds M; count every other-core access that finds it there.'),
+      'counting writebacks', 'A line in state M holds the only up-to-date copy. When ANOTHER core reads or writes that line, the owner has to supply the data (write it back): that is one writeback. So step through the operations, keep track of which core holds M, and count each access by a different core that finds it there.',
+      show(ops.map((o, i) => { const a = mesi(ops.slice(0, i), cores), b = mesi(ops.slice(0, i + 1), cores); return `${o[1] === 'R' ? `C${o[0]} R` : `C${o[0]} W`}  states ${b.st.map((s, k) => `C${k}=${s}`).join(' ')}${b.wb > a.wb ? '   ← writeback' : ''}`; }).join('\n'), 'each operation and the resulting states'),
+      count('Count the writeback arrows:', 'number of ← writeback rows', wb));
   },
-  (r) => {
-    const qs = [
-      ['Two threads increment their own counters, which share a 64-byte line. Fix?', 'Pad or align each counter to its own cache line (e.g. alignas(64)) to stop false sharing', ['Use a bigger cache', 'Use volatile', 'Add a lock']],
-      ['Why does MESI have an E (Exclusive) state beyond MSI?', 'A core that read a line nobody else has can later write it without any bus transaction', ['For error correction', 'To support DMA', 'It is the same as S']],
-      ['Snooping vs directory coherence: why do large systems use directories?', 'Broadcasting every miss to all cores does not scale; a directory sends messages only to the sharers', ['Directories are faster for 2 cores', 'Snooping cannot handle writes', 'Directories need no memory']],
-      ['Under x86-TSO, which reordering can a program observe?', 'A later load passing an earlier store to a different address (store buffer)', ['Loads passing loads', 'Stores passing stores', 'None at all']],
-    ] as const;
-    const [q, right, wrong] = pick(r, qs);
-    return mcs(r, q, right, wrong, `${right}.`);
-  },
+  (r) => concept(r, [
+    ['Two threads increment their own counters, which share a 64-byte line. Fix?', 'Pad or align each counter to its own cache line (e.g. alignas(64)) to stop false sharing', ['Use a bigger cache', 'Use volatile', 'Add a lock'], 'false sharing', 'Coherence works on whole lines, not single variables. If two threads write different variables that sit in the same line, each write invalidates the other core\'s copy, and the line ping-pongs between them, although they share no data at all. Putting each variable on its own line stops it.', ['Coherence tracks data in units of:', 'Whole cache lines', ['Single bytes', 'Variables']]],
+    ['Why does MESI have an E (Exclusive) state beyond MSI?', 'A core that read a line nobody else has can later write it without any bus transaction', ['For error correction', 'To support DMA', 'It is the same as S'], 'the Exclusive state', 'In plain MSI, a line that was read and later written needs a message to everyone to invalidate other copies, even if there are none. E records "I am the only holder", so a later write just silently turns E into M with no traffic.', ['Writing to a line you hold in E needs:', 'No message to other cores', ['An invalidate broadcast', 'A memory read']]],
+    ['Snooping vs directory coherence: why do large systems use directories?', 'Broadcasting every miss to all cores does not scale; a directory sends messages only to the sharers', ['Directories are faster for 2 cores', 'Snooping cannot handle writes', 'Directories need no memory'], 'directory coherence', 'Snooping sends every request to every cache. With many cores that traffic explodes. A directory remembers which cores hold each line, so a request only sends messages to those that matter.', ['With 100 cores and 2 sharers of a line, a directory needs to message:', 'Only the 2 sharers', ['All 100 cores', 'Nobody']]],
+    ['Under x86-TSO, which reordering can a program observe?', 'A later load passing an earlier store to a different address (store buffer)', ['Loads passing loads', 'Stores passing stores', 'None at all'], 'memory ordering (TSO)', 'A core puts its stores into a store buffer and keeps going, so a LATER load can run before an EARLIER store has become visible to others. That store-to-load reordering is the one that x86-TSO allows; loads and stores otherwise stay in order.', ['A store sitting in the store buffer is not yet visible to:', 'Other cores', ['The core that wrote it', 'The compiler']]],
+  ], (why) => `${why}.`),
 ]);
 
 // ------------------------------------------------------------------ DRAM
@@ -259,29 +321,43 @@ export const dramPractice = practice('practice-dram', 'DRAM Drills', 'row hits a
     const pool = Array.from({ length: tier(d, 2, 3, 3) }, () => between(r, 1, 99));
     const rows = Array.from({ length: tier(d, 4, 6, 8) }, () => pick(r, pool));
     const o = dramOpen(rows, cl, rcd, rp);
-    if (d < 3) return ask(`One DRAM bank, open-page policy, starts precharged. CL = ${cl}, tRCD = ${rcd}, tRP = ${rp}. Requests to rows: ${rows.join(', ')}. Total latency (sum over requests, served one at a time), in cycles?`, num(o.t), `Row hit: CL. First access: tRCD + CL. Row conflict: tRP + tRCD + CL. ${o.hits} hit${o.hits === 1 ? '' : 's'}: total ${o.t} cycles.`, 'Classify each request as hit, empty or conflict.');
+    let open = -1;
+    const costs = rows.map((row) => { const c = row === open ? cl : open < 0 ? rcd + cl : rp + rcd + cl; const kind = row === open ? 'row HIT' : open < 0 ? 'bank empty' : 'row CONFLICT'; open = row; return [kind, c] as const; });
+    const idea = `A DRAM bank reads from one "open" row at a time. Three cases for each request: the row is already open (row HIT): just the column access time CL. The bank has nothing open (empty): activate the row first, tRCD, then CL. A DIFFERENT row is open (row CONFLICT): precharge it (tRP), activate the new one (tRCD), then CL. Go request by request, remembering which row is open.`;
+    const table = show(rows.map((row, i) => `row ${String(row).padStart(2)}  ${costs[i][0].padEnd(12)} ${costs[i][1]} cycles`).join('\n'), 'each request classified, with its cost');
+    if (d < 3) return walk(ask(`One DRAM bank, open-page policy, starts precharged. CL = ${cl}, tRCD = ${rcd}, tRP = ${rp}. Requests to rows: ${rows.join(', ')}. Total latency (sum over requests, served one at a time), in cycles?`, num(o.t), `Row hit: CL. First access: tRCD + CL. Row conflict: tRP + tRCD + CL. ${o.hits} hit${o.hits === 1 ? '' : 's'}: total ${o.t} cycles.`, 'Classify each request as hit, empty or conflict.'),
+      'DRAM row hits and conflicts', idea,
+      `The costs here: hit = CL = ${cl}; empty = tRCD + CL = ${rcd + cl}; conflict = tRP + tRCD + CL = ${rp + rcd + cl}.`,
+      table,
+      count('Add up the costs:', costs.map((c) => c[1]).join(' + '), o.t));
     const closed = rows.length * (rcd + cl);
-    return ask(`Same bank (CL ${cl}, tRCD ${rcd}, tRP ${rp}), rows ${rows.join(', ')}. A close-page policy precharges right after every access (hidden), so each request costs tRCD + CL. Open-page total minus close-page total, in cycles? (negative = open page wins)`, num(o.t - closed), `Open page: ${o.t}; close page: ${rows.length} × ${rcd + cl} = ${closed}. Difference ${o.t - closed}. Open page wins when locality is high; close page when accesses are random.`, 'Compute both totals.');
+    return walk(ask(`Same bank (CL ${cl}, tRCD ${rcd}, tRP ${rp}), rows ${rows.join(', ')}. A close-page policy precharges right after every access (hidden), so each request costs tRCD + CL. Open-page total minus close-page total, in cycles? (negative = open page wins)`, num(o.t - closed), `Open page: ${o.t}; close page: ${rows.length} × ${rcd + cl} = ${closed}. Difference ${o.t - closed}. Open page wins when locality is high; close page when accesses are random.`, 'Compute both totals.'),
+      'open-page versus close-page', `${idea} A CLOSE-page policy precharges right after every access, hiding that cost, so every request is an "empty bank" case: tRCD + CL, whatever the pattern.`,
+      table,
+      count('Open-page total, the sum of the costs:', costs.map((c) => c[1]).join(' + '), o.t),
+      count(`Close-page total: every request costs tRCD + CL = ${rcd + cl}, and there are ${rows.length}:`, `${rows.length} × ${rcd + cl}`, closed),
+      count('Open minus close:', `${o.t} - ${closed}`, o.t - closed));
   },
   (r, d) => {
     const mt = pick(r, [4800, 5600, 6400]), ch = tier(d, 1, 2, pick(r, [4, 8]));
     const bw = (mt * 8 * ch) / 1000;
-    return ask(`${ch} channel${ch > 1 ? 's' : ''} of DDR5-${mt} (64 data bits per channel). Peak bandwidth, in GB/s?`, qty(bw, 'GB/s', 0.01), `${mt} MT/s × 8 bytes × ${ch} = ${sig(bw)} GB/s. Sustained is usually 70-90% of that.`, 'Transfers/s × bytes per transfer × channels.');
+    return walk(ask(`${ch} channel${ch > 1 ? 's' : ''} of DDR5-${mt} (64 data bits per channel). Peak bandwidth, in GB/s?`, qty(bw, 'GB/s', 0.01), `${mt} MT/s × 8 bytes × ${ch} = ${sig(bw)} GB/s. Sustained is usually 70-90% of that.`, 'Transfers/s × bytes per transfer × channels.'),
+      'DRAM peak bandwidth', 'Bandwidth is how many bytes move per second. A DDR channel does "mt" mega-transfers per second, and each transfer moves the channel width: 64 bits = 8 bytes. So one channel moves mt × 8 megabytes per second, and channels add up.',
+      calc('One channel, in GB/s: transfers per second × 8 bytes, divided by 1000 to convert MB to GB:', `${mt} × 8 / 1000`, (mt * 8) / 1000, 'GB/s', sig((mt * 8) / 1000, 4), 0.005),
+      calc(`All ${ch} channel${ch > 1 ? 's' : ''}, in GB/s:`, `${sig((mt * 8) / 1000, 4)} × ${ch}`, bw, 'GB/s', sig(bw), 0.01));
   },
   (r, d) => {
     const trfc = pick(r, [295, 410, 550]), trefi = pick(r, [3900, 7800]);
     const f = (trfc / trefi) * 100;
-    return ask(`Each bank is refreshed every tREFI = ${trefi} ns and each refresh blocks it for tRFC = ${trfc} ns. What % of the time is it unavailable?`, qty(f, '%', 0.02, sig(f)), `${trfc}/${trefi} = ${sig(f)}%.${d === 3 ? ' Denser chips have longer tRFC, which is why DDR5 adds same-bank refresh.' : ' Refresh is a tax on bandwidth and latency.'}`, 'tRFC / tREFI.');
+    return walk(ask(`Each bank is refreshed every tREFI = ${trefi} ns and each refresh blocks it for tRFC = ${trfc} ns. What % of the time is it unavailable?`, qty(f, '%', 0.02, sig(f)), `${trfc}/${trefi} = ${sig(f)}%.${d === 3 ? ' Denser chips have longer tRFC, which is why DDR5 adds same-bank refresh.' : ' Refresh is a tax on bandwidth and latency.'}`, 'tRFC / tREFI.'),
+      'refresh overhead', 'DRAM cells leak, so every row must be refreshed regularly. Every tREFI a refresh command starts, and it blocks the bank for tRFC. The fraction of time lost is the blocked time over the period: tRFC ÷ tREFI.',
+      calc('Fraction of time blocked, as a %:', `${trfc} / ${trefi} × 100`, f, '%', sig(f), 0.02));
   },
-  (r) => {
-    const qs = [
-      ['Why do memory controllers interleave consecutive cache lines across banks and channels?', 'So streaming accesses spread out and many banks work in parallel instead of conflicting in one', ['To save power', 'For security', 'To simplify refresh']],
-      ['What does an FR-FCFS scheduler prioritize?', 'Row hits first (ready requests), then the oldest request', ['Only the oldest request', 'Writes before reads always', 'Random order']],
-      ['Rowhammer is…', 'Repeatedly activating one row flipping bits in neighboring rows through disturbance', ['A refresh command', 'A timing parameter', 'A kind of ECC']],
-    ] as const;
-    const [q, right, wrong] = pick(r, qs);
-    return mcs(r, q, right, wrong, `${right}.`);
-  },
+  (r) => concept(r, [
+    ['Why do memory controllers interleave consecutive cache lines across banks and channels?', 'So streaming accesses spread out and many banks work in parallel instead of conflicting in one', ['To save power', 'For security', 'To simplify refresh'], 'address interleaving', 'Each bank can only serve one row at a time and takes a long time to switch. If consecutive addresses went to the same bank, a streaming read would queue up there. Spreading them across banks and channels lets many work at the same time.', ['Consecutive lines placed in different banks can be:', 'Accessed in parallel', ['Accessed only one at a time', 'Never accessed']]],
+    ['What does an FR-FCFS scheduler prioritize?', 'Row hits first (ready requests), then the oldest request', ['Only the oldest request', 'Writes before reads always', 'Random order'], 'memory scheduling', 'Row hits are much cheaper than conflicts, so the scheduler first picks requests that hit an already-open row (first-ready), and among those of equal standing takes the oldest (first-come, first-served). That raises throughput but can delay some requests, so controllers also limit starvation.', ['A request that hits an open row is preferred because it is:', 'Cheaper and faster to serve', ['Older', 'Always a write']]],
+    ['Rowhammer is…', 'Repeatedly activating one row flipping bits in neighboring rows through disturbance', ['A refresh command', 'A timing parameter', 'A kind of ECC'], 'Rowhammer', 'Each time a row is activated, it slightly disturbs the cells in rows next to it. If software activates the same row again and again between refreshes, the disturbance can flip bits in the neighbours, which can break memory isolation.', ['Hammering a row flips bits in:', 'Its neighbouring rows', ['The same row only', 'The cache']]],
+  ], (why) => `${why}.`),
 ]);
 
 // ------------------------------------------------------------------ buses and protocols
@@ -299,7 +375,10 @@ export const busPractice = practice('practice-bus', 'Bus & Protocol Drills', 'VA
     const valid = Array.from({ length: n }, () => (r() < 0.7 ? 1 : 0)), ready = Array.from({ length: n }, () => (r() < 0.6 ? 1 : 0));
     const k = valid.filter((v, i) => v && ready[i]).length;
     const w = (a: number[]) => a.map((x) => String(x).padStart(3)).join('');
-    return ask(`How many transfers happen on this channel?${code(`cycle ${w(Array.from({ length: n }, (_, i) => i))}\nVALID ${w(valid)}\nREADY ${w(ready)}`)}`, num(k), `A transfer happens in each cycle where VALID and READY are both 1: ${k}. ${d === 3 ? 'Note: in a real trace, once VALID rises it must stay high until the transfer; this random trace ignores that rule.' : 'Either side can stall the other.'}`, 'Count cycles with both high.');
+    return walk(ask(`How many transfers happen on this channel?${code(`cycle ${w(Array.from({ length: n }, (_, i) => i))}\nVALID ${w(valid)}\nREADY ${w(ready)}`)}`, num(k), `A transfer happens in each cycle where VALID and READY are both 1: ${k}. ${d === 3 ? 'Note: in a real trace, once VALID rises it must stay high until the transfer; this random trace ignores that rule.' : 'Either side can stall the other.'}`, 'Count cycles with both high.'),
+      'the VALID/READY handshake', 'The sender raises VALID when it has data, and the receiver raises READY when it can take data. A transfer happens only in a cycle where BOTH are 1 at the same clock edge. If only one is high, nothing moves that cycle: the other side is holding things up.',
+      show(`cycle ${w(Array.from({ length: n }, (_, i) => i))}\nVALID ${w(valid)}\nREADY ${w(ready)}\nboth  ${w(valid.map((v, i) => (v && ready[i] ? 1 : 0)))}`, 'a 1 in the last row means a transfer'),
+      count('Count the 1s in the "both" row:', 'cycles with VALID and READY', k));
   },
   (r, d) => {
     const size = pick(r, [4, 8]), len = pick(r, [4, 8]), kind = d === 1 ? 'INCR' : pick(r, ['INCR', 'WRAP'] as const);
@@ -307,29 +386,45 @@ export const busPractice = practice('practice-bus', 'Bus & Protocol Drills', 'VA
     const start = kind === 'WRAP' ? between(r, 1, 0x100 / span - 1) * span + size * between(r, 1, len - 1) : 0x1000 + size * between(r, 0, 60);
     const k = between(r, 1, len - 1);
     const a = axiBeat(start, size, len, kind, k);
-    return ask(`AXI ${kind} burst: start ${hex(start, 4)}, ${size}-byte beats, ${len} beats. Address of beat ${k} (the first beat is beat 0), in hex?`, hexa(a, 4), kind === 'INCR' ? `${hex(start, 4)} + ${k} × ${size} = ${hex(a, 4)}.` : `WRAP bursts stay inside an aligned ${span}-byte window (${hex(Math.floor(start / span) * span, 4)}-${hex(Math.floor(start / span) * span + span - 1, 4)}) and wrap around: beats ${Array.from({ length: len }, (_, i) => hex(axiBeat(start, size, len, kind, i), 4)).join(', ')}. Cache-line fills use WRAP to fetch the critical word first.`, kind === 'INCR' ? 'Add k × size.' : 'Stay inside the aligned window of size × len bytes.');
+    const base = Math.floor(start / span) * span;
+    return walk(ask(`AXI ${kind} burst: start ${hex(start, 4)}, ${size}-byte beats, ${len} beats. Address of beat ${k} (the first beat is beat 0), in hex?`, hexa(a, 4), kind === 'INCR' ? `${hex(start, 4)} + ${k} × ${size} = ${hex(a, 4)}.` : `WRAP bursts stay inside an aligned ${span}-byte window (${hex(base, 4)}-${hex(base + span - 1, 4)}) and wrap around: beats ${Array.from({ length: len }, (_, i) => hex(axiBeat(start, size, len, kind, i), 4)).join(', ')}. Cache-line fills use WRAP to fetch the critical word first.`, kind === 'INCR' ? 'Add k × size.' : 'Stay inside the aligned window of size × len bytes.'),
+      kind === 'INCR' ? 'INCR burst addresses' : 'WRAP burst addresses',
+      kind === 'INCR' ? 'An INCR burst moves forward: each beat is one beat-size after the previous one. So beat k is at the start address plus k × the beat size in bytes.'
+        : `A WRAP burst also moves forward by the beat size, but when it would pass the end of an aligned window of (beat size × number of beats) bytes, it wraps back to the start of that window. This is how a cache miss fetches the word it needs FIRST, then the rest of its line.`,
+      ...(kind === 'INCR' ? [count(`Bytes from the start to beat ${k}: ${k} beats × ${size} bytes each:`, `${k} × ${size}`, k * size),
+        step(`Add that to the start address ${hex(start, 4)}. Beat ${k} is at (hex):`, hexa(a, 4))]
+        : [count('The window size in bytes is beat size × number of beats:', `${size} × ${len}`, span),
+          step(`The window containing the start ${hex(start, 4)} begins at the nearest multiple of ${span} below it (hex):`, hexa(base, 4)),
+          show(Array.from({ length: len }, (_, i) => `beat ${i}  ${hex(axiBeat(start, size, len, kind, i), 4)}`).join('\n'), `start at ${hex(start, 4)}, go forward, wrap at the window end ${hex(base + span, 4)}`),
+          step(`Beat ${k} in hex:`, hexa(a, 4))]));
   },
   (r, d) => {
     const size = pick(r, [8, 16]), len = pick(r, [16, 32, 64]);
     const off = pick(r, tier(d, [0xf00, 0x800], [0xfc0, 0xe00], [0xff0, 0xf80, 0xc00]));
     const start = 0x20000 + off, end = start + size * len - 1;
     const cross = Math.floor(start / 4096) !== Math.floor(end / 4096);
-    return mcs(r, `An AXI INCR burst starts at ${hex(start, 5)} with ${len} beats of ${size} bytes. Is it legal?`, cross ? `No: it ends at ${hex(end, 5)}, crossing a 4 KB boundary` : `Yes: it ends at ${hex(end, 5)}, inside the same 4 KB page`, [cross ? 'Yes: bursts may be any length' : 'No: it crosses a 4 KB boundary', 'No: bursts must start at 0', 'Only if it is a WRAP burst'], 'AXI bursts must not cross 4 KB so that a burst never spans two pages (or two slaves).');
+    return walk(mcs(r, `An AXI INCR burst starts at ${hex(start, 5)} with ${len} beats of ${size} bytes. Is it legal?`, cross ? `No: it ends at ${hex(end, 5)}, crossing a 4 KB boundary` : `Yes: it ends at ${hex(end, 5)}, inside the same 4 KB page`, [cross ? 'Yes: bursts may be any length' : 'No: it crosses a 4 KB boundary', 'No: bursts must start at 0', 'Only if it is a WRAP burst'], 'AXI bursts must not cross 4 KB so that a burst never spans two pages (or two slaves).'),
+      'the AXI 4 KB rule', 'An AXI burst may never cross a 4 KB boundary (an address that is a multiple of 0x1000), so that a whole burst stays in one page and one slave. To check a burst, find its LAST byte: start + total bytes - 1. If that is in the same 4 KB block as the start (same address with the bottom 12 bits removed), it is legal.',
+      count('Total bytes in the burst = beats × beat size:', `${len} × ${size}`, len * size),
+      step('The last byte is at start + total - 1 (hex):', hexa(end, 5)),
+      choice(`The start is in block ${hex(Math.floor(start / 4096) * 4096, 5)} (the address with its bottom 12 bits cleared). The last byte is in block ${hex(Math.floor(end / 4096) * 4096, 5)}. Is the burst legal?`, cross ? 'No: the blocks differ' : 'Yes: same block', [cross ? 'Yes: same block' : 'No: the blocks differ']));
   },
   (r, d) => {
     const rtt = pick(r, tier(d, [4, 6], [8, 12], [16, 20])), have = between(r, 2, rtt - 1);
-    if (d === 1) return ask(`A link's credit round trip is ${rtt} cycles. How many credits are needed to send a flit every cycle?`, num(rtt), `Enough to cover the round trip: ${rtt}.`, 'Credits = round-trip time.');
-    return ask(`Credit round trip ${rtt} cycles, but the receiver only has ${have} buffers. Maximum sustained throughput, in flits per cycle?`, qty(have / rtt, '', 0.02, sig(have / rtt)), `${have} flits per ${rtt}-cycle round trip = ${sig(have / rtt)} flits/cycle.`, 'Credits / round trip.');
+    const idea = 'Credit-based flow control: the receiver gives the sender one credit per free buffer slot; the sender spends one per flit and may only send if it has credits. A credit comes back only after a round trip (flit travels, is freed, credit returns). To send a flit every cycle you need enough credits to keep sending for the whole round trip.';
+    if (d === 1) return walk(ask(`A link's credit round trip is ${rtt} cycles. How many credits are needed to send a flit every cycle?`, num(rtt), `Enough to cover the round trip: ${rtt}.`, 'Credits = round-trip time.'),
+      'credits and the round trip', idea,
+      count(`Sending one flit per cycle for ${rtt} cycles, before the first credit comes back, uses this many credits:`, `${rtt} cycles × 1 per cycle`, rtt));
+    return walk(ask(`Credit round trip ${rtt} cycles, but the receiver only has ${have} buffers. Maximum sustained throughput, in flits per cycle?`, qty(have / rtt, '', 0.02, sig(have / rtt)), `${have} flits per ${rtt}-cycle round trip = ${sig(have / rtt)} flits/cycle.`, 'Credits / round trip.'),
+      'throughput limited by credits', idea,
+      choice(`With only ${have} credits, how many flits can be sent per round trip of ${rtt} cycles?`, `${have}: one per credit`, [`${rtt}`, '1']),
+      calc('Throughput in flits per cycle = credits ÷ round trip:', `${have} / ${rtt}`, have / rtt, '', sig(have / rtt), 0.02));
   },
-  (r) => {
-    const qs = [
-      ['Why may an AXI source not wait for READY before raising VALID?', 'If both sides wait for each other, neither moves: deadlock', ['Style rule only', 'To save power', 'READY is optional']],
-      ['What are AXI IDs for?', 'Letting a master have several outstanding transactions that may complete out of order across IDs (in order within one ID)', ['Addressing slaves', 'Error correction', 'Burst length']],
-      ['APB vs AXI: when is APB used?', 'Simple, low-bandwidth register access to peripherals', ['High-bandwidth DMA', 'Cache coherence', 'DRAM access']],
-    ] as const;
-    const [q, right, wrong] = pick(r, qs);
-    return mcs(r, q, right, wrong, `${right}.`);
-  },
+  (r) => concept(r, [
+    ['Why may an AXI source not wait for READY before raising VALID?', 'If both sides wait for each other, neither moves: deadlock', ['Style rule only', 'To save power', 'READY is optional'], 'handshake deadlock', 'If the sender waits for READY before raising VALID, and the receiver waits for VALID before raising READY, both wait forever. So the rule is that the sender must never wait for READY; the receiver may choose to wait for VALID.', ['If both sides wait for the other before acting:', 'Neither ever moves: deadlock', ['It works faster', 'They take turns']]],
+    ['What are AXI IDs for?', 'Letting a master have several outstanding transactions that may complete out of order across IDs (in order within one ID)', ['Addressing slaves', 'Error correction', 'Burst length'], 'AXI IDs', 'A master can send many requests before the first reply arrives. The ID tags each one so replies can come back in a different order (a fast slave can answer before a slow one), but replies with the SAME ID stay in order.', ['Replies with different IDs:', 'May arrive out of order', ['Must arrive in order', 'Are dropped']]],
+    ['APB vs AXI: when is APB used?', 'Simple, low-bandwidth register access to peripherals', ['High-bandwidth DMA', 'Cache coherence', 'DRAM access'], 'picking a bus', 'AXI has separate channels, bursts and outstanding transactions, which costs area but gives speed. APB has no pipelining: one slow access at a time with a tiny interface. That is ideal for configuration registers that are rarely touched.', ['A block that just holds a few control registers should use:', 'APB: simple and small', ['AXI with big bursts', 'A cache']]],
+  ], (why) => `${why}.`),
 ]);
 
 // ------------------------------------------------------------------ networks on chip
@@ -338,30 +433,42 @@ export const nocPractice = practice('practice-noc', 'NoC Drills', 'mesh hops, wo
   (r, d) => {
     const k = pick(r, [4, 6, 8]);
     const [x0, y0, x1, y1] = [between(r, 0, k - 1), between(r, 0, k - 1), between(r, 0, k - 1), between(r, 0, k - 1)];
-    if (d < 3) return ask(`${k}×${k} mesh, XY routing. Hops from (${x0},${y0}) to (${x1},${y1})?`, num(Math.abs(x1 - x0) + Math.abs(y1 - y0)), `|${x1}-${x0}| + |${y1}-${y0}| = ${Math.abs(x1 - x0) + Math.abs(y1 - y0)}.`, 'Manhattan distance.');
-    const dx = Math.min(Math.abs(x1 - x0), k - Math.abs(x1 - x0)), dy = Math.min(Math.abs(y1 - y0), k - Math.abs(y1 - y0));
-    return ask(`Same trip, (${x0},${y0}) to (${x1},${y1}), on a ${k}×${k} TORUS (wrap-around links). Minimum hops?`, num(dx + dy), `In each dimension go the short way around: ${dx} + ${dy} = ${dx + dy}.`, 'min(d, k - d) per dimension.');
+    if (d < 3) return walk(ask(`${k}×${k} mesh, XY routing. Hops from (${x0},${y0}) to (${x1},${y1})?`, num(Math.abs(x1 - x0) + Math.abs(y1 - y0)), `|${x1}-${x0}| + |${y1}-${y0}| = ${Math.abs(x1 - x0) + Math.abs(y1 - y0)}.`, 'Manhattan distance.'),
+      'hops in a mesh', 'In a mesh, routers sit on a grid and each link joins neighbouring routers. XY routing first moves along X to the right column, then along Y to the right row. Each step moves one router, so the number of hops is the distance in X plus the distance in Y.',
+      count(`Steps in X, from column ${x0} to ${x1}:`, `|${x1} - ${x0}|`, Math.abs(x1 - x0)),
+      count(`Steps in Y, from row ${y0} to ${y1}:`, `|${y1} - ${y0}|`, Math.abs(y1 - y0)),
+      count('Total hops:', `${Math.abs(x1 - x0)} + ${Math.abs(y1 - y0)}`, Math.abs(x1 - x0) + Math.abs(y1 - y0)));
+    const ax = Math.abs(x1 - x0), ay = Math.abs(y1 - y0);
+    const dx = Math.min(ax, k - ax), dy = Math.min(ay, k - ay);
+    return walk(ask(`Same trip, (${x0},${y0}) to (${x1},${y1}), on a ${k}×${k} TORUS (wrap-around links). Minimum hops?`, num(dx + dy), `In each dimension go the short way around: ${dx} + ${dy} = ${dx + dy}.`, 'min(d, k - d) per dimension.'),
+      'hops in a torus', `A torus is a mesh whose edges wrap around: the last column links back to the first, and the last row to the first. In each dimension you can go either direction, so take the shorter one: with a direct distance d in a ring of k routers, going the other way costs k - d, and the minimum is the smaller of the two.`,
+      count(`X: direct distance ${ax}, the other way around is ${k} - ${ax}. The shorter is:`, `min(${ax}, ${k - ax})`, dx),
+      count(`Y: direct distance ${ay}, the other way is ${k} - ${ay}. The shorter is:`, `min(${ay}, ${k - ay})`, dy),
+      count('Total minimum hops:', `${dx} + ${dy}`, dx + dy));
   },
   (r, d) => {
     const hops = pick(r, [3, 5, 8]), flits = pick(r, [4, 8, 16]), rd = pick(r, [1, 2, 3]);
     const wh = hops * rd + flits, sf = hops * (rd + flits);
-    const which = d === 3 ? 'store-and-forward' : 'wormhole';
-    return ask(`A ${flits}-flit packet crosses ${hops} hops with ${rd} cycle${rd > 1 ? 's' : ''} of router delay per hop, one flit per cycle per link. Latency with ${which} switching, in cycles?`, num(d === 3 ? sf : wh), `Wormhole: ${hops}×${rd} + ${flits} = ${wh}. Store-and-forward: ${hops}×(${rd}+${flits}) = ${sf}.`, d === 3 ? 'Every router waits for the whole packet.' : 'The head pays per hop; the body streams.');
+    const sfw = d === 3;
+    const idea = 'Packet latency depends on how routers forward a packet made of several flits (small pieces). WORMHOLE switching forwards each flit as soon as it arrives, so the flits stream behind the head like a worm: the head pays the router delay at every hop, then the rest of the packet follows one flit per cycle. STORE-AND-FORWARD waits for the WHOLE packet at every hop before sending it on.';
+    return walk(ask(`A ${flits}-flit packet crosses ${hops} hops with ${rd} cycle${rd > 1 ? 's' : ''} of router delay per hop, one flit per cycle per link. Latency with ${sfw ? 'store-and-forward' : 'wormhole'} switching, in cycles?`, num(sfw ? sf : wh), `Wormhole: ${hops}×${rd} + ${flits} = ${wh}. Store-and-forward: ${hops}×(${rd}+${flits}) = ${sf}.`, sfw ? 'Every router waits for the whole packet.' : 'The head pays per hop; the body streams.'),
+      sfw ? 'store-and-forward latency' : 'wormhole latency', idea,
+      ...(sfw ? [count(`At each hop the packet takes the router delay ${rd} plus ${flits} cycles to cross the link:`, `${rd} + ${flits}`, rd + flits), count(`${hops} hops, each costing that:`, `${hops} × ${rd + flits}`, sf)]
+        : [count(`The head flit pays the router delay at each of the ${hops} hops:`, `${hops} × ${rd}`, hops * rd), count(`Then the ${flits} flits stream out one per cycle. Total:`, `${hops * rd} + ${flits}`, wh)]));
   },
   (r, d) => {
     const k = pick(r, [4, 8]), bw = pick(r, [16, 32, 64]);
     const links = d === 3 ? 2 * k : k;
-    return ask(`A ${k}×${k} ${d === 3 ? 'torus' : 'mesh'} with ${bw} GB/s links (each direction). Bisection bandwidth in one direction, in GB/s?`, qty(links * bw, 'GB/s', 0.01, String(links * bw)), `Cut the network in half: ${links} links cross the cut${d === 3 ? ' (the wrap-around links double it)' : ''}. ${links} × ${bw} = ${links * bw} GB/s. Uniform random traffic sends half its bytes across that cut.`, 'Count links crossing the middle.');
+    return walk(ask(`A ${k}×${k} ${d === 3 ? 'torus' : 'mesh'} with ${bw} GB/s links (each direction). Bisection bandwidth in one direction, in GB/s?`, qty(links * bw, 'GB/s', 0.01, String(links * bw)), `Cut the network in half: ${links} links cross the cut${d === 3 ? ' (the wrap-around links double it)' : ''}. ${links} × ${bw} = ${links * bw} GB/s. Uniform random traffic sends half its bytes across that cut.`, 'Count links crossing the middle.'),
+      'bisection bandwidth', `Bisection bandwidth is the bandwidth across the narrowest cut that splits the network into two equal halves: it limits how much traffic can cross from one half to the other. Cut the ${k}×${k} grid down the middle and count the links that cross the cut: one per row in a mesh${d === 3 ? ', and in a torus each row has a second link, the wrap-around one, that also crosses' : ''}. Multiply by the bandwidth of one link.`,
+      count(`${k} rows, ${d === 3 ? '2 crossing links in each row (the normal link and the wrap-around)' : '1 crossing link in each row'}. Links across the cut:`, d === 3 ? `2 × ${k}` : `${k}`, links),
+      calc('Bandwidth = number of links × bandwidth per link, in GB/s:', `${links} × ${bw}`, links * bw, 'GB/s', String(links * bw), 0.01));
   },
-  (r) => {
-    const qs = [
-      ['Why is XY routing deadlock-free on a mesh?', 'Packets never turn from Y back to X, so channel dependencies cannot form a cycle', ['It uses more buffers', 'It is adaptive', 'Meshes cannot deadlock']],
-      ['Why do coherence protocols use separate virtual networks for requests and responses?', 'So responses can always drain even when requests fill the buffers: avoids protocol deadlock', ['For security', 'For bandwidth only', 'Responses are larger']],
-      ['What is head-of-line blocking?', 'A blocked packet at the front of a queue stops packets behind it that could have proceeded', ['A routing loop', 'A broken link', 'Clock skew']],
-    ] as const;
-    const [q, right, wrong] = pick(r, qs);
-    return mcs(r, q, right, wrong, `${right}.`);
-  },
+  (r) => concept(r, [
+    ['Why is XY routing deadlock-free on a mesh?', 'Packets never turn from Y back to X, so channel dependencies cannot form a cycle', ['It uses more buffers', 'It is adaptive', 'Meshes cannot deadlock'], 'deadlock-free routing', 'A deadlock is a cycle of packets each waiting for a link held by the next. XY routing forbids some turns: once a packet goes in Y it never turns back to X. With those turns forbidden, no closed loop of waiting packets can form.', ['Deadlock needs:', 'A cycle of packets waiting on each other', ['A long packet', 'A fast clock']]],
+    ['Why do coherence protocols use separate virtual networks for requests and responses?', 'So responses can always drain even when requests fill the buffers: avoids protocol deadlock', ['For security', 'For bandwidth only', 'Responses are larger'], 'virtual networks', 'Processing a request can require sending a response. If both share the same buffers and requests fill them all, no response can move, so no request can complete: deadlock. Separate virtual networks keep a path free so that responses can always get through.', ['If requests fill all shared buffers, responses:', 'Cannot move, so requests cannot complete', ['Take priority', 'Are dropped']]],
+    ['What is head-of-line blocking?', 'A blocked packet at the front of a queue stops packets behind it that could have proceeded', ['A routing loop', 'A broken link', 'Clock skew'], 'head-of-line blocking', 'Packets wait in a single first-in-first-out queue. If the packet at the head cannot go (its output is busy), everything behind it is stuck too, even if they want a free output. Virtual channels give them separate queues to get past.', ['A packet stuck at the front of a FIFO also blocks:', 'The packets behind it', ['Nothing', 'The packets in front']]],
+  ], (why) => `${why}.`),
 ]);
 
 // ------------------------------------------------------------------ SerDes
@@ -369,37 +476,50 @@ export const nocPractice = practice('practice-noc', 'NoC Drills', 'mesh hops, wo
 export const serdesPractice = practice('practice-serdes', 'SerDes Drills', 'line rates, encoding, BER, jitter budgets, PCIe bandwidth', [
   (r, d) => {
     const gbps = pick(r, [8, 16, 25, 32, 56]);
-    if (d === 1) return ask(`A ${gbps} Gb/s NRZ link: unit interval, in ps?`, qty(1000 / gbps, 'ps', 0.01), `UI = 1/${gbps} GHz = ${sig(1000 / gbps)} ps.`, 'One bit time.');
+    if (d === 1) return walk(ask(`A ${gbps} Gb/s NRZ link: unit interval, in ps?`, qty(1000 / gbps, 'ps', 0.01), `UI = 1/${gbps} GHz = ${sig(1000 / gbps)} ps.`, 'One bit time.'),
+      'the unit interval', 'The unit interval (UI) is the time of one bit on the wire: 1 divided by the bit rate. At a rate in Gb/s, 1 ÷ rate gives nanoseconds, and × 1000 turns that into picoseconds.',
+      calc('UI in ps = 1000 ÷ rate in Gb/s:', `1000 / ${gbps}`, 1000 / gbps, 'ps', sig(1000 / gbps), 0.01));
     const pam = d === 3;
-    return ask(`A ${pam ? 'PAM4' : 'NRZ'} lane carries ${gbps * 2} Gb/s. What is its symbol rate, in GBd?`, qty(pam ? gbps : gbps * 2, '', 0.01, String(pam ? gbps : gbps * 2)), pam ? `PAM4 sends 2 bits per symbol: ${gbps} GBd. Same Nyquist frequency as ${gbps} Gb/s NRZ, but only a third of the eye height per level.` : `NRZ is 1 bit per symbol: ${gbps * 2} GBd.`, 'Bits per symbol: NRZ 1, PAM4 2.');
+    const v = pam ? gbps : gbps * 2;
+    return walk(ask(`A ${pam ? 'PAM4' : 'NRZ'} lane carries ${gbps * 2} Gb/s. What is its symbol rate, in GBd?`, qty(v, '', 0.01, String(v)), pam ? `PAM4 sends 2 bits per symbol: ${gbps} GBd. Same Nyquist frequency as ${gbps} Gb/s NRZ, but only a third of the eye height per level.` : `NRZ is 1 bit per symbol: ${gbps * 2} GBd.`, 'Bits per symbol: NRZ 1, PAM4 2.'),
+      'bit rate versus symbol rate', 'The bit rate counts bits per second; the symbol rate (in baud, Bd) counts how often the signal level changes per second. If each symbol carries several bits, the symbol rate is the bit rate divided by bits per symbol. NRZ has 2 levels: 1 bit per symbol. PAM4 has 4 levels: 2 bits per symbol.',
+      choice(`${pam ? 'PAM4 has 4 voltage levels' : 'NRZ has 2 voltage levels'}, so each symbol carries how many bits?`, pam ? '2' : '1', [pam ? '1' : '2', '4']),
+      calc('Symbol rate = bit rate ÷ bits per symbol, in GBd:', `${gbps * 2} / ${pam ? 2 : 1}`, v, '', String(v), 0.01));
   },
   (r, d) => {
     const rate = pick(r, [10, 25, 32]) * 1e9, ber = pick(r, [1e-12, 1e-15]);
     const per = 1 / (rate * ber);
-    return ask(`A ${rate / 1e9} Gb/s link at BER ${ber.toExponential(0).replace('e-', 'e-')}. Average time between bit errors, in seconds?`, qty(per, 's', 0.02, sig(per)), `1/(${rate / 1e9}e9 × ${ber.toExponential(0)}) = ${sig(per)} s.${d > 1 ? ' That is why links have CRC and replay: errors are rare but certain.' : ''}`, 'Errors per second = rate × BER.');
+    const eps = rate * ber;
+    return walk(ask(`A ${rate / 1e9} Gb/s link at BER ${ber.toExponential(0).replace('e-', 'e-')}. Average time between bit errors, in seconds?`, qty(per, 's', 0.02, sig(per)), `1/(${rate / 1e9}e9 × ${ber.toExponential(0)}) = ${sig(per)} s.${d > 1 ? ' That is why links have CRC and replay: errors are rare but certain.' : ''}`, 'Errors per second = rate × BER.'),
+      'bit error rate and time between errors', 'The bit error rate (BER) is the fraction of bits that arrive wrong. The link sends rate bits every second, so the number of errors per second is rate × BER. The average time between errors is the reverse: 1 divided by the errors per second.',
+      calc('Errors per second = bit rate × BER:', `${rate / 1e9}e9 × ${ber.toExponential(0)}`, eps, '', sig(eps), 0.02),
+      calc('Average seconds between errors:', `1 / ${sig(eps)}`, per, 's', sig(per), 0.02));
   },
   (r, d) => {
     const dj = pick(r, [5, 8, 10]), rj = pick(r, [0.5, 0.8, 1]);
     const q = d === 3 ? 7.94 : 7.03, ber = d === 3 ? '1e-15' : '1e-12';
     const tj = dj + 2 * q * rj;
-    return ask(`Deterministic jitter ${dj} ps pk-pk, random jitter ${rj} ps rms. Total jitter at BER ${ber} (TJ = DJ + 2·Q·RJ, Q = ${q}), in ps?`, qty(tj, 'ps', 0.01), `${dj} + 2 × ${q} × ${rj} = ${sig(tj)} ps. Random jitter is unbounded, so its contribution grows with the BER target.`, 'Plug into the dual-Dirac formula.');
+    return walk(ask(`Deterministic jitter ${dj} ps pk-pk, random jitter ${rj} ps rms. Total jitter at BER ${ber} (TJ = DJ + 2·Q·RJ, Q = ${q}), in ps?`, qty(tj, 'ps', 0.01), `${dj} + 2 × ${q} × ${rj} = ${sig(tj)} ps. Random jitter is unbounded, so its contribution grows with the BER target.`, 'Plug into the dual-Dirac formula.'),
+      'total jitter at a BER', 'Jitter is timing error in the edges. DETERMINISTIC jitter (DJ) has a fixed, bounded size. RANDOM jitter (RJ) follows a bell curve with no hard limit, so to cover a given BER we allow a multiple Q of its rms value on each side. The dual-Dirac model adds them: TJ = DJ + 2 × Q × RJ.',
+      calc('The random part, 2 × Q × RJ:', `2 × ${q} × ${rj}`, 2 * q * rj, 'ps', sig(2 * q * rj, 4), 0.005),
+      calc('Add the deterministic part:', `${dj} + ${sig(2 * q * rj, 4)}`, tj, 'ps', sig(tj), 0.01));
   },
   (r, d) => {
     const gens: [number, number, number][] = d === 1 ? [[2, 5, 0.8]] : [[3, 8, 128 / 130], [4, 16, 128 / 130], [5, 32, 128 / 130]];
     const [g, gt, eff] = pick(r, gens);
     const lanes = pick(r, [1, 4, 8, 16]);
     const bw = (gt * eff * lanes) / 8;
-    return ask(`PCIe Gen${g} x${lanes} (${gt} GT/s, ${g === 2 ? '8b/10b' : '128b/130b'}). Usable bandwidth per direction, in GB/s?`, qty(bw, 'GB/s', 0.02), `${gt} × ${g === 2 ? '0.8' : '128/130'} × ${lanes} / 8 = ${sig(bw)} GB/s.`, 'Rate × efficiency × lanes / 8.');
+    return walk(ask(`PCIe Gen${g} x${lanes} (${gt} GT/s, ${g === 2 ? '8b/10b' : '128b/130b'}). Usable bandwidth per direction, in GB/s?`, qty(bw, 'GB/s', 0.02), `${gt} × ${g === 2 ? '0.8' : '128/130'} × ${lanes} / 8 = ${sig(bw)} GB/s.`, 'Rate × efficiency × lanes / 8.'),
+      'PCIe bandwidth', `PCIe moves data on several lanes in parallel. Each lane runs at the raw rate in GT/s (billions of transfers per second, 1 bit each). The line code adds extra bits: ${g === 2 ? '8b/10b sends 10 bits for each 8 of data: 80% efficient' : '128b/130b sends 130 bits for each 128 of data: about 98.5% efficient'}. So usable Gb/s per lane = rate × efficiency, then multiply by the lanes, and divide by 8 to get bytes.`,
+      calc('Efficiency of the line code:', g === 2 ? '8 / 10' : '128 / 130', eff, '', sig(eff, 4), 0.005),
+      calc(`Usable Gb/s on all ${lanes} lane${lanes > 1 ? 's' : ''}:`, `${gt} × ${sig(eff, 4)} × ${lanes}`, gt * eff * lanes, '', sig(gt * eff * lanes, 4), 0.01),
+      calc('Divide by 8 to get GB/s:', `${sig(gt * eff * lanes, 4)} / 8`, bw, 'GB/s', sig(bw), 0.02));
   },
-  (r) => {
-    const qs = [
-      ['What does a CTLE do?', 'Boosts high frequencies to undo the channel\'s low-pass loss (linear equalization)', ['Recovers the clock', 'Encodes 8b/10b', 'Adds jitter']],
-      ['Why does a DFE not amplify noise the way a CTLE does?', 'It subtracts ISI using past bit decisions (digital values), not by boosting the noisy analog signal', ['It has no taps', 'It runs at DC', 'It uses a PLL']],
-      ['Why do SerDes links need scrambling or encoding?', 'To guarantee enough transitions for clock recovery and keep the line DC-balanced', ['For encryption', 'To reduce data rate', 'To add errors']],
-    ] as const;
-    const [q, right, wrong] = pick(r, qs);
-    return mcs(r, q, right, wrong, `${right}.`);
-  },
+  (r) => concept(r, [
+    ['What does a CTLE do?', 'Boosts high frequencies to undo the channel\'s low-pass loss (linear equalization)', ['Recovers the clock', 'Encodes 8b/10b', 'Adds jitter'], 'CTLE', 'A long channel loses high frequencies more than low ones, which smears each bit into the next. A continuous-time linear equalizer (CTLE) is a filter that boosts the high frequencies back up, which undoes some of the smearing. It also boosts high-frequency noise.', ['A CTLE works by:', 'Boosting high frequencies', ['Boosting low frequencies', 'Recovering the clock']]],
+    ['Why does a DFE not amplify noise the way a CTLE does?', 'It subtracts ISI using past bit decisions (digital values), not by boosting the noisy analog signal', ['It has no taps', 'It runs at DC', 'It uses a PLL'], 'DFE', 'A decision feedback equalizer knows what bits it already decided. The smearing (ISI) those past bits leave on the current bit can be calculated and subtracted. Since that comes from clean decided bits, not the noisy analog signal, no noise is amplified.', ['A DFE subtracts interference computed from:', 'Previously decided bits', ['The noisy input', 'The clock']]],
+    ['Why do SerDes links need scrambling or encoding?', 'To guarantee enough transitions for clock recovery and keep the line DC-balanced', ['For encryption', 'To reduce data rate', 'To add errors'], 'encoding and scrambling', 'There is no separate clock wire: the receiver recovers the clock from the data edges. A long run of the same bit has no edges and the clock would drift. Encoding (8b/10b) or scrambling makes sure edges happen often, and keeps the average voltage near zero.', ['The receiver recovers the clock from:', 'Transitions in the data', ['A separate wire', 'The power supply']]],
+  ], (why) => `${why}.`),
 ]);
 
 // ------------------------------------------------------------------ performance
@@ -408,32 +528,58 @@ export const perfPractice = practice('practice-perf', 'Performance Drills', 'iro
   (r, d) => {
     const cpiA = pick(r, [1.0, 1.2, 1.5]), fA = pick(r, [3, 3.5, 4]), cpiB = pick(r, [0.8, 0.9, 1.1]), fB = pick(r, [2.5, 3]);
     const icB = d === 3 ? pick(r, [1.1, 1.2]) : 1;
-    const s = (cpiA / fA) / ((icB * cpiB) / fB);
-    return ask(`Core A: CPI ${cpiA} at ${fA} GHz. Core B: CPI ${cpiB} at ${fB} GHz${icB > 1 ? `, but its ISA needs ${Math.round((icB - 1) * 100)}% more instructions` : ''}. Speedup of B over A (A time / B time)?`, qty(s, 'x', 0.01, sig(s)), `Time = IC × CPI / f. A: ${cpiA}/${fA} = ${sig(cpiA / fA)}; B: ${icB > 1 ? `${icB} × ` : ''}${cpiB}/${fB} = ${sig((icB * cpiB) / fB)}. Speedup ${sig(s)}×. ${s < 1 ? 'B is slower despite its lower CPI.' : ''}`, 'Compare IC × CPI / f.');
+    const tA = cpiA / fA, tB = (icB * cpiB) / fB;
+    const s = tA / tB;
+    return walk(ask(`Core A: CPI ${cpiA} at ${fA} GHz. Core B: CPI ${cpiB} at ${fB} GHz${icB > 1 ? `, but its ISA needs ${Math.round((icB - 1) * 100)}% more instructions` : ''}. Speedup of B over A (A time / B time)?`, qty(s, 'x', 0.01, sig(s)), `Time = IC × CPI / f. A: ${cpiA}/${fA} = ${sig(cpiA / fA)}; B: ${icB > 1 ? `${icB} × ` : ''}${cpiB}/${fB} = ${sig((icB * cpiB) / fB)}. Speedup ${sig(s)}×. ${s < 1 ? 'B is slower despite its lower CPI.' : ''}`, 'Compare IC × CPI / f.'),
+      'the iron law of performance', 'Execution time = instructions × cycles per instruction (CPI) ÷ clock frequency. So a lower CPI helps, but so does a higher clock, and fewer instructions. To compare two cores, work out that product for each (per unit of instruction count of core A) and divide. Speedup of B over A = A\'s time ÷ B\'s time.',
+      calc(`Time for A, per instruction of the program, in ns: CPI ÷ GHz:`, `${cpiA} / ${fA}`, tA, 'ns', sig(tA, 4), 0.005),
+      calc(`Time for B${icB > 1 ? ` (it needs ${icB}× as many instructions)` : ''}, in ns:`, `${icB > 1 ? `${icB} × ` : ''}${cpiB} / ${fB}`, tB, 'ns', sig(tB, 4), 0.005),
+      calc('Speedup of B over A = A time ÷ B time:', `${sig(tA, 4)} / ${sig(tB, 4)}`, s, 'x', sig(s), 0.01));
   },
   (r, d) => {
     const p = pick(r, [0.5, 0.8, 0.9, 0.95]), s = pick(r, [4, 10, 100]);
-    if (d < 3) { const sp = 1 / (1 - p + p / s); return ask(`${p * 100}% of the runtime is sped up ${s}×. Overall speedup?`, qty(sp, 'x', 0.02, sig(sp)), `Amdahl: 1/(${sig(1 - p)} + ${p}/${s}) = ${sig(sp)}×. Limit as s → ∞: ${sig(1 / (1 - p))}×.`, '1 / ((1-p) + p/s).'); }
+    const idea = 'Amdahl\'s law: if a fraction p of the runtime is sped up by a factor s, the new runtime is the untouched part (1 - p) plus the sped-up part p ÷ s, as a fraction of the old time. The overall speedup is 1 divided by that new time. Even an infinitely fast accelerator leaves the (1 - p) part, so the speedup is capped at 1 ÷ (1 - p).';
+    if (d < 3) { const sp = 1 / (1 - p + p / s); return walk(ask(`${p * 100}% of the runtime is sped up ${s}×. Overall speedup?`, qty(sp, 'x', 0.02, sig(sp)), `Amdahl: 1/(${sig(1 - p)} + ${p}/${s}) = ${sig(sp)}×. Limit as s → ∞: ${sig(1 / (1 - p))}×.`, '1 / ((1-p) + p/s).'),
+      "Amdahl's law", idea,
+      calc('The part that is not sped up, 1 - p:', `1 - ${p}`, 1 - p, '', sig(1 - p, 4), 0.005),
+      calc('The sped-up part now takes p ÷ s:', `${p} / ${s}`, p / s, '', sig(p / s, 4), 0.005),
+      calc('Overall speedup = 1 ÷ (sum of the two):', `1 / (${sig(1 - p, 4)} + ${sig(p / s, 4)})`, sp, 'x', sig(sp), 0.02)); }
     const target = pick(r, [2, 3, 4]);
     const need = p / (1 / target - (1 - p));
     const ok = 1 / target - (1 - p) > 0;
-    if (!ok) return ask(`Only ${p * 100}% of the runtime can be accelerated. What is the maximum possible overall speedup?`, qty(1 / (1 - p), 'x', 0.02, sig(1 / (1 - p))), `1/(1 - ${p}) = ${sig(1 / (1 - p))}×, even with infinite acceleration.`, 'Let s go to infinity.');
-    return ask(`${p * 100}% of the runtime can be accelerated. How fast must the accelerator be (×) for a ${target}× overall speedup?`, qty(need, 'x', 0.02, sig(need)), `Solve 1/(${sig(1 - p)} + ${p}/s) = ${target}: s = ${p}/(1/${target} - ${sig(1 - p)}) = ${sig(need)}×.`, 'Rearrange Amdahl for s.');
+    if (!ok) return walk(ask(`Only ${p * 100}% of the runtime can be accelerated. What is the maximum possible overall speedup?`, qty(1 / (1 - p), 'x', 0.02, sig(1 / (1 - p))), `1/(1 - ${p}) = ${sig(1 / (1 - p))}×, even with infinite acceleration.`, 'Let s go to infinity.'),
+      'the limit of acceleration', idea,
+      choice('With an infinitely fast accelerator, the accelerated part takes:', 'Almost no time, leaving only the part that cannot be sped up', ['The same time as before', 'Negative time']),
+      calc('The remaining time is 1 - p, so the maximum speedup is 1 ÷ (1 - p):', `1 / (1 - ${p})`, 1 / (1 - p), 'x', sig(1 / (1 - p)), 0.02));
+    return walk(ask(`${p * 100}% of the runtime can be accelerated. How fast must the accelerator be (×) for a ${target}× overall speedup?`, qty(need, 'x', 0.02, sig(need)), `Solve 1/(${sig(1 - p)} + ${p}/s) = ${target}: s = ${p}/(1/${target} - ${sig(1 - p)}) = ${sig(need)}×.`, 'Rearrange Amdahl for s.'),
+      "Amdahl's law, solved backwards", `${idea} Here the speedup is given and s is unknown: the new runtime must be 1 ÷ target, so the sped-up part may use only 1/target - (1 - p) of the old time, and p ÷ s must equal that.`,
+      calc('The new runtime must be 1 ÷ target:', `1 / ${target}`, 1 / target, '', sig(1 / target, 4), 0.005),
+      calc('Time left for the sped-up part: new runtime minus the untouched part (1 - p):', `${sig(1 / target, 4)} - ${sig(1 - p, 4)}`, 1 / target - (1 - p), '', sig(1 / target - (1 - p), 4), 0.02),
+      calc('The accelerated part has p of the old work, so s = p ÷ that time:', `${p} / ${sig(1 / target - (1 - p), 4)}`, need, 'x', sig(need), 0.02));
   },
   (r, d) => {
     const peak = pick(r, [500, 1000, 2000]), bw = pick(r, [50, 100, 200]), ai = pick(r, tier(d, [1, 2], [4, 8], [16, 32, 64]));
     const att = Math.min(peak, bw * ai);
-    return ask(`Roofline: peak ${peak} GFLOP/s, ${bw} GB/s memory bandwidth, kernel intensity ${ai} FLOP/byte. Attainable GFLOP/s?`, qty(att, 'GFLOP/s', 0.01), `min(${peak}, ${bw} × ${ai}) = ${att}: ${bw * ai < peak ? 'memory-bound; raise intensity (tiling, reuse)' : 'compute-bound'}. The ridge point is ${peak / bw} FLOP/byte.`, 'min(peak, bandwidth × intensity).');
+    return walk(ask(`Roofline: peak ${peak} GFLOP/s, ${bw} GB/s memory bandwidth, kernel intensity ${ai} FLOP/byte. Attainable GFLOP/s?`, qty(att, 'GFLOP/s', 0.01), `min(${peak}, ${bw} × ${ai}) = ${att}: ${bw * ai < peak ? 'memory-bound; raise intensity (tiling, reuse)' : 'compute-bound'}. The ridge point is ${peak / bw} FLOP/byte.`, 'min(peak, bandwidth × intensity).'),
+      'the roofline model', 'A kernel can be limited in two ways. COMPUTE-bound: it cannot go faster than the peak GFLOP/s. MEMORY-bound: memory can only deliver bandwidth × intensity FLOPs per second (intensity is FLOPs done per byte fetched). The attainable rate is whichever limit is lower.',
+      calc('What memory can feed, bandwidth × intensity, in GFLOP/s:', `${bw} × ${ai}`, bw * ai, 'GFLOP/s', String(bw * ai), 0.01),
+      calc(`The attainable rate is the smaller of that and the peak ${peak}:`, `min(${bw * ai}, ${peak})`, att, 'GFLOP/s', String(att), 0.01));
   },
   (r, d) => {
     const bw = pick(r, [50, 100, 200]), lat = pick(r, [80, 100, 120]), line = 64;
     const n = (bw * lat) / line;
-    return ask(`To sustain ${bw} GB/s of ${line}-byte misses with ${lat} ns latency, how many misses must be in flight? (Little's law)`, qty(n, '', 0.02, sig(n)), `${bw} GB/s × ${lat} ns / ${line} B = ${sig(n)} outstanding misses.${d > 1 ? ' One core has maybe 10-20 miss buffers (MSHRs), so a single core cannot saturate the memory system.' : ''}`, 'In flight = throughput × latency.');
+    return walk(ask(`To sustain ${bw} GB/s of ${line}-byte misses with ${lat} ns latency, how many misses must be in flight? (Little's law)`, qty(n, '', 0.02, sig(n)), `${bw} GB/s × ${lat} ns / ${line} B = ${sig(n)} outstanding misses.${d > 1 ? ' One core has maybe 10-20 miss buffers (MSHRs), so a single core cannot saturate the memory system.' : ''}`, 'In flight = throughput × latency.'),
+      "Little's law for memory", "Little's law: the number of things in flight = arrival rate × time each spends in the system. Here the things are cache-line misses. Rate × latency gives the bytes in flight (GB/s × ns = bytes), and dividing by the line size gives the number of misses.",
+      count(`Bytes in flight = bandwidth × latency (GB/s × ns is bytes):`, `${bw} × ${lat}`, bw * lat),
+      calc(`Divide by ${line} bytes per miss:`, `${bw * lat} / ${line}`, n, '', sig(n), 0.02));
   },
   (r) => {
     const a = pick(r, [2, 4, 8]), b = pick(r, [0.5, 1, 2]);
     const g = Math.sqrt(a * b), m = (a + b) / 2;
-    return ask(`A design is ${a}× on benchmark 1 and ${b}× on benchmark 2 (speedups vs a baseline). Geometric-mean speedup?`, qty(g, 'x', 0.01, sig(g)), `√(${a} × ${b}) = ${sig(g)}×. The arithmetic mean (${sig(m)}×) of ratios depends on which machine you normalize to; the geometric mean does not.`, 'Square root of the product.');
+    return walk(ask(`A design is ${a}× on benchmark 1 and ${b}× on benchmark 2 (speedups vs a baseline). Geometric-mean speedup?`, qty(g, 'x', 0.01, sig(g)), `√(${a} × ${b}) = ${sig(g)}×. The arithmetic mean (${sig(m)}×) of ratios depends on which machine you normalize to; the geometric mean does not.`, 'Square root of the product.'),
+      'the geometric mean', 'To summarise speedups (ratios) over several benchmarks, use the geometric mean: multiply them all, then take the n-th root of the product (the square root for 2 numbers). Unlike the plain average, it gives the same ranking whichever machine you use as the baseline.',
+      calc('The product of the two speedups:', `${a} × ${b}`, a * b, '', sig(a * b, 4), 0.005),
+      calc('Square root of the product:', `sqrt(${sig(a * b, 4)})`, g, 'x', sig(g), 0.01));
   },
 ]);
 
