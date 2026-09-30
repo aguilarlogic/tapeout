@@ -1,15 +1,11 @@
 // Practice banks and bosses for the silicon roles of Act 7: physical design, memory, process and yield,
 // packaging, post-silicon validation, production test, and FPGA prototyping / emulation.
 import { num, qty } from '../lessons/answers';
-import { art, ask, mc, pick, say, type Rng } from '../lessons/types';
+import { calc, choice, count, show, walk } from '../lessons/teach';
+import { art, ask, mc, pick, say } from '../lessons/types';
 import { boss, practice, tier } from './types';
-import { mcs, sig } from './util';
+import { concept, sci, sig } from './util';
 
-/** A concept question: [question, right answer, wrong answers, why the answer is right]. */
-const concept = (r: Rng, qs: readonly (readonly [string, string, readonly string[], string])[]) => {
-  const [q, right, wrong, why] = pick(r, qs);
-  return mcs(r, q, right, wrong, `${right}. ${why}`);
-};
 /** Elmore delay of a distributed RC wire, in ps: r in Ω/µm, c in fF/µm, length in µm. */
 const wire = (rr: number, cc: number, len: number) => 0.5 * rr * cc * len * len * 1e-3;
 /** Poisson yield of a die of `mm2` at `d0` defects per cm². */
@@ -23,69 +19,117 @@ const poisson = (lam: number, k: number) => { let p = Math.exp(-lam), s = p; for
 export const pnrPractice = practice('practice-pnr', 'Physical Design Drills', 'floorplans, wire delay and repeaters, clock trees, routing capacity, IR and EM', [
   (r, d) => {
     const cells = pick(r, [2, 3.6, 4.5, 12]);
+    const idea = 'Utilization says how full the core is: the area of the standard cells divided by the area of the core they sit in. A core needs free space for buffers added later, the clock tree and routing wires, so about 60 to 75% is typical.';
     if (d === 1) {
       const core = pick(r, [5, 6, 8, 16]), u = (cells / core) * 100;
-      return ask(`${cells} mm² of standard cells sit in a ${core} mm² core. Utilization, in %?`, qty(u, '%', 0.02, sig(u)), `${cells} / ${core} = ${sig(u)}%. Around 60 to 75% leaves room for buffers, clock tree and routing.`, 'Cell area / core area.');
+      return walk(ask(`${cells} mm² of standard cells sit in a ${core} mm² core. Utilization, in %?`, qty(u, '%', 0.02, sig(u)), `${cells} / ${core} = ${sig(u)}%. Around 60 to 75% leaves room for buffers, clock tree and routing.`, 'Cell area / core area.'),
+        'floorplan utilization', idea,
+        calc('Utilization = cell area ÷ core area, as a %:', `${cells} / ${core} × 100`, u, '%', sig(u), 0.02));
     }
     const u = pick(r, [60, 70, 75]), core = cells / (u / 100);
-    if (d === 2) return ask(`${cells} mm² of cells, target utilization ${u}%. Core area, in mm²?`, qty(core, 'mm2', 0.02, sig(core)), `${cells} / ${u / 100} = ${sig(core)} mm².`, 'Solve utilization for the core area.');
+    if (d === 2) return walk(ask(`${cells} mm² of cells, target utilization ${u}%. Core area, in mm²?`, qty(core, 'mm2', 0.02, sig(core)), `${cells} / ${u / 100} = ${sig(core)} mm².`, 'Solve utilization for the core area.'),
+      'sizing a core for a utilization target', `${idea} To find the core for a target, turn the formula around: core area = cell area ÷ utilization (as a fraction).`,
+      calc('Utilization as a fraction:', `${u} / 100`, u / 100, '', String(u / 100), 0.001),
+      calc('Core area = cells ÷ utilization, in mm²:', `${cells} / ${u / 100}`, core, 'mm2', sig(core), 0.02));
     const ring = pick(r, [0.1, 0.2, 0.3]), die = (Math.sqrt(core) + 2 * ring) ** 2;
-    return ask(`${cells} mm² of cells at ${u}% utilization in a square core, surrounded by a ${ring} mm I/O ring on every side. Die area, in mm²?`, qty(die, 'mm2', 0.02, sig(die)), `Core = ${sig(core)} mm², side ${sig(Math.sqrt(core))} mm. Die side = ${sig(Math.sqrt(core))} + 2 × ${ring} = ${sig(Math.sqrt(core) + 2 * ring)} mm, area ${sig(die)} mm². Small dies pay a big fraction to the ring; pad-limited designs are real.`, 'Core side + two ring widths, squared.');
+    return walk(ask(`${cells} mm² of cells at ${u}% utilization in a square core, surrounded by a ${ring} mm I/O ring on every side. Die area, in mm²?`, qty(die, 'mm2', 0.02, sig(die)), `Core = ${sig(core)} mm², side ${sig(Math.sqrt(core))} mm. Die side = ${sig(Math.sqrt(core))} + 2 × ${ring} = ${sig(Math.sqrt(core) + 2 * ring)} mm, area ${sig(die)} mm². Small dies pay a big fraction to the ring; pad-limited designs are real.`, 'Core side + two ring widths, squared.'),
+      'from cell area to die area', `${idea} The die is the square core plus the I/O ring around it, on every side. So: core area → core side (square root) → add the ring twice (both sides) → square it again.`,
+      calc('Core area = cells ÷ utilization, in mm²:', `${cells} / ${u / 100}`, core, 'mm2', sig(core, 4), 0.005),
+      calc('The core is square, so its side is the square root, in mm:', `sqrt(${sig(core, 4)})`, Math.sqrt(core), 'mm', sig(Math.sqrt(core), 4), 0.005),
+      calc(`Die side = core side + the ring on both edges (2 × ${ring}), in mm:`, `${sig(Math.sqrt(core), 4)} + 2 × ${ring}`, Math.sqrt(core) + 2 * ring, 'mm', sig(Math.sqrt(core) + 2 * ring, 4), 0.005),
+      calc('Die area = side squared, in mm²:', `${sig(Math.sqrt(core) + 2 * ring, 4)}^2`, die, 'mm2', sig(die), 0.02));
   },
   (r, d) => {
+    const idea = 'The resistance R of a wire grows in proportion to its length, and so does its capacitance C, because a longer wire has more metal to charge. The delay is about R × C, so it grows as length SQUARED. For a wire spread evenly along its length (distributed), the Elmore delay is ½ × R × C.';
     if (d === 1) {
       const k = pick(r, [2, 3, 4, 10]);
-      return ask(`An unbuffered on-chip wire gets ${k}× longer. By what factor does its RC delay grow?`, num(k * k), `R ∝ L and C ∝ L, so delay ∝ L²: ${k}² = ${k * k}.`, 'Both R and C scale with length.');
+      return walk(ask(`An unbuffered on-chip wire gets ${k}× longer. By what factor does its RC delay grow?`, num(k * k), `R ∝ L and C ∝ L, so delay ∝ L²: ${k}² = ${k * k}.`, 'Both R and C scale with length.'),
+        'wire delay scales with length squared', idea,
+        choice(`A wire ${k}× longer has R that is ${k}× bigger, and C that is:`, `${k}× bigger as well`, ['The same', `${k * k}× bigger`]),
+        count(`Delay ∝ R × C, so it grows by ${k} × ${k}:`, `${k} × ${k}`, k * k));
     }
     const rr = pick(r, [0.5, 1, 2]), cc = 0.2, len = pick(r, [1000, 2000, 3000]), t = wire(rr, cc, len);
-    if (d === 2) return ask(`A ${len} µm wire has r = ${rr} Ω/µm and c = ${cc} fF/µm. Elmore delay (½·R·C), in ps?`, qty(t, 'ps', 0.02, sig(t)), `R = ${rr * len} Ω, C = ${sig(cc * len)} fF. ½ × ${rr * len} × ${sig(cc * len)}e-15 = ${sig(t)} ps.`, 'Total R and total C, times one half.');
+    if (d === 2) return walk(ask(`A ${len} µm wire has r = ${rr} Ω/µm and c = ${cc} fF/µm. Elmore delay (½·R·C), in ps?`, qty(t, 'ps', 0.02, sig(t)), `R = ${rr * len} Ω, C = ${sig(cc * len)} fF. ½ × ${rr * len} × ${sig(cc * len)}e-15 = ${sig(t)} ps.`, 'Total R and total C, times one half.'),
+      'Elmore delay of a wire', idea,
+      calc('Total resistance = r × length, in Ω:', `${rr} × ${len}`, rr * len, '', String(rr * len), 0.001),
+      calc('Total capacitance = c × length, in fF:', `${cc} × ${len}`, cc * len, 'fF', sig(cc * len, 4), 0.001),
+      calc('Delay = ½ × R × C. Ω × fF = fs, so divide by 1000 for ps:', `0.5 × ${rr * len} × ${sig(cc * len, 4)} / 1000`, t, 'ps', sig(t), 0.02));
     const k = pick(r, [3, 4, 5, 6]), tb = pick(r, [15, 20, 30]), seg = k * wire(rr, cc, len / k) + (k - 1) * tb;
-    return ask(`The same ${len} µm wire (r = ${rr} Ω/µm, c = ${cc} fF/µm, ${sig(t)} ps unbuffered) is cut into ${k} equal segments by ${k - 1} repeaters of ${tb} ps each. Total delay, in ps?`, qty(seg, 'ps', 0.02, sig(seg)), `Each segment: ½ × ${rr} × ${cc} × ${sig(len / k)}² fs = ${sig(wire(rr, cc, len / k))} ps. ${k} × ${sig(wire(rr, cc, len / k))} + ${k - 1} × ${tb} = ${sig(seg)} ps. Repeaters turn L² into roughly L.`, 'Each segment is 1/k as long, so 1/k² the delay.');
+    return walk(ask(`The same ${len} µm wire (r = ${rr} Ω/µm, c = ${cc} fF/µm, ${sig(t)} ps unbuffered) is cut into ${k} equal segments by ${k - 1} repeaters of ${tb} ps each. Total delay, in ps?`, qty(seg, 'ps', 0.02, sig(seg)), `Each segment: ½ × ${rr} × ${cc} × ${sig(len / k)}² fs = ${sig(wire(rr, cc, len / k))} ps. ${k} × ${sig(wire(rr, cc, len / k))} + ${k - 1} × ${tb} = ${sig(seg)} ps. Repeaters turn L² into roughly L.`, 'Each segment is 1/k as long, so 1/k² the delay.'),
+      'repeaters', `${idea} Cutting the wire into k segments with a repeater (amplifier) between them makes each segment 1/k as long, so each has 1/k² of the delay, and all k of them together 1/k of the original. But each repeater adds its own delay.`,
+      calc(`Each segment is ${len} ÷ ${k} µm long. Its delay is ½ × r × c × length², in ps (r in Ω/µm, c in fF/µm, ÷ 1000):`, `0.5 × ${rr} × ${cc} × ${sig(len / k, 4)}^2 / 1000`, wire(rr, cc, len / k), 'ps', sig(wire(rr, cc, len / k), 4), 0.01),
+      calc(`All ${k} segments plus ${k - 1} repeaters of ${tb} ps:`, `${k} × ${sig(wire(rr, cc, len / k), 4)} + ${k - 1} × ${tb}`, seg, 'ps', sig(seg), 0.02));
   },
   (r, d) => {
     const f = pick(r, [4, 8]);
+    const idea = 'A clock tree is a tree of buffers that delivers the clock to every flop at nearly the same time. Each buffer drives a fixed number of loads (its fan-out f). With L levels of buffers a balanced tree can reach f^L flops: each level multiplies by f.';
     if (d === 1) {
       const lv = pick(r, [3, 4, 5]), s = f ** lv;
-      return ask(`A clock tree drives ${s} flops and each buffer drives ${f} loads. How many buffer levels deep is a balanced tree?`, num(lv), `${f}^${lv} = ${s}, so ${lv} levels.`, 'Fan-out per level, to the power of the depth.');
+      return walk(ask(`A clock tree drives ${s} flops and each buffer drives ${f} loads. How many buffer levels deep is a balanced tree?`, num(lv), `${f}^${lv} = ${s}, so ${lv} levels.`, 'Fan-out per level, to the power of the depth.'),
+        'clock tree depth', idea,
+        show(Array.from({ length: lv }, (_, i) => `after level ${i + 1}: ${f ** (i + 1)} loads`).join('\n'), `each level multiplies by ${f}`),
+        count(`How many levels does it take to reach ${s} flops?`, `${f}^levels = ${s}`, lv));
     }
     if (d === 2) {
       const s = pick(r, [1000, 5000, 20000]), lv = Math.ceil(Math.log(s) / Math.log(f));
-      return ask(`A clock tree drives ${s} flops with a fan-out of ${f} per buffer. Minimum number of levels?`, num(lv), `${f}^${lv - 1} = ${f ** (lv - 1)} < ${s} ≤ ${f}^${lv} = ${f ** lv}: ${lv} levels.`, 'Smallest L with fanout^L ≥ sinks.');
+      return walk(ask(`A clock tree drives ${s} flops with a fan-out of ${f} per buffer. Minimum number of levels?`, num(lv), `${f}^${lv - 1} = ${f ** (lv - 1)} < ${s} ≤ ${f}^${lv} = ${f ** lv}: ${lv} levels.`, 'Smallest L with fanout^L ≥ sinks.'),
+        'minimum clock tree depth', `${idea} To find the depth for a given number of flops, find the smallest whole L with f^L at least as big as the number of flops.`,
+        show(Array.from({ length: lv }, (_, i) => `${f}^${i + 1} = ${f ** (i + 1)}`).join('\n'), `powers of ${f}`),
+        count(`The first power of ${f} that reaches ${s} is level:`, `smallest L with ${f}^L ≥ ${s}`, lv));
     }
     const lv = pick(r, [3, 4, 5]), b = (f ** lv - 1) / (f - 1);
-    return ask(`A full tree with fan-out ${f} and ${lv} levels of buffers drives ${f ** lv} flops. How many buffers does it use?`, num(b), `1 + ${f} + … + ${f}^${lv - 1} = (${f}^${lv} - 1)/(${f} - 1) = ${b}. Clock trees burn a big share of dynamic power because all of that toggles every cycle.`, 'Count buffers level by level.');
+    return walk(ask(`A full tree with fan-out ${f} and ${lv} levels of buffers drives ${f ** lv} flops. How many buffers does it use?`, num(b), `1 + ${f} + … + ${f}^${lv - 1} = (${f}^${lv} - 1)/(${f} - 1) = ${b}. Clock trees burn a big share of dynamic power because all of that toggles every cycle.`, 'Count buffers level by level.'),
+      'counting clock tree buffers', `${idea} To count the buffers, go level by level: the first level has 1 buffer, the next has f, the next f², and so on, up to f^(L-1). The last level's outputs are the flops themselves.`,
+      show(Array.from({ length: lv }, (_, i) => `level ${i + 1}: ${f ** i} buffer${f ** i > 1 ? 's' : ''}`).join('\n'), `each level has ${f}× more`),
+      count('Add them all up:', Array.from({ length: lv }, (_, i) => `${f ** i}`).join(' + '), b));
   },
   (r, d) => {
     if (d === 1) {
       const w = pick(r, [10, 20, 50]), p = pick(r, [40, 64, 80]), t = Math.floor((w * 1000) / p);
-      return ask(`A ${w} µm edge of a routing tile on a layer with ${p} nm pitch. How many tracks cross it?`, num(t), `${w * 1000} nm / ${p} nm = ${t} tracks.`, 'Width / pitch.');
+      return walk(ask(`A ${w} µm edge of a routing tile on a layer with ${p} nm pitch. How many tracks cross it?`, num(t), `${w * 1000} nm / ${p} nm = ${t} tracks.`, 'Width / pitch.'),
+        'routing tracks', 'Wires on one metal layer run in parallel "tracks", each a fixed distance apart: the pitch. The number of tracks across an edge is its width divided by the pitch, rounded down. Put both in the same unit (nm): 1 µm = 1000 nm.',
+        count(`The edge in nm:`, `${w} × 1000`, w * 1000),
+        count('Tracks = edge ÷ pitch, rounded down:', `floor(${w * 1000} / ${p})`, t));
     }
     if (d === 2) {
       const t = pick(r, [100, 125, 250]), layers = pick(r, [2, 3, 4]), nets = Math.round(t * layers * pick(r, [0.7, 0.9, 1.1, 1.25])), o = Math.max(0, nets - t * layers);
-      return ask(`A tile edge offers ${t} tracks on each of ${layers} horizontal layers. The router wants to push ${nets} nets through it. How many overflow?`, num(o), `Capacity = ${t} × ${layers} = ${t * layers}. ${o ? `${nets} - ${t * layers} = ${o} nets overflow: the router must detour them or the placer must spread cells.` : `${nets} fit, so 0 overflow (though above ~90% the detailed router still struggles).`}`, 'Capacity is tracks × layers.');
+      return walk(ask(`A tile edge offers ${t} tracks on each of ${layers} horizontal layers. The router wants to push ${nets} nets through it. How many overflow?`, num(o), `Capacity = ${t} × ${layers} = ${t * layers}. ${o ? `${nets} - ${t * layers} = ${o} nets overflow: the router must detour them or the placer must spread cells.` : `${nets} fit, so 0 overflow (though above ~90% the detailed router still struggles).`}`, 'Capacity is tracks × layers.'),
+        'routing overflow', 'Each tile edge has a capacity: the number of wires that can pass through it, which is the tracks per layer times the number of layers that run in that direction. If more nets want to cross than the capacity, the extra ones overflow, and must be detoured. Overflow is capped at zero: spare room is not negative overflow.',
+        count('Capacity = tracks per layer × layers:', `${t} × ${layers}`, t * layers),
+        count(`Overflow = demand (${nets}) minus capacity, or 0 if it fits:`, `max(0, ${nets} - ${t * layers})`, o));
     }
     const i = pick(r, [5, 12, 30]), j = pick(r, [1, 2, 4]), w = i / j;
-    return ask(`A power strap carries ${i} mA and electromigration rules allow ${j} mA per µm of width at this temperature. Minimum width, in µm?`, qty(w, 'um', 0.02, sig(w)), `${i} / ${j} = ${sig(w)} µm. EM limits get tighter as temperature rises, and they limit signal nets with high toggle rates too.`, 'Current / current density.');
+    return walk(ask(`A power strap carries ${i} mA and electromigration rules allow ${j} mA per µm of width at this temperature. Minimum width, in µm?`, qty(w, 'um', 0.02, sig(w)), `${i} / ${j} = ${sig(w)} µm. EM limits get tighter as temperature rises, and they limit signal nets with high toggle rates too.`, 'Current / current density.'),
+      'electromigration width', 'Electromigration (EM) is metal atoms being pushed along by a strong current until the wire breaks. The rules give a maximum current per micron of width. So the width must be at least the current ÷ that limit.',
+      calc('Width = current ÷ allowed current per µm, in µm:', `${i} / ${j}`, w, 'um', sig(w), 0.02));
   },
   (r, d) => {
     if (d === 1) {
       const i = pick(r, [1, 2, 5, 10]), res = pick(r, [5, 10, 20]), v = i * res;
-      return ask(`A block draws ${i} A through a power grid with ${res} mΩ effective resistance. IR drop, in mV?`, qty(v, 'mV', 0.02, String(v)), `${i} × ${res} mΩ = ${v} mV.`, 'V = I·R.');
+      return walk(ask(`A block draws ${i} A through a power grid with ${res} mΩ effective resistance. IR drop, in mV?`, qty(v, 'mV', 0.02, String(v)), `${i} × ${res} mΩ = ${v} mV.`, 'V = I·R.'),
+        'IR drop', 'The power grid is a network of wires with resistance. A current I flowing through resistance R loses a voltage I × R on the way (Ohm\'s law), so the block sees a lower supply. An ampere through a milliohm drops a millivolt.',
+        calc('IR drop = I × R, in mV (A × mΩ = mV):', `${i} × ${res}`, v, 'mV', String(v), 0.02));
     }
     if (d === 2) {
       const rs = pick(r, [0.5, 1, 2]), n = pick(r, [10, 20, 40]), i = pick(r, [2, 4]), v = (i * rs * 1000) / n;
-      return ask(`${n} identical parallel power straps each have ${rs} Ω. A ${i} A load is fed through them. IR drop, in mV?`, qty(v, 'mV', 0.02, sig(v)), `Parallel: ${rs}/${n} = ${sig((rs / n) * 1000)} mΩ. ${i} A × that = ${sig(v)} mV.`, 'N equal resistors in parallel: R/N.');
+      return walk(ask(`${n} identical parallel power straps each have ${rs} Ω. A ${i} A load is fed through them. IR drop, in mV?`, qty(v, 'mV', 0.02, sig(v)), `Parallel: ${rs}/${n} = ${sig((rs / n) * 1000)} mΩ. ${i} A × that = ${sig(v)} mV.`, 'N equal resistors in parallel: R/N.'),
+        'IR drop through parallel straps', 'N equal resistors side by side have a combined resistance of R ÷ N (more paths, less resistance). Then the drop is I × that resistance.',
+        calc('The combined resistance R ÷ N, in mΩ (× 1000 from Ω):', `${rs} / ${n} × 1000`, (rs / n) * 1000, 'mOhm', sig((rs / n) * 1000, 4), 0.005),
+        calc('IR drop = I × R, in mV:', `${i} × ${sig((rs / n) * 1000, 4)}`, v, 'mV', sig(v), 0.02));
     }
     const vdd = pick(r, [0.75, 0.8, 0.9]), b = pick(r, [3, 5]), i = pick(r, [5, 10, 20]), res = ((b / 100) * vdd * 1000) / i;
-    return ask(`Vdd = ${vdd} V and the IR-drop budget is ${b}%. The block draws ${i} A. Maximum grid resistance, in mΩ?`, qty(res, 'mΩ', 0.02, sig(res)), `Allowed drop = ${b}% × ${vdd} = ${sig(b * vdd * 10)} mV. R = ${sig(b * vdd * 10)} mV / ${i} A = ${sig(res)} mΩ.`, 'Budget voltage / current.');
+    return walk(ask(`Vdd = ${vdd} V and the IR-drop budget is ${b}%. The block draws ${i} A. Maximum grid resistance, in mΩ?`, qty(res, 'mΩ', 0.02, sig(res)), `Allowed drop = ${b}% × ${vdd} = ${sig(b * vdd * 10)} mV. R = ${sig(b * vdd * 10)} mV / ${i} A = ${sig(res)} mΩ.`, 'Budget voltage / current.'),
+      'an IR-drop budget', 'The budget says how many percent of the supply you may lose in the grid. Turn that into volts (percent × Vdd), then use Ohm\'s law backwards: R = V ÷ I, the largest resistance that keeps the drop inside the budget.',
+      calc('Allowed drop in mV = budget × Vdd × 1000:', `${b} / 100 × ${vdd} × 1000`, (b / 100) * vdd * 1000, 'mV', sig((b / 100) * vdd * 1000, 4), 0.005),
+      calc('Maximum R = allowed drop ÷ current, in mΩ (mV ÷ A):', `${sig((b / 100) * vdd * 1000, 4)} / ${i}`, res, 'mΩ', sig(res), 0.02));
   },
   (r) => concept(r, [
-    ['DRC and LVS both pass. What did each check?', 'DRC: shapes obey the fab\'s geometric rules. LVS: the layout\'s transistors and connections match the netlist', ['Both check timing', 'DRC checks logic, LVS checks power', 'Both check DFT'], 'DRC asks whether the shapes can be manufactured; LVS asks whether they are the circuit you meant. Neither checks timing.'],
-    ['Why does CTS run after placement and before routing?', 'The tree must know where every flop is, and clock nets need the best routing resources before signal nets take them', ['Clocks are not timed', 'Routing needs no clocks', 'It is only a convention'], 'Balancing skew needs the flop locations, and clock nets get priority on the best routing layers.'],
-    ['Timing fails by 20 ps on three paths a week before tapeout. Normal fix?', 'An ECO: resize or buffer those cells and reroute locally, without re-running the whole flow', ['Re-run synthesis from scratch', 'Raise the voltage in the spec', 'Delete the paths'], 'ECOs change a few cells and wires while keeping everything else, so late fixes do not reopen every other signoff.'],
-    ['What is the antenna effect?', 'During manufacturing, a long metal wire collects charge that can damage the thin gate oxide it connects to; fixed with diodes or layer jumps', ['Crosstalk from a radio', 'A package resonance', 'Clock skew'], 'Plasma etching charges long exposed wires; the charge discharges through the thin gate oxide unless a diode or a jump to a higher layer gives it another path.'],
-    ['Why does a sign-off timing run add OCV derates?', 'Identical cells vary across the die, so launch and capture paths are made slightly pessimistic', ['To speed up the tool', 'Only for hold checks at slow corners', 'Because libraries are wrong'], 'On-chip variation makes nominally identical cells differ, so timing assumes the worst mix for each check.'],
-  ]),
+    ['DRC and LVS both pass. What did each check?', 'DRC: shapes obey the fab\'s geometric rules. LVS: the layout\'s transistors and connections match the netlist', ['Both check timing', 'DRC checks logic, LVS checks power', 'Both check DFT'], 'DRC versus LVS', 'Design Rule Check (DRC) asks whether the drawn shapes obey the factory\'s spacing and width rules, so they can be manufactured. Layout Versus Schematic (LVS) extracts the circuit from the drawn shapes and compares it with the intended netlist. Neither looks at timing.', ['Checking that the layout is the circuit you intended is:', 'LVS', ['DRC', 'CTS']]],
+    ['Why does CTS run after placement and before routing?', 'The tree must know where every flop is, and clock nets need the best routing resources before signal nets take them', ['Clocks are not timed', 'Routing needs no clocks', 'It is only a convention'], 'the order of the flow', 'The clock tree has to reach each flop, so it cannot be built before the flops have a place. And clock wires are the most timing-critical, so they get the best routing tracks first, before signal wires fill them.', ['A clock tree needs to know:', 'Where every flop is placed', ['The final routing', 'The test patterns']]],
+    ['Timing fails by 20 ps on three paths a week before tapeout. Normal fix?', 'An ECO: resize or buffer those cells and reroute locally, without re-running the whole flow', ['Re-run synthesis from scratch', 'Raise the voltage in the spec', 'Delete the paths'], 'engineering change orders', 'Late in the project, rerunning the whole flow would change everything and reopen every signoff. An ECO changes only a few cells and wires, such as making a cell larger or adding a buffer, and keeps the rest of the design exactly as it was.', ['An ECO changes:', 'Only a small part of the design', ['Everything', 'Nothing']]],
+    ['What is the antenna effect?', 'During manufacturing, a long metal wire collects charge that can damage the thin gate oxide it connects to; fixed with diodes or layer jumps', ['Crosstalk from a radio', 'A package resonance', 'Clock skew'], 'the antenna effect', 'During plasma etching, a long wire that is not yet connected to a diode collects charge like an antenna. If it connects to a thin gate, the charge can punch through the gate oxide. The fix is a diode that gives the charge another path, or jumping to a higher layer so the wire is shorter at that step.', ['The charge from the long wire can damage:', 'The thin gate oxide', ['The clock', 'The package']]],
+    ['Why does a sign-off timing run add OCV derates?', 'Identical cells vary across the die, so launch and capture paths are made slightly pessimistic', ['To speed up the tool', 'Only for hold checks at slow corners', 'Because libraries are wrong'], 'on-chip variation', 'Two identical cells on the same chip are never exactly equal in speed. To be safe, timing analysis assumes the launching path is a little slower (or faster) and the capturing path the opposite, in whichever direction is worse for the check.', ['OCV derating makes the analysis:', 'Slightly pessimistic, to be safe', ['Optimistic', 'Faster to run']]],
+  ], (why) => `${why}.`),
 ]);
 
 export const pdBoss = boss({
@@ -111,65 +155,120 @@ export const pdBoss = boss({
 export const sramPractice = practice('practice-sram', 'Memory Drills', 'array area, bit lines, sensing, DRAM charge sharing, refresh, redundancy', [
   (r, d) => {
     const cell = pick(r, [0.021, 0.027, 0.05]), mb = pick(r, [8, 32, 64]), bits = mb * 8 * 2 ** 20, a = (bits * cell) / 1e6;
-    if (d === 1) return ask(`A bitcell is ${cell} µm². Area of the cells alone for ${mb} MB, in mm²?`, qty(a, 'mm2', 0.03, sig(a)), `${mb} × 8 × 2²⁰ = ${bits.toLocaleString('en-US')} bits × ${cell} µm² = ${sig(a)} mm².`, 'Bits × cell area.');
+    const idea = 'A memory is an array of bitcells, one bit each. The area of the cell array is the number of bits times the area of one cell. 1 mm² is 1,000,000 µm², so divide by 1e6 to go from µm² to mm². Real macros also need decoders, sense amplifiers and wiring, so the array is only part of the area.';
+    if (d === 1) return walk(ask(`A bitcell is ${cell} µm². Area of the cells alone for ${mb} MB, in mm²?`, qty(a, 'mm2', 0.03, sig(a)), `${mb} × 8 × 2²⁰ = ${bits.toLocaleString('en-US')} bits × ${cell} µm² = ${sig(a)} mm².`, 'Bits × cell area.'),
+      'area of a memory array', idea,
+      count(`Number of bits = MB × 8 bits × 2^20 (1 MB = ${(2 ** 20).toLocaleString('en-US')} bytes):`, `${mb} × 8 × 1048576`, bits),
+      calc('Area in µm² = bits × cell area, then ÷ 1e6 for mm²:', `${bits} × ${cell} / 1e6`, a, 'mm2', sig(a), 0.03));
     if (d === 2) {
       const e = pick(r, [0.6, 0.7, 0.75]);
-      return ask(`Same ${mb} MB of ${cell} µm² cells, but the arrays are only ${e * 100}% efficient (the rest is decoders, sense amps and wiring). Total area, in mm²?`, qty(a / e, 'mm2', 0.03, sig(a / e)), `${sig(a)} / ${e} = ${sig(a / e)} mm².`, 'Divide the cell area by the efficiency.');
+      return walk(ask(`Same ${mb} MB of ${cell} µm² cells, but the arrays are only ${e * 100}% efficient (the rest is decoders, sense amps and wiring). Total area, in mm²?`, qty(a / e, 'mm2', 0.03, sig(a / e)), `${sig(a)} / ${e} = ${sig(a / e)} mm².`, 'Divide the cell area by the efficiency.'),
+        'array efficiency', `${idea} Array efficiency is the fraction of the macro that is cells: cell area ÷ total area. To get the total, divide the cell area by the efficiency.`,
+        calc('Area of the cells alone, in mm² (bits × cell area ÷ 1e6):', `${bits} × ${cell} / 1e6`, a, 'mm2', sig(a, 4), 0.005),
+        calc('Total area = cell area ÷ efficiency, in mm²:', `${sig(a, 4)} / ${e}`, a / e, 'mm2', sig(a / e), 0.03));
     }
     const kb = pick(r, [16, 32, 64]), rows = pick(r, [256, 512]), mux = pick(r, [4, 8]), cols = (kb * 1024 * 8) / rows;
-    return ask(`A ${kb} KB SRAM macro has ${rows} rows and a ${mux}:1 column mux. How wide is each word, in bits?`, num(cols / mux), `${kb} × 1024 × 8 / ${rows} = ${cols} columns, / ${mux} = ${cols / mux} bits per word. Column muxing keeps the macro roughly square.`, 'Bits / rows = columns; columns / mux = word.');
+    return walk(ask(`A ${kb} KB SRAM macro has ${rows} rows and a ${mux}:1 column mux. How wide is each word, in bits?`, num(cols / mux), `${kb} × 1024 × 8 / ${rows} = ${cols} columns, / ${mux} = ${cols / mux} bits per word. Column muxing keeps the macro roughly square.`, 'Bits / rows = columns; columns / mux = word.'),
+      'rows, columns and word width', 'The bits sit in a grid of rows × columns. A column mux lets several columns share one sense amplifier, so each read picks one column out of each group of "mux" columns. So: total bits ÷ rows = columns, and columns ÷ mux = bits in a word.',
+      count('Total bits = KB × 1024 × 8:', `${kb} × 1024 × 8`, kb * 1024 * 8),
+      count('Columns = total bits ÷ rows:', `${kb * 1024 * 8} / ${rows}`, cols),
+      count(`Word width = columns ÷ mux (one column chosen out of each ${mux}):`, `${cols} / ${mux}`, cols / mux));
   },
   (r, d) => {
     const cbl = pick(r, [50, 100, 200]), dv = pick(r, [100, 150]), i = pick(r, [20, 40]);
+    const idea = 'To read a cell, the bit line (a long wire with capacitance C) is discharged by the cell\'s small current I. A capacitor losing charge at constant current changes voltage at I ÷ C, so the time to drop by ΔV is t = C × ΔV ÷ I. Convert to base units (farads, volts, amps) and then express the answer in ps.';
     if (d < 3) {
       const t = ((cbl * 1e-15 * dv * 1e-3) / (i * 1e-6)) * 1e12;
-      return ask(`A bitcell sinks ${i} µA from a ${cbl} fF bit line. How long until the line has dropped ${dv} mV, in ps?`, qty(t, 'ps', 0.02, sig(t)), `t = C·ΔV/I = ${cbl}e-15 × ${dv}e-3 / ${i}e-6 = ${sig(t)} ps.`, 'I = C·dV/dt.');
+      return walk(ask(`A bitcell sinks ${i} µA from a ${cbl} fF bit line. How long until the line has dropped ${dv} mV, in ps?`, qty(t, 'ps', 0.02, sig(t)), `t = C·ΔV/I = ${cbl}e-15 × ${dv}e-3 / ${i}e-6 = ${sig(t)} ps.`, 'I = C·dV/dt.'),
+        'bit-line sensing time', idea,
+        calc('The charge to remove, C × ΔV, in coulombs (fF = 1e-15 F, mV = 1e-3 V):', `${cbl}e-15 × ${dv}e-3`, cbl * 1e-15 * dv * 1e-3, '', sci(cbl * 1e-15 * dv * 1e-3, 2), 0.01),
+        calc('Time = charge ÷ current (µA = 1e-6 A), then × 1e12 to get ps:', `${sci(cbl * 1e-15 * dv * 1e-3, 2)} / ${i}e-6 × 1e12`, t, 'ps', sig(t), 0.02));
     }
     const sig0 = pick(r, [10, 15, 20]), need = 6 * sig0, t = ((cbl * 1e-15 * need * 1e-3) / (i * 1e-6)) * 1e12;
-    return ask(`The sense amplifier has ${sig0} mV rms offset and needs a 6σ margin. The cell sinks ${i} µA from ${cbl} fF. How long must the word line stay on before sensing, in ps?`, qty(t, 'ps', 0.02, sig(t)), `Required swing = 6 × ${sig0} = ${need} mV. t = ${cbl}e-15 × ${need}e-3 / ${i}e-6 = ${sig(t)} ps. Sense-amp offset directly sets memory speed.`, 'Margin first, then t = C·ΔV/I.');
+    return walk(ask(`The sense amplifier has ${sig0} mV rms offset and needs a 6σ margin. The cell sinks ${i} µA from ${cbl} fF. How long must the word line stay on before sensing, in ps?`, qty(t, 'ps', 0.02, sig(t)), `Required swing = 6 × ${sig0} = ${need} mV. t = ${cbl}e-15 × ${need}e-3 / ${i}e-6 = ${sig(t)} ps. Sense-amp offset directly sets memory speed.`, 'Margin first, then t = C·ΔV/I.'),
+      'offset-limited sensing time', `${idea} The sense amplifier has a random offset: it can mistake a small difference for the wrong value. To be safe the bit line must drop by several times the offset (6σ here) before the amplifier looks.`,
+      calc('Required bit-line swing = 6 × the offset, in mV:', `6 × ${sig0}`, need, 'mV', String(need), 0.001),
+      calc('The charge to remove, C × ΔV, in coulombs:', `${cbl}e-15 × ${need}e-3`, cbl * 1e-15 * need * 1e-3, '', sci(cbl * 1e-15 * need * 1e-3, 2), 0.01),
+      calc('Time = charge ÷ current, in ps (× 1e12):', `${sci(cbl * 1e-15 * need * 1e-3, 2)} / ${i}e-6 × 1e12`, t, 'ps', sig(t), 0.02));
   },
   (r, d) => {
     const cs = pick(r, [10, 20, 25]), cb = pick(r, [80, 100, 150]), vdd = pick(r, [1.1, 1.2]);
+    const idea = 'A DRAM cell is a tiny capacitor Cs. To read it, it is connected to the much larger bit-line capacitance Cbl, which has been precharged to Vdd/2. The two share charge and settle to a common voltage, so the bit line only moves a little: the bump = (cell voltage - Vdd/2) × Cs ÷ (Cs + Cbl). The sense amplifier then has to detect that small bump.';
     if (d === 1) {
       const dv = ((vdd / 2) * cs) / (cs + cb) * 1000;
-      return ask(`A DRAM cell of ${cs} fF holds a 1 (${vdd} V) and connects to a ${cb} fF bit line precharged to Vdd/2. How big is the bump on the bit line, in mV?`, qty(dv, 'mV', 0.02, sig(dv)), `Charge sharing: (Vdd/2) × Cs/(Cs + Cbl) = ${vdd / 2} × ${cs}/${cs + cb} = ${sig(dv)} mV.`, 'The cell and bit line settle to a common voltage.');
+      return walk(ask(`A DRAM cell of ${cs} fF holds a 1 (${vdd} V) and connects to a ${cb} fF bit line precharged to Vdd/2. How big is the bump on the bit line, in mV?`, qty(dv, 'mV', 0.02, sig(dv)), `Charge sharing: (Vdd/2) × Cs/(Cs + Cbl) = ${vdd / 2} × ${cs}/${cs + cb} = ${sig(dv)} mV.`, 'The cell and bit line settle to a common voltage.'),
+        'DRAM charge sharing', idea,
+        calc('The cell holds Vdd, the bit line Vdd/2: the difference is Vdd/2, in V:', `${vdd} / 2`, vdd / 2, 'V', String(vdd / 2), 0.001),
+        calc('Share the charge: Cs ÷ (Cs + Cbl):', `${cs} / (${cs} + ${cb})`, cs / (cs + cb), '', sig(cs / (cs + cb), 4), 0.005),
+        calc('Bump = difference × that ratio, in mV (× 1000):', `${vdd / 2} × ${sig(cs / (cs + cb), 4)} × 1000`, dv, 'mV', sig(dv), 0.02));
     }
     if (d === 2) {
       const want = pick(r, [60, 80, 100]), c = (want * cb) / ((vdd / 2) * 1000 - want);
-      return ask(`Bit line ${cb} fF, precharged to Vdd/2 = ${vdd / 2} V. The sense amp needs a ${want} mV bump. Minimum cell capacitance, in fF?`, qty(c, 'fF', 0.02, sig(c)), `${want} = ${vdd / 2 * 1000} × Cs/(Cs + ${cb}) → Cs = ${want} × ${cb} / (${vdd / 2 * 1000} - ${want}) = ${sig(c)} fF. Keeping Cs up while cells shrink is why DRAM capacitors are tall, deep structures.`, 'Solve the charge-sharing formula for Cs.');
+      return walk(ask(`Bit line ${cb} fF, precharged to Vdd/2 = ${vdd / 2} V. The sense amp needs a ${want} mV bump. Minimum cell capacitance, in fF?`, qty(c, 'fF', 0.02, sig(c)), `${want} = ${vdd / 2 * 1000} × Cs/(Cs + ${cb}) → Cs = ${want} × ${cb} / (${vdd / 2 * 1000} - ${want}) = ${sig(c)} fF. Keeping Cs up while cells shrink is why DRAM capacitors are tall, deep structures.`, 'Solve the charge-sharing formula for Cs.'),
+        'the cell capacitance needed', `${idea} Here the bump is given and Cs is unknown. Write bump = V × Cs ÷ (Cs + Cbl), with V = Vdd/2, and solve: Cs = bump × Cbl ÷ (V - bump).`,
+        calc('The available voltage Vdd/2, in mV:', `${vdd} / 2 × 1000`, (vdd / 2) * 1000, 'mV', String((vdd / 2) * 1000), 0.001),
+        calc('V minus the wanted bump, in mV:', `${(vdd / 2) * 1000} - ${want}`, (vdd / 2) * 1000 - want, 'mV', String((vdd / 2) * 1000 - want), 0.001),
+        calc('Cs = bump × Cbl ÷ that, in fF:', `${want} × ${cb} / ${(vdd / 2) * 1000 - want}`, c, 'fF', sig(c), 0.02));
     }
     const lk = pick(r, [0.8, 0.7]), dv = ((lk * vdd - vdd / 2) * cs) / (cs + cb) * 1000;
-    return ask(`Just before refresh, a stored 1 has leaked to ${lk * 100}% of ${vdd} V. Cell ${cs} fF, bit line ${cb} fF precharged to Vdd/2. Bit-line bump, in mV?`, qty(dv, 'mV', 0.02, sig(dv)), `(${sig(lk * vdd)} - ${vdd / 2}) × ${cs}/${cs + cb} = ${sig(dv)} mV. Refresh must come before leakage erases the margin.`, 'Use the leaked cell voltage minus Vdd/2.');
+    return walk(ask(`Just before refresh, a stored 1 has leaked to ${lk * 100}% of ${vdd} V. Cell ${cs} fF, bit line ${cb} fF precharged to Vdd/2. Bit-line bump, in mV?`, qty(dv, 'mV', 0.02, sig(dv)), `(${sig(lk * vdd)} - ${vdd / 2}) × ${cs}/${cs + cb} = ${sig(dv)} mV. Refresh must come before leakage erases the margin.`, 'Use the leaked cell voltage minus Vdd/2.'),
+      'the bump after leakage', `${idea} A cell loses charge over time, so its voltage has fallen below Vdd. The bump is now based on the leaked voltage minus Vdd/2: smaller, and eventually zero if it leaks all the way.`,
+      calc('The leaked cell voltage, in V:', `${lk} × ${vdd}`, lk * vdd, 'V', sig(lk * vdd, 4), 0.002),
+      calc('Its difference from the precharge Vdd/2, in V:', `${sig(lk * vdd, 4)} - ${vdd / 2}`, lk * vdd - vdd / 2, 'V', sig(lk * vdd - vdd / 2, 4), 0.01),
+      calc('Bump = difference × Cs ÷ (Cs + Cbl), in mV:', `${sig(lk * vdd - vdd / 2, 4)} × ${cs} / ${cs + cb} × 1000`, dv, 'mV', sig(dv), 0.02));
   },
   (r, d) => {
     if (d === 1) {
       const rows = pick(r, [8192, 16384]), w = pick(r, [32, 64]), t = (w / rows) * 1000;
-      return ask(`Every one of ${rows} rows must be refreshed within ${w} ms. How often must a refresh command go out, in µs?`, qty(t, 'us', 0.02, sig(t)), `${w} ms / ${rows} = ${sig(t)} µs (tREFI).`, 'Window / rows.');
+      return walk(ask(`Every one of ${rows} rows must be refreshed within ${w} ms. How often must a refresh command go out, in µs?`, qty(t, 'us', 0.02, sig(t)), `${w} ms / ${rows} = ${sig(t)} µs (tREFI).`, 'Window / rows.'),
+        'refresh interval', 'Every row has to be refreshed within the retention window. The controller spreads the work evenly: one refresh command per row-share, so the interval between commands is the window divided by the number of rows. ms ÷ rows × 1000 gives µs.',
+        calc('Interval = window ÷ rows, in µs (× 1000 to go from ms):', `${w} / ${rows} × 1000`, t, 'us', sig(t), 0.02));
     }
     const trfc = pick(r, [260, 350, 550]), trefi = d === 3 ? 3.9 : 7.8, o = (trfc / (trefi * 1000)) * 100;
-    return ask(`Each refresh blocks the bank for tRFC = ${trfc} ns and refreshes come every ${trefi} µs${d === 3 ? ' (above 85 °C, where refresh rate doubles)' : ''}. What fraction of time is lost, in %?`, qty(o, '%', 0.02, sig(o)), `${trfc} ns / ${trefi * 1000} ns = ${sig(o)}%. Bigger chips have longer tRFC, so refresh overhead grows with density${d === 3 ? ', and heat makes it twice as bad' : ''}.`, 'Busy time / period.');
+    return walk(ask(`Each refresh blocks the bank for tRFC = ${trfc} ns and refreshes come every ${trefi} µs${d === 3 ? ' (above 85 °C, where refresh rate doubles)' : ''}. What fraction of time is lost, in %?`, qty(o, '%', 0.02, sig(o)), `${trfc} ns / ${trefi * 1000} ns = ${sig(o)}%. Bigger chips have longer tRFC, so refresh overhead grows with density${d === 3 ? ', and heat makes it twice as bad' : ''}.`, 'Busy time / period.'),
+      'refresh overhead', 'The time lost to refresh is the time busy (tRFC) divided by the time between refreshes (tREFI). Put both in the same unit first: 1 µs = 1000 ns.',
+      calc('The period in ns (µs × 1000):', `${trefi} × 1000`, trefi * 1000, 'ns', String(trefi * 1000), 0.001),
+      calc('Fraction lost = tRFC ÷ period, as a %:', `${trfc} / ${trefi * 1000} × 100`, o, '%', sig(o), 0.02));
   },
   (r, d) => {
     const mbits = pick(r, [32, 64, 256]), p = pick(r, [1e-9, 1e-8, 5e-8]), lam = mbits * 2 ** 20 * p;
-    if (d === 1) return ask(`A die carries ${mbits} Mbit of SRAM, and each cell fails independently with probability ${p}. Expected number of bad cells per die?`, qty(lam, '', 0.03, sig(lam)), `${mbits} × 2²⁰ × ${p} = ${sig(lam)}.`, 'Bits × failure probability.');
-    if (d === 2) return ask(`Expected bad cells per die is ${sig(lam)} (Poisson). Without repair, what fraction of dies has no bad cell at all, in %?`, qty(Math.exp(-lam) * 100, '%', 0.03, sig(Math.exp(-lam) * 100)), `P(0) = e^(-${sig(lam)}) = ${sig(Math.exp(-lam) * 100)}%.`, 'Poisson: P(0) = e^(-λ).');
+    const idea = 'Defects strike randomly, so the number of bad cells on a die follows a Poisson distribution with mean λ = (number of cells) × (chance each one fails). The probability of exactly k bad cells is e^(-λ) × λ^k ÷ k!. With no repair the die works only if it has zero bad cells: P(0) = e^(-λ). With s spare rows, it still works with up to s bad cells: add P(0) + P(1) + … + P(s).';
+    if (d === 1) return walk(ask(`A die carries ${mbits} Mbit of SRAM, and each cell fails independently with probability ${p}. Expected number of bad cells per die?`, qty(lam, '', 0.03, sig(lam)), `${mbits} × 2²⁰ × ${p} = ${sig(lam)}.`, 'Bits × failure probability.'),
+      'expected bad cells', idea,
+      count(`Cells on the die = Mbit × 2^20 (${(2 ** 20).toLocaleString('en-US')}):`, `${mbits} × 1048576`, mbits * 2 ** 20),
+      calc('λ = cells × failure probability:', `${mbits * 2 ** 20} × ${p}`, lam, '', sig(lam), 0.03));
+    if (d === 2) return walk(ask(`Expected bad cells per die is ${sig(lam)} (Poisson). Without repair, what fraction of dies has no bad cell at all, in %?`, qty(Math.exp(-lam) * 100, '%', 0.03, sig(Math.exp(-lam) * 100)), `P(0) = e^(-${sig(lam)}) = ${sig(Math.exp(-lam) * 100)}%.`, 'Poisson: P(0) = e^(-λ).'),
+      'Poisson yield without repair', idea,
+      calc('P(0) = e^(-λ), as a % (× 100):', `e^(-${sig(lam)}) × 100`, Math.exp(-lam) * 100, '%', sig(Math.exp(-lam) * 100), 0.03));
     const s = pick(r, [1, 2, 4]), y = poisson(lam, s) * 100;
-    return ask(`Expected bad cells per die is ${sig(lam)}. Spare rows can repair up to ${s} of them. Repaired yield, in %?`, qty(y, '%', 0.03, sig(y)), `P(≤ ${s}) = Σ e^(-λ)λᵏ/k! for k = 0…${s} = ${sig(y)}%, up from ${sig(Math.exp(-lam) * 100)}% without repair. A few spares rescue most of the dies.`, 'Sum the Poisson terms up to the number of spares.');
+    const terms: number[] = [];
+    let pk = Math.exp(-lam);
+    for (let k = 0; k <= s; k++) { if (k > 0) pk *= lam / k; terms.push(pk); }
+    return walk(ask(`Expected bad cells per die is ${sig(lam)}. Spare rows can repair up to ${s} of them. Repaired yield, in %?`, qty(y, '%', 0.03, sig(y)), `P(≤ ${s}) = Σ e^(-λ)λᵏ/k! for k = 0…${s} = ${sig(y)}%, up from ${sig(Math.exp(-lam) * 100)}% without repair. A few spares rescue most of the dies.`, 'Sum the Poisson terms up to the number of spares.'),
+      'yield with repair', idea,
+      ...terms.map((t, k) => calc(`P(${k} bad cells) = e^(-λ) × λ^${k} ÷ ${k}!, as a fraction:`, `e^(-${sig(lam)}) × ${sig(lam)}^${k} / ${Array.from({ length: k }, (_, i) => i + 1).join(' × ') || '1'}`, t, '', sig(t, 4), 0.01)),
+      calc('Add them up, as a %:', `(${terms.map((t) => sig(t, 4)).join(' + ')}) × 100`, y, '%', sig(y), 0.03));
   },
   (r, d) => {
     if (d < 3) {
       const b = pick(r, [1, 2, 3, 4]), name = ['SLC', 'MLC', 'TLC', 'QLC'][b - 1];
-      return ask(`${b < 3 ? 'An' : 'A'} ${name} flash cell stores ${b} bit${b > 1 ? 's' : ''}. How many threshold-voltage levels must it hold?`, num(2 ** b), `2^${b} = ${2 ** b}. More levels, less room between them: each added bit costs endurance and speed.`, '2 to the number of bits.');
+      return walk(ask(`${b < 3 ? 'An' : 'A'} ${name} flash cell stores ${b} bit${b > 1 ? 's' : ''}. How many threshold-voltage levels must it hold?`, num(2 ** b), `2^${b} = ${2 ** b}. More levels, less room between them: each added bit costs endurance and speed.`, '2 to the number of bits.'),
+        'flash levels per cell', 'A flash cell stores data as a threshold voltage. To store b bits, the cell must tell apart 2^b different voltage levels, because b bits can take 2^b different values (1 bit: 2 levels; 2 bits: 4 levels).',
+        count(`${b} bit${b > 1 ? 's' : ''} have this many different values:`, `2^${b}`, 2 ** b));
     }
     const win = pick(r, [3, 4, 6]), b = pick(r, [3, 4]), sp = (win * 1000) / (2 ** b - 1);
-    return ask(`A flash cell has a ${win} V threshold window and stores ${b} bits with equally spaced levels. Spacing between neighbouring levels, in mV?`, qty(sp, 'mV', 0.02, sig(sp)), `${2 ** b} levels have ${2 ** b - 1} gaps: ${win * 1000} / ${2 ** b - 1} = ${sig(sp)} mV. Charge leaks and disturbs must stay below half that.`, 'Levels minus one gaps.');
+    return walk(ask(`A flash cell has a ${win} V threshold window and stores ${b} bits with equally spaced levels. Spacing between neighbouring levels, in mV?`, qty(sp, 'mV', 0.02, sig(sp)), `${2 ** b} levels have ${2 ** b - 1} gaps: ${win * 1000} / ${2 ** b - 1} = ${sig(sp)} mV. Charge leaks and disturbs must stay below half that.`, 'Levels minus one gaps.'),
+      'spacing between flash levels', 'N levels spread across a voltage window leave N - 1 gaps between them (like 5 fence posts have 4 gaps). The spacing is the window divided by the number of gaps. Smaller spacing means the stored charge has less room to drift before the wrong level is read.',
+      count(`${b} bits give this many levels:`, `2^${b}`, 2 ** b),
+      count('N levels have N - 1 gaps:', `${2 ** b} - 1`, 2 ** b - 1),
+      calc('Spacing = window ÷ gaps, in mV (window × 1000):', `${win} × 1000 / ${2 ** b - 1}`, sp, 'mV', sig(sp), 0.02));
   },
   (r) => concept(r, [
-    ['During a read, the stored 0 node rises because the bit line pulls on it. How do designers stop it from flipping?', 'Make the pull-down transistor stronger than the access transistor (the cell ratio)', ['Raise the bit line voltage', 'Remove the access transistor', 'Use a bigger sense amplifier'], 'If the pull-down is stronger than the access transistor, the node stays low enough during a read to keep the cell from flipping.'],
-    ['Why do SRAMs need sense amplifiers?', 'The tiny cell moves a long, heavily loaded bit line only slowly; the sense amp resolves a small difference quickly', ['To write faster', 'To refresh the cells', 'To store extra bits'], 'The sense amp detects a difference of tens of millivolts and amplifies it to a full logic level, much faster than waiting for a full swing.'],
-    ['Why is 6T SRAM volatile but flash is not?', 'SRAM holds its bit in powered cross-coupled inverters; flash traps charge in an insulated gate that stays without power', ['SRAM is slower', 'Flash uses magnets', 'SRAM cells are too small'], 'The inverters need power to hold the state; charge on flash\'s floating gate or trap layer stays put for years.'],
-    ['What is row hammer?', 'Repeatedly activating one DRAM row disturbs neighbouring rows until their bits flip', ['A refresh algorithm', 'A burn-in test', 'An SRAM write assist'], 'Coupling and charge leakage between tightly packed cells cause it. Mitigations: targeted refresh of neighbours and ECC.'],
-  ]),
+    ['During a read, the stored 0 node rises because the bit line pulls on it. How do designers stop it from flipping?', 'Make the pull-down transistor stronger than the access transistor (the cell ratio)', ['Raise the bit line voltage', 'Remove the access transistor', 'Use a bigger sense amplifier'], 'SRAM read stability', 'While reading, the access transistor connects the stored 0 node to the bit line, which is held high. The pull-down transistor inside the cell fights that. If the pull-down is stronger than the access transistor (a good "cell ratio"), the node stays low enough, and the cell does not flip.', ['If the access transistor is stronger than the pull-down, a read may:', 'Flip the stored bit', ['Be faster and safe', 'Do nothing']]],
+    ['Why do SRAMs need sense amplifiers?', 'The tiny cell moves a long, heavily loaded bit line only slowly; the sense amp resolves a small difference quickly', ['To write faster', 'To refresh the cells', 'To store extra bits'], 'sense amplifiers', 'A cell is tiny and the bit line is long and heavy with capacitance, so the cell can only move the bit line voltage very slowly. A sense amplifier detects the tiny difference early (tens of millivolts) and amplifies it to a full logic level, much faster than waiting.', ['A sense amp lets the read finish:', 'Before the bit line has swung fully', ['After the bit line has fully swung', 'Without a bit line']]],
+    ['Why is 6T SRAM volatile but flash is not?', 'SRAM holds its bit in powered cross-coupled inverters; flash traps charge in an insulated gate that stays without power', ['SRAM is slower', 'Flash uses magnets', 'SRAM cells are too small'], 'volatile versus non-volatile', 'An SRAM cell is two inverters feeding each other, which only hold a value while powered. Flash puts electrons on an electrically insulated gate, where they remain for years with the power off.', ['Charge on an insulated gate stays without power because it is:', 'Electrically isolated', ['Refreshed constantly', 'Held by the clock']]],
+    ['What is row hammer?', 'Repeatedly activating one DRAM row disturbs neighbouring rows until their bits flip', ['A refresh algorithm', 'A burn-in test', 'An SRAM write assist'], 'row hammer', 'DRAM cells are packed so tightly that activating a row disturbs its neighbours a little, leaking some of their charge. Do it often enough between refreshes and neighbouring bits flip. Mitigations: refresh the neighbours sooner, and ECC.', ['Hammering one row disturbs:', 'Its neighbours', ['Only itself', 'The clock']]],
+  ], (why) => `${why}.`),
 ]);
 
 export const memoryBoss = boss({
@@ -195,55 +294,102 @@ export const memoryBoss = boss({
 export const fabPractice = practice('practice-fab', 'Fab & Yield Drills', 'lithography resolution, multi-patterning, yield models, dies per wafer, Cpk', [
   (r, d) => {
     const tool = pick(r, [['ArF immersion', 193, 1.35], ['EUV', 13.5, 0.33], ['High-NA EUV', 13.5, 0.55]] as const);
+    const idea = 'The smallest feature a lithography tool can print (its half-pitch resolution) follows the Rayleigh criterion: R = k1 × λ ÷ NA. λ is the wavelength of the light, NA the numerical aperture of the lens (how wide a cone of light it collects), and k1 a factor for how clever the process is (smaller is harder). A shorter wavelength or bigger NA prints finer features.';
     if (d === 1) {
       const k1 = pick(r, [0.3, 0.35, 0.4]), res = (k1 * tool[1]) / tool[2];
-      return ask(`${tool[0]}: λ = ${tool[1]} nm, NA = ${tool[2]}, k1 = ${k1}. Resolution (half-pitch), in nm?`, qty(res, 'nm', 0.02, sig(res)), `R = k1·λ/NA = ${k1} × ${tool[1]} / ${tool[2]} = ${sig(res)} nm.`, 'Rayleigh: k1·λ/NA.');
+      return walk(ask(`${tool[0]}: λ = ${tool[1]} nm, NA = ${tool[2]}, k1 = ${k1}. Resolution (half-pitch), in nm?`, qty(res, 'nm', 0.02, sig(res)), `R = k1·λ/NA = ${k1} × ${tool[1]} / ${tool[2]} = ${sig(res)} nm.`, 'Rayleigh: k1·λ/NA.'),
+        'the Rayleigh resolution', idea,
+        calc('The top of the fraction, k1 × λ, in nm:', `${k1} × ${tool[1]}`, k1 * tool[1], 'nm', sig(k1 * tool[1], 4), 0.005),
+        calc('Divide by NA:', `${sig(k1 * tool[1], 4)} / ${tool[2]}`, res, 'nm', sig(res), 0.02));
     }
     if (d === 2) {
       const res = pick(r, [20, 30, 40]), k1 = (res * tool[2]) / tool[1];
-      return ask(`To print a ${res} nm half-pitch with ${tool[0]} (λ = ${tool[1]} nm, NA = ${tool[2]}), what k1 is needed?`, qty(k1, '', 0.02, sig(k1)), `k1 = R·NA/λ = ${res} × ${tool[2]} / ${tool[1]} = ${sig(k1)}.${k1 < 0.25 ? ' Below 0.25 a single exposure cannot do it at all: multi-patterning is required.' : ''}`, 'Solve Rayleigh for k1.');
+      return walk(ask(`To print a ${res} nm half-pitch with ${tool[0]} (λ = ${tool[1]} nm, NA = ${tool[2]}), what k1 is needed?`, qty(k1, '', 0.02, sig(k1)), `k1 = R·NA/λ = ${res} × ${tool[2]} / ${tool[1]} = ${sig(k1)}.${k1 < 0.25 ? ' Below 0.25 a single exposure cannot do it at all: multi-patterning is required.' : ''}`, 'Solve Rayleigh for k1.'),
+        'solving Rayleigh for k1', `${idea} Here the feature size is given and k1 is unknown: multiply both sides by NA and divide by λ, so k1 = R × NA ÷ λ. Physics allows a single exposure only down to k1 = 0.25.`,
+        calc('R × NA, in nm:', `${res} × ${tool[2]}`, res * tool[2], 'nm', sig(res * tool[2], 4), 0.005),
+        calc('k1 = that ÷ λ:', `${sig(res * tool[2], 4)} / ${tool[1]}`, k1, '', sig(k1), 0.02));
     }
     const p = pick(r, [76, 80, 96]), n = pick(r, [2, 4]);
-    return ask(`Lithography prints lines at ${p} nm pitch. After ${n === 2 ? 'self-aligned double patterning (SADP)' : 'self-aligned quadruple patterning (SAQP)'}, what is the final pitch, in nm?`, qty(p / n, 'nm', 0.01, String(p / n)), `Each spacer step halves the pitch: ${p} / ${n} = ${p / n} nm. The cost is extra deposition and etch steps, and cut masks for line ends.`, 'Spacers form on both sides of each line.');
+    return walk(ask(`Lithography prints lines at ${p} nm pitch. After ${n === 2 ? 'self-aligned double patterning (SADP)' : 'self-aligned quadruple patterning (SAQP)'}, what is the final pitch, in nm?`, qty(p / n, 'nm', 0.01, String(p / n)), `Each spacer step halves the pitch: ${p} / ${n} = ${p / n} nm. The cost is extra deposition and etch steps, and cut masks for line ends.`, 'Spacers form on both sides of each line.'),
+      'multi-patterning', 'When a single exposure cannot print a pitch, the process prints coarser lines, then builds a "spacer" wall on BOTH sides of each one and removes the original. Each line has become two, so the pitch is halved. Doing this twice (SAQP) halves it again: the pitch is divided by 2 for SADP, and by 4 for SAQP.',
+      choice(`${n === 2 ? 'SADP' : 'SAQP'} multiplies the number of lines by:`, String(n), [String(n === 2 ? 4 : 2), '1']),
+      calc('Final pitch = printed pitch ÷ that factor, in nm:', `${p} / ${n}`, p / n, 'nm', String(p / n), 0.01));
   },
   (r, d) => {
     const d0 = pick(r, [0.05, 0.1, 0.2]), a = pick(r, [50, 100, 300, 600]), y = yieldOf(a, d0) * 100;
-    if (d === 1) return ask(`D₀ = ${d0} defects/cm², die ${a} mm². Poisson yield, in %?`, qty(y, '%', 0.02, sig(y)), `Y = e^(-A·D₀) = e^(-${a / 100} × ${d0}) = ${sig(y)}%.`, 'Convert mm² to cm² first.');
+    const idea = 'The Poisson yield model says defects land randomly on the wafer. The chance a die has none is Y = e^(-A × D₀), where A is the die area in cm² (1 cm² = 100 mm²) and D₀ is the defect density in defects per cm². Bigger dies catch more defects, so yield falls exponentially with area.';
+    if (d === 1) return walk(ask(`D₀ = ${d0} defects/cm², die ${a} mm². Poisson yield, in %?`, qty(y, '%', 0.02, sig(y)), `Y = e^(-A·D₀) = e^(-${a / 100} × ${d0}) = ${sig(y)}%.`, 'Convert mm² to cm² first.'),
+      'Poisson yield', idea,
+      calc('The die area in cm² (mm² ÷ 100):', `${a} / 100`, a / 100, 'cm2', String(a / 100), 0.001),
+      calc('The average number of defects per die, A × D₀:', `${a / 100} × ${d0}`, (a / 100) * d0, '', sig((a / 100) * d0, 4), 0.005),
+      calc('Y = e^(-that), as a %:', `e^(-${sig((a / 100) * d0, 4)}) × 100`, y, '%', sig(y), 0.02));
     if (d === 2) {
       const a2 = a * 2, y2 = yieldOf(a2, d0) * 100;
-      return ask(`At D₀ = ${d0}/cm², a ${a} mm² die yields ${sig(y)}%. What does a ${a2} mm² die yield, in %?`, qty(y2, '%', 0.02, sig(y2)), `e^(-${a2 / 100} × ${d0}) = ${sig(y2)}%: the square of the smaller yield. Yield falls exponentially with area.`, 'Twice the area squares the yield.');
+      return walk(ask(`At D₀ = ${d0}/cm², a ${a} mm² die yields ${sig(y)}%. What does a ${a2} mm² die yield, in %?`, qty(y2, '%', 0.02, sig(y2)), `e^(-${a2 / 100} × ${d0}) = ${sig(y2)}%: the square of the smaller yield. Yield falls exponentially with area.`, 'Twice the area squares the yield.'),
+        'yield versus die area', idea,
+        calc('The new area in cm²:', `${a2} / 100`, a2 / 100, 'cm2', String(a2 / 100), 0.001),
+        calc('Average defects per die, A × D₀:', `${a2 / 100} × ${d0}`, (a2 / 100) * d0, '', sig((a2 / 100) * d0, 4), 0.005),
+        calc('Y = e^(-that), as a %:', `e^(-${sig((a2 / 100) * d0, 4)}) × 100`, y2, '%', sig(y2), 0.02));
     }
     const t = pick(r, [80, 90]), dd = -Math.log(t / 100) / (a / 100);
-    return ask(`A ${a} mm² die must reach ${t}% yield. Maximum defect density, in defects/cm²?`, qty(dd, '', 0.02, sig(dd)), `D₀ = -ln(${t / 100}) / ${a / 100} cm² = ${sig(dd)}/cm². That is the target the fab's defect engineers chase.`, 'Solve Y = e^(-A·D₀) for D₀.');
+    return walk(ask(`A ${a} mm² die must reach ${t}% yield. Maximum defect density, in defects/cm²?`, qty(dd, '', 0.02, sig(dd)), `D₀ = -ln(${t / 100}) / ${a / 100} cm² = ${sig(dd)}/cm². That is the target the fab's defect engineers chase.`, 'Solve Y = e^(-A·D₀) for D₀.'),
+      'the defect density a yield target needs', `${idea} To find D₀ for a yield target, take the natural log of both sides: ln(Y) = -A × D₀, so D₀ = -ln(Y) ÷ A.`,
+      calc('-ln(Y), with Y as a fraction:', `-ln(${t / 100})`, -Math.log(t / 100), '', sig(-Math.log(t / 100), 4), 0.005),
+      calc(`D₀ = that ÷ A, with A = ${a / 100} cm²:`, `${sig(-Math.log(t / 100), 4)} / ${a / 100}`, dd, '', sig(dd), 0.02));
   },
   (r, d) => {
     const a = pick(r, [50, 100, 200, 400, 600]), n = dpw(a);
-    if (d === 1) return ask(`About how many ${a} mm² dies fit on a 300 mm wafer? (DPW ≈ π·(d/2)²/A - π·d/√(2A))`, qty(n, '', 0.03, String(Math.round(n))), `${sig((Math.PI * 150 ** 2) / a)} - ${sig((Math.PI * 300) / Math.sqrt(2 * a))} ≈ ${Math.round(n)}. The second term counts partial dies lost at the edge.`, 'Wafer area / die area, minus the edge loss.');
+    const idea = 'A wafer is a 300 mm circle, and dies are rectangles. The number of dies is roughly the wafer area divided by the die area, minus the partial dies lost around the edge: DPW ≈ π·(d/2)² ÷ A - π·d ÷ √(2A). A wafer costs thousands of dollars, so the cost of a good die is the wafer cost divided by the GOOD dies on it (dies per wafer × yield).';
+    const t1 = (Math.PI * 150 ** 2) / a, t2 = (Math.PI * 300) / Math.sqrt(2 * a);
+    if (d === 1) return walk(ask(`About how many ${a} mm² dies fit on a 300 mm wafer? (DPW ≈ π·(d/2)²/A - π·d/√(2A))`, qty(n, '', 0.03, String(Math.round(n))), `${sig((Math.PI * 150 ** 2) / a)} - ${sig((Math.PI * 300) / Math.sqrt(2 * a))} ≈ ${Math.round(n)}. The second term counts partial dies lost at the edge.`, 'Wafer area / die area, minus the edge loss.'),
+      'dies per wafer', idea,
+      calc('Wafer area ÷ die area, with π × 150² mm² for the wafer:', `3.1416 × 150^2 / ${a}`, t1, '', sig(t1, 4), 0.005),
+      calc('The edge loss π × 300 ÷ √(2A):', `3.1416 × 300 / sqrt(2 × ${a})`, t2, '', sig(t2, 4), 0.005),
+      calc('Dies per wafer = first minus second:', `${sig(t1, 4)} - ${sig(t2, 4)}`, n, '', String(Math.round(n)), 0.03));
     const d0 = pick(r, [0.1, 0.2]), good = n * yieldOf(a, d0);
-    if (d === 2) return ask(`${Math.round(n)} dies of ${a} mm² per wafer at D₀ = ${d0}/cm². Good dies per wafer?`, qty(good, '', 0.03, String(Math.round(good))), `Yield = ${sig(yieldOf(a, d0) * 100)}%, × ${Math.round(n)} = ${Math.round(good)} good dies.`, 'Dies × yield.');
+    if (d === 2) return walk(ask(`${Math.round(n)} dies of ${a} mm² per wafer at D₀ = ${d0}/cm². Good dies per wafer?`, qty(good, '', 0.03, String(Math.round(good))), `Yield = ${sig(yieldOf(a, d0) * 100)}%, × ${Math.round(n)} = ${Math.round(good)} good dies.`, 'Dies × yield.'),
+      'good dies per wafer', idea,
+      calc('Yield = e^(-A × D₀), with A in cm², as a fraction:', `e^(-${a / 100} × ${d0})`, yieldOf(a, d0), '', sig(yieldOf(a, d0), 4), 0.005),
+      calc('Good dies = dies per wafer × yield:', `${Math.round(n)} × ${sig(yieldOf(a, d0), 4)}`, good, '', String(Math.round(good)), 0.03));
     const cost = pick(r, [10000, 17000, 20000]), per = cost / good;
-    return ask(`A wafer costs $${cost.toLocaleString('en-US')}. ${Math.round(n)} dies of ${a} mm² per wafer, D₀ = ${d0}/cm². Cost per good die, in $?`, qty(per, '', 0.03, sig(per)), `${Math.round(good)} good dies, so $${cost} / ${Math.round(good)} = $${sig(per)}. Big dies cost more than their area suggests because yield drops too.`, 'Wafer cost / good dies.');
+    return walk(ask(`A wafer costs $${cost.toLocaleString('en-US')}. ${Math.round(n)} dies of ${a} mm² per wafer, D₀ = ${d0}/cm². Cost per good die, in $?`, qty(per, '', 0.03, sig(per)), `${Math.round(good)} good dies, so $${cost} / ${Math.round(good)} = $${sig(per)}. Big dies cost more than their area suggests because yield drops too.`, 'Wafer cost / good dies.'),
+      'cost per good die', idea,
+      calc('Yield = e^(-A × D₀), with A in cm², as a fraction:', `e^(-${a / 100} × ${d0})`, yieldOf(a, d0), '', sig(yieldOf(a, d0), 4), 0.005),
+      calc('Good dies per wafer = dies × yield:', `${Math.round(n)} × ${sig(yieldOf(a, d0), 4)}`, good, '', sig(good, 4), 0.01),
+      calc('Cost per good die = wafer cost ÷ good dies, in dollars:', `${cost} / ${sig(good, 4)}`, per, '', sig(per), 0.03));
   },
   (r, d) => {
     const lsl = pick(r, [0.9, 1.0]), usl = +(lsl + pick(r, [0.2, 0.3])).toFixed(2), s = pick(r, [0.02, 0.025, 0.03]);
+    const idea = 'Process capability says how comfortably a process fits inside its spec limits (LSL lower, USL upper). Cp = (USL - LSL) ÷ (6σ) compares the spec width with the process spread (±3σ), assuming it is centred. Cpk also includes how far the mean is from centre: Cpk = (distance from the mean to the NEARER limit) ÷ (3σ). A Cpk of 1.33 or more is a common target.';
     if (d === 1) {
       const cp = (usl - lsl) / (6 * s);
-      return ask(`A process parameter has spec limits ${lsl} to ${usl}, is centred, and has σ = ${s}. Cp?`, qty(cp, '', 0.02, sig(cp)), `Cp = (USL - LSL)/(6σ) = ${sig(usl - lsl)}/${sig(6 * s)} = ${sig(cp)}. 1.33 or better is a common target.`, 'Spec width / six sigma.');
+      return walk(ask(`A process parameter has spec limits ${lsl} to ${usl}, is centred, and has σ = ${s}. Cp?`, qty(cp, '', 0.02, sig(cp)), `Cp = (USL - LSL)/(6σ) = ${sig(usl - lsl)}/${sig(6 * s)} = ${sig(cp)}. 1.33 or better is a common target.`, 'Spec width / six sigma.'),
+        'Cp, process capability', idea,
+        calc('The spec width, USL - LSL:', `${usl} - ${lsl}`, usl - lsl, '', sig(usl - lsl, 4), 0.005),
+        calc('The process spread, 6σ:', `6 × ${s}`, 6 * s, '', sig(6 * s, 4), 0.005),
+        calc('Cp = width ÷ spread:', `${sig(usl - lsl, 4)} / ${sig(6 * s, 4)}`, cp, '', sig(cp), 0.02));
     }
     if (d === 2) {
       const mu = +(lsl + (usl - lsl) * pick(r, [0.35, 0.6, 0.65])).toFixed(3), cpk = Math.min(usl - mu, mu - lsl) / (3 * s);
-      return ask(`Spec ${lsl} to ${usl}, mean ${mu}, σ = ${s}. Cpk?`, qty(cpk, '', 0.02, sig(cpk)), `Cpk = min(${sig(usl - mu)}, ${sig(mu - lsl)}) / (3 × ${s}) = ${sig(cpk)}. An off-centre mean costs capability even with the same σ.`, 'Distance to the nearer limit / 3σ.');
+      return walk(ask(`Spec ${lsl} to ${usl}, mean ${mu}, σ = ${s}. Cpk?`, qty(cpk, '', 0.02, sig(cpk)), `Cpk = min(${sig(usl - mu)}, ${sig(mu - lsl)}) / (3 × ${s}) = ${sig(cpk)}. An off-centre mean costs capability even with the same σ.`, 'Distance to the nearer limit / 3σ.'),
+        'Cpk, capability with an off-centre mean', idea,
+        calc('Distance from the mean up to the USL:', `${usl} - ${mu}`, usl - mu, '', sig(usl - mu, 4), 0.005),
+        calc('Distance from the LSL up to the mean:', `${mu} - ${lsl}`, mu - lsl, '', sig(mu - lsl, 4), 0.005),
+        calc(`Cpk = the smaller of the two (${sig(Math.min(usl - mu, mu - lsl), 4)}) ÷ 3σ:`, `${sig(Math.min(usl - mu, mu - lsl), 4)} / (3 × ${s})`, cpk, '', sig(cpk), 0.02));
     }
     const t = 1.33, sm = (usl - lsl) / 2 / (3 * t);
-    return ask(`Spec ${lsl} to ${usl}, perfectly centred. What is the largest σ that still gives Cpk = 1.33?`, qty(sm, '', 0.02, sig(sm)), `Half-width ${sig((usl - lsl) / 2)} = 3 × 1.33 × σ → σ = ${sig(sm)}.`, 'Cpk = half-width / 3σ when centred.');
+    return walk(ask(`Spec ${lsl} to ${usl}, perfectly centred. What is the largest σ that still gives Cpk = 1.33?`, qty(sm, '', 0.02, sig(sm)), `Half-width ${sig((usl - lsl) / 2)} = 3 × 1.33 × σ → σ = ${sig(sm)}.`, 'Cpk = half-width / 3σ when centred.'),
+      'the σ a Cpk target allows', `${idea} For a centred process the nearer limit is half the spec width away, so Cpk = half-width ÷ (3σ). Solve for σ: σ = half-width ÷ (3 × Cpk).`,
+      calc('The half-width, (USL - LSL) ÷ 2:', `(${usl} - ${lsl}) / 2`, (usl - lsl) / 2, '', sig((usl - lsl) / 2, 4), 0.005),
+      calc('σ = half-width ÷ (3 × 1.33):', `${sig((usl - lsl) / 2, 4)} / (3 × 1.33)`, sm, '', sig(sm), 0.02));
   },
   (r) => concept(r, [
-    ['Designers sign off at TT, FF, SS, FS and SF. What do the letters mean?', 'The speed of the NMOS and PMOS devices: typical, fast or slow', ['Temperature and frequency', 'Test and function', 'Film thickness'], 'Process variation can make NMOS and PMOS faster or slower independently; FS and SF are the skewed corners.'],
-    ['After years at high temperature a chip\'s paths are slower. Likely mechanism?', 'BTI and hot-carrier injection shift transistor thresholds over time', ['Poisson yield', 'Electromagnetic interference', 'Lithography blur'], 'BTI traps charge near the gate under bias, and HCI damages the oxide with energetic carriers. Both raise Vt, so designs add aging margin.'],
-    ['Why did the industry move from FinFETs to gate-all-around nanosheets?', 'Wrapping the gate on all sides controls the channel better at short lengths, and sheet width can be tuned', ['Nanosheets are cheaper', 'FinFETs cannot be made with EUV', 'Nanosheets need no doping'], 'A fin\'s gate touches three sides; a nanosheet\'s touches four, reducing leakage and letting designers choose the sheet width.'],
-    ['What does EUV lithography change compared with 193 nm immersion?', 'A much shorter wavelength prints fine pitches in one exposure instead of several', ['It removes the need for masks', 'It works in air', 'It makes transistors faster directly'], '13.5 nm light replaces triple and quadruple patterning, which were costly and caused overlay errors.'],
-    ['A yield engineer sees failing dies clustered at the wafer edge. First suspicion?', 'An edge-related process issue (film thickness, etch or lithography focus near the edge)', ['A random particle', 'A design bug', 'A bad tester'], 'Random defects spread evenly; spatial patterns like rings, edges or scratches point at a specific tool or step.'],
-  ]),
+    ['Designers sign off at TT, FF, SS, FS and SF. What do the letters mean?', 'The speed of the NMOS and PMOS devices: typical, fast or slow', ['Temperature and frequency', 'Test and function', 'Film thickness'], 'process corners', 'Manufacturing variation makes the N and P transistors on a chip each come out typical, fast or slow. The two letters name the NMOS and PMOS speeds: TT, FF, SS, and the skewed corners FS (fast N, slow P) and SF. Timing is checked at each.', ['In "FS", the F stands for the speed of:', 'The NMOS transistors', ['The clock', 'The frequency']]],
+    ['After years at high temperature a chip\'s paths are slower. Likely mechanism?', 'BTI and hot-carrier injection shift transistor thresholds over time', ['Poisson yield', 'Electromagnetic interference', 'Lithography blur'], 'transistor aging', 'Bias temperature instability (BTI) traps charge near the gate while a transistor is on, and hot-carrier injection (HCI) damages the oxide. Both raise the threshold voltage, which slows transistors down with age. Designs therefore add margin for aging.', ['A higher threshold voltage makes a transistor:', 'Slower', ['Faster', 'Unchanged']]],
+    ['Why did the industry move from FinFETs to gate-all-around nanosheets?', 'Wrapping the gate on all sides controls the channel better at short lengths, and sheet width can be tuned', ['Nanosheets are cheaper', 'FinFETs cannot be made with EUV', 'Nanosheets need no doping'], 'gate-all-around transistors', 'A transistor\'s gate controls the channel beneath it. In a FinFET the gate touches the fin on three sides; in a nanosheet it wraps on all four. Better control means less leakage at short lengths, and the width of the sheet can be chosen freely.', ['More of the channel surrounded by the gate means:', 'Better control and less leakage', ['More leakage', 'No change']]],
+    ['What does EUV lithography change compared with 193 nm immersion?', 'A much shorter wavelength prints fine pitches in one exposure instead of several', ['It removes the need for masks', 'It works in air', 'It makes transistors faster directly'], 'EUV lithography', 'EUV light is 13.5 nm, about 14 times shorter than 193 nm. By Rayleigh, a shorter wavelength prints finer features directly, replacing the multi-patterning (several exposures per layer) that 193 nm needed.', ['A shorter wavelength lets you print:', 'Finer features in one exposure', ['Bigger features', 'No features']]],
+    ['A yield engineer sees failing dies clustered at the wafer edge. First suspicion?', 'An edge-related process issue (film thickness, etch or lithography focus near the edge)', ['A random particle', 'A design bug', 'A bad tester'], 'reading wafer maps', 'Random defects fall like rain and spread evenly over the wafer. A pattern (rings, an edge, scratches) means something systematic, so you look for a specific tool or step with that signature.', ['Failures in a clear pattern suggest a cause that is:', 'Systematic, not random', ['Random', 'Unknowable']]],
+  ], (why) => `${why}.`),
 ]);
 
 export const processBoss = boss({
@@ -275,46 +421,85 @@ export const processBoss = boss({
 export const pkgPractice = practice('practice-pkg', 'Packaging Drills', 'chiplet yield, bump density, thermal resistance, HBM bandwidth, warpage', [
   (r, d) => {
     const big = pick(r, [400, 600, 800]), n = pick(r, [2, 4]), yb = yieldOf(big, 0.1), ys = yieldOf(big / n, 0.1);
-    if (d === 1) return ask(`At D₀ = 0.1/cm², what is the yield of a ${big / n} mm² chiplet, in %?`, qty(ys * 100, '%', 0.02, sig(ys * 100)), `e^(-${big / n / 100} × 0.1) = ${sig(ys * 100)}%.`, 'Poisson yield.');
-    if (d === 2) return ask(`A ${big} mm² monolithic die (yield ${sig(yb * 100)}%) is split into ${n} chiplets. If chiplets were assembled without testing first, what fraction of packages would have all-good chiplets, in %?`, qty(ys ** n * 100, '%', 0.02, sig(ys ** n * 100)), `${sig(ys)}^${n} = ${sig(ys ** n * 100)}%, the same as the monolithic die. Splitting only helps if you test each chiplet first and assemble known-good dies.`, 'All n must be good.');
-    return ask(`With known-good-die testing, silicon cost per good unit area goes as 1/yield. How many times more does good silicon cost as one ${big} mm² die than as ${n} chiplets of ${big / n} mm²?`, qty(ys / yb, 'x', 0.02, sig(ys / yb)), `${sig(ys)} / ${sig(yb)} = ${sig(ys / yb)}×. That factor, minus packaging costs, is the business case for chiplets.`, 'Ratio of yields.');
+    const idea = 'Yield falls exponentially with die area (Poisson: Y = e^(-A × D₀)), so a small chiplet yields much better than one big die. But if you glue untested chiplets together, ALL of them must be good, which gets back to the same yield. The saving only appears when each chiplet is tested first ("known-good die") so only good ones are assembled.';
+    if (d === 1) return walk(ask(`At D₀ = 0.1/cm², what is the yield of a ${big / n} mm² chiplet, in %?`, qty(ys * 100, '%', 0.02, sig(ys * 100)), `e^(-${big / n / 100} × 0.1) = ${sig(ys * 100)}%.`, 'Poisson yield.'),
+      'chiplet yield', idea,
+      calc('The area in cm² (mm² ÷ 100):', `${big / n} / 100`, big / n / 100, 'cm2', String(big / n / 100), 0.001),
+      calc('Y = e^(-A × D₀), as a %:', `e^(-${big / n / 100} × 0.1) × 100`, ys * 100, '%', sig(ys * 100), 0.02));
+    if (d === 2) return walk(ask(`A ${big} mm² monolithic die (yield ${sig(yb * 100)}%) is split into ${n} chiplets. If chiplets were assembled without testing first, what fraction of packages would have all-good chiplets, in %?`, qty(ys ** n * 100, '%', 0.02, sig(ys ** n * 100)), `${sig(ys)}^${n} = ${sig(ys ** n * 100)}%, the same as the monolithic die. Splitting only helps if you test each chiplet first and assemble known-good dies.`, 'All n must be good.'),
+      'untested chiplets', idea,
+      calc(`One chiplet of ${big / n} mm² yields, as a fraction (e^(-${big / n / 100} × 0.1)):`, `e^(-${big / n / 100} × 0.1)`, ys, '', sig(ys, 4), 0.005),
+      calc(`Independent chances multiply: all ${n} must be good, as a %:`, `${sig(ys, 4)}^${n} × 100`, ys ** n * 100, '%', sig(ys ** n * 100), 0.02));
+    return walk(ask(`With known-good-die testing, silicon cost per good unit area goes as 1/yield. How many times more does good silicon cost as one ${big} mm² die than as ${n} chiplets of ${big / n} mm²?`, qty(ys / yb, 'x', 0.02, sig(ys / yb)), `${sig(ys)} / ${sig(yb)} = ${sig(ys / yb)}×. That factor, minus packaging costs, is the business case for chiplets.`, 'Ratio of yields.'),
+      'the economics of chiplets', `${idea} With testing first, the cost of good silicon is proportional to 1 ÷ yield. So the cost ratio (big die versus chiplets) is (1 ÷ yield of big) ÷ (1 ÷ yield of small) = yield of small ÷ yield of big.`,
+      calc(`Yield of the ${big} mm² die, as a fraction:`, `e^(-${big / 100} × 0.1)`, yb, '', sig(yb, 4), 0.005),
+      calc(`Yield of a ${big / n} mm² chiplet, as a fraction:`, `e^(-${big / n / 100} × 0.1)`, ys, '', sig(ys, 4), 0.005),
+      calc('Cost ratio = chiplet yield ÷ big-die yield:', `${sig(ys, 4)} / ${sig(yb, 4)}`, ys / yb, 'x', sig(ys / yb), 0.02));
   },
   (r, d) => {
     const tech = tier<[string, number]>(d, ['C4 bumps', 130], ['micro-bumps', 40], ['hybrid bonding', 9]), side = pick(r, [5, 10, 20]), n = ((side * 1000) / tech[1]) ** 2;
-    return ask(`A ${side} mm × ${side} mm area uses ${tech[0]} on a ${tech[1]} µm grid. About how many connections?`, qty(n, '', 0.03, String(Math.round(n))), `(${side * 1000} / ${tech[1]})² = ${Math.round(n).toLocaleString('en-US')}. From solder bumps to hybrid bonding, density goes up by about 200×: that is what makes 3D stacking and wide die-to-die links possible.`, 'Connections per side, squared.');
+    return walk(ask(`A ${side} mm × ${side} mm area uses ${tech[0]} on a ${tech[1]} µm grid. About how many connections?`, qty(n, '', 0.03, String(Math.round(n))), `(${side * 1000} / ${tech[1]})² = ${Math.round(n).toLocaleString('en-US')}. From solder bumps to hybrid bonding, density goes up by about 200×: that is what makes 3D stacking and wide die-to-die links possible.`, 'Connections per side, squared.'),
+      'connection density', 'Connections sit on a square grid with a fixed spacing (the pitch). Along one side of the area, the number that fit is the side length divided by the pitch. The grid is square, so the total is that number squared. Put both in µm: 1 mm = 1000 µm.',
+      calc(`Connections along one side = ${side} mm × 1000 ÷ pitch ${tech[1]} µm:`, `${side * 1000} / ${tech[1]}`, (side * 1000) / tech[1], '', sig((side * 1000) / tech[1], 4), 0.005),
+      calc('Total = that squared:', `${sig((side * 1000) / tech[1], 4)}^2`, n, '', String(Math.round(n)), 0.03));
   },
   (r, d) => {
     const ta = pick(r, [25, 35, 45]), p = pick(r, [15, 50, 150]);
+    const idea = 'Heat flows from the chip to the air through a chain of thermal resistances θ (in °C per watt), like current through resistors in series. The temperature rise is power × total θ, and the junction (chip) temperature is the ambient temperature plus that rise: Tj = Ta + P × θtotal. Resistances in series add.';
     if (d === 1) {
       const th = p === 15 ? pick(r, [2, 3]) : p === 50 ? pick(r, [0.5, 0.8]) : pick(r, [0.2, 0.3]), tj = ta + p * th;
-      return ask(`Ambient ${ta} °C, the chip burns ${p} W, θja = ${th} °C/W. Junction temperature, in °C?`, qty(tj, '°C', 0.02, sig(tj)), `${ta} + ${p} × ${th} = ${sig(tj)} °C.`, 'Tj = Ta + P·θ.');
+      return walk(ask(`Ambient ${ta} °C, the chip burns ${p} W, θja = ${th} °C/W. Junction temperature, in °C?`, qty(tj, '°C', 0.02, sig(tj)), `${ta} + ${p} × ${th} = ${sig(tj)} °C.`, 'Tj = Ta + P·θ.'),
+        'junction temperature', idea,
+        calc('The temperature rise = power × θja, in °C:', `${p} × ${th}`, p * th, '°C', sig(p * th, 4), 0.005),
+        calc('Tj = ambient + rise:', `${ta} + ${sig(p * th, 4)}`, tj, '°C', sig(tj), 0.02));
     }
     const jc = pick(r, [0.05, 0.1]), cs = pick(r, [0.05, 0.1]);
     if (d === 2) {
       const sa = pick(r, [0.1, 0.15, 0.2]), tj = ta + p * (jc + cs + sa);
-      return ask(`${p} W chip. θjc = ${jc}, θcs (thermal paste) = ${cs}, θsa (heatsink) = ${sa} °C/W, ambient ${ta} °C. Junction temperature, in °C?`, qty(tj, '°C', 0.02, sig(tj)), `Series resistances add: ${sig(jc + cs + sa)} °C/W. ${ta} + ${p} × ${sig(jc + cs + sa)} = ${sig(tj)} °C.`, 'Add the thermal resistances in series.');
+      return walk(ask(`${p} W chip. θjc = ${jc}, θcs (thermal paste) = ${cs}, θsa (heatsink) = ${sa} °C/W, ambient ${ta} °C. Junction temperature, in °C?`, qty(tj, '°C', 0.02, sig(tj)), `Series resistances add: ${sig(jc + cs + sa)} °C/W. ${ta} + ${p} × ${sig(jc + cs + sa)} = ${sig(tj)} °C.`, 'Add the thermal resistances in series.'),
+        'thermal resistances in series', `${idea} Here the heat goes junction → case (θjc), case → sink through paste (θcs), sink → air (θsa).`,
+        calc('Total θ = θjc + θcs + θsa, in °C/W:', `${jc} + ${cs} + ${sa}`, jc + cs + sa, '', sig(jc + cs + sa, 4), 0.005),
+        calc('Tj = ambient + power × total θ, in °C:', `${ta} + ${p} × ${sig(jc + cs + sa, 4)}`, tj, '°C', sig(tj), 0.02));
     }
     const tmax = pick(r, [95, 105]), sa = (tmax - ta) / p - jc - cs;
-    return ask(`${p} W chip, Tj must stay below ${tmax} °C at ${ta} °C ambient. θjc = ${jc}, θcs = ${cs} °C/W. Largest heatsink θsa, in °C/W?`, qty(sa, '', 0.03, sig(sa)), `Total allowed = (${tmax} - ${ta}) / ${p} = ${sig((tmax - ta) / p)} °C/W. Minus ${jc} and ${cs} leaves ${sig(sa)} °C/W.${sa <= 0 ? ' Negative: no heatsink can do it; you need liquid cooling or less power.' : ''}`, 'Budget total θ, subtract the fixed parts.');
+    return walk(ask(`${p} W chip, Tj must stay below ${tmax} °C at ${ta} °C ambient. θjc = ${jc}, θcs = ${cs} °C/W. Largest heatsink θsa, in °C/W?`, qty(sa, '', 0.03, sig(sa)), `Total allowed = (${tmax} - ${ta}) / ${p} = ${sig((tmax - ta) / p)} °C/W. Minus ${jc} and ${cs} leaves ${sig(sa)} °C/W.${sa <= 0 ? ' Negative: no heatsink can do it; you need liquid cooling or less power.' : ''}`, 'Budget total θ, subtract the fixed parts.'),
+      'the heatsink a thermal budget allows', `${idea} To find what heatsink you can use, work backwards: the largest total θ is (Tj max - Ta) ÷ P. The heatsink gets what is left after the fixed parts θjc and θcs.`,
+      calc('The allowed temperature rise, Tj max - ambient, in °C:', `${tmax} - ${ta}`, tmax - ta, '°C', String(tmax - ta), 0.001),
+      calc('The total θ allowed = rise ÷ power, in °C/W:', `${tmax - ta} / ${p}`, (tmax - ta) / p, '', sig((tmax - ta) / p, 4), 0.005),
+      calc('θsa = total minus θjc minus θcs:', `${sig((tmax - ta) / p, 4)} - ${jc} - ${cs}`, sa, '', sig(sa), 0.03));
   },
   (r, d) => {
     const gbps = pick(r, [3.2, 6.4, 9.6]), bw = (1024 * gbps) / 8;
-    if (d === 1) return ask(`One HBM stack has a 1024-bit interface at ${gbps} Gb/s per pin. Bandwidth, in GB/s?`, qty(bw, 'GB/s', 0.02, sig(bw)), `1024 × ${gbps} / 8 = ${sig(bw)} GB/s. That width only works on a silicon interposer with thousands of fine wires.`, 'Bits × rate / 8.');
+    const idea = 'HBM is very wide rather than very fast: each stack has a 1024-bit interface at a modest rate per pin. Bandwidth in GB/s = (number of pins × Gb/s per pin) ÷ 8, since 8 bits make a byte. Several stacks add up.';
+    if (d === 1) return walk(ask(`One HBM stack has a 1024-bit interface at ${gbps} Gb/s per pin. Bandwidth, in GB/s?`, qty(bw, 'GB/s', 0.02, sig(bw)), `1024 × ${gbps} / 8 = ${sig(bw)} GB/s. That width only works on a silicon interposer with thousands of fine wires.`, 'Bits × rate / 8.'),
+      'HBM bandwidth per stack', idea,
+      calc('Total Gb/s = pins × rate per pin:', `1024 × ${gbps}`, 1024 * gbps, '', sig(1024 * gbps, 4), 0.005),
+      calc('Convert bits to bytes (÷ 8), in GB/s:', `${sig(1024 * gbps, 4)} / 8`, bw, 'GB/s', sig(bw), 0.02));
     const st = pick(r, [4, 6, 8]);
-    if (d === 2) return ask(`A GPU has ${st} HBM stacks at ${gbps} Gb/s per pin (1024 bits each). Total bandwidth, in TB/s?`, qty((bw * st) / 1000, 'TB/s', 0.02, sig((bw * st) / 1000)), `${st} × ${sig(bw)} GB/s = ${sig((bw * st) / 1000)} TB/s.`, 'Stacks × per-stack bandwidth.');
+    if (d === 2) return walk(ask(`A GPU has ${st} HBM stacks at ${gbps} Gb/s per pin (1024 bits each). Total bandwidth, in TB/s?`, qty((bw * st) / 1000, 'TB/s', 0.02, sig((bw * st) / 1000)), `${st} × ${sig(bw)} GB/s = ${sig((bw * st) / 1000)} TB/s.`, 'Stacks × per-stack bandwidth.'),
+      'HBM bandwidth of a GPU', idea,
+      calc('One stack, in GB/s:', `1024 × ${gbps} / 8`, bw, 'GB/s', sig(bw, 4), 0.005),
+      calc(`${st} stacks, in TB/s (÷ 1000):`, `${st} × ${sig(bw, 4)} / 1000`, (bw * st) / 1000, 'TB/s', sig((bw * st) / 1000), 0.02));
     const need = pick(r, [4, 6, 8]), n = Math.ceil((need * 1000) / bw);
-    return ask(`An accelerator needs ${need} TB/s from HBM at ${gbps} Gb/s per pin (1024 bits per stack). How many stacks?`, num(n), `${need * 1000} / ${sig(bw)} = ${sig((need * 1000) / bw)}, rounded up: ${n} stacks. Each one takes shoreline on the die edge, which caps how many fit.`, 'Divide and round up.');
+    return walk(ask(`An accelerator needs ${need} TB/s from HBM at ${gbps} Gb/s per pin (1024 bits per stack). How many stacks?`, num(n), `${need * 1000} / ${sig(bw)} = ${sig((need * 1000) / bw)}, rounded up: ${n} stacks. Each one takes shoreline on the die edge, which caps how many fit.`, 'Divide and round up.'),
+      'how many HBM stacks', `${idea} To find how many stacks you need, divide the required bandwidth by one stack's bandwidth, and round UP: you cannot fit a fraction of a stack.`,
+      calc('One stack, in GB/s:', `1024 × ${gbps} / 8`, bw, 'GB/s', sig(bw, 4), 0.005),
+      calc(`The need in GB/s (${need} TB/s × 1000) ÷ one stack:`, `${need * 1000} / ${sig(bw, 4)}`, (need * 1000) / bw, '', sig((need * 1000) / bw, 4), 0.005),
+      count('Round up to a whole number of stacks:', `ceil(${sig((need * 1000) / bw, 4)})`, n));
   },
   (r, d) => {
-    const l = pick(r, [20, 40, 60]), dt = pick(r, [80, 100, 150]), da = tier(d, 17 - 2.6, 17 - 2.6, 17 - 3.2), dl = da * 1e-6 * dt * l * 1000;
-    return ask(`Silicon expands ${d === 3 ? '3.2' : '2.6'} ppm/K and the organic substrate 17 ppm/K. Over a ${dt} K temperature swing, how much more does a ${l} mm substrate edge grow than the die, in µm?`, qty(dl, 'um', 0.03, sig(dl)), `(${17} - ${d === 3 ? 3.2 : 2.6}) ppm/K × ${dt} K × ${l} mm = ${sig(dl)} µm. The corner bumps take that shear every power cycle, which is why they crack first and why big packages add underfill and stiffeners.`, 'Δα × ΔT × length.');
+    const l = pick(r, [20, 40, 60]), dt = pick(r, [80, 100, 150]), ca = d === 3 ? 3.2 : 2.6, da = tier(d, 17 - 2.6, 17 - 2.6, 17 - 3.2), dl = da * 1e-6 * dt * l * 1000;
+    return walk(ask(`Silicon expands ${d === 3 ? '3.2' : '2.6'} ppm/K and the organic substrate 17 ppm/K. Over a ${dt} K temperature swing, how much more does a ${l} mm substrate edge grow than the die, in µm?`, qty(dl, 'um', 0.03, sig(dl)), `(${17} - ${d === 3 ? 3.2 : 2.6}) ppm/K × ${dt} K × ${l} mm = ${sig(dl)} µm. The corner bumps take that shear every power cycle, which is why they crack first and why big packages add underfill and stiffeners.`, 'Δα × ΔT × length.'),
+      'thermal expansion mismatch', 'Materials grow with temperature by α (in ppm per kelvin, parts per million) × ΔT × length. Silicon and the organic substrate have different α (a CTE mismatch), so as they heat up the substrate grows more than the die. The bumps between them must absorb the difference. 1 ppm is 1e-6, and 1 mm is 1000 µm.',
+      calc('The difference in expansion rates, in ppm/K:', `17 - ${ca}`, 17 - ca, '', sig(17 - ca, 4), 0.005),
+      calc('Extra growth = Δα × 1e-6 × ΔT × length, length in µm (mm × 1000):', `${sig(17 - ca, 4)}e-6 × ${dt} × ${l} × 1000`, dl, 'um', sig(dl), 0.03));
   },
   (r) => concept(r, [
-    ['Why does HBM sit on an interposer next to the GPU instead of on the board?', 'Its 1024-bit interface needs thousands of short, fine wires that only silicon interposers or bridges provide', ['It is cheaper', 'Boards are too slow for DRAM', 'It needs no power'], 'A board can route hundreds of wires per package edge, not thousands. HBM trades high pin rate for massive width.'],
-    ['What does UCIe standardize?', 'A die-to-die interface so chiplets from different vendors can connect in one package', ['A DRAM protocol', 'A PCB material', 'A cooling standard'], 'Like PCIe for boards, a common die-to-die interface lets chiplets from different vendors and processes be mixed.'],
-    ['A 3D stack puts logic under memory. What becomes the hardest problem?', 'Getting heat out through the stacked layers', ['Routing power to the top die', 'Testing the bottom die', 'Clock distribution'], 'Each layer adds thermal resistance, and the hot logic is farthest from the heatsink.'],
-    ['What is a known-good die (KGD)?', 'A bare die fully tested before assembly, so a bad one never ruins an expensive package', ['A die from a good wafer', 'A die that passed visual inspection', 'A spare die in the package'], 'One bad die scraps every good die in the package, so each is tested before assembly.'],
-  ]),
+    ['Why does HBM sit on an interposer next to the GPU instead of on the board?', 'Its 1024-bit interface needs thousands of short, fine wires that only silicon interposers or bridges provide', ['It is cheaper', 'Boards are too slow for DRAM', 'It needs no power'], 'why HBM needs an interposer', 'HBM gets its bandwidth from being very wide, with over a thousand data wires per stack. A circuit board can route only hundreds of wires along a package edge, and they are long. A silicon interposer has much finer, shorter wires, thousands of them.', ['Many fine, short wires between chips need:', 'A silicon interposer', ['A circuit board', 'A longer cable']]],
+    ['What does UCIe standardize?', 'A die-to-die interface so chiplets from different vendors can connect in one package', ['A DRAM protocol', 'A PCB material', 'A cooling standard'], 'chiplet interfaces', 'To mix chiplets from different makers in one package they must all speak the same language over the short wires between them. UCIe is a standard die-to-die interface, like PCIe is for boards.', ['A standard interface lets chiplets from different vendors:', 'Work together in one package', ['Share a wafer', 'Use one supply']]],
+    ['A 3D stack puts logic under memory. What becomes the hardest problem?', 'Getting heat out through the stacked layers', ['Routing power to the top die', 'Testing the bottom die', 'Clock distribution'], '3D stacking and heat', 'In a stack, the heat from the hot logic layer must pass through the layers above it to reach the heatsink on top. Each layer adds thermal resistance, so the logic can get much hotter than it would alone.', ['Each extra layer between the heat source and the heatsink adds:', 'Thermal resistance', ['Cooling', 'Bandwidth only']]],
+    ['What is a known-good die (KGD)?', 'A bare die fully tested before assembly, so a bad one never ruins an expensive package', ['A die from a good wafer', 'A die that passed visual inspection', 'A spare die in the package'], 'known-good die', 'Once dies are assembled in one package, a single bad die wastes all the good ones (and the packaging cost). Testing each die before assembly means only good dies go in.', ['Testing before assembly prevents:', 'One bad die scrapping a whole package', ['All defects', 'Wafer cost']]],
+  ], (why) => `${why}.`),
 ]);
 
 export const pkgBoss = boss({
@@ -341,44 +526,79 @@ export const postsiPractice = practice('practice-postsi', 'Post-Silicon Drills',
     const ghz = pick(r, [1, 2, 3]), s = pick(r, [1, 10, 60]), hz = pick(r, [100, 1000]);
     if (d < 3) {
       const days = (ghz * 1e9 * s) / hz / 86400;
-      return ask(`Silicon runs at ${ghz} GHz; full-chip RTL simulation runs at ${hz} Hz. How many days does simulation need to cover ${s} second${s > 1 ? 's' : ''} of silicon?`, qty(days, '', 0.03, sig(days)), `${ghz}e9 × ${s} / ${hz} = ${sig(ghz * 1e9 * s / hz)} s = ${sig(days)} days. Silicon runs more cycles in an hour than all of pre-silicon verification did.`, 'Cycles / sim rate, then seconds to days.');
+      const cyc = ghz * 1e9 * s;
+      return walk(ask(`Silicon runs at ${ghz} GHz; full-chip RTL simulation runs at ${hz} Hz. How many days does simulation need to cover ${s} second${s > 1 ? 's' : ''} of silicon?`, qty(days, '', 0.03, sig(days)), `${ghz}e9 × ${s} / ${hz} = ${sig(ghz * 1e9 * s / hz)} s = ${sig(days)} days. Silicon runs more cycles in an hour than all of pre-silicon verification did.`, 'Cycles / sim rate, then seconds to days.'),
+        'simulation versus silicon speed', 'To cover the same stretch of chip time, you need to simulate the same number of clock cycles. Silicon runs at GHz, simulation at only hundreds of Hz, so the simulator takes far longer. Count the cycles first, then divide by how fast the simulator does cycles per second, then convert seconds to days (÷ 86,400).',
+        calc(`Cycles in ${s} s of silicon = frequency × time:`, `${ghz}e9 × ${s}`, cyc, '', sci(cyc, 2), 0.01),
+        calc(`Simulation seconds = cycles ÷ ${hz} cycles per second:`, `${sci(cyc, 2)} / ${hz}`, cyc / hz, '', sci(cyc / hz, 2), 0.01),
+        calc('Convert to days (÷ 86,400 seconds per day):', `${sci(cyc / hz, 2)} / 86400`, days, '', sig(days), 0.03));
     }
     const emu = pick(r, [1, 2]), t = (ghz * 1e9 * s) / (emu * 1e6) / 3600;
-    return ask(`Silicon runs at ${ghz} GHz. How many hours does an emulator running at ${emu} MHz need to cover ${s} second${s > 1 ? 's' : ''} of it?`, qty(t, 'h', 0.03, sig(t)), `${ghz}e9 × ${s} / ${emu}e6 = ${sig(t * 3600)} s = ${sig(t)} h.`, 'Same idea, faster engine.');
+    const cyc = ghz * 1e9 * s;
+    return walk(ask(`Silicon runs at ${ghz} GHz. How many hours does an emulator running at ${emu} MHz need to cover ${s} second${s > 1 ? 's' : ''} of it?`, qty(t, 'h', 0.03, sig(t)), `${ghz}e9 × ${s} / ${emu}e6 = ${sig(t * 3600)} s = ${sig(t)} h.`, 'Same idea, faster engine.'),
+      'emulation time', 'Same idea as simulation: the emulator has to run the same number of cycles as the silicon did, but at its own (much slower) rate. Cycles ÷ rate gives seconds, and ÷ 3600 gives hours.',
+      calc(`Cycles in ${s} s of silicon:`, `${ghz}e9 × ${s}`, cyc, '', sci(cyc, 2), 0.01),
+      calc(`Emulator seconds = cycles ÷ ${emu}e6 cycles per second:`, `${sci(cyc, 2)} / ${emu}e6`, cyc / (emu * 1e6), '', sig(cyc / (emu * 1e6), 4), 0.01),
+      calc('Convert to hours (÷ 3600):', `${sig(cyc / (emu * 1e6), 4)} / 3600`, t, 'h', sig(t), 0.03));
   },
   (r, d) => {
     const n = pick(r, [1024, 4096, 16384]), f = pick(r, [1, 2, 4]);
-    if (d === 1) return ask(`A trace buffer stores ${n} entries, one per cycle at ${f} GHz. How much history does it hold, in ns?`, qty(n / f, 'ns', 0.01, sig(n / f)), `${n} cycles / ${f} GHz = ${sig(n / f)} ns. Tiny: the trigger has to fire very close to the bug.`, 'Entries × cycle time.');
+    const idea = 'A trace buffer records signals on each clock cycle into a small on-chip memory. It holds only as many entries as it has, so the time it covers is (entries × the time per cycle) = entries ÷ frequency. At f GHz, a cycle is 1/f ns.';
+    if (d === 1) return walk(ask(`A trace buffer stores ${n} entries, one per cycle at ${f} GHz. How much history does it hold, in ns?`, qty(n / f, 'ns', 0.01, sig(n / f)), `${n} cycles / ${f} GHz = ${sig(n / f)} ns. Tiny: the trigger has to fire very close to the bug.`, 'Entries × cycle time.'),
+      'trace buffer history', idea,
+      calc('History = entries ÷ frequency (GHz), in ns:', `${n} / ${f}`, n / f, 'ns', sig(n / f), 0.01));
     if (d === 2) {
       const c = pick(r, [4, 8, 16]);
-      return ask(`The ${n}-entry trace buffer at ${f} GHz only stores a cycle when the traced signals change, which happens on 1 cycle in ${c}. How much history, in ns?`, qty((n * c) / f, 'ns', 0.01, String((n * c) / f)), `${n} × ${c} / ${f} = ${(n * c) / f} ns. Compression and filtering stretch small buffers.`, 'Each entry now covers several cycles.');
+      return walk(ask(`The ${n}-entry trace buffer at ${f} GHz only stores a cycle when the traced signals change, which happens on 1 cycle in ${c}. How much history, in ns?`, qty((n * c) / f, 'ns', 0.01, String((n * c) / f)), `${n} × ${c} / ${f} = ${(n * c) / f} ns. Compression and filtering stretch small buffers.`, 'Each entry now covers several cycles.'),
+        'trace compression', `${idea} If an entry is only stored when something changes (1 cycle in ${c}), then each entry stands for about ${c} cycles, so the same buffer covers ${c} times as many cycles.`,
+        count('Cycles covered = entries × cycles per entry:', `${n} × ${c}`, n * c),
+        calc('History = cycles ÷ frequency (GHz), in ns:', `${n * c} / ${f}`, (n * c) / f, 'ns', String((n * c) / f), 0.01));
     }
     const w = pick(r, [5, 10, 20]), need = w * 1000 * f;
-    return ask(`You need ${w} µs of history of a signal that changes every cycle at ${f} GHz. How many entries must the trace buffer have?`, num(need), `${w} µs × ${f} GHz = ${need.toLocaleString('en-US')} entries. On-chip SRAM is expensive, so teams stream trace off-chip instead.`, 'Time × frequency.');
+    return walk(ask(`You need ${w} µs of history of a signal that changes every cycle at ${f} GHz. How many entries must the trace buffer have?`, num(need), `${w} µs × ${f} GHz = ${need.toLocaleString('en-US')} entries. On-chip SRAM is expensive, so teams stream trace off-chip instead.`, 'Time × frequency.'),
+      'sizing a trace buffer', `${idea} To find the size for a wanted history, turn it around: entries = time × frequency. Convert µs to ns first (× 1000), since GHz is cycles per ns.`,
+      count('The time in ns:', `${w} × 1000`, w * 1000),
+      count(`Entries = time in ns × ${f} cycles per ns:`, `${w * 1000} × ${f}`, need));
   },
   (r, d) => {
     const rate = pick(r, [0.1, 0.5, 2]), hrs = pick(r, [1, 4, 24]), lam = rate * hrs;
-    if (d === 1) return ask(`A bug shows up ${rate} times per hour on average. Expected occurrences in ${hrs} h?`, qty(lam, '', 0.02, sig(lam)), `${rate} per hour × ${hrs} h = ${sig(lam)} expected occurrences.`, 'Rate × time.');
-    if (d === 2) return ask(`A bug shows up ${rate} times per hour at random (Poisson). Probability of seeing it at least once in ${hrs} h, in %?`, qty((1 - Math.exp(-lam)) * 100, '%', 0.02, sig((1 - Math.exp(-lam)) * 100)), `1 - e^(-${sig(lam)}) = ${sig((1 - Math.exp(-lam)) * 100)}%.`, '1 - P(zero).');
+    const idea = 'A rare random bug occurring on average "rate" times per hour follows a Poisson process. Over h hours the expected number of occurrences is λ = rate × h. The probability of seeing NONE in that time is e^(-λ), so the probability of seeing it at least once is 1 - e^(-λ).';
+    if (d === 1) return walk(ask(`A bug shows up ${rate} times per hour on average. Expected occurrences in ${hrs} h?`, qty(lam, '', 0.02, sig(lam)), `${rate} per hour × ${hrs} h = ${sig(lam)} expected occurrences.`, 'Rate × time.'),
+      'expected occurrences', idea,
+      calc('λ = rate × time:', `${rate} × ${hrs}`, lam, '', sig(lam), 0.02));
+    if (d === 2) return walk(ask(`A bug shows up ${rate} times per hour at random (Poisson). Probability of seeing it at least once in ${hrs} h, in %?`, qty((1 - Math.exp(-lam)) * 100, '%', 0.02, sig((1 - Math.exp(-lam)) * 100)), `1 - e^(-${sig(lam)}) = ${sig((1 - Math.exp(-lam)) * 100)}%.`, '1 - P(zero).'),
+      'the chance of catching a rare bug', idea,
+      calc('λ = rate × time:', `${rate} × ${hrs}`, lam, '', sig(lam, 4), 0.005),
+      calc('P(at least once) = 1 - e^(-λ), as a %:', `(1 - e^(-${sig(lam, 4)})) × 100`, (1 - Math.exp(-lam)) * 100, '%', sig((1 - Math.exp(-lam)) * 100), 0.02));
     const t = -Math.log(0.05) / rate;
-    return ask(`A bug appears ${rate} times per hour at random. How many hours must the fix run clean to be 95% confident the bug would have shown up if it were still there?`, qty(t, 'h', 0.03, sig(t)), `Need e^(-${rate}·t) ≤ 0.05, so t = ln(20)/${rate} = ${sig(t)} h. "It ran overnight" is not proof for rare bugs.`, 'Solve 1 - e^(-rate·t) = 0.95.');
+    return walk(ask(`A bug appears ${rate} times per hour at random. How many hours must the fix run clean to be 95% confident the bug would have shown up if it were still there?`, qty(t, 'h', 0.03, sig(t)), `Need e^(-${rate}·t) ≤ 0.05, so t = ln(20)/${rate} = ${sig(t)} h. "It ran overnight" is not proof for rare bugs.`, 'Solve 1 - e^(-rate·t) = 0.95.'),
+      'how long to run a fix clean', `${idea} To be 95% sure you would have seen the bug, the chance of seeing nothing must be at most 5%: e^(-rate × t) = 0.05. Take the natural log of both sides: rate × t = -ln(0.05) = ln(20), so t = ln(20) ÷ rate.`,
+      calc('ln(20) = -ln(0.05):', 'ln(20)', Math.log(20), '', sig(Math.log(20), 4), 0.005),
+      calc('t = ln(20) ÷ rate, in hours:', `${sig(Math.log(20), 4)} / ${rate}`, t, 'h', sig(t), 0.03));
   },
   (r, d) => {
     const v1 = 0.7, v2 = 0.9, f1 = pick(r, [1.8, 2.0]), f2 = +(f1 + pick(r, [0.8, 1.0])).toFixed(1), k = (f2 - f1) / (v2 - v1);
+    const idea = 'A shmoo plot maps which combinations of voltage and frequency a chip passes. Fmax rises with voltage, roughly as a straight line over a small range. Given two points, the slope is (F2 - F1) ÷ (V2 - V1) in GHz per volt, and any other point on the line follows from it.';
     if (d < 3) {
       const v = pick(r, [0.75, 0.8, 0.85]), f = f1 + k * (v - v1);
-      return ask(`A shmoo plot shows Fmax = ${f1} GHz at ${v1} V and ${f2} GHz at ${v2} V, linear in between. Fmax at ${v} V, in GHz?`, qty(f, 'GHz', 0.02, sig(f)), `Slope = ${sig(k)} GHz/V. ${f1} + ${sig(k)} × ${sig(v - v1)} = ${sig(f)} GHz.`, 'Interpolate.');
+      return walk(ask(`A shmoo plot shows Fmax = ${f1} GHz at ${v1} V and ${f2} GHz at ${v2} V, linear in between. Fmax at ${v} V, in GHz?`, qty(f, 'GHz', 0.02, sig(f)), `Slope = ${sig(k)} GHz/V. ${f1} + ${sig(k)} × ${sig(v - v1)} = ${sig(f)} GHz.`, 'Interpolate.'),
+        'interpolating a shmoo line', idea,
+        calc('The slope, (F2 - F1) ÷ (V2 - V1), in GHz/V:', `(${f2} - ${f1}) / (${v2} - ${v1})`, k, '', sig(k, 4), 0.005),
+        calc(`Fmax at ${v} V = F1 + slope × (V - V1):`, `${f1} + ${sig(k, 4)} × (${v} - ${v1})`, f, 'GHz', sig(f), 0.02));
     }
     const ft = +(f2 + 0.2).toFixed(1), v = v1 + (ft - f1) / k;
-    return ask(`Fmax is ${f1} GHz at ${v1} V and ${f2} GHz at ${v2} V, and the line keeps going. Marketing wants ${ft} GHz. What voltage, in V?`, qty(v, 'V', 0.02, sig(v)), `${v1} + (${ft} - ${f1}) / ${sig(k)} = ${sig(v)} V. Power grows roughly with V² × f, so the last few hundred MHz are the most expensive.`, 'Extrapolate the line.');
+    return walk(ask(`Fmax is ${f1} GHz at ${v1} V and ${f2} GHz at ${v2} V, and the line keeps going. Marketing wants ${ft} GHz. What voltage, in V?`, qty(v, 'V', 0.02, sig(v)), `${v1} + (${ft} - ${f1}) / ${sig(k)} = ${sig(v)} V. Power grows roughly with V² × f, so the last few hundred MHz are the most expensive.`, 'Extrapolate the line.'),
+      'extrapolating a shmoo line', `${idea} To find the voltage for a wanted frequency, go backwards along the line: V = V1 + (F - F1) ÷ slope.`,
+      calc('The slope, in GHz/V:', `(${f2} - ${f1}) / (${v2} - ${v1})`, k, '', sig(k, 4), 0.005),
+      calc(`V = V1 + (F - F1) ÷ slope for F = ${ft} GHz:`, `${v1} + (${ft} - ${f1}) / ${sig(k, 4)}`, v, 'V', sig(v), 0.02));
   },
   (r) => concept(r, [
-    ['First silicon arrives. Right bring-up order?', 'Power rails and shorts, then clocks and reset, then JTAG and scan, then boot code, then the OS', ['Boot the OS immediately', 'Run the full test suite first', 'Overclock first'], 'Each step depends on the one before it: no boot without clocks, no clocks without clean power.'],
-    ['A test fails only at high frequency and low voltage, and passes when slowed down. What kind of bug?', 'An electrical speed path, not a logic bug', ['A logic bug', 'A software bug', 'A packaging defect'], 'Logic bugs fail at any speed. Failures that go away when slowed down point at timing: a speed path.'],
-    ['Silicon has almost no internal visibility. What helps most?', 'Designed-in debug: trace buffers, triggers, performance counters and scan dumps', ['printf in the RTL', 'An oscilloscope on the die', 'Re-running the simulation'], 'You cannot probe internal nodes, so observability must be designed in before tapeout.'],
-    ['A bug is found in A0. A metal-only fix is ready. What is the next stepping, and why is it cheap?', 'A1: only the metal masks change, and wafers held before metal can be finished quickly', ['B0: every mask is new', 'A0 again', 'C0: it skips B'], 'Metal-only changes (using spare cells) reuse the expensive base-layer masks and the wafers already processed up to metal.'],
-    ['A logic bug escapes to silicon. What can often work around it without new masks?', 'A chicken bit or microcode/firmware patch that disables or changes the feature', ['Raising the voltage', 'Cooling the chip', 'A new package'], 'Designers add disable bits to risky features for exactly this case; a small performance loss beats a respin.'],
-  ]),
+    ['First silicon arrives. Right bring-up order?', 'Power rails and shorts, then clocks and reset, then JTAG and scan, then boot code, then the OS', ['Boot the OS immediately', 'Run the full test suite first', 'Overclock first'], 'bring-up order', 'Each step needs the one before it to work: no boot without clocks, no clocks without clean power. So check power first (for shorts and right voltages), then clocks and reset, then the debug access (JTAG), then run simple boot code, and only then the operating system.', ['Before checking whether boot code runs, you need:', 'Working power, clocks and reset', ['The operating system', 'The customer workload']]],
+    ['A test fails only at high frequency and low voltage, and passes when slowed down. What kind of bug?', 'An electrical speed path, not a logic bug', ['A logic bug', 'A software bug', 'A packaging defect'], 'speed paths versus logic bugs', 'A logic bug gives the wrong answer no matter how slowly you run. A failure that goes away when you slow down or raise the voltage means a signal is arriving too late, a speed path: the logic is right but too slow.', ['A logic bug fails at:', 'Any speed', ['Only high speed', 'Only low voltage']]],
+    ['Silicon has almost no internal visibility. What helps most?', 'Designed-in debug: trace buffers, triggers, performance counters and scan dumps', ['printf in the RTL', 'An oscilloscope on the die', 'Re-running the simulation'], 'designing for debug', 'Once a chip is made, you cannot probe its internal wires. So visibility must be designed in before tapeout: buffers that record signals, triggers that stop them at the right moment, counters, and ways to dump internal state.', ['You can only see inside a finished chip through:', 'Debug hardware designed in beforehand', ['A probe on any wire', 'The RTL source']]],
+    ['A bug is found in A0. A metal-only fix is ready. What is the next stepping, and why is it cheap?', 'A1: only the metal masks change, and wafers held before metal can be finished quickly', ['B0: every mask is new', 'A0 again', 'C0: it skips B'], 'steppings and metal fixes', 'A chip is built layer by layer: transistors first (base layers), then metal wiring. A fix that only changes the wiring (using spare cells already there) needs new metal masks only. The letter stays (A1), and wafers held before the metal step can finish quickly.', ['A metal-only fix reuses:', 'The expensive base-layer masks', ['No masks', 'All new masks']]],
+    ['A logic bug escapes to silicon. What can often work around it without new masks?', 'A chicken bit or microcode/firmware patch that disables or changes the feature', ['Raising the voltage', 'Cooling the chip', 'A new package'], 'chicken bits', 'Designers add a control bit to risky new features, a "chicken bit", that can switch the feature off or back to a simpler behaviour. If the feature has a bug in silicon, firmware sets the bit: slightly slower, but no new masks.', ['A chicken bit lets you:', 'Disable a buggy feature from software', ['Raise the clock', 'Test the package']]],
+  ], (why) => `${why}.`),
 ]);
 
 export const postsiBoss = boss({
@@ -403,33 +623,61 @@ export const postsiBoss = boss({
 export const atePractice = practice('practice-ate', 'Production Test Drills', 'test cost, throughput, DPPM, yield, binning', [
   (r, d) => {
     const t = pick(r, [1, 2, 5]), c = pick(r, [0.02, 0.05]), s = tier(d, 1, pick(r, [2, 4]), pick(r, [4, 8])), cost = (t * c) / s;
-    return ask(`A test program takes ${t} s, tester time costs $${c}/s, and ${s > 1 ? `${s} dies are tested in parallel` : 'one die is tested at a time'}. Test cost per die, in cents?`, qty(cost * 100, '', 0.02, sig(cost * 100)), `${t} × $${c} / ${s} = $${sig(cost)} = ${sig(cost * 100)}¢. On a $2 chip, test cost matters a lot.`, 'Time × rate / sites.');
+    return walk(ask(`A test program takes ${t} s, tester time costs $${c}/s, and ${s > 1 ? `${s} dies are tested in parallel` : 'one die is tested at a time'}. Test cost per die, in cents?`, qty(cost * 100, '', 0.02, sig(cost * 100)), `${t} × $${c} / ${s} = $${sig(cost)} = ${sig(cost * 100)}¢. On a $2 chip, test cost matters a lot.`, 'Time × rate / sites.'),
+      'test cost per die', 'A tester is expensive and charges by the second. The cost of one test run is (test time × cost per second). If several dies ("sites") are tested at the same time, that cost is shared between them, so divide by the number of sites. There are 100 cents in a dollar.',
+      calc('The cost of one test run = time × rate, in dollars:', `${t} × ${c}`, t * c, '', sig(t * c, 4), 0.005),
+      ...(s > 1 ? [calc(`Shared by ${s} dies, per die, in dollars:`, `${sig(t * c, 4)} / ${s}`, cost, '', sig(cost, 4), 0.005)] : []),
+      calc('Convert dollars to cents (× 100):', `${sig(cost, 4)} × 100`, cost * 100, '', sig(cost * 100), 0.02));
   },
   (r, d) => {
     const t = pick(r, [0.5, 1, 2]), idx = pick(r, [0.2, 0.3, 0.5]), s = tier(d, 1, 4, pick(r, [8, 16])), uph = (3600 * s) / (t + idx);
-    return ask(`Test time ${t} s, handler index time ${idx} s, ${s} site${s > 1 ? 's' : ''}. Units per hour?`, qty(uph, '', 0.02, String(Math.round(uph))), `3600 × ${s} / (${t} + ${idx}) = ${Math.round(uph)} UPH. When test time shrinks, the index time dominates.`, 'Each cycle takes test + index time.');
+    return walk(ask(`Test time ${t} s, handler index time ${idx} s, ${s} site${s > 1 ? 's' : ''}. Units per hour?`, qty(uph, '', 0.02, String(Math.round(uph))), `3600 × ${s} / (${t} + ${idx}) = ${Math.round(uph)} UPH. When test time shrinks, the index time dominates.`, 'Each cycle takes test + index time.'),
+      'test throughput', 'The handler is the machine that puts each part into the tester and takes it out. Every cycle takes the test time PLUS the index time (the time the handler needs to swap parts). Each cycle finishes one part per site. There are 3600 seconds in an hour.',
+      calc('One cycle = test time + index time, in seconds:', `${t} + ${idx}`, t + idx, 's', sig(t + idx, 4), 0.005),
+      calc('Cycles per hour = 3600 ÷ cycle time:', `3600 / ${sig(t + idx, 4)}`, 3600 / (t + idx), '', sig(3600 / (t + idx), 5), 0.005),
+      ...(s > 1 ? [calc(`Each cycle tests ${s} parts, so units per hour:`, `${sig(3600 / (t + idx), 5)} × ${s}`, uph, '', String(Math.round(uph)), 0.02)] : [calc('Units per hour = cycles per hour × 1 part each:', `${sig(3600 / (t + idx), 5)} × 1`, uph, '', String(Math.round(uph)), 0.02)]));
   },
   (r, d) => {
     const y = pick(r, [0.7, 0.8, 0.9]), fc = tier(d, 0.95, pick(r, [0.98, 0.99]), pick(r, [0.995, 0.999])), dl = (1 - y ** (1 - fc)) * 1e6;
-    return ask(`Yield is ${y * 100}% and fault coverage is ${fc * 100}%. Estimated DPPM (Williams-Brown: DL = 1 - Y^(1 - FC))?`, qty(dl, '', 0.03, String(Math.round(dl))), `1 - ${y}^${sig(1 - fc)} = ${sig(dl / 1e6)} → ${Math.round(dl)} DPPM. Cars want single digits, so coverage has to be very close to 100%.`, 'Plug into the formula and scale to parts per million.');
+    const pw = y ** (1 - fc);
+    return walk(ask(`Yield is ${y * 100}% and fault coverage is ${fc * 100}%. Estimated DPPM (Williams-Brown: DL = 1 - Y^(1 - FC))?`, qty(dl, '', 0.03, String(Math.round(dl))), `1 - ${y}^${sig(1 - fc)} = ${sig(dl / 1e6)} → ${Math.round(dl)} DPPM. Cars want single digits, so coverage has to be very close to 100%.`, 'Plug into the formula and scale to parts per million.'),
+      'defect level (Williams-Brown)', 'Some defective parts pass the test because the test does not catch every fault. The Williams-Brown model estimates the fraction that escape: DL = 1 - Y^(1 - FC), with yield Y and fault coverage FC both as fractions. Multiply by a million for defective parts per million (DPPM). Because the answer is tiny, keep several decimals in the middle step.',
+      calc('The exponent 1 - FC:', `1 - ${fc}`, 1 - fc, '', sig(1 - fc, 4), 0.005),
+      calc('Y to that power (give 6 decimals):', `${y}^${sig(1 - fc, 4)}`, pw, '', pw.toFixed(6), 0.00001),
+      calc('DPPM = (1 - that) × 1,000,000:', `(1 - ${pw.toFixed(6)}) × 1000000`, dl, '', String(Math.round(dl)), 0.03));
   },
   (r, d) => {
     const ws = pick(r, [0.85, 0.9]), as = pick(r, [0.98, 0.99]), ft = pick(r, [0.95, 0.97]);
-    if (d < 3) return ask(`Wafer sort yield ${ws * 100}%, assembly yield ${as * 100}%, final test yield ${ft * 100}%. Overall yield, in %?`, qty(ws * as * ft * 100, '%', 0.02, sig(ws * as * ft * 100)), `${ws} × ${as} × ${ft} = ${sig(ws * as * ft * 100)}%.`, 'Multiply the stages.');
+    if (d < 3) return walk(ask(`Wafer sort yield ${ws * 100}%, assembly yield ${as * 100}%, final test yield ${ft * 100}%. Overall yield, in %?`, qty(ws * as * ft * 100, '%', 0.02, sig(ws * as * ft * 100)), `${ws} × ${as} × ${ft} = ${sig(ws * as * ft * 100)}%.`, 'Multiply the stages.'),
+      'combined yield', 'A part has to survive every stage to ship: the chance of passing all of them is the product of the chances of passing each one (as fractions), not the average. Multiply, then convert to a percentage.',
+      calc('Wafer sort × assembly:', `${ws} × ${as}`, ws * as, '', sig(ws * as, 4), 0.005),
+      calc('Times final test, as a % (× 100):', `${sig(ws * as, 4)} × ${ft} × 100`, ws * as * ft * 100, '%', sig(ws * as * ft * 100), 0.02));
     const pc = pick(r, [5, 10]), cost = pc / (as * ft);
-    return ask(`A known-good die costs $${pc} after wafer sort. Assembly yield ${as * 100}%, final test yield ${ft * 100}%, and failures are scrapped with their package. Silicon cost per shipped part, in $?`, qty(cost, '', 0.02, sig(cost)), `$${pc} / (${as} × ${ft}) = $${sig(cost)}. Better wafer sort (catching more before packaging) cuts the waste.`, 'Divide by the downstream yields.');
+    return walk(ask(`A known-good die costs $${pc} after wafer sort. Assembly yield ${as * 100}%, final test yield ${ft * 100}%, and failures are scrapped with their package. Silicon cost per shipped part, in $?`, qty(cost, '', 0.02, sig(cost)), `$${pc} / (${as} × ${ft}) = $${sig(cost)}. Better wafer sort (catching more before packaging) cuts the waste.`, 'Divide by the downstream yields.'),
+      'cost per shipped part', 'Dies that fail after assembly or at final test are thrown away, but their silicon still had to be paid for. So the cost of each part that ships is the cost of a good die divided by the fraction of parts that survive the later stages (assembly yield × final test yield).',
+      calc('The fraction surviving the later stages, assembly × final test:', `${as} × ${ft}`, as * ft, '', sig(as * ft, 4), 0.005),
+      calc('Cost per shipped part = die cost ÷ that fraction, in dollars:', `${pc} / ${sig(as * ft, 4)}`, cost, '', sig(cost), 0.02));
   },
   (_r, d) => {
     const bins = [[0.2, 400], [0.5, 300], [0.3, 200]] as const, asp = bins.reduce((a, [f, p]) => a + f * p, 0);
-    if (d < 3) return ask(`Speed binning: 20% of parts sell at $400, 50% at $300, 30% at $200. Average selling price, in $?`, qty(asp, '', 0.01, String(asp)), `0.2 × 400 + 0.5 × 300 + 0.3 × 200 = $${asp}.`, 'Weighted average.');
-    return ask('Binning: 20% at $400, 50% at $300, 30% at $200. A process fix moves 10 points from the $200 bin to the $400 bin. New average price, in $?', qty(asp + 0.1 * 200, '', 0.01, String(asp + 0.1 * 200)), `+0.1 × ($400 - $200) = +$20 → $${asp + 20}. Speed-bin mix is money.`, 'Only the moved fraction changes.');
+    const idea = 'Speed binning sorts parts by the speed they can run at, and each bin sells for a different price. The average selling price is the average of the bin prices weighted by the fraction of parts in each bin: add up (fraction × price).';
+    if (d < 3) return walk(ask(`Speed binning: 20% of parts sell at $400, 50% at $300, 30% at $200. Average selling price, in $?`, qty(asp, '', 0.01, String(asp)), `0.2 × 400 + 0.5 × 300 + 0.3 × 200 = $${asp}.`, 'Weighted average.'),
+      'the weighted average price', idea,
+      calc('The $400 bin contributes fraction × price:', '0.2 × 400', 80, '', '80', 0.001),
+      calc('The $300 bin:', '0.5 × 300', 150, '', '150', 0.001),
+      calc('The $200 bin, then add all three:', '0.3 × 200 + 80 + 150', asp, '', String(asp), 0.01));
+    return walk(ask('Binning: 20% at $400, 50% at $300, 30% at $200. A process fix moves 10 points from the $200 bin to the $400 bin. New average price, in $?', qty(asp + 0.1 * 200, '', 0.01, String(asp + 0.1 * 200)), `+0.1 × ($400 - $200) = +$20 → $${asp + 20}. Speed-bin mix is money.`, 'Only the moved fraction changes.'),
+      'the value of a better bin mix', `${idea} After the fix the fractions are 30% at $400, 50% at $300, 20% at $200. (Or: only the moved 10% changes, and each moved part is worth $200 more.)`,
+      calc('New contribution of the $400 bin:', '0.3 × 400', 120, '', '120', 0.001),
+      calc('New contribution of the $200 bin:', '0.2 × 200', 40, '', '40', 0.001),
+      calc('Add the unchanged $300 bin (0.5 × 300 = 150) for the new average:', '120 + 150 + 40', asp + 20, '', String(asp + 20), 0.01));
   },
   (r) => concept(r, [
-    ['Difference between wafer sort and final test?', 'Wafer sort probes each die before dicing, so bad dies are not packaged; final test checks packaged parts, often at temperature and speed', ['They are the same', 'Final test happens first', 'Wafer sort tests only memory'], 'Sort saves packaging cost on bad dies; final test catches assembly damage and checks speed and temperature specs.'],
-    ['Why do some parts get burn-in?', 'To trigger infant-mortality failures before shipping, under heat and high voltage', ['To make them faster', 'To program fuses', 'To test the package only'], 'Weak parts fail early (the bathtub curve); stress makes them fail in the factory instead of at the customer.'],
-    ['What does IDDQ testing look for?', 'Abnormal quiescent supply current that reveals shorts and leakage defects logic tests miss', ['Clock frequency', 'Timing paths', 'Bit errors in memory'], 'A static CMOS circuit draws almost no current at rest, so a short shows up as extra current even when the logic output is right.'],
-    ['What does adaptive test do?', 'Uses data from earlier dies and test steps to add or skip tests per part, cutting cost without losing quality', ['Changes the chip design', 'Tests only one die per wafer', 'Uses random test patterns'], 'Statistics from earlier dies show which tests rarely fail, and which parts look risky and need more tests.'],
-  ]),
+    ['Difference between wafer sort and final test?', 'Wafer sort probes each die before dicing, so bad dies are not packaged; final test checks packaged parts, often at temperature and speed', ['They are the same', 'Final test happens first', 'Wafer sort tests only memory'], 'two test stages', 'Wafer sort tests bare dies on the wafer with needle probes, so bad dies are found before the cost of packaging is spent on them. Final test happens after packaging, to catch assembly damage and to verify speed and temperature specs.', ['Wafer sort happens:', 'Before packaging', ['After packaging', 'After shipping']]],
+    ['Why do some parts get burn-in?', 'To trigger infant-mortality failures before shipping, under heat and high voltage', ['To make them faster', 'To program fuses', 'To test the package only'], 'burn-in', 'Failures are more common very early in a part\'s life (infant mortality) and late (wear-out). Running parts hot and at high voltage for a while ages weak ones quickly, so they fail in the factory instead of in the customer\'s product.', ['Burn-in makes weak parts fail:', 'In the factory, before shipping', ['At the customer', 'Never']]],
+    ['What does IDDQ testing look for?', 'Abnormal quiescent supply current that reveals shorts and leakage defects logic tests miss', ['Clock frequency', 'Timing paths', 'Bit errors in memory'], 'IDDQ', 'A CMOS chip that is not switching draws almost no supply current. A defect such as a short between wires makes a path for current even at rest, so measuring the quiescent current (IDDQ) can reveal it even when the logic outputs are still right.', ['A healthy idle CMOS chip draws:', 'Almost no current', ['A lot of current', 'Random current']]],
+    ['What does adaptive test do?', 'Uses data from earlier dies and test steps to add or skip tests per part, cutting cost without losing quality', ['Changes the chip design', 'Tests only one die per wafer', 'Uses random test patterns'], 'adaptive test', 'Test data from earlier dies shows which tests almost never fail and which parts look marginal. Adaptive test then skips the low-value tests on healthy parts and adds extra ones on suspicious parts, saving time without letting more bad parts escape.', ['Adaptive test spends extra test time on:', 'Parts that look suspicious', ['Every part equally', 'No part']]],
+  ], (why) => `${why}.`),
 ]);
 
 export const testBoss = boss({
@@ -454,30 +702,51 @@ export const testBoss = boss({
 export const emuPractice = practice('practice-emu', 'Prototyping Drills', 'LUTs, capacity, partitioning, pin multiplexing, emulation speed', [
   (r, d) => {
     const k = tier(d, 4, 6, pick(r, [5, 6]));
-    if (d < 3) return ask(`How many configuration bits does a ${k}-input LUT hold?`, num(2 ** k), `One per truth-table row: 2^${k} = ${2 ** k}.`, 'A LUT is a tiny memory addressed by its inputs.');
+    const idea = 'A look-up table (LUT) is how an FPGA implements logic: a tiny memory with k address inputs, holding one output bit for each possible input combination (the truth table). k inputs make 2^k combinations, so a k-input LUT has 2^k configuration bits.';
+    if (d < 3) return walk(ask(`How many configuration bits does a ${k}-input LUT hold?`, num(2 ** k), `One per truth-table row: 2^${k} = ${2 ** k}.`, 'A LUT is a tiny memory addressed by its inputs.'),
+      'LUT size', idea,
+      count(`${k} inputs have this many different combinations (rows of the truth table):`, `2^${k}`, 2 ** k));
     const n = pick(r, [8, 9, 12]), l = Math.ceil((n - 1) / (k - 1));
-    return ask(`An ${n}-input AND gate is built from ${k}-input LUTs in a tree. How many LUTs at minimum?`, num(l), `Each LUT reduces the input count by ${k - 1}: ceil((${n} - 1)/(${k} - 1)) = ${l}.`, 'Each LUT eats k inputs and makes 1.');
+    return walk(ask(`An ${n}-input AND gate is built from ${k}-input LUTs in a tree. How many LUTs at minimum?`, num(l), `Each LUT reduces the input count by ${k - 1}: ceil((${n} - 1)/(${k} - 1)) = ${l}.`, 'Each LUT eats k inputs and makes 1.'),
+      'mapping a wide gate onto LUTs', `${idea} A wide gate is built as a tree: each ${k}-input LUT takes ${k} signals and produces 1, so it reduces the number of signals by ${k} - 1 = ${k - 1}. Start with ${n} signals and finish with 1: you must remove ${n - 1} signals.`,
+      count('Each LUT removes this many signals (inputs minus its 1 output):', `${k} - 1`, k - 1),
+      count('Signals to remove, from the starting inputs down to 1:', `${n} - 1`, n - 1),
+      count('LUTs needed = signals to remove ÷ removed per LUT, rounded up:', `ceil(${n - 1} / ${k - 1})`, l));
   },
   (r, d) => {
     const cyc = pick(r, [2, 5, 20]), f = tier(d, 1, pick(r, [1, 2]), 0.5), min = (cyc * 1e9) / (f * 1e6) / 60;
-    return ask(`Booting Linux takes ${cyc} billion cycles. On an emulator at ${f} MHz, how many minutes?`, qty(min, 'min', 0.03, sig(min)), `${cyc}e9 / ${f}e6 = ${sig(min * 60)} s = ${sig(min)} min. RTL simulation at 100 Hz would take years.`, 'Cycles / frequency.');
+    return walk(ask(`Booting Linux takes ${cyc} billion cycles. On an emulator at ${f} MHz, how many minutes?`, qty(min, 'min', 0.03, sig(min)), `${cyc}e9 / ${f}e6 = ${sig(min * 60)} s = ${sig(min)} min. RTL simulation at 100 Hz would take years.`, 'Cycles / frequency.'),
+      'boot time on an emulator', 'Time = number of cycles ÷ cycles per second. An emulator at f MHz does f million cycles per second. That gives seconds; divide by 60 for minutes.',
+      calc('Seconds = cycles ÷ rate (billion = 1e9, MHz = 1e6):', `${cyc}e9 / ${f}e6`, (cyc * 1e9) / (f * 1e6), 's', sig((cyc * 1e9) / (f * 1e6), 4), 0.005),
+      calc('Convert to minutes (÷ 60):', `${sig((cyc * 1e9) / (f * 1e6), 4)} / 60`, min, 'min', sig(min), 0.03));
   },
   (r, d) => {
     const gates = pick(r, [200, 500, 1000]), cap = pick(r, [40, 60]), fill = tier(d, 1, 0.7, 0.6), n = Math.ceil(gates / (cap * fill));
-    return ask(`A design has ${gates} million ASIC gates. Each FPGA holds about ${cap} million${fill < 1 ? `, but only ${fill * 100}% can be used before routing and timing break` : ''}. How many FPGAs?`, num(n), `${gates} / (${cap}${fill < 1 ? ` × ${fill}` : ''}) = ${sig(gates / (cap * fill))} → ${n}. Full FPGAs do not route, so real prototypes plan for 50 to 70%.`, 'Round up.');
+    return walk(ask(`A design has ${gates} million ASIC gates. Each FPGA holds about ${cap} million${fill < 1 ? `, but only ${fill * 100}% can be used before routing and timing break` : ''}. How many FPGAs?`, num(n), `${gates} / (${cap}${fill < 1 ? ` × ${fill}` : ''}) = ${sig(gates / (cap * fill))} → ${n}. Full FPGAs do not route, so real prototypes plan for 50 to 70%.`, 'Round up.'),
+      'how many FPGAs', 'The number of FPGAs is the design size divided by the usable capacity of one FPGA, rounded up (you cannot buy part of one). A full FPGA will not route or meet timing, so the usable capacity is the capacity times the fill fraction.',
+      ...(fill < 1 ? [calc('Usable gates per FPGA = capacity × fill, in millions:', `${cap} × ${fill}`, cap * fill, '', sig(cap * fill, 4), 0.005)] : []),
+      calc('Design size ÷ usable capacity:', `${gates} / ${sig(cap * fill, 4)}`, gates / (cap * fill), '', sig(gates / (cap * fill), 4), 0.005),
+      count('Round up to whole FPGAs:', `ceil(${sig(gates / (cap * fill), 4)})`, n));
   },
   (r, d) => {
     const sig0 = pick(r, [2000, 5000, 8000]), pins = pick(r, [500, 1000]), ratio = Math.ceil(sig0 / pins);
-    if (d < 3) return ask(`${sig0} signals cross between two FPGAs that share ${pins} pins. At minimum, how many signals must share each pin (TDM ratio)?`, num(ratio), `ceil(${sig0} / ${pins}) = ${ratio}.`, 'Signals / pins, rounded up.');
+    const idea = 'When a design is split across FPGAs, the signals that cross between them need pins. If there are more signals than pins, several signals take turns on each pin (time-division multiplexing, TDM). The TDM ratio is the number of signals per pin: signals ÷ pins, rounded up.';
+    if (d < 3) return walk(ask(`${sig0} signals cross between two FPGAs that share ${pins} pins. At minimum, how many signals must share each pin (TDM ratio)?`, num(ratio), `ceil(${sig0} / ${pins}) = ${ratio}.`, 'Signals / pins, rounded up.'),
+      'the TDM ratio', idea,
+      calc('Signals ÷ pins:', `${sig0} / ${pins}`, sig0 / pins, '', sig(sig0 / pins, 4), 0.005),
+      count('Round up to a whole number of signals per pin:', `ceil(${sig(sig0 / pins, 4)})`, ratio));
     const io = pick(r, [800, 1200]), f = io / ratio / 2;
-    return ask(`${sig0} signals cross ${pins} pins, so the TDM ratio is ${ratio}. Pins toggle at ${io} Mb/s, and each design clock needs about 2 TDM frames. Max design clock, in MHz?`, qty(f, 'MHz', 0.03, sig(f)), `${io} / ${ratio} / 2 = ${sig(f)} MHz. Partitioning to cut the crossing signals speeds up the whole prototype.`, 'Pin rate / ratio / 2.');
+    return walk(ask(`${sig0} signals cross ${pins} pins, so the TDM ratio is ${ratio}. Pins toggle at ${io} Mb/s, and each design clock needs about 2 TDM frames. Max design clock, in MHz?`, qty(f, 'MHz', 0.03, sig(f)), `${io} / ${ratio} / 2 = ${sig(f)} MHz. Partitioning to cut the crossing signals speeds up the whole prototype.`, 'Pin rate / ratio / 2.'),
+      'the speed limit from pin multiplexing', `${idea} Each pin moves one bit per tick at the pin rate. In one design clock cycle, every signal on the pin needs a turn, so a design clock needs ratio ticks (a "frame"), and about 2 frames for the full round trip. So the design clock = pin rate ÷ ratio ÷ 2.`,
+      calc('One frame takes `ratio` ticks, so frames per second, in millions = pin rate ÷ ratio:', `${io} / ${ratio}`, io / ratio, '', sig(io / ratio, 4), 0.005),
+      calc('Two frames per design clock, so the design clock in MHz:', `${sig(io / ratio, 4)} / 2`, f, 'MHz', sig(f), 0.03));
   },
   (r) => concept(r, [
-    ['Rank by speed: RTL simulation, emulation, FPGA prototype.', 'FPGA prototype (~10-100 MHz) > emulation (~1-5 MHz) > simulation (Hz to kHz)', ['Simulation is fastest', 'Emulation is fastest', 'They are equal'], 'Each step down in speed buys visibility and faster turnaround.'],
-    ['ASIC RTL uses gated clocks everywhere. What happens on an FPGA?', 'Gated clocks are converted to clock enables on the global clock, because FPGA clock networks cannot be gated freely', ['Nothing changes', 'The FPGA fails to program', 'The clocks run faster'], 'FPGAs have a few dedicated low-skew clock trees; gating a clock in logic adds skew and glitches, so tools convert gates to enables.'],
-    ['What is transaction-based co-emulation?', 'The DUT runs in the emulator while the testbench runs on a host and exchanges transactions, not cycle-by-cycle signals', ['Two emulators racing', 'Simulation of an FPGA', 'Emulating the testbench only'], 'Signal-level communication with a host would crawl; exchanging whole transactions keeps the emulator running at full speed.'],
-    ['Why prefer an emulator over an FPGA prototype for debug?', 'An emulator can capture every signal and compile fast; a prototype is faster but hard to see into', ['Emulators are faster', 'Prototypes cannot run software', 'Emulators need no RTL'], 'Teams use the emulator to find bugs and the prototype to run lots of software.'],
-  ]),
+    ['Rank by speed: RTL simulation, emulation, FPGA prototype.', 'FPGA prototype (~10-100 MHz) > emulation (~1-5 MHz) > simulation (Hz to kHz)', ['Simulation is fastest', 'Emulation is fastest', 'They are equal'], 'the speed ladder', 'Simulation is software executing the design, slow but it shows everything. Emulation maps the design onto dedicated hardware, much faster, with good visibility. An FPGA prototype is the fastest, but hardest to see into. You trade visibility for speed.', ['As speed goes up, visibility into the design goes:', 'Down', ['Up', 'Stays the same']]],
+    ['ASIC RTL uses gated clocks everywhere. What happens on an FPGA?', 'Gated clocks are converted to clock enables on the global clock, because FPGA clock networks cannot be gated freely', ['Nothing changes', 'The FPGA fails to program', 'The clocks run faster'], 'clock gating on an FPGA', 'An FPGA has a few special low-skew clock networks. Putting gating logic on a clock adds delay and glitches, so the tools convert clock gates into a clock enable: the flop always sees the real clock but only acts when enabled.', ['A clock enable lets a flop:', 'Skip updates while keeping the same clock', ['Change its clock', 'Run faster']]],
+    ['What is transaction-based co-emulation?', 'The DUT runs in the emulator while the testbench runs on a host and exchanges transactions, not cycle-by-cycle signals', ['Two emulators racing', 'Simulation of an FPGA', 'Emulating the testbench only'], 'transaction-based emulation', 'If the testbench on the host had to talk to the emulator on every clock cycle, the host would slow everything down. Instead they exchange whole transactions (a read, a write, a packet), so the emulator can run at full speed in between.', ['Exchanging whole transactions instead of each cycle:', 'Keeps the emulator from waiting on the host', ['Makes it slower', 'Removes the testbench']]],
+    ['Why prefer an emulator over an FPGA prototype for debug?', 'An emulator can capture every signal and compile fast; a prototype is faster but hard to see into', ['Emulators are faster', 'Prototypes cannot run software', 'Emulators need no RTL'], 'emulator versus prototype', 'Emulators are built for visibility: they can record any signal and recompile the design quickly after a fix. FPGA prototypes run faster but internal signals are hard to reach. Teams use the emulator to find bugs, and the prototype to run lots of software.', ['For finding a bug inside the design, you want:', 'Visibility into every signal', ['The highest clock speed', 'The cheapest board']]],
+  ], (why) => `${why}.`),
 ]);
 
 export const fpgaBoss = boss({
