@@ -22,6 +22,7 @@ function viewEl(v: View): HTMLElement {
   if (v.kind === 'table') {
     return h('div', { class: 'arch-view' }, v.caption ? h('h4', null, v.caption) : '', h('div', { class: 'arch-scroll' }, h('table', { class: 'arch-table' }, h('thead', null, h('tr', null, ...v.head.map((x) => h('th', null, x)))), h('tbody', null, ...v.rows.map((r, i) => h('tr', { class: v.classes?.[i] ?? '' }, ...r.map((c) => h('td', null, String(c)))))))));
   }
+  if (v.kind === 'grid') return h('div', { class: 'arch-view' }, v.caption ? h('h4', null, v.caption) : '', h('div', { class: 'arch-scroll' }, h('table', { class: 'arch-grid' }, h('tbody', null, ...v.cells.map((row) => h('tr', null, ...row.map((c) => h('td', { class: c.c ?? '' }, c.t))))))));
   return h('div', { class: 'arch-view' }, v.caption ? h('h4', null, v.caption) : '', ...v.items.map((it) => h('div', { class: 'arch-bar' }, h('span', { class: 'lbl' }, it.label), h('span', { class: 'track' }, h('span', { class: 'fill', style: `width:${Math.min(100, (100 * it.value) / Math.max(1, it.of))}%` })), h('span', { class: 'num dim small' }, String(it.value)))));
 }
 
@@ -98,7 +99,7 @@ export function archPage(id: string): HTMLElement {
     last = res;
     goalList.replaceChildren(...res.goals.map((g) => h('li', { class: g.ok ? 'ok' : 'bad' }, h('span', { class: 'mark' }, g.ok ? '✓' : '✗'), h('span', null, g.label, g.note ? h('span', { class: 'dim small' }, ` — ${g.note}`) : ''))));
     metricBox.replaceChildren(...res.metrics.map(([k, v]) => h('div', { class: 'arch-metric' }, h('span', { class: 'dim small' }, k), h('b', null, v))));
-    viewBox.replaceChildren(res.view ? viewEl(res.view) : '');
+    viewBox.replaceChildren(...[res.view, res.extra].map((x) => (x ? viewEl(x) : '')));
     ed?.markLines(res.error?.line ? [res.error.line] : [], []);
     if (res.error) { status.className = 'status err'; status.textContent = res.error.message + (res.error.line ? ` (line ${res.error.line})` : ''); }
     else if (res.goals.every((g) => g.ok)) { status.className = 'status ok'; status.textContent = `All ${res.goals.length} goals met. Submit to bank the result.`; }

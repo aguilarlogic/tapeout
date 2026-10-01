@@ -14,12 +14,15 @@ export interface Goal { label: string; ok: boolean; note?: string }
 export type View =
   | { kind: 'diagram'; rows: PipeRow[]; caption?: string }
   | { kind: 'table'; head: string[]; rows: (string | number)[][]; caption?: string; /** a CSS class per row */ classes?: string[] }
+  | { kind: 'grid'; cells: { t: string; c?: string }[][]; caption?: string }
   | { kind: 'bars'; items: { label: string; value: number; of: number }[]; caption?: string };
 
 export interface ArchResult {
   goals: Goal[];
   metrics: [string, string][];
   view?: View;
+  /** a second view shown under the first */
+  extra?: View;
   error?: { message: string; line?: number };
 }
 

@@ -483,3 +483,7 @@ table.rv-fmt th, table.rv-fmt td { border: 1px solid var(--line, #2a313b); paddi
 pre.rv-prog { max-height: 260px; overflow: auto; }
 .arch-field.text { width: 100%; }
 textarea.arch-text { width: 100%; max-width: 520px; background: var(--panel2, #12161c); color: inherit; border: 1px solid var(--line, #2a313b); border-radius: 6px; padding: 6px 8px; font: 13px/1.4 ui-monospace, Menlo, monospace; resize: vertical; }
+table.arch-grid { border-collapse: collapse; font: 11px/1.2 ui-monospace, Menlo, monospace; }
+table.arch-grid td { border: 1px solid var(--line, #2a313b); min-width: 34px; height: 26px; text-align: center; padding: 1px 3px; color: var(--dim, #9aa); }
+table.arch-grid td.cell { background: #2f5440; color: #fff; } table.arch-grid td.pad { background: #3a3358; color: #fff; } table.arch-grid td.blk { background: #444; }
+table.arch-grid td.bad { background: #6a2d2d; color: #fff; } table.arch-grid td.use { background: #3b4a36; color: #dfe; } table.arch-grid td.over { background: #7a2b2b; color: #fff; }

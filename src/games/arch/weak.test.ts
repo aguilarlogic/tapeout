@@ -65,4 +65,14 @@ describe('weak or wrong answers are rejected', () => {
     const res = inst.run({ ...defaults(inst.controls), ...inst.solution.values, q1: 1 });
     expect(res.goals.some((g) => !g.ok && /one chain/.test(g.label))).toBe(true);
   });
+  it('PD: overlapping or unplaced cells, lazy routing, over-budget grids', () => {
+    expect(ok(run('pd-place', 1, { q1: 0, pl: 'c1 1 1\nc2 1 1' }))).toBe(false);
+    expect(ok(run('pd-congestion', 1, {}))).toBe(false);
+    expect(ok(run('pd-cts', 1, { depth: '0', size: '4' }))).toBe(false);
+    expect(ok(run('pd-ir', 1, { width: '4', bumps: '16' }))).toBe(false);
+    const inst = findArchLevel('pd-floorplan')!.build(rng(1));
+    const dup = inst.run({ ...defaults(inst.controls), ...inst.solution.values, s0: String(inst.solution.values.s1) });
+    expect(dup.goals.some((g) => !g.ok && /exactly once/.test(g.label))).toBe(true);
+    expect(ok(run('pd-boss', 1, { pl: 'c1 0 0' }))).toBe(false);
+  });
 });

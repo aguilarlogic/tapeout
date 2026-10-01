@@ -122,7 +122,7 @@ export const SKILLS: Skill[] = [
   S('interconnect', 'Architecture', 'Buses, NoCs, SerDes, PCIe/CXL', ['arch', 'soc', 'rtl', 'dv', 'board'], ['bus', 'noc', 'serdes'], ['practice-bus', 'practice-noc', 'practice-serdes'], ['boss-interconnect']),
   S('perf', 'Architecture', 'Performance modeling (gem5, roofline)', ['arch', 'ai'], ['perf'], ['practice-perf'], ['boss-perf']),
   S('sta', 'Implementation', 'Static timing analysis', ['pd', 'rtl', 'circuit', 'libchar'], ['sta'], ['sta-slack', 'sta-battles', 'sta-hold', 'sta-skew', 'sta-pipeline', 'practice-sta'], ['boss-sta']),
-  S('pd', 'Implementation', 'Physical design: floorplan, place, CTS, route, signoff', ['pd'], ['pnr'], ['practice-pnr'], ['boss-pd'], 'placement & CTS labs'),
+  S('pd', 'Implementation', 'Physical design: floorplan, place, CTS, route, signoff', ['pd'], ['pnr'], ['practice-pnr', 'pd-place', 'pd-congestion', 'pd-cts', 'pd-ir', 'pd-floorplan'], ['boss-pd', 'pd-boss'], ''),
   S('circuit', 'Implementation', 'Transistor-level circuit design and layout', ['circuit', 'libchar', 'memory', 'io'], ['vlsi', 'mos'], ['cmos-inv', 'cmos-nand', 'cmos-nor', 'cmos-and', 'cmos-aoi', 'practice-vlsi'], ['boss-circuit']),
   S('lowpower', 'Implementation', 'Low-power design: gating, voltage domains, DVFS', ['rtl', 'pd', 'soc', 'circuit'], ['power'], ['practice-power'], ['boss-lowpower']),
   S('board', 'Implementation', 'Board design, SI and PI', ['board', 'pkg', 'io'], ['pcb', 'sipi'], ['pcb-first-light', 'pcb-crossing', 'pcb-decouple', 'pcb-return-path', 'pcb-diff-pair', 'practice-pcb'], ['boss-board', 'inc-link', 'clab-boss-pdn']),
