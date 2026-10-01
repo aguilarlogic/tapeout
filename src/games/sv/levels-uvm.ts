@@ -283,7 +283,7 @@ const U_SB_SEQ = U_SB({
 });
 
 const uvmSeq: TbLevel = {
-  id: 'uvm-seq', title: 'Write a sequence', concept: 'uvm_sequence, body(), uvm_do_with, sequence items', xp: 130, tier: 'guided',
+  id: 'tbu-seq', title: 'Write a sequence', concept: 'uvm_sequence, body(), uvm_do_with, sequence items', xp: 130, tier: 'guided',
   ticket: 'The environment is built. Your job is the stimulus: a sequence that targets the corner cases the spec lists.',
   build: () => ({
     mode: 'write',
@@ -352,7 +352,7 @@ endclass
 `);
 
 const uvmDrv: TbLevel = {
-  id: 'uvm-driver', title: 'Write the driver', concept: 'uvm_driver, seq_item_port handshake, config_db get, virtual interface', xp: 140, tier: 'guided',
+  id: 'tbu-driver', title: 'Write the driver', concept: 'uvm_driver, seq_item_port handshake, config_db get, virtual interface', xp: 140, tier: 'guided',
   ticket: 'Items arrive from the sequencer. Turn them into pin activity, and tell the sequencer when each is finished.',
   build: () => ({
     mode: 'write',
@@ -462,7 +462,7 @@ endclass
 `).replace('foreach (CORNERS[i]) repeat (2) begin\n      alu_txn t;\n      `uvm_do_with(t, { a == CORNERS[i]; })\n    end', 'for (int i = 0; i < 4; i++) begin\n      alu_txn t;\n      `uvm_do_with(t, { op == i; a == 255; b == 255; })\n    end\n    for (int i = 0; i < 4; i++) begin\n      alu_txn t;\n      `uvm_do_with(t, { op == i; a == 0; b == 255; })\n    end\n    for (int i = 0; i < 4; i++) begin\n      alu_txn t;\n      `uvm_do_with(t, { op == i; a == 3; b == 7; })\n    end');
 
 const uvmMonSb: TbLevel = {
-  id: 'uvm-monsb', title: 'Monitor and scoreboard', concept: 'uvm_monitor, analysis ports, uvm_analysis_imp, scoreboard checking', xp: 160, tier: 'guided',
+  id: 'tbu-monsb', title: 'Monitor and scoreboard', concept: 'uvm_monitor, analysis ports, uvm_analysis_imp, scoreboard checking', xp: 160, tier: 'guided',
   ticket: 'Make the environment notice when the ALU is wrong. Four hidden bugs are in the design; the stimulus is good, so the checking is on you.',
   build: () => ({
     mode: 'write',
@@ -508,7 +508,7 @@ const configEnv = [U_HEAD, U_TXN, U_DRV, U_MON.replace('"vif", vif', '"vintf", v
 const configSolution = [U_HEAD, U_TXN, U_DRV, U_MON, U_SB(), U_AGENT, U_ENV(), U_SEQ(40), U_TEST, U_TOP].join('\n');
 
 const uvmConfig: TbLevel = {
-  id: 'uvm-config', title: 'The interface never arrives', concept: 'uvm_config_db set/get, field names, hierarchy paths, ordering', xp: 150, tier: 'guided',
+  id: 'tbu-config', title: 'The interface never arrives', concept: 'uvm_config_db set/get, field names, hierarchy paths, ordering', xp: 150, tier: 'guided',
   ticket: 'The test dies at time 0 with UVM_FATAL "no virtual interface". Three separate mistakes hide behind that one message.',
   build: () => ({
     mode: 'fix',
@@ -563,7 +563,7 @@ const factSolution = factStarter
 const U_SB_CORNER = U_SB({ fields: '  int corner = 0;', code: "    if ((t.a == 8'h00 || t.a == 8'hFF) && (t.b == 8'h00 || t.b == 8'hFF)) corner++;", report: '    $display("corner %0d", corner);' });
 
 const uvmFactory: TbLevel = {
-  id: 'uvm-factory', title: 'Swap a type with the factory', concept: 'uvm_factory, type_id::create, type overrides, derived transactions', xp: 150, tier: 'guided',
+  id: 'tbu-factory', title: 'Swap a type with the factory', concept: 'uvm_factory, type_id::create, type overrides, derived transactions', xp: 150, tier: 'guided',
   ticket: 'A bug only appears when both operands are at an extreme. The environment is frozen; get your corner cases in without touching it.',
   build: () => ({
     mode: 'write',
@@ -633,7 +633,7 @@ endclass
 `);
 
 const uvmCov: TbLevel = {
-  id: 'uvm-cov', title: 'A coverage subscriber', concept: 'uvm_subscriber, analysis_export, covergroups in components', xp: 150, tier: 'guided',
+  id: 'tbu-cov', title: 'A coverage subscriber', concept: 'uvm_subscriber, analysis_export, covergroups in components', xp: 150, tier: 'guided',
   ticket: 'Tests pass; are they any good? Hang a coverage collector on the monitor and find out what the stimulus actually exercised.',
   build: () => ({
     mode: 'write',
@@ -696,7 +696,7 @@ endclass
 `);
 
 const uvmPhases: TbLevel = {
-  id: 'uvm-phases', title: 'The test ends too soon', concept: 'phases, objections, drain time', xp: 130, tier: 'guided',
+  id: 'tbu-phases', title: 'The test ends too soon', concept: 'phases, objections, drain time', xp: 130, tier: 'guided',
   ticket: 'The test passes in zero time: no transactions, no errors, a lovely green report. Why?',
   build: () => ({
     mode: 'fix',
@@ -806,7 +806,7 @@ const ALU_MUTANTS = (): TbMutant[] => [
 ];
 
 const uvmBoss: TbLevel = {
-  id: 'uvm-boss', title: 'Boss: the whole agent', concept: 'driver, monitor, scoreboard and coverage written from a spec', xp: 400, tier: 'boss',
+  id: 'tbu-boss', title: 'Boss: the whole agent', concept: 'driver, monitor, scoreboard and coverage written from a spec', xp: 400, tier: 'boss',
   ticket: 'A new ALU block arrives with a UVM shell around it and four empty components. Fill them in. Review will run your environment against designs you have not seen.',
   build: (r) => {
     const mutants = choose(r, ALU_MUTANTS(), 4);

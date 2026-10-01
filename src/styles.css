@@ -428,3 +428,9 @@ table.cex .hot { background: rgba(255,120,100,.22); }
 .formal-ctl { display: inline-flex; align-items: center; gap: 6px; margin: 0 6px; }
 .depth-in { width: 4.2em; }
 .formal-out { margin-top: 8px; }
+
+/* SV Lab (testbench) */
+.sim-log { margin: 8px 0 0; max-height: 240px; overflow: auto; padding: 8px 10px; border-radius: 6px; background: rgba(138,148,166,.12); font-size: 12px; white-space: pre-wrap; word-break: break-word; }
+.cov-box h4, .cov-group h4 { margin: 10px 0 4px; font-size: 13px; }
+table.cases.cov td, table.cases.cov th { text-align: left; padding: 2px 8px; }
+table.cases.cov tr.bad td:last-child { color: #fb7185; }

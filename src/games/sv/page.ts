@@ -1,0 +1,135 @@
+// Testbench Lab page: write or repair a SystemVerilog testbench (plain classes or UVM), run it on the correct design and on
+// hidden buggy variants, and see the simulation log and functional coverage.
+import { mentorSay } from '../../os/mentor';
+import { clearDraft, complete, levelRecord, loadDraft, saveDraft } from '../../state';
+import { h } from '../../ui/dom';
+import { editor, highlight } from '../../ui/editor';
+import { celebrate, levelHeader, nextHref } from '../../ui/layout';
+import { rng } from '../../sim/harness';
+import { evaluate, type Evaluation } from './check';
+import type { CovGroupReport } from './cover';
+import { findTbLevel } from './levels';
+
+export const starsFor = (hintsUsed: number) => (hintsUsed > 0 ? 2 : 3);
+
+function coverageView(cov: CovGroupReport[]): HTMLElement | string {
+  if (!cov.length) return '';
+  const blocks = cov.map((g) => h('div', { class: 'cov-group' },
+    h('h4', null, `${g.name}: ${g.pct.toFixed(0)}% (${g.samples} sample${g.samples === 1 ? '' : 's'})`),
+    h('table', { class: 'cases cov' },
+      h('thead', null, h('tr', null, h('th', null, 'Coverpoint / cross'), h('th', null, '%'), h('th', null, 'Holes'))),
+      h('tbody', null, ...g.items.map((it) => {
+        const holes = it.bins.filter((b) => !b.covered && b.kind !== 'ignore' && b.kind !== 'illegal').map((b) => b.name);
+        return h('tr', { class: holes.length ? 'bad' : 'ok' }, h('td', null, h('code', null, it.name), it.cross ? ' (cross)' : ''), h('td', null, `${it.pct.toFixed(0)}%`),
+          h('td', null, holes.length ? `${holes.slice(0, 8).join(', ')}${holes.length > 8 ? ` … +${holes.length - 8}` : ''}` : 'none'));
+      })))));
+  return h('div', { class: 'cov-box' }, h('h4', null, 'Functional coverage (correct design, first run)'), ...blocks);
+}
+
+export function svPage(id: string): HTMLElement {
+  const level = findTbLevel(id);
+  if (!level) return h('p', null, 'Unknown mission.');
+  const boss = level.tier === 'boss';
+  const seedKey = `tb.${level.id}.seed`;
+  let seed = loadDraft<number>(seedKey);
+  if (seed === undefined) { seed = Math.floor(Math.random() * 1e6) + 1; saveDraft(seedKey, seed); }
+  const inst = level.build(rng(seed));
+  const draftKey = `tb.${level.id}.${seed}`;
+  const usage = loadDraft<{ hints: number }>(`${draftKey}.usage`) ?? { hints: 0 };
+  const saveUsage = () => saveDraft(`${draftKey}.usage`, usage);
+  const fix = inst.mode === 'fix';
+
+  const ed = editor(loadDraft<string>(draftKey) ?? inst.starter, (v) => saveDraft(draftKey, v), () => run(false), {
+    highlight, label: fix ? 'SystemVerilog testbench to repair' : 'SystemVerilog testbench',
+  });
+
+  // --- brief and hints
+  const hintList = h('ol', { class: 'hints' });
+  const hintBtn = h('button', { class: 'btn ghost small', onclick: () => reveal() }, '');
+  const renderHints = () => {
+    hintList.replaceChildren(...inst.hints.slice(0, usage.hints).map((t) => h('li', { html: t })));
+    hintBtn.textContent = usage.hints >= inst.hints.length ? 'No more hints' : `Reveal a hint (${inst.hints.length - usage.hints} left, caps you at 2 stars)`;
+    (hintBtn as HTMLButtonElement).disabled = usage.hints >= inst.hints.length;
+  };
+  const reveal = () => {
+    usage.hints = Math.min(inst.hints.length, usage.hints + 1);
+    saveUsage();
+    renderHints();
+    mentorSay(`Hint: ${inst.hints[usage.hints - 1].replace(/<[^>]+>/g, '')}`, 'thinking');
+  };
+  renderHints();
+
+  const brief = h('aside', { class: 'brief panel' },
+    h('div', { class: 'tag' }, `${inst.uvm ? 'UVM' : 'Testbench'} · ${level.concept}`),
+    h('p', { class: 'dim small' }, level.ticket),
+    h('div', { class: 'brief-body', html: inst.brief }),
+    boss ? h('p', { class: 'dim small' }, 'Boss mission: no hints. Hidden bugs are checked on every run.') : '',
+    inst.hints.length ? h('div', { class: 'hint-box' }, hintBtn, hintList) : '',
+  );
+
+  // --- code provided around the learner's (read only)
+  const provided = inst.fixed.replace('@@DUT@@', inst.dut ?? '').trim();
+  const shown = provided ? h('details', { class: 'src-view' },
+    h('summary', null, inst.uvm ? 'Provided code: DUT, interface, scaffold (read only; the UVM library itself is built in)' : 'Provided code: DUT and harness (read only)'),
+    h('pre', { class: 'ed-hl src', html: highlight(provided) })) : '';
+
+  // --- results
+  const status = h('div', { class: 'status idle' }, 'Check runs your testbench. Submit also banks the result.');
+  const goalList = h('ul', { class: 'goals' });
+  const mutList = h('div', { class: 'mut-list' });
+  const covBox = h('div', { class: 'cov-wrap' });
+  const logBox = h('pre', { class: 'sim-log' });
+
+  const show = (ev: Evaluation) => {
+    goalList.replaceChildren(...ev.goals.map((g) => h('li', { class: g.ok ? 'ok' : 'bad' }, h('span', { class: 'mark' }, g.ok ? '✓' : '✗'), h('span', null, g.label, g.note ? h('span', { class: 'dim small' }, ` — ${g.note}`) : ''))));
+    mutList.replaceChildren(...(ev.mutants.length ? [h('h4', null, boss ? 'Hidden bugs' : 'Buggy designs'), ...ev.mutants.map((m, i) => h('div', { class: m.caught ? 'mut ok' : 'mut bad' }, m.caught ? '✓ caught: ' : '✗ MISSED: ', boss ? `bug ${i + 1}` : m.name, m.note ? h('span', { class: 'dim small' }, ` (${m.note})`) : ''))] : []));
+    const run0 = ev.run;
+    covBox.replaceChildren(...(run0 && !run0.parseError && run0.coverage.length ? [coverageView(run0.coverage)] : []));
+    const lines = run0?.log ?? [];
+    logBox.textContent = lines.length ? `${lines.slice(0, 120).join('\n')}${lines.length > 120 ? `\n… ${lines.length - 120} more lines` : ''}` : '';
+    logBox.hidden = !lines.length;
+    if (ev.error?.line) ed.markLines([ev.error.line], []); else ed.markLines([], []);
+  };
+
+  const run = (submit: boolean) => {
+    status.className = 'status idle';
+    status.textContent = 'Simulating…';
+    // yield once so the status paints before the (synchronous) simulation
+    setTimeout(() => {
+      const ev = evaluate(inst, ed.value);
+      show(ev);
+      if (ev.error) {
+        status.className = 'status err';
+        status.textContent = ev.error.message + (ev.error.line ? ` (line ${ev.error.line})` : '');
+        mentorSay(status.textContent, 'concerned');
+        return;
+      }
+      if (!ev.passed) {
+        const bad = ev.goals.filter((g) => !g.ok);
+        status.className = 'status err';
+        status.textContent = `${bad.length} of ${ev.goals.length} goals not met.`;
+        mentorSay(`Not yet: ${bad[0].label}${bad[0].note ? ` (${bad[0].note})` : ''}.`, 'concerned');
+        return;
+      }
+      status.className = 'status ok';
+      if (!submit) { status.textContent = `All ${ev.goals.length} goals met. Submit to bank the result.`; return; }
+      status.textContent = `PASS: all ${ev.goals.length} goals met.`;
+      const stars = starsFor(usage.hints);
+      const gained = complete(level.id, level.xp, stars);
+      celebrate(stars, gained, usage.hints ? ['Solve it without hints for another star.'] : [], nextHref(level.id));
+    }, 20);
+  };
+
+  const toolbar = h('div', { class: 'toolbar' },
+    h('button', { class: 'btn', onclick: () => run(false), title: 'Ctrl+Enter' }, '▶ Run'),
+    h('button', { class: 'btn primary', onclick: () => run(true) }, '✔ Submit'),
+    h('button', { class: 'btn ghost', onclick: () => { if (confirm('Reset to the starter?')) { ed.value = inst.starter; clearDraft(draftKey); } } }, 'Reset'),
+    boss ? h('button', { class: 'btn ghost', onclick: () => { if (confirm('Roll a new variant? This clears your current work.')) { saveDraft(seedKey, Math.floor(Math.random() * 1e6) + 1); const host = document.getElementById('lab-slot'); if (host) host.replaceWith(svPage(level.id)); else location.reload(); } } }, 'New variant') : '',
+  );
+
+  return h('div', { class: 'level', id: 'lab-slot' },
+    levelHeader(level.title, level.id, levelRecord(level.id)?.stars ?? 0, level.xp),
+    h('div', { class: 'level-grid clab-grid' }, brief, h('section', { class: 'work panel' }, toolbar, shown, ed.el)),
+    h('section', { class: 'results panel' }, status, goalList, mutList, covBox, logBox),
+  );
+}
