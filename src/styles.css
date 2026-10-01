@@ -434,3 +434,8 @@ table.cex .hot { background: rgba(255,120,100,.22); }
 .cov-box h4, .cov-group h4 { margin: 10px 0 4px; font-size: 13px; }
 table.cases.cov td, table.cases.cov th { text-align: left; padding: 2px 8px; }
 table.cases.cov tr.bad td:last-child { color: #fb7185; }
+
+/* CDC Lab */
+table.cases.cdc td, table.cases.cdc th { text-align: left; padding: 3px 8px; vertical-align: top; }
+table.cases.cdc tr.bad td:last-child { color: #fb7185; }
+.cdc-sim .mut { margin: 3px 0; }

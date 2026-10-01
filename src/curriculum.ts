@@ -8,6 +8,7 @@ import { CODE_LEVELS } from './games/code/levels';
 import { SHELL_LEVELS } from './games/shell/levels';
 import { SVA_LEVELS } from './games/sva/levels';
 import { TB_LEVELS } from './games/sv/levels';
+import { CDC_LEVELS } from './games/cdc/levels';
 import { DEBUG_LEVELS, RTL_LEVELS } from './games/rtl/levels';
 import { TIMING_LEVELS } from './games/timing/levels';
 import { UVM_PUZZLES } from './games/uvm/puzzles';
@@ -16,7 +17,7 @@ import { findIncident } from './incidents';
 import { findBoss, findPractice } from './practice';
 import { levelRecord, profile } from './state';
 
-export type ModKind = 'lesson' | 'practice' | 'boss' | 'incident' | 'logic' | 'cmos' | 'rtl' | 'debug' | 'cov' | 'uvm' | 'sta' | 'pcb' | 'clab' | 'code' | 'shell' | 'sva' | 'tb' | 'drills' | 'final';
+export type ModKind = 'lesson' | 'practice' | 'boss' | 'incident' | 'logic' | 'cmos' | 'rtl' | 'debug' | 'cov' | 'uvm' | 'sta' | 'pcb' | 'clab' | 'code' | 'shell' | 'sva' | 'tb' | 'cdc' | 'drills' | 'final';
 
 export interface Module {
   id: string;
@@ -31,13 +32,13 @@ export interface Act { id: string; n: number; name: string; tagline: string; reg
 
 export const KIND_LABEL: Record<ModKind, string> = {
   lesson: 'Lesson', practice: 'Practice', boss: 'Boss', incident: 'Incident', logic: 'Logic lab', cmos: 'Transistor lab', rtl: 'Verilog', debug: 'Bug hunt', cov: 'Coverage',
-  uvm: 'UVM', clab: 'Circuit Lab', code: 'Code Lab', shell: 'Shell Lab', sva: 'Assertions', tb: 'Testbench', sta: 'Timing', pcb: 'Board', drills: 'Interview', final: 'Final review',
+  uvm: 'UVM', clab: 'Circuit Lab', code: 'Code Lab', shell: 'Shell Lab', sva: 'Assertions', tb: 'Testbench', cdc: 'Clock crossing', sta: 'Timing', pcb: 'Board', drills: 'Interview', final: 'Final review',
 };
 
 /** The desktop app a module opens in. */
 export const KIND_APP: Record<ModKind, string> = {
   lesson: 'terminal', practice: 'terminal', boss: 'terminal', incident: 'terminal', logic: 'Logic Lab', cmos: 'Logic Lab', rtl: 'Verilog IDE', debug: 'Verilog IDE', cov: 'Coverage',
-  uvm: 'UVM Builder', clab: 'Circuit Lab', code: 'Code Lab', shell: 'Shell Lab', sva: 'SVA Lab', tb: 'SV Lab', sta: 'Timing', pcb: 'Board Router', drills: 'Flashcards', final: 'terminal',
+  uvm: 'UVM Builder', clab: 'Circuit Lab', code: 'Code Lab', shell: 'Shell Lab', sva: 'SVA Lab', tb: 'SV Lab', cdc: 'CDC Lab', sta: 'Timing', pcb: 'Board Router', drills: 'Flashcards', final: 'terminal',
 };
 
 const lesson = (id: string): Module => {
@@ -77,6 +78,9 @@ const sva = (...ids: string[]): Module[] => ids.flatMap((id) => mods(SVA_LEVELS,
 
 /** SV Lab testbench and UVM missions by id, in the order given. */
 const tb = (...ids: string[]): Module[] => ids.flatMap((id) => mods(TB_LEVELS, 'tb', 'tb', (x) => x.id === id));
+
+/** CDC Lab missions by id, in the order given. */
+const cdc = (...ids: string[]): Module[] => ids.flatMap((id) => mods(CDC_LEVELS, 'cdc', 'cdc', (x) => x.id === id));
 
 /** Shell Lab missions by id, in the order given. */
 const shell = (...ids: string[]): Module[] => ids.flatMap((id) => mods(SHELL_LEVELS, 'shell', 'shell', (x) => x.id === id));
@@ -121,7 +125,7 @@ export const ACTS: Act[] = [
       { name: 'Memory & state', modules: [...drill('seq'), ...logic(['logic-latch', 'logic-counter']), ...drill('fsm'), bossMod('boss-logic')] },
       { name: 'Verilog', modules: [...drill('verilog'), ...mods(RTL_LEVELS, 'rtl', 'rtl'), bossMod('boss-hdl')] },
       { name: 'Microarchitecture', modules: [...drill('alu'), bossMod('boss-uarch')] },
-      { name: 'Clocks & resets', modules: [...drill('clk'), bossMod('boss-cdc')] },
+      { name: 'Clocks & resets', modules: [...drill('clk'), ...cdc('cdc-sync', 'cdc-pulse', 'cdc-gray', 'cdc-handshake'), bossMod('boss-cdc'), ...cdc('cdc-fifo')] },
     ],
   },
   {

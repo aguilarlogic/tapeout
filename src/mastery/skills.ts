@@ -83,7 +83,7 @@ export const SKILLS: Skill[] = [
   S('hdl', 'Digital design', 'Verilog RTL', ['rtl', 'dv', 'fpga', 'soc', 'arch', 'ai'], ['verilog'], ['mux4', 'shift', 'seqdet', 'fifo', 'practice-verilog'], ['boss-hdl']),
   S('sv-design', 'Digital design', 'SystemVerilog design constructs (interfaces, packages, structs, generate)', ['rtl', 'dv', 'soc'], [], [], [], 'SV Lab'),
   S('uarch', 'Digital design', 'Microarchitecture: ALUs, fast adders, multipliers, pipelines', ['rtl', 'arch', 'ai', 'circuit'], ['alu'], ['adder4', 'practice-alu'], ['boss-uarch']),
-  S('cdc', 'Digital design', 'Clocks, resets, CDC, synchronizers, async FIFOs', ['rtl', 'dv', 'soc', 'fpga', 'clocking'], ['clk'], ['gray', 'fifo', 'practice-clk'], ['boss-cdc']),
+  S('cdc', 'Digital design', 'Clocks, resets, CDC, synchronizers, async FIFOs', ['rtl', 'dv', 'soc', 'fpga', 'clocking'], ['clk'], ['gray', 'fifo', 'practice-clk', 'cdc-sync', 'cdc-pulse', 'cdc-gray', 'cdc-handshake'], ['boss-cdc', 'cdc-fifo']),
   S('c', 'Software', 'C programming', ['firmware', 'dv', 'eda', 'arch', 'postsi'], ['c'], ['practice-c', 'code-c-swap', 'code-c-strings', 'code-c-array', 'code-c-bits', 'code-c-layout', 'code-c-list', 'code-c-vec', 'code-c-bug-overflow', 'code-c-bug-uaf', 'code-c-bug-leak', 'code-c-bug-dangling', 'code-c-bug-uninit'], ['boss-c', 'code-boss-c-ring', 'code-boss-c-split', 'code-boss-c-crc']),
   S('cpp', 'Software', 'C++ programming', ['eda', 'arch', 'dv'], ['cpp'], ['practice-cpp'], ['boss-cpp']),
   S('dsa', 'Software', 'Data structures and algorithms', ['eda', 'arch', 'dv', 'firmware'], ['dsa'], ['practice-dsa', 'code-py-fibmemo', 'code-py-bsearch', 'code-py-bfs', 'code-py-topo', 'code-py-lru'], ['boss-dsa', 'code-boss-py-graph']),
