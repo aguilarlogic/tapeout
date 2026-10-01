@@ -126,7 +126,7 @@ export const SKILLS: Skill[] = [
   S('circuit', 'Implementation', 'Transistor-level circuit design and layout', ['circuit', 'libchar', 'memory', 'io'], ['vlsi', 'mos'], ['cmos-inv', 'cmos-nand', 'cmos-nor', 'cmos-and', 'cmos-aoi', 'practice-vlsi'], ['boss-circuit']),
   S('lowpower', 'Implementation', 'Low-power design: gating, voltage domains, DVFS', ['rtl', 'pd', 'soc', 'circuit'], ['power'], ['practice-power'], ['boss-lowpower']),
   S('board', 'Implementation', 'Board design, SI and PI', ['board', 'pkg', 'io'], ['pcb', 'sipi'], ['pcb-first-light', 'pcb-crossing', 'pcb-decouple', 'pcb-return-path', 'pcb-diff-pair', 'practice-pcb'], ['boss-board', 'inc-link', 'clab-boss-pdn']),
-  S('dft', 'Test', 'DFT: scan, ATPG, BIST, JTAG', ['dft', 'test', 'rtl', 'soc'], ['dft'], ['practice-dft'], ['boss-dft']),
+  S('dft', 'Test', 'DFT: scan, ATPG, BIST, JTAG', ['dft', 'test', 'rtl', 'soc'], ['dft'], ['practice-dft', 'dft-detect', 'dft-coverage', 'dft-redundant', 'dft-scan', 'dft-bist'], ['boss-dft', 'dft-boss']),
   S('test-eng', 'Test', 'Test and product engineering', ['test', 'dft'], ['ate'], ['practice-ate'], ['boss-test', 'inc-finaltest']),
   S('postsi', 'Test', 'Post-silicon validation and debug', ['postsi', 'dv'], ['postsi'], ['practice-postsi'], ['boss-postsi', 'inc-hang']),
   S('analog', 'Specialties', 'Analog and mixed-signal design', ['analog', 'clocking', 'sensors'], ['analog'], ['practice-analog', 'clab-inverting', 'clab-gbw', 'clab-csamp', 'clab-mirror'], ['boss-analog', 'clab-boss-amp']),

@@ -6,6 +6,7 @@ export type Values = Record<string, string | number | boolean>;
 export type Control =
   | { id: string; kind: 'select'; label: string; options: { value: string; label: string }[]; value: string; hint?: string }
   | { id: string; kind: 'toggle'; label: string; value: boolean; hint?: string }
+  | { id: string; kind: 'text'; label: string; value: string; rows?: number; placeholder?: string; hint?: string }
   | { id: string; kind: 'number'; label: string; min: number; max: number; step?: number; value: number; hint?: string };
 
 export interface Goal { label: string; ok: boolean; note?: string }
@@ -41,7 +42,7 @@ export interface ArchLevel {
   xp: number;
   tier: 'guided' | 'boss';
   /** which lab the mission belongs to, for the header tag */
-  lab: 'Pipeline' | 'Cache' | 'Out-of-order';
+  lab: 'Pipeline' | 'Cache' | 'Out-of-order' | 'DFT' | 'PD' | 'Layout' | 'STA';
   ticket: string;
   build: (r: Rng) => ArchInstance;
 }

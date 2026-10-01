@@ -52,4 +52,17 @@ describe('weak or wrong answers are rejected', () => {
     const wrong = inst.solution.values.limit === 'units' ? 'none' : 'units';
     expect(ok(inst.run({ ...defaults(inst.controls), ...inst.solution.values, limit: wrong }))).toBe(false);
   });
+  it('DFT: a vector that does not propagate the fault, too few vectors, wrong lists', () => {
+    expect(ok(run('dft-detect', 1, { vectors: '00000\n00000\n00000' }))).toBe(false);
+    expect(ok(run('dft-coverage', 1, { vectors: '00000\n11111' }))).toBe(false);
+    expect(ok(run('dft-redundant', 1, { list: 'y sa0\ny sa1' }))).toBe(false);
+    expect(ok(run('dft-redundant', 1, { list: '' }))).toBe(false);
+    expect(ok(run('dft-bist', 1, { poly: '4', seed: 1, n: 10, states: 31 }))).toBe(false);
+    expect(ok(run('dft-boss', 1, { vectors: '00000000', untestable: 0 }))).toBe(false);
+  });
+  it('DFT: scan test time formula is checked', () => {
+    const inst = findArchLevel('dft-scan')!.build(rng(1));
+    const res = inst.run({ ...defaults(inst.controls), ...inst.solution.values, q1: 1 });
+    expect(res.goals.some((g) => !g.ok && /one chain/.test(g.label))).toBe(true);
+  });
 });

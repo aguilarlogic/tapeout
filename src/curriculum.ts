@@ -20,7 +20,7 @@ import { findIncident } from './incidents';
 import { findBoss, findPractice } from './practice';
 import { levelRecord, profile } from './state';
 
-export type ModKind = 'lesson' | 'practice' | 'boss' | 'incident' | 'logic' | 'cmos' | 'rtl' | 'debug' | 'cov' | 'uvm' | 'sta' | 'pcb' | 'clab' | 'code' | 'shell' | 'sva' | 'tb' | 'cdc' | 'isa' | 'arch' | 'rv' | 'drills' | 'final';
+export type ModKind = 'lesson' | 'practice' | 'boss' | 'incident' | 'logic' | 'cmos' | 'rtl' | 'debug' | 'cov' | 'uvm' | 'sta' | 'pcb' | 'clab' | 'code' | 'shell' | 'sva' | 'tb' | 'cdc' | 'isa' | 'arch' | 'rv' | 'dft' | 'drills' | 'final';
 
 export interface Module {
   id: string;
@@ -35,13 +35,13 @@ export interface Act { id: string; n: number; name: string; tagline: string; reg
 
 export const KIND_LABEL: Record<ModKind, string> = {
   lesson: 'Lesson', practice: 'Practice', boss: 'Boss', incident: 'Incident', logic: 'Logic lab', cmos: 'Transistor lab', rtl: 'Verilog', debug: 'Bug hunt', cov: 'Coverage',
-  uvm: 'UVM', clab: 'Circuit Lab', code: 'Code Lab', shell: 'Shell Lab', sva: 'Assertions', tb: 'Testbench', cdc: 'Clock crossing', isa: 'Assembly', arch: 'Architecture lab', rv: 'Core project', sta: 'Timing', pcb: 'Board', drills: 'Interview', final: 'Final review',
+  uvm: 'UVM', clab: 'Circuit Lab', code: 'Code Lab', shell: 'Shell Lab', sva: 'Assertions', tb: 'Testbench', cdc: 'Clock crossing', isa: 'Assembly', arch: 'Architecture lab', rv: 'Core project', dft: 'DFT Lab', sta: 'Timing', pcb: 'Board', drills: 'Interview', final: 'Final review',
 };
 
 /** The desktop app a module opens in. */
 export const KIND_APP: Record<ModKind, string> = {
   lesson: 'terminal', practice: 'terminal', boss: 'terminal', incident: 'terminal', logic: 'Logic Lab', cmos: 'Logic Lab', rtl: 'Verilog IDE', debug: 'Verilog IDE', cov: 'Coverage',
-  uvm: 'UVM Builder', clab: 'Circuit Lab', code: 'Code Lab', shell: 'Shell Lab', sva: 'SVA Lab', tb: 'SV Lab', cdc: 'CDC Lab', isa: 'ISA Lab', arch: 'Arch Lab', rv: 'RISC-V Core', sta: 'Timing', pcb: 'Board Router', drills: 'Flashcards', final: 'terminal',
+  uvm: 'UVM Builder', clab: 'Circuit Lab', code: 'Code Lab', shell: 'Shell Lab', sva: 'SVA Lab', tb: 'SV Lab', cdc: 'CDC Lab', isa: 'ISA Lab', arch: 'Arch Lab', rv: 'RISC-V Core', dft: 'DFT Lab', sta: 'Timing', pcb: 'Board Router', drills: 'Flashcards', final: 'terminal',
 };
 
 const lesson = (id: string): Module => {
@@ -84,6 +84,9 @@ const tb = (...ids: string[]): Module[] => ids.flatMap((id) => mods(TB_LEVELS, '
 
 /** CDC Lab missions by id, in the order given. */
 const cdc = (...ids: string[]): Module[] => ids.flatMap((id) => mods(CDC_LEVELS, 'cdc', 'cdc', (x) => x.id === id));
+
+/** DFT Lab missions (they run on the generic lab page under #/arch). */
+const dft = (...ids: string[]): Module[] => ids.flatMap((id) => mods(ARCH_LEVELS, 'dft', 'arch', (x) => x.id === id));
 
 /** RISC-V core project missions by id, in the order given. */
 const rv = (...ids: string[]): Module[] => ids.flatMap((id) => mods(RV_LEVELS, 'rv', 'rv', (x) => x.id === id));
@@ -156,7 +159,7 @@ export const ACTS: Act[] = [
       { name: 'Random & coverage', modules: [...drill('crv'), ...tb('tb-rand', 'tb-rand-dist', 'tb-rand-arr'), bossMod('boss-crv'), ...tb('tb-cov', 'tb-cov-holes'), prac('practice-cov'), ...mods(SCENARIOS, 'cov', 'cov'), bossMod('boss-coverage')] },
       { name: 'UVM', modules: [...drill('uvm'), ...mods(UVM_PUZZLES, 'uvm', 'uvm'), bossMod('boss-uvm'), ...tb('tbu-seq', 'tbu-driver', 'tbu-monsb', 'tbu-config', 'tbu-factory', 'tbu-cov', 'tbu-phases', 'tbu-boss')] },
       { name: 'Assertions & formal', modules: [...drill('sva'), ...sva('sva-latency', 'sva-reg', 'sva-arbiter', 'sva-fifo', 'sva-valid-ready', 'sva-fsm', 'sva-repeat', 'sva-cover'), bossMod('boss-sva'), ...sva('sva-boss-burst'), ...drill('formal'), ...sva('formal-assume', 'formal-depth', 'formal-fix'), bossMod('boss-formal'), ...sva('formal-boss-wrap')] },
-      { name: 'Design for test', modules: [...drill('dft'), bossMod('boss-dft')] },
+      { name: 'Design for test', modules: [...drill('dft'), ...dft('dft-detect', 'dft-coverage', 'dft-redundant', 'dft-scan', 'dft-bist'), bossMod('boss-dft'), ...dft('dft-boss')] },
     ],
   },
   {

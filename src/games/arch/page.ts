@@ -71,6 +71,10 @@ export function archPage(id: string): HTMLElement {
     if (c.kind === 'select') {
       input = h('select', { id: `c-${c.id}`, onchange: (e: Event) => { values[c.id] = (e.target as HTMLSelectElement).value; changed(); } }, ...c.options.map((o) => h('option', { value: o.value }, o.label)));
       (input as HTMLSelectElement).value = String(values[c.id]);
+    } else if (c.kind === 'text') {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      input = h('textarea', { id: `c-${c.id}`, rows: String(c.rows ?? 4), spellcheck: 'false', class: 'arch-text', placeholder: c.placeholder ?? '', oninput: (e: Event) => { values[c.id] = (e.target as HTMLTextAreaElement).value; clearTimeout(timer); timer = setTimeout(changed, 250); } });
+      (input as HTMLTextAreaElement).value = String(values[c.id]);
     } else if (c.kind === 'toggle') {
       input = h('input', { type: 'checkbox', id: `c-${c.id}`, onchange: (e: Event) => { values[c.id] = (e.target as HTMLInputElement).checked; changed(); } });
       (input as HTMLInputElement).checked = !!values[c.id];
