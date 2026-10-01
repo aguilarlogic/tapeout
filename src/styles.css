@@ -398,3 +398,18 @@ select.blank.wrong { border-color: var(--err); color: var(--err); }
 .cases .err { color: #fb7185; }
 .console { background: rgba(138,148,166,.15); border-radius: 6px; padding: 8px 10px; font-size: 12px; white-space: pre-wrap; margin: 8px 0 0; }
 .console:empty { display: none; }
+
+/* Shell Lab terminal */
+.sh-term { background: #0d1117; color: #d6deeb; border-radius: 8px; border: 1px solid var(--line, #2a3340); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; display: flex; flex-direction: column; min-height: 340px; max-height: 62vh; cursor: text; }
+.sh-screen { flex: 1; overflow-y: auto; padding: 10px 12px 4px; }
+.sh-line { margin: 0; white-space: pre-wrap; word-break: break-word; line-height: 1.45; font: inherit; }
+.sh-line.cmd { color: #9fd4ff; }
+.sh-line.err { color: #ff9b8f; }
+.sh-line.dim { color: #7d8aa0; }
+.sh-row { display: flex; gap: 8px; align-items: flex-start; padding: 4px 12px 10px; }
+.sh-prompt { color: #7ee787; white-space: nowrap; padding-top: 1px; }
+.sh-input { flex: 1; background: transparent; border: 0; outline: 0; color: inherit; font: inherit; resize: none; padding: 0; line-height: 1.45; }
+.sh-term .sh-line { background: none; border: 0; padding: 0; margin: 0; border-radius: 0; color: #d6deeb; }
+.sh-term .sh-line.cmd { color: #9fd4ff; }
+.sh-term .sh-line.err { color: #ff9b8f; }
+.sh-term .sh-line.dim { color: #7d8aa0; }

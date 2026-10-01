@@ -579,17 +579,30 @@ export const UTILS: Record<string, Utility> = {
     return 0;
   },
   sort: (ctx, args) => {
-    const { flags, vals, rest } = parse(args, ['k', 't', 'o']);
+    // keys: -k F[,F][nr] may repeat, so pull them out before the generic option parser
+    const keys: { f: number; num: boolean; rev: boolean }[] = [];
+    const other: string[] = [];
+    for (let i = 0; i < args.length; i++) {
+      const spec = args[i] === '-k' ? args[++i] : /^-k./.test(args[i]) ? args[i].slice(2) : null;
+      if (spec === null) { other.push(args[i]); continue; }
+      const m = /^(\d+)(?:\.\d+)?(?:[bdfgiMhnRrV]*)(?:,(\d+)(?:\.\d+)?([bdfgiMhnRrV]*))?$/.exec(spec);
+      const mods = spec.replace(/^[\d.]+(,[\d.]+)?/, '') + (spec.match(/^\d+[bdfgiMhnRrV]+/)?.[0].replace(/^\d+/, '') ?? '');
+      keys.push({ f: m ? parseInt(m[1], 10) : 1, num: /[nh]/.test(mods), rev: /r/.test(mods) });
+    }
+    const { flags, vals, rest } = parse(other, ['t', 'o']);
     const all = inputs(ctx, rest, 'sort').flatMap((i) => lines(i.text));
-    const key = vals.k ? parseInt(vals.k, 10) : 0;
     const sep = vals.t;
-    const keyOf = (l: string) => { if (!key) return l; const f = sep ? l.split(sep) : l.trim().split(/\s+/); return f.slice(key - 1).join(sep ?? ' '); };
-    const num = flags.has('n') || flags.has('h');
+    const field = (l: string, f: number) => (sep ? l.split(sep)[f - 1] ?? '' : l.trim().split(/\s+/)[f - 1] ?? '');
+    const gnum = flags.has('n') || flags.has('h');
+    const cmpStr = (x: string, y: string) => { const xx = flags.has('f') ? x.toLowerCase() : x, yy = flags.has('f') ? y.toLowerCase() : y; return xx < yy ? -1 : xx > yy ? 1 : 0; };
     const cmp = (a: string, b: string) => {
-      const x = keyOf(a), y = keyOf(b);
-      if (num) { const d = (parseFloat(x) || 0) - (parseFloat(y) || 0); if (d) return d; return a < b ? -1 : a > b ? 1 : 0; }
-      const xx = flags.has('f') ? x.toLowerCase() : x, yy = flags.has('f') ? y.toLowerCase() : y;
-      return xx < yy ? -1 : xx > yy ? 1 : a < b ? -1 : a > b ? 1 : 0;
+      for (const k of keys) {
+        const x = field(a, k.f), y = field(b, k.f);
+        const d = k.num || (gnum && !keys.length) ? (parseFloat(x) || 0) - (parseFloat(y) || 0) : cmpStr(x, y);
+        if (d) return k.rev ? -d : d;
+      }
+      if (!keys.length && gnum) { const d = (parseFloat(a) || 0) - (parseFloat(b) || 0); if (d) return d; }
+      return keys.length && flags.has('s') ? 0 : cmpStr(a, b);
     };
     all.sort(cmp);
     if (flags.has('r')) all.reverse();

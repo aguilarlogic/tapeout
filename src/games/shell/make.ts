@@ -161,7 +161,7 @@ export const make: Utility = (ctx, args) => {
       if (withRecipe) return { rule: withRecipe, deps };
       // a rule with only dependencies may still use a pattern rule for its recipe
       const pat = patternFor(t);
-      return pat ? { rule: pat.rule, deps: [...deps, ...pat.deps] } : { rule: exact[0], deps };
+      return pat ? { rule: pat.rule, deps: [...pat.deps, ...deps] } : { rule: exact[0], deps };
     }
     return patternFor(t);
   };

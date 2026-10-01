@@ -89,10 +89,10 @@ export const SKILLS: Skill[] = [
   S('dsa', 'Software', 'Data structures and algorithms', ['eda', 'arch', 'dv', 'firmware'], ['dsa'], ['practice-dsa', 'code-py-fibmemo', 'code-py-bsearch', 'code-py-bfs', 'code-py-topo', 'code-py-lru'], ['boss-dsa', 'code-boss-py-graph']),
   S('asm', 'Software', 'Assembly and the hardware/software interface', ['firmware', 'arch', 'rtl', 'dv', 'postsi'], ['asm'], ['practice-asm'], ['boss-asm']),
   S('os', 'Software', 'Operating systems', ['firmware', 'arch', 'postsi'], ['os'], ['practice-os'], ['boss-os']),
-  S('shell', 'Tooling', 'Linux shell, pipes and regular expressions', 'all', ['shell'], ['practice-shell'], ['boss-shell']),
-  S('git', 'Tooling', 'Version control with git', 'all', ['git'], ['practice-git'], ['boss-git']),
+  S('shell', 'Tooling', 'Linux shell, pipes and regular expressions', 'all', ['shell'], ['practice-shell', 'sh-nav', 'sh-grep', 'sh-pipes', 'sh-find', 'sh-awk', 'sh-sed', 'sh-perm', 'sh-loop', 'sh-script'], ['boss-shell', 'sh-boss-triage']),
+  S('git', 'Tooling', 'Version control with git', 'all', ['git'], ['practice-git', 'git-first', 'git-branch', 'git-undo', 'git-conflict', 'git-stash', 'git-bisect'], ['boss-git', 'git-boss-merge', 'git-boss-bisect']),
   S('python', 'Tooling', 'Python scripting', 'all', ['python'], ['practice-python', 'code-py-parse', 'code-py-hist', 'code-py-regfield'], ['boss-python', 'code-boss-py-log']),
-  S('flows', 'Tooling', 'TCL, Make and EDA flow scripting', ['pd', 'dv', 'rtl', 'eda', 'dft', 'soc', 'libchar'], ['flows'], ['practice-flows', 'code-py-triage'], ['boss-flows']),
+  S('flows', 'Tooling', 'TCL, Make and EDA flow scripting', ['pd', 'dv', 'rtl', 'eda', 'dft', 'soc', 'libchar'], ['flows'], ['practice-flows', 'code-py-triage', 'sh-make', 'sh-make-hdr', 'sh-python'], ['boss-flows', 'sh-boss-make']),
 
   // ------------------------------------------------ design verification
   S('tb-arch', 'Verification', 'Testbench architecture, scoreboards, reference models', ['dv'], ['dv'], ['practice-dv'], ['boss-tb']),
