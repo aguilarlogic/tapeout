@@ -20,7 +20,7 @@ import { findIncident } from './incidents';
 import { findBoss, findPractice } from './practice';
 import { levelRecord, profile } from './state';
 
-export type ModKind = 'lesson' | 'practice' | 'boss' | 'incident' | 'logic' | 'cmos' | 'rtl' | 'debug' | 'cov' | 'uvm' | 'sta' | 'pcb' | 'clab' | 'code' | 'shell' | 'sva' | 'tb' | 'cdc' | 'isa' | 'arch' | 'rv' | 'dft' | 'pd' | 'sta2' | 'layout' | 'sig' | 'drills' | 'final';
+export type ModKind = 'lesson' | 'practice' | 'boss' | 'incident' | 'logic' | 'cmos' | 'rtl' | 'debug' | 'cov' | 'uvm' | 'sta' | 'pcb' | 'clab' | 'code' | 'shell' | 'sva' | 'tb' | 'cdc' | 'isa' | 'arch' | 'rv' | 'dft' | 'pd' | 'sta2' | 'layout' | 'sig' | 'spec' | 'drills' | 'final';
 
 export interface Module {
   id: string;
@@ -35,13 +35,13 @@ export interface Act { id: string; n: number; name: string; tagline: string; reg
 
 export const KIND_LABEL: Record<ModKind, string> = {
   lesson: 'Lesson', practice: 'Practice', boss: 'Boss', incident: 'Incident', logic: 'Logic lab', cmos: 'Transistor lab', rtl: 'Verilog', debug: 'Bug hunt', cov: 'Coverage',
-  uvm: 'UVM', clab: 'Circuit Lab', code: 'Code Lab', shell: 'Shell Lab', sva: 'Assertions', tb: 'Testbench', cdc: 'Clock crossing', isa: 'Assembly', arch: 'Architecture lab', rv: 'Core project', dft: 'DFT Lab', pd: 'PD Lab', sta2: 'STA Lab', layout: 'Layout Lab', sig: 'Signals Lab', sta: 'Timing', pcb: 'Board', drills: 'Interview', final: 'Final review',
+  uvm: 'UVM', clab: 'Circuit Lab', code: 'Code Lab', shell: 'Shell Lab', sva: 'Assertions', tb: 'Testbench', cdc: 'Clock crossing', isa: 'Assembly', arch: 'Architecture lab', rv: 'Core project', dft: 'DFT Lab', pd: 'PD Lab', sta2: 'STA Lab', layout: 'Layout Lab', sig: 'Signals Lab', spec: 'Specialty Lab', sta: 'Timing', pcb: 'Board', drills: 'Interview', final: 'Final review',
 };
 
 /** The desktop app a module opens in. */
 export const KIND_APP: Record<ModKind, string> = {
   lesson: 'terminal', practice: 'terminal', boss: 'terminal', incident: 'terminal', logic: 'Logic Lab', cmos: 'Logic Lab', rtl: 'Verilog IDE', debug: 'Verilog IDE', cov: 'Coverage',
-  uvm: 'UVM Builder', clab: 'Circuit Lab', code: 'Code Lab', shell: 'Shell Lab', sva: 'SVA Lab', tb: 'SV Lab', cdc: 'CDC Lab', isa: 'ISA Lab', arch: 'Arch Lab', rv: 'RISC-V Core', dft: 'DFT Lab', pd: 'PD Lab', sta2: 'STA Lab', layout: 'Layout Lab', sig: 'Signals Lab', sta: 'Timing', pcb: 'Board Router', drills: 'Flashcards', final: 'terminal',
+  uvm: 'UVM Builder', clab: 'Circuit Lab', code: 'Code Lab', shell: 'Shell Lab', sva: 'SVA Lab', tb: 'SV Lab', cdc: 'CDC Lab', isa: 'ISA Lab', arch: 'Arch Lab', rv: 'RISC-V Core', dft: 'DFT Lab', pd: 'PD Lab', sta2: 'STA Lab', layout: 'Layout Lab', sig: 'Signals Lab', spec: 'Specialty Lab', sta: 'Timing', pcb: 'Board Router', drills: 'Flashcards', final: 'terminal',
 };
 
 const lesson = (id: string): Module => {
@@ -90,6 +90,8 @@ const dft = (...ids: string[]): Module[] => ids.flatMap((id) => mods(ARCH_LEVELS
 
 /** Signals Lab missions (generic lab page under #/arch). */
 const sig = (...ids: string[]): Module[] => ids.flatMap((id) => mods(ARCH_LEVELS, 'sig', 'arch', (x) => x.id === id));
+/** Specialty Lab missions: RF, photonics, memory, process, package, FPGA, AI, security, safety, quantum (generic lab page). */
+const spec = (...ids: string[]): Module[] => ids.flatMap((id) => mods(ARCH_LEVELS, 'spec', 'arch', (x) => x.id === id));
 /** Layout Lab missions (generic lab page under #/arch). */
 const layout = (...ids: string[]): Module[] => ids.flatMap((id) => mods(ARCH_LEVELS, 'layout', 'arch', (x) => x.id === id));
 
@@ -193,11 +195,11 @@ export const ACTS: Act[] = [
   {
     id: 'roles', n: 7, name: 'Specializations', tagline: 'The roles beyond RTL and DV: analog, RF, physical design, memory, fab, AI, security, quantum', region: 'SPECIALTY IP',
     chapters: [
-      { name: 'Circuits & signals', modules: [...drill('analog'), ...clab('clab-inverting', 'clab-gbw', 'clab-csamp', 'clab-mirror'), bossMod('boss-analog'), ...clab('clab-boss-amp'), ...drill('rf'), ...clab('clab-lcfilter'), bossMod('boss-rf'), incident('inc-radio'), ...drill('pmic'), ...clab('clab-duty', 'clab-buck'), bossMod('boss-pmic'), ...clab('clab-boss-buck'), incident('inc-rail'), lesson('sipi')] },
-      { name: 'Silicon & manufacturing', modules: [...drill('pnr'), bossMod('boss-pd'), ...drill('sram'), bossMod('boss-memory'), incident('inc-bitflip'), ...drill('fab'), bossMod('boss-process'), incident('inc-wafer'), ...drill('pkg'), bossMod('boss-pkg'), incident('inc-package')] },
-      { name: 'Bring-up & production', modules: [...drill('postsi'), bossMod('boss-postsi'), incident('inc-hang'), ...drill('ate'), bossMod('boss-test'), incident('inc-finaltest'), ...drill('emu'), bossMod('boss-fpga')] },
-      { name: 'Domain chips', modules: [...drill('npu'), bossMod('boss-ai'), ...drill('hwsec'), bossMod('boss-hwsec'), incident('inc-key'), ...drill('fusa'), bossMod('boss-fusa'), incident('inc-limp'), ...drill('photonics'), bossMod('boss-photonics'), incident('inc-optical')] },
-      { name: 'Quantum', modules: [...drill('qubit'), bossMod('boss-qubit'), ...drill('qctrl'), bossMod('boss-qctrl'), incident('inc-qubit')] },
+      { name: 'Circuits & signals', modules: [...drill('analog'), ...clab('clab-inverting', 'clab-gbw', 'clab-csamp', 'clab-mirror'), bossMod('boss-analog'), ...clab('clab-boss-amp'), ...drill('rf'), ...clab('clab-lcfilter'), ...spec('rf-smith', 'rf-match'), bossMod('boss-rf'), incident('inc-radio'), ...drill('pmic'), ...clab('clab-duty', 'clab-buck'), bossMod('boss-pmic'), ...clab('clab-boss-buck'), incident('inc-rail'), lesson('sipi')] },
+      { name: 'Silicon & manufacturing', modules: [...drill('pnr'), bossMod('boss-pd'), ...drill('sram'), ...spec('mem-snm', 'mem-assist'), bossMod('boss-memory'), incident('inc-bitflip'), ...drill('fab'), ...spec('proc-yield'), bossMod('boss-process'), incident('inc-wafer'), ...drill('pkg'), ...spec('pkg-thermal'), bossMod('boss-pkg'), incident('inc-package')] },
+      { name: 'Bring-up & production', modules: [...drill('postsi'), bossMod('boss-postsi'), incident('inc-hang'), ...drill('ate'), bossMod('boss-test'), incident('inc-finaltest'), ...drill('emu'), ...spec('fpga-map', 'fpga-fmax'), bossMod('boss-fpga')] },
+      { name: 'Domain chips', modules: [...drill('npu'), ...spec('ai-tile'), bossMod('boss-ai'), ...spec('ai-boss'), ...drill('hwsec'), ...spec('sec-dpa', 'sec-defend'), bossMod('boss-hwsec'), incident('inc-key'), ...drill('fusa'), ...spec('fusa-fmeda', 'fusa-asil', 'fusa-campaign'), bossMod('boss-fusa'), incident('inc-limp'), ...drill('photonics'), ...spec('ph-budget', 'ph-wdm'), bossMod('boss-photonics'), incident('inc-optical')] },
+      { name: 'Quantum', modules: [...drill('qubit'), ...spec('q-gates', 'q-coherence'), bossMod('boss-qubit'), ...drill('qctrl'), ...spec('qc-pulse'), bossMod('boss-qctrl'), incident('inc-qubit')] },
     ],
   },
 ];

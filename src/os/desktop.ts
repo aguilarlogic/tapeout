@@ -31,7 +31,7 @@ import { bindMentorLog } from './mentor';
 import { getWindow, initWM, openWindow } from './wm';
 
 const LABS: Record<string, (id: string) => HTMLElement> = {
-  logic: logicPage, rtl: rtlPage, pcb: pcbPage, sta: timingPage, cov: coveragePage, uvm: uvmPage, clab: circuitPage, code: codePage, shell: shellPage, sva: svaPage, tb: svPage, cdc: cdcPage, isa: isaPage, arch: archPage, rv: rvPage, dft: archPage, pd: archPage, sta2: archPage, layout: archPage, sig: archPage,
+  logic: logicPage, rtl: rtlPage, pcb: pcbPage, sta: timingPage, cov: coveragePage, uvm: uvmPage, clab: circuitPage, code: codePage, shell: shellPage, sva: svaPage, tb: svPage, cdc: cdcPage, isa: isaPage, arch: archPage, rv: rvPage, dft: archPage, pd: archPage, sta2: archPage, layout: archPage, sig: archPage, spec: archPage,
 };
 
 let term: Terminal;

@@ -96,9 +96,17 @@ Each phase ships playable content and is committed on its own.
   - **PD Lab** (6 missions, 1 boss): HPWL placement with annealed references, L-route global-routing demand and overflow, a recursive clock tree (skew vs latency vs power), a resistive power mesh (IR drop vs stripe width vs bumps), 2x2 macro floorplanning, and a closure boss with a hard macro, a critical net and routing capacity.
   - **STA Lab** (4 missions, 1 boss): reading a path report (setup, hold, Fmax), OCV derates and CRPR, multicycle exceptions with the hold adjustment and the unsafe-exception trap, and an ECO-budget boss.
   - **Layout Lab** (5 missions, 1 boss): a rectangle layout language with a design-rule checker, connectivity and device extraction, and LVS (opens, shorts, wrong devices). Fix DRC errors, draw an inverter, debug an LVS failure, draw a NAND2, and a boss that draws a NAND2 or NOR2 from its schematic within an area budget.
-- [ ] **Phase 9: Signals Lab and specialty labs.**
+- [x] **Phase 9: Signals Lab and specialty labs.** 6 Signals missions and 21 specialty missions on the generic lab page, each with a reference solution proved by tests over many seeds and wrong answers proved rejected.
   - [x] **Signals Lab** (5 missions, 1 boss, on the generic lab page with a new SVG plot view): aliasing and choosing a sample rate around an interferer, windowed-sinc FIR design (taps, window, cutoff), FFT resolution and leakage (record length and window), converter noise (bits, oversampling, delta-sigma order against power), PID tuning on an under-damped plant, and a boss that sizes an anti-alias filter, sample rate and ADC together at minimum cost. Targets come from exhaustive search over the models the learner runs, checked over 40 seeds per mission.
-  - [ ] Specialty labs: RF/photonics, memory/yield/thermal, FPGA/AI/security, FuSa/quantum.
+  - [x] **Specialty labs** (new Specialty Lab kind; 19 guided missions and 1 boss, each wired into the skill's practice or boss tier, replacing the earlier "plan" placeholders):
+    - **RF**: reflection coefficient, VSWR and return loss from an impedance; an L-match with a lossy inductor (topology, L and C solved numerically, bandwidth checked).
+    - **Photonics**: optical link budget with WDM split, couplers, modulator type and energy per bit; ring-filter WDM channel plan (Q, linewidth, crosstalk, FSR).
+    - **Memory, process, package**: 6T SRAM sizing with Pelgrom mismatch; read/write assists and Vmin against energy; spare-row redundancy and good dies per wafer; junction temperature, TIM, heat sink, fan and throttling against cost.
+    - **FPGA**: resource counting (DSP, LUT, FF, block-RAM aspect ratios); pipelining for Fmax against flip-flops and latency.
+    - **AI**: output-stationary matmul tiling (buffer fit, DRAM traffic, tile overhead); a boss sizing an accelerator on a roofline (array, precision, batch).
+    - **Security**: CPA key recovery from simulated power traces; a defence mission (masking, shuffling, noise) judged by a real second-order attack.
+    - **Safety**: FMEDA metrics (SPFM, LFM, ASIL); the cheapest mechanism set for an ASIL target; fault-injection confidence bounds.
+    - **Quantum**: one-qubit state preparation by BFS-checked shortest sequence; T1/T2 gate budgets; pulse calibration with leakage, DRAG and decoherence.
 - [ ] **Phase 10: the roles still missing**: EDA/CAD, library characterization, I/O and ESD, SoC integration,
   clocking/PLL, image sensors, MEMS, neuromorphic, emerging devices, application engineering/TPM.
 - [ ] **Phase 11: capstone projects, the career story, and balancing.**

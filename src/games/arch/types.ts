@@ -48,7 +48,7 @@ export interface ArchLevel {
   xp: number;
   tier: 'guided' | 'boss';
   /** which lab the mission belongs to, for the header tag */
-  lab: 'Pipeline' | 'Cache' | 'Out-of-order' | 'DFT' | 'PD' | 'Layout' | 'STA' | 'Signals';
+  lab: 'Pipeline' | 'Cache' | 'Out-of-order' | 'DFT' | 'PD' | 'Layout' | 'STA' | 'Signals' | 'RF' | 'Photonics' | 'Memory' | 'Process' | 'Package' | 'FPGA' | 'AI' | 'Security' | 'Safety' | 'Quantum';
   ticket: string;
   build: (r: Rng) => ArchInstance;
 }

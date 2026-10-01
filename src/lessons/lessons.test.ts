@@ -91,7 +91,7 @@ describe('curriculum', () => {
     expect(new Set(ALL_MODULES.map((m) => m.id)).size).toBe(ALL_MODULES.length);
   });
   it('starts specialists at Act 7 and keeps the final review to the core acts', () => {
-    expect(ACTS[6].chapters.flatMap((c) => c.modules).every((m) => ['lesson', 'practice', 'boss', 'incident', 'clab'].includes(m.kind))).toBe(true);
+    expect(ACTS[6].chapters.flatMap((c) => c.modules).every((m) => ['lesson', 'practice', 'boss', 'incident', 'clab', 'spec'].includes(m.kind))).toBe(true);
     for (let seed = 1; seed < 20; seed++) {
       const titles = finalExam(rng(seed)).steps.filter((s) => s.t === 'say').map((s) => (s as { text: string }).text);
       for (const m of ACTS[6].chapters.flatMap((c) => c.modules)) expect(titles).not.toContain(`**${m.title}**`);
