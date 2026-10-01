@@ -200,6 +200,9 @@ export const ACTS: Act[] = [
       { name: 'Bring-up & production', modules: [...drill('postsi'), bossMod('boss-postsi'), incident('inc-hang'), ...drill('ate'), bossMod('boss-test'), incident('inc-finaltest'), ...drill('emu'), ...spec('fpga-map', 'fpga-fmax'), bossMod('boss-fpga')] },
       { name: 'Domain chips', modules: [...drill('npu'), ...spec('ai-tile'), bossMod('boss-ai'), ...spec('ai-boss'), ...drill('hwsec'), ...spec('sec-dpa', 'sec-defend'), bossMod('boss-hwsec'), incident('inc-key'), ...drill('fusa'), ...spec('fusa-fmeda', 'fusa-asil', 'fusa-campaign'), bossMod('boss-fusa'), incident('inc-limp'), ...drill('photonics'), ...spec('ph-budget', 'ph-wdm'), bossMod('boss-photonics'), incident('inc-optical')] },
       { name: 'Quantum', modules: [...drill('qubit'), ...spec('q-gates', 'q-coherence'), bossMod('boss-qubit'), ...drill('qctrl'), ...spec('qc-pulse'), bossMod('boss-qctrl'), incident('inc-qubit')] },
+      { name: 'Design tools & clocking', modules: [...drill('eda'), ...code('code-eda-maze', 'code-eda-sta', 'code-eda-dpll'), bossMod('boss-eda'), ...code('code-eda-boss'), ...drill('libchar'), ...spec('lib-table', 'lib-setup'), bossMod('boss-libchar'), ...drill('clocking'), ...spec('pll-loop'), bossMod('boss-clocking'), ...spec('pll-jitter')] },
+      { name: 'Chip integration', modules: [...drill('io-esd'), bossMod('boss-io-esd'), incident('inc-esd'), ...drill('soc-int'), bossMod('boss-soc-int'), incident('inc-soc'), ...drill('ae-tpm'), bossMod('boss-ae-tpm'), incident('inc-customer')] },
+      { name: 'Sensors & frontier', modules: [...drill('sensors'), bossMod('boss-sensors'), incident('inc-pixel'), ...drill('mems'), bossMod('boss-mems'), ...drill('neuro'), bossMod('boss-neuro'), ...drill('emerging'), bossMod('boss-emerging')] },
     ],
   },
 ];

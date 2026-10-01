@@ -5,6 +5,7 @@ import { STATS_LESSONS } from './stats';
 import { TOOLING_LESSONS } from './tooling';
 import { DIGITAL_LESSONS } from './digital';
 import { FOUNDATION_LESSONS } from './foundations';
+import { FRONTIER_LESSONS } from './frontier';
 import { MATH_LESSONS } from './math';
 import { PHYSICS_LESSONS } from './physics';
 import { QUANTUM_LESSONS } from './quantum';
@@ -20,7 +21,7 @@ export const CORE_LESSONS: Lesson[] = [
   ...TOOLING_LESSONS, ...SYSTEMS_LESSONS, ...DIGITAL_LESSONS, ...VLSI_LESSONS, ...VERIF_LESSONS, ...ARCH_LESSONS,
 ];
 
-export const LESSONS: Lesson[] = [...CORE_LESSONS, ...ROLE_LESSONS, ...QUANTUM_LESSONS];
+export const LESSONS: Lesson[] = [...CORE_LESSONS, ...ROLE_LESSONS, ...QUANTUM_LESSONS, ...FRONTIER_LESSONS];
 
 export function findLesson(id: string): Lesson | undefined {
   return LESSONS.find((l) => l.id === id);

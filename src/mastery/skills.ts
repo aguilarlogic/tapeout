@@ -144,16 +144,16 @@ export const SKILLS: Skill[] = [
   S('quantum-ctrl', 'Specialties', 'Quantum control and cryo-electronics', ['quantum'], ['qctrl'], ['practice-qctrl', 'qc-pulse'], ['boss-qctrl', 'inc-qubit']),
 
   // ------------------------------------------------ roles not yet covered
-  S('eda', 'Emerging roles', 'EDA algorithms: placement, routing, SAT/BDDs', ['eda'], [], [], [], 'Code Lab'),
-  S('libchar', 'Emerging roles', 'Standard-cell libraries and Liberty characterization', ['libchar', 'circuit'], [], [], [], 'lesson + characterization lab'),
-  S('io-esd', 'Emerging roles', 'I/O and ESD design', ['io'], [], [], [], 'lesson + incident'),
-  S('soc-int', 'Emerging roles', 'SoC integration', ['soc'], [], [], [], 'lesson + integration incident'),
-  S('clocking', 'Emerging roles', 'Clocking and PLL design', ['clocking', 'analog'], [], [], [], 'lesson + PLL lab'),
-  S('sensors', 'Emerging roles', 'Image sensors and displays', ['sensors'], [], [], [], 'lesson + incident'),
-  S('mems', 'Emerging roles', 'MEMS and sensors', ['mems'], [], [], [], 'lesson'),
-  S('neuro', 'Emerging roles', 'Neuromorphic and in-memory computing', ['neuro', 'ai'], [], [], [], 'lesson'),
-  S('emerging', 'Emerging roles', 'Emerging devices: CFETs, 2D materials, spintronics', ['emerging', 'process'], [], [], [], 'lesson'),
-  S('ae-tpm', 'Emerging roles', 'Applications engineering and program management', ['ae'], [], [], [], 'lesson + customer incident'),
+  S('eda', 'Emerging roles', 'EDA algorithms: placement, routing, SAT/BDDs', ['eda'], ['eda'], ['practice-eda', 'code-eda-maze', 'code-eda-sta', 'code-eda-dpll'], ['boss-eda', 'code-eda-boss']),
+  S('libchar', 'Emerging roles', 'Standard-cell libraries and Liberty characterization', ['libchar', 'circuit'], ['libchar'], ['practice-libchar', 'lib-table', 'lib-setup'], ['boss-libchar']),
+  S('io-esd', 'Emerging roles', 'I/O and ESD design', ['io'], ['io-esd'], ['practice-io-esd'], ['boss-io-esd', 'inc-esd']),
+  S('soc-int', 'Emerging roles', 'SoC integration', ['soc'], ['soc-int'], ['practice-soc-int'], ['boss-soc-int', 'inc-soc']),
+  S('clocking', 'Emerging roles', 'Clocking and PLL design', ['clocking', 'analog'], ['clocking'], ['practice-clocking', 'pll-loop'], ['boss-clocking', 'pll-jitter']),
+  S('sensors', 'Emerging roles', 'Image sensors and displays', ['sensors'], ['sensors'], ['practice-sensors'], ['boss-sensors', 'inc-pixel']),
+  S('mems', 'Emerging roles', 'MEMS and sensors', ['mems'], ['mems'], ['practice-mems'], ['boss-mems']),
+  S('neuro', 'Emerging roles', 'Neuromorphic and in-memory computing', ['neuro', 'ai'], ['neuro'], ['practice-neuro'], ['boss-neuro']),
+  S('emerging', 'Emerging roles', 'Emerging devices: CFETs, 2D materials, spintronics', ['emerging', 'process'], ['emerging'], ['practice-emerging'], ['boss-emerging']),
+  S('ae-tpm', 'Emerging roles', 'Applications engineering and program management', ['ae'], ['ae-tpm'], ['practice-ae-tpm'], ['boss-ae-tpm', 'inc-customer']),
 ];
 
 export const findSkill = (id: string) => SKILLS.find((s) => s.id === id);

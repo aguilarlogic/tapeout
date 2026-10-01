@@ -76,3 +76,20 @@ describe('specialty labs reject plausible wrong answers', () => {
     expect(ok(run('qc-pulse', 1, { om: 2, scale: 1, drag: true }))).toBe(false);
   });
 });
+
+describe('library and clocking labs reject plausible wrong answers', () => {
+  it('library table: unanswered and nonsense answers fail', () => {
+    expect(ok(run('lib-table', 1, {}))).toBe(false);
+    expect(ok(run('lib-table', 1, { d1: '10', ml: '3', d3: '10' }))).toBe(false);
+  });
+  it('setup and hold: using the nominal clk→Q as the setup fails', () => {
+    expect(ok(run('lib-setup', 1, { su: '0', ho: '0', win: '0' }))).toBe(false);
+  });
+  it('PLL loop: a fat filter breaks the area budget, a tiny one the bandwidth', () => {
+    expect(ok(run('pll-loop', 1, { r: 50, c1: 500, c2: 20 }))).toBe(false);
+    expect(ok(run('pll-loop', 1, { r: 1, c1: 2, c2: 0.2 }))).toBe(false);
+  });
+  it('PLL jitter: the widest bandwidth violates the f_ref/10 limit', () => {
+    expect(ok(run('pll-jitter', 1, { fref: '25', bw: 12 }))).toBe(false);
+  });
+});
