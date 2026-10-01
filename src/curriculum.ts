@@ -10,6 +10,7 @@ import { SVA_LEVELS } from './games/sva/levels';
 import { TB_LEVELS } from './games/sv/levels';
 import { CDC_LEVELS } from './games/cdc/levels';
 import { ARCH_LEVELS } from './games/arch/levels';
+import { RV_LEVELS } from './games/rv/levels';
 import { ISA_LEVELS } from './games/isa/levels';
 import { DEBUG_LEVELS, RTL_LEVELS } from './games/rtl/levels';
 import { TIMING_LEVELS } from './games/timing/levels';
@@ -19,7 +20,7 @@ import { findIncident } from './incidents';
 import { findBoss, findPractice } from './practice';
 import { levelRecord, profile } from './state';
 
-export type ModKind = 'lesson' | 'practice' | 'boss' | 'incident' | 'logic' | 'cmos' | 'rtl' | 'debug' | 'cov' | 'uvm' | 'sta' | 'pcb' | 'clab' | 'code' | 'shell' | 'sva' | 'tb' | 'cdc' | 'isa' | 'arch' | 'drills' | 'final';
+export type ModKind = 'lesson' | 'practice' | 'boss' | 'incident' | 'logic' | 'cmos' | 'rtl' | 'debug' | 'cov' | 'uvm' | 'sta' | 'pcb' | 'clab' | 'code' | 'shell' | 'sva' | 'tb' | 'cdc' | 'isa' | 'arch' | 'rv' | 'drills' | 'final';
 
 export interface Module {
   id: string;
@@ -34,13 +35,13 @@ export interface Act { id: string; n: number; name: string; tagline: string; reg
 
 export const KIND_LABEL: Record<ModKind, string> = {
   lesson: 'Lesson', practice: 'Practice', boss: 'Boss', incident: 'Incident', logic: 'Logic lab', cmos: 'Transistor lab', rtl: 'Verilog', debug: 'Bug hunt', cov: 'Coverage',
-  uvm: 'UVM', clab: 'Circuit Lab', code: 'Code Lab', shell: 'Shell Lab', sva: 'Assertions', tb: 'Testbench', cdc: 'Clock crossing', isa: 'Assembly', arch: 'Architecture lab', sta: 'Timing', pcb: 'Board', drills: 'Interview', final: 'Final review',
+  uvm: 'UVM', clab: 'Circuit Lab', code: 'Code Lab', shell: 'Shell Lab', sva: 'Assertions', tb: 'Testbench', cdc: 'Clock crossing', isa: 'Assembly', arch: 'Architecture lab', rv: 'Core project', sta: 'Timing', pcb: 'Board', drills: 'Interview', final: 'Final review',
 };
 
 /** The desktop app a module opens in. */
 export const KIND_APP: Record<ModKind, string> = {
   lesson: 'terminal', practice: 'terminal', boss: 'terminal', incident: 'terminal', logic: 'Logic Lab', cmos: 'Logic Lab', rtl: 'Verilog IDE', debug: 'Verilog IDE', cov: 'Coverage',
-  uvm: 'UVM Builder', clab: 'Circuit Lab', code: 'Code Lab', shell: 'Shell Lab', sva: 'SVA Lab', tb: 'SV Lab', cdc: 'CDC Lab', isa: 'ISA Lab', arch: 'Arch Lab', sta: 'Timing', pcb: 'Board Router', drills: 'Flashcards', final: 'terminal',
+  uvm: 'UVM Builder', clab: 'Circuit Lab', code: 'Code Lab', shell: 'Shell Lab', sva: 'SVA Lab', tb: 'SV Lab', cdc: 'CDC Lab', isa: 'ISA Lab', arch: 'Arch Lab', rv: 'RISC-V Core', sta: 'Timing', pcb: 'Board Router', drills: 'Flashcards', final: 'terminal',
 };
 
 const lesson = (id: string): Module => {
@@ -83,6 +84,9 @@ const tb = (...ids: string[]): Module[] => ids.flatMap((id) => mods(TB_LEVELS, '
 
 /** CDC Lab missions by id, in the order given. */
 const cdc = (...ids: string[]): Module[] => ids.flatMap((id) => mods(CDC_LEVELS, 'cdc', 'cdc', (x) => x.id === id));
+
+/** RISC-V core project missions by id, in the order given. */
+const rv = (...ids: string[]): Module[] => ids.flatMap((id) => mods(RV_LEVELS, 'rv', 'rv', (x) => x.id === id));
 
 /** Architecture Lab missions by id, in the order given. */
 const arch = (...ids: string[]): Module[] => ids.flatMap((id) => mods(ARCH_LEVELS, 'arch', 'arch', (x) => x.id === id));
@@ -132,7 +136,7 @@ export const ACTS: Act[] = [
       { name: 'Building blocks', modules: [...drill('comb'), ...logic(['logic-mux', 'logic-half', 'logic-full'])] },
       { name: 'Memory & state', modules: [...drill('seq'), ...logic(['logic-latch', 'logic-counter']), ...drill('fsm'), bossMod('boss-logic')] },
       { name: 'Verilog', modules: [...drill('verilog'), ...mods(RTL_LEVELS, 'rtl', 'rtl'), bossMod('boss-hdl')] },
-      { name: 'Microarchitecture', modules: [...drill('alu'), bossMod('boss-uarch')] },
+      { name: 'Microarchitecture', modules: [...drill('alu'), ...rv('rv-alu', 'rv-branch', 'rv-mem', 'rv-mext'), bossMod('boss-uarch'), ...rv('rv-boss')] },
       { name: 'Clocks & resets', modules: [...drill('clk'), ...cdc('cdc-sync', 'cdc-pulse', 'cdc-gray', 'cdc-handshake'), bossMod('boss-cdc'), ...cdc('cdc-fifo')] },
     ],
   },

@@ -116,7 +116,7 @@ export const SKILLS: Skill[] = [
   S('cocotb', 'Verification', 'cocotb (Python testbenches)', ['dv', 'rtl', 'fpga'], [], [], [], 'Code Lab driving the simulator'),
 
   // ------------------------------------------------ roles
-  S('rtl-craft', 'Design craft', 'RTL craft: synthesis, PPA trade-offs, design reviews', ['rtl', 'soc', 'ai'], [], [], [], 'RV32I core project'),
+  S('rtl-craft', 'Design craft', 'RTL craft: synthesis, PPA trade-offs, design reviews', ['rtl', 'soc', 'ai'], [], ['rv-alu', 'rv-branch', 'rv-mem', 'rv-mext'], ['rv-boss']),
   S('cpu-arch', 'Architecture', 'Cores: pipelines, superscalar, OoO, branch prediction', ['arch', 'rtl', 'dv', 'postsi'], ['pipe', 'ooo'], ['practice-pipe', 'practice-ooo', 'pipe-fwd', 'pipe-branch', 'pipe-sched', 'pipe-unroll', 'ooo-rename', 'ooo-window', 'ooo-diagnose'], ['boss-cpu', 'pipe-boss', 'ooo-boss']),
   S('mem-hier', 'Architecture', 'Caches, coherence, consistency, DRAM', ['arch', 'rtl', 'dv', 'memory'], ['cache', 'coherence', 'dram'], ['practice-cache', 'practice-coherence', 'practice-dram', 'cache-predict', 'cache-block', 'cache-conflict', 'cache-policy', 'cache-tile', 'cache-write'], ['boss-mem', 'cache-boss']),
   S('interconnect', 'Architecture', 'Buses, NoCs, SerDes, PCIe/CXL', ['arch', 'soc', 'rtl', 'dv', 'board'], ['bus', 'noc', 'serdes'], ['practice-bus', 'practice-noc', 'practice-serdes'], ['boss-interconnect']),
