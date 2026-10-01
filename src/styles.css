@@ -491,3 +491,11 @@ table.arch-grid td.lm1 { background: #2f5aa0; color: #cde; } table.arch-grid td.
 table.arch-grid td.lp { background: #a03a3a; color: #fdd; } table.arch-grid td.ln { background: #3a7a3a; color: #dfd; }
 table.arch-grid td.lpd { background: #8a6a2a; color: #fed; } table.arch-grid td.lw { background: #26303a; color: #678; }
 table.arch-grid td.lm1, table.arch-grid td.lc, table.arch-grid td.lp, table.arch-grid td.ln, table.arch-grid td.lpd, table.arch-grid td.lw { min-width: 16px; width: 16px; height: 16px; padding: 0; font-size: 9px; }
+
+/* Signals Lab plots */
+.arch-plot { width: 100%; max-width: 620px; background: var(--panel2, #12161c); border-radius: 6px; display: block; }
+.arch-plot .grid { stroke: #2a3340; stroke-width: 1; }
+.arch-plot .mark { stroke: #ff7a90; stroke-width: 1; stroke-dasharray: 4 3; }
+.arch-plot .tick { fill: #8b97a6; font-size: 10px; }
+.arch-legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; margin-top: 4px; }
+.arch-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; }

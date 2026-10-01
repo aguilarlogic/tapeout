@@ -20,7 +20,7 @@ import { findIncident } from './incidents';
 import { findBoss, findPractice } from './practice';
 import { levelRecord, profile } from './state';
 
-export type ModKind = 'lesson' | 'practice' | 'boss' | 'incident' | 'logic' | 'cmos' | 'rtl' | 'debug' | 'cov' | 'uvm' | 'sta' | 'pcb' | 'clab' | 'code' | 'shell' | 'sva' | 'tb' | 'cdc' | 'isa' | 'arch' | 'rv' | 'dft' | 'pd' | 'sta2' | 'layout' | 'drills' | 'final';
+export type ModKind = 'lesson' | 'practice' | 'boss' | 'incident' | 'logic' | 'cmos' | 'rtl' | 'debug' | 'cov' | 'uvm' | 'sta' | 'pcb' | 'clab' | 'code' | 'shell' | 'sva' | 'tb' | 'cdc' | 'isa' | 'arch' | 'rv' | 'dft' | 'pd' | 'sta2' | 'layout' | 'sig' | 'drills' | 'final';
 
 export interface Module {
   id: string;
@@ -35,13 +35,13 @@ export interface Act { id: string; n: number; name: string; tagline: string; reg
 
 export const KIND_LABEL: Record<ModKind, string> = {
   lesson: 'Lesson', practice: 'Practice', boss: 'Boss', incident: 'Incident', logic: 'Logic lab', cmos: 'Transistor lab', rtl: 'Verilog', debug: 'Bug hunt', cov: 'Coverage',
-  uvm: 'UVM', clab: 'Circuit Lab', code: 'Code Lab', shell: 'Shell Lab', sva: 'Assertions', tb: 'Testbench', cdc: 'Clock crossing', isa: 'Assembly', arch: 'Architecture lab', rv: 'Core project', dft: 'DFT Lab', pd: 'PD Lab', sta2: 'STA Lab', layout: 'Layout Lab', sta: 'Timing', pcb: 'Board', drills: 'Interview', final: 'Final review',
+  uvm: 'UVM', clab: 'Circuit Lab', code: 'Code Lab', shell: 'Shell Lab', sva: 'Assertions', tb: 'Testbench', cdc: 'Clock crossing', isa: 'Assembly', arch: 'Architecture lab', rv: 'Core project', dft: 'DFT Lab', pd: 'PD Lab', sta2: 'STA Lab', layout: 'Layout Lab', sig: 'Signals Lab', sta: 'Timing', pcb: 'Board', drills: 'Interview', final: 'Final review',
 };
 
 /** The desktop app a module opens in. */
 export const KIND_APP: Record<ModKind, string> = {
   lesson: 'terminal', practice: 'terminal', boss: 'terminal', incident: 'terminal', logic: 'Logic Lab', cmos: 'Logic Lab', rtl: 'Verilog IDE', debug: 'Verilog IDE', cov: 'Coverage',
-  uvm: 'UVM Builder', clab: 'Circuit Lab', code: 'Code Lab', shell: 'Shell Lab', sva: 'SVA Lab', tb: 'SV Lab', cdc: 'CDC Lab', isa: 'ISA Lab', arch: 'Arch Lab', rv: 'RISC-V Core', dft: 'DFT Lab', pd: 'PD Lab', sta2: 'STA Lab', layout: 'Layout Lab', sta: 'Timing', pcb: 'Board Router', drills: 'Flashcards', final: 'terminal',
+  uvm: 'UVM Builder', clab: 'Circuit Lab', code: 'Code Lab', shell: 'Shell Lab', sva: 'SVA Lab', tb: 'SV Lab', cdc: 'CDC Lab', isa: 'ISA Lab', arch: 'Arch Lab', rv: 'RISC-V Core', dft: 'DFT Lab', pd: 'PD Lab', sta2: 'STA Lab', layout: 'Layout Lab', sig: 'Signals Lab', sta: 'Timing', pcb: 'Board Router', drills: 'Flashcards', final: 'terminal',
 };
 
 const lesson = (id: string): Module => {
@@ -88,6 +88,8 @@ const cdc = (...ids: string[]): Module[] => ids.flatMap((id) => mods(CDC_LEVELS,
 /** DFT Lab missions (they run on the generic lab page under #/arch). */
 const dft = (...ids: string[]): Module[] => ids.flatMap((id) => mods(ARCH_LEVELS, 'dft', 'arch', (x) => x.id === id));
 
+/** Signals Lab missions (generic lab page under #/arch). */
+const sig = (...ids: string[]): Module[] => ids.flatMap((id) => mods(ARCH_LEVELS, 'sig', 'arch', (x) => x.id === id));
 /** Layout Lab missions (generic lab page under #/arch). */
 const layout = (...ids: string[]): Module[] => ids.flatMap((id) => mods(ARCH_LEVELS, 'layout', 'arch', (x) => x.id === id));
 
@@ -121,7 +123,7 @@ export const ACTS: Act[] = [
       { name: 'Calculus & linear algebra', modules: [...drill('calc'), bossMod('boss-calc'), ...drill('linalg'), bossMod('boss-linalg')] },
       { name: 'Differential equations', modules: [...drill('ode'), ...clab('clab-debounce', 'clab-rlc'), bossMod('boss-ode'), ...clab('clab-boss-ode')] },
       { name: 'Probability & numerics', modules: [...drill('prob'), ...code('code-py-mc'), bossMod('boss-prob'), ...drill('numerics'), ...code('code-py-newton', 'code-py-simpson'), bossMod('boss-numerics'), ...code('code-boss-py-root')] },
-      { name: 'Signals & control', modules: [...drill('signals', 'dsp'), bossMod('boss-signals'), ...drill('control'), bossMod('boss-control')] },
+      { name: 'Signals & control', modules: [...drill('signals', 'dsp'), ...sig('sig-alias', 'sig-fir', 'sig-fft', 'sig-adc'), bossMod('boss-signals'), ...sig('sig-boss'), ...drill('control'), ...sig('sig-pid'), bossMod('boss-control')] },
       { name: 'Physics', modules: [...drill('semi', 'mosphys', 'em'), bossMod('boss-em')] },
       { name: 'Electronics', modules: [...drill('electronics'), ...clab('clab-rectifier', 'clab-bjt'), bossMod('boss-electronics'), ...clab('clab-boss-bjt')] },
       { name: 'Transistors', modules: [...drill('mos'), ...logic(['cmos-inv', 'cmos-nand', 'cmos-nor', 'cmos-and', 'cmos-aoi']), bossMod('boss-devices')] },

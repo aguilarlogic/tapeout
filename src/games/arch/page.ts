@@ -12,6 +12,46 @@ import { defaults, type ArchResult, type Control, type Values, type View } from 
 
 export const starsFor = (hintsUsed: number) => (hintsUsed > 0 ? 2 : 3);
 
+const PLOT_COLORS = ['#6cc8ff', '#ffb454', '#8be28b', '#ff7a90'];
+
+/** A small SVG line/stem plot; the axes autoscale to the data. */
+function plotEl(v: Extract<View, { kind: 'plot' }>): HTMLElement {
+  const W = 560, H = 220, L = 44, R = 10, T = 10, B = 28;
+  const xsOf = (s: Extract<View, { kind: 'plot' }>['series'][number]) => s.xs ?? s.ys.map((_, i) => i);
+  const allX = v.series.flatMap(xsOf), allY = [...v.series.flatMap((s) => s.ys), ...(v.marks ?? []).map((m) => m.y)].filter(Number.isFinite);
+  const x0 = Math.min(...allX, 0), x1 = Math.max(...allX, x0 + 1e-9);
+  let y0 = Math.min(...allY, 0), y1 = Math.max(...allY, y0 + 1e-9);
+  if (y1 - y0 < 1e-9) { y0 -= 1; y1 += 1; }
+  const px = (x: number) => L + ((x - x0) / (x1 - x0)) * (W - L - R);
+  const py = (y: number) => T + (1 - (y - y0) / (y1 - y0)) * (H - T - B);
+  const NS = 'http://www.w3.org/2000/svg';
+  const el = (tag: string, attrs: Record<string, string | number>, text?: string) => {
+    const e = document.createElementNS(NS, tag);
+    for (const [k, val] of Object.entries(attrs)) e.setAttribute(k, String(val));
+    if (text !== undefined) e.textContent = text;
+    return e;
+  };
+  const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, class: 'arch-plot', role: 'img' });
+  const fmt = (x: number) => (Math.abs(x) >= 100 || Number.isInteger(x) ? String(Math.round(x)) : x.toFixed(2));
+  for (let i = 0; i <= 4; i++) {
+    const y = y0 + ((y1 - y0) * i) / 4;
+    svg.append(el('line', { x1: L, x2: W - R, y1: py(y), y2: py(y), class: 'grid' }), el('text', { x: L - 4, y: py(y) + 3, class: 'tick', 'text-anchor': 'end' }, fmt(y)));
+    const x = x0 + ((x1 - x0) * i) / 4;
+    svg.append(el('text', { x: px(x), y: H - B + 13, class: 'tick', 'text-anchor': 'middle' }, fmt(x)));
+  }
+  for (const m of v.marks ?? []) svg.append(el('line', { x1: L, x2: W - R, y1: py(m.y), y2: py(m.y), class: 'mark' }), el('text', { x: W - R - 2, y: py(m.y) - 3, class: 'tick', 'text-anchor': 'end' }, m.label));
+  v.series.forEach((s, k) => {
+    const color = s.color ?? PLOT_COLORS[k % PLOT_COLORS.length];
+    const xs = xsOf(s);
+    if (s.stem) s.ys.forEach((y, i) => svg.append(el('line', { x1: px(xs[i]), x2: px(xs[i]), y1: py(Math.max(y0, 0)), y2: py(y), stroke: color, 'stroke-width': 1.5 })));
+    else svg.append(el('polyline', { points: s.ys.map((y, i) => `${px(xs[i]).toFixed(1)},${py(y).toFixed(1)}`).join(' '), fill: 'none', stroke: color, 'stroke-width': 1.6 }));
+  });
+  if (v.xlabel) svg.append(el('text', { x: (W + L) / 2, y: H - 2, class: 'tick', 'text-anchor': 'middle' }, v.xlabel));
+  if (v.ylabel) svg.append(el('text', { x: 4, y: 10, class: 'tick' }, v.ylabel));
+  const legend = h('div', { class: 'arch-legend' }, ...v.series.map((s, k) => h('span', null, h('i', { style: `background:${s.color ?? PLOT_COLORS[k % PLOT_COLORS.length]}` }), s.label)));
+  return h('div', { class: 'arch-view' }, v.caption ? h('h4', null, v.caption) : '', svg as unknown as HTMLElement, legend);
+}
+
 function viewEl(v: View): HTMLElement {
   if (v.kind === 'diagram') {
     const width = Math.max(0, ...v.rows.map((r) => r.stages.length));
@@ -23,6 +63,7 @@ function viewEl(v: View): HTMLElement {
     return h('div', { class: 'arch-view' }, v.caption ? h('h4', null, v.caption) : '', h('div', { class: 'arch-scroll' }, h('table', { class: 'arch-table' }, h('thead', null, h('tr', null, ...v.head.map((x) => h('th', null, x)))), h('tbody', null, ...v.rows.map((r, i) => h('tr', { class: v.classes?.[i] ?? '' }, ...r.map((c) => h('td', null, String(c)))))))));
   }
   if (v.kind === 'grid') return h('div', { class: 'arch-view' }, v.caption ? h('h4', null, v.caption) : '', h('div', { class: 'arch-scroll' }, h('table', { class: 'arch-grid' }, h('tbody', null, ...v.cells.map((row) => h('tr', null, ...row.map((c) => h('td', { class: c.c ?? '' }, c.t))))))));
+  if (v.kind === 'plot') return plotEl(v);
   return h('div', { class: 'arch-view' }, v.caption ? h('h4', null, v.caption) : '', ...v.items.map((it) => h('div', { class: 'arch-bar' }, h('span', { class: 'lbl' }, it.label), h('span', { class: 'track' }, h('span', { class: 'fill', style: `width:${Math.min(100, (100 * it.value) / Math.max(1, it.of))}%` })), h('span', { class: 'num dim small' }, String(it.value)))));
 }
 

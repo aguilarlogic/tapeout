@@ -15,7 +15,10 @@ export type View =
   | { kind: 'diagram'; rows: PipeRow[]; caption?: string }
   | { kind: 'table'; head: string[]; rows: (string | number)[][]; caption?: string; /** a CSS class per row */ classes?: string[] }
   | { kind: 'grid'; cells: { t: string; c?: string }[][]; caption?: string }
-  | { kind: 'bars'; items: { label: string; value: number; of: number }[]; caption?: string };
+  | { kind: 'bars'; items: { label: string; value: number; of: number }[]; caption?: string }
+  | { kind: 'plot'; series: PlotSeries[]; xlabel?: string; ylabel?: string; caption?: string; /** horizontal reference lines */ marks?: { y: number; label: string }[] };
+
+export interface PlotSeries { label: string; ys: number[]; /** x for each y; defaults to the index */ xs?: number[]; stem?: boolean; color?: string }
 
 export interface ArchResult {
   goals: Goal[];
@@ -45,7 +48,7 @@ export interface ArchLevel {
   xp: number;
   tier: 'guided' | 'boss';
   /** which lab the mission belongs to, for the header tag */
-  lab: 'Pipeline' | 'Cache' | 'Out-of-order' | 'DFT' | 'PD' | 'Layout' | 'STA';
+  lab: 'Pipeline' | 'Cache' | 'Out-of-order' | 'DFT' | 'PD' | 'Layout' | 'STA' | 'Signals';
   ticket: string;
   build: (r: Rng) => ArchInstance;
 }

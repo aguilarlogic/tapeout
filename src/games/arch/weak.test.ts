@@ -108,3 +108,29 @@ describe('Layout missions reject broken layouts', () => {
     expect(seen.size).toBeGreaterThan(2);
   });
 });
+
+describe('signals lab rejects plausible wrong answers', () => {
+  it('aliasing: the textbook 2x rate is not enough, and a slow clock misses the band', () => {
+    const inst = findArchLevel('sig-alias')!.build(rng(1));
+    const lo = inst.run({ alias: '0', fs: 40 });
+    expect(lo.goals.every((g) => g.ok)).toBe(false);
+    expect(ok(inst.run({ alias: '0', fs: 100000 }))).toBe(false);
+  });
+  it('FIR: a rectangular window cannot make a deep stopband', () => {
+    expect(ok(run('sig-fir', 1, { taps: 63, win: 'rect', fc: 0.15 }))).toBe(false);
+  });
+  it('FFT: the longest record with a rectangular window still hides a weak neighbour, and a long record is over budget', () => {
+    expect(ok(run('sig-fft', 1, { n: '1024', win: 'rect' }))).toBe(false);
+  });
+  it('ADC: brute force bits at Nyquist rate meets SNR but not the power budget', () => {
+    const res = run('sig-adc', 1, { bits: 16, osr: '1', order: '0' });
+    expect(res.goals.find((g) => /power/.test(g.label))?.ok).toBe(false);
+  });
+  it('PID: P-only control leaves a steady-state error, and huge gains go unstable or ring', () => {
+    expect(run('sig-pid', 1, { kp: 5, ki: 0, kd: 0 }).goals.find((g) => /steady/.test(g.label))?.ok).toBe(false);
+    expect(ok(run('sig-pid', 1, { kp: 30, ki: 60, kd: 5 }))).toBe(false);
+  });
+  it('boss: a first-order filter at the band edge droops too much', () => {
+    expect(ok(run('sig-boss', 1, { fs: 500, order: '1', fc: 20, bits: '16' }))).toBe(false);
+  });
+});

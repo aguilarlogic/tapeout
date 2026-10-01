@@ -97,6 +97,8 @@ Each phase ships playable content and is committed on its own.
   - **STA Lab** (4 missions, 1 boss): reading a path report (setup, hold, Fmax), OCV derates and CRPR, multicycle exceptions with the hold adjustment and the unsafe-exception trap, and an ECO-budget boss.
   - **Layout Lab** (5 missions, 1 boss): a rectangle layout language with a design-rule checker, connectivity and device extraction, and LVS (opens, shorts, wrong devices). Fix DRC errors, draw an inverter, debug an LVS failure, draw a NAND2, and a boss that draws a NAND2 or NOR2 from its schematic within an area budget.
 - [ ] **Phase 9: Signals Lab and specialty labs.**
+  - [x] **Signals Lab** (5 missions, 1 boss, on the generic lab page with a new SVG plot view): aliasing and choosing a sample rate around an interferer, windowed-sinc FIR design (taps, window, cutoff), FFT resolution and leakage (record length and window), converter noise (bits, oversampling, delta-sigma order against power), PID tuning on an under-damped plant, and a boss that sizes an anti-alias filter, sample rate and ADC together at minimum cost. Targets come from exhaustive search over the models the learner runs, checked over 40 seeds per mission.
+  - [ ] Specialty labs: RF/photonics, memory/yield/thermal, FPGA/AI/security, FuSa/quantum.
 - [ ] **Phase 10: the roles still missing**: EDA/CAD, library characterization, I/O and ESD, SoC integration,
   clocking/PLL, image sensors, MEMS, neuromorphic, emerging devices, application engineering/TPM.
 - [ ] **Phase 11: capstone projects, the career story, and balancing.**
