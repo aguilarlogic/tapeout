@@ -3,6 +3,7 @@
 import { circuitPage } from '../games/circuit/page';
 import { codePage } from '../games/code/page';
 import { shellPage } from '../games/shell/page';
+import { svaPage } from '../games/sva/page';
 import { findModule, KIND_APP } from '../curriculum';
 import { coveragePage } from '../games/coverage/page';
 import { drillsPage } from '../games/drills/page';
@@ -25,7 +26,7 @@ import { bindMentorLog } from './mentor';
 import { getWindow, initWM, openWindow } from './wm';
 
 const LABS: Record<string, (id: string) => HTMLElement> = {
-  logic: logicPage, rtl: rtlPage, pcb: pcbPage, sta: timingPage, cov: coveragePage, uvm: uvmPage, clab: circuitPage, code: codePage, shell: shellPage,
+  logic: logicPage, rtl: rtlPage, pcb: pcbPage, sta: timingPage, cov: coveragePage, uvm: uvmPage, clab: circuitPage, code: codePage, shell: shellPage, sva: svaPage,
 };
 
 let term: Terminal;

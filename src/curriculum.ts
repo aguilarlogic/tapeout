@@ -6,6 +6,7 @@ import { PCB_LEVELS } from './games/pcb/levels';
 import { CIRCUIT_LEVELS } from './games/circuit/levels';
 import { CODE_LEVELS } from './games/code/levels';
 import { SHELL_LEVELS } from './games/shell/levels';
+import { SVA_LEVELS } from './games/sva/levels';
 import { DEBUG_LEVELS, RTL_LEVELS } from './games/rtl/levels';
 import { TIMING_LEVELS } from './games/timing/levels';
 import { UVM_PUZZLES } from './games/uvm/puzzles';
@@ -14,7 +15,7 @@ import { findIncident } from './incidents';
 import { findBoss, findPractice } from './practice';
 import { levelRecord, profile } from './state';
 
-export type ModKind = 'lesson' | 'practice' | 'boss' | 'incident' | 'logic' | 'cmos' | 'rtl' | 'debug' | 'cov' | 'uvm' | 'sta' | 'pcb' | 'clab' | 'code' | 'shell' | 'drills' | 'final';
+export type ModKind = 'lesson' | 'practice' | 'boss' | 'incident' | 'logic' | 'cmos' | 'rtl' | 'debug' | 'cov' | 'uvm' | 'sta' | 'pcb' | 'clab' | 'code' | 'shell' | 'sva' | 'drills' | 'final';
 
 export interface Module {
   id: string;
@@ -29,13 +30,13 @@ export interface Act { id: string; n: number; name: string; tagline: string; reg
 
 export const KIND_LABEL: Record<ModKind, string> = {
   lesson: 'Lesson', practice: 'Practice', boss: 'Boss', incident: 'Incident', logic: 'Logic lab', cmos: 'Transistor lab', rtl: 'Verilog', debug: 'Bug hunt', cov: 'Coverage',
-  uvm: 'UVM', clab: 'Circuit Lab', code: 'Code Lab', shell: 'Shell Lab', sta: 'Timing', pcb: 'Board', drills: 'Interview', final: 'Final review',
+  uvm: 'UVM', clab: 'Circuit Lab', code: 'Code Lab', shell: 'Shell Lab', sva: 'Assertions', sta: 'Timing', pcb: 'Board', drills: 'Interview', final: 'Final review',
 };
 
 /** The desktop app a module opens in. */
 export const KIND_APP: Record<ModKind, string> = {
   lesson: 'terminal', practice: 'terminal', boss: 'terminal', incident: 'terminal', logic: 'Logic Lab', cmos: 'Logic Lab', rtl: 'Verilog IDE', debug: 'Verilog IDE', cov: 'Coverage',
-  uvm: 'UVM Builder', clab: 'Circuit Lab', code: 'Code Lab', shell: 'Shell Lab', sta: 'Timing', pcb: 'Board Router', drills: 'Flashcards', final: 'terminal',
+  uvm: 'UVM Builder', clab: 'Circuit Lab', code: 'Code Lab', shell: 'Shell Lab', sva: 'SVA Lab', sta: 'Timing', pcb: 'Board Router', drills: 'Flashcards', final: 'terminal',
 };
 
 const lesson = (id: string): Module => {
@@ -69,6 +70,9 @@ const logic = (ids: string[]) => ids.map((id) => {
 
 /** Code Lab missions by id, in the order given. */
 const code = (...ids: string[]): Module[] => ids.flatMap((id) => mods(CODE_LEVELS, 'code', 'code', (x) => x.id === id));
+
+/** SVA and formal missions by id, in the order given. */
+const sva = (...ids: string[]): Module[] => ids.flatMap((id) => mods(SVA_LEVELS, 'sva', 'sva', (x) => x.id === id));
 
 /** Shell Lab missions by id, in the order given. */
 const shell = (...ids: string[]): Module[] => ids.flatMap((id) => mods(SHELL_LEVELS, 'shell', 'shell', (x) => x.id === id));
@@ -131,7 +135,7 @@ export const ACTS: Act[] = [
       { name: 'Testbenches & debug', modules: [...drill('dv'), ...code('code-py-lfsr', 'code-py-uart'), ...mods(DEBUG_LEVELS, 'debug', 'rtl'), bossMod('boss-tb'), bossMod('boss-debug')] },
       { name: 'Random & coverage', modules: [...drill('crv'), bossMod('boss-crv'), prac('practice-cov'), ...mods(SCENARIOS, 'cov', 'cov'), bossMod('boss-coverage')] },
       { name: 'UVM', modules: [...drill('uvm'), ...mods(UVM_PUZZLES, 'uvm', 'uvm'), bossMod('boss-uvm')] },
-      { name: 'Assertions & formal', modules: [...drill('sva'), bossMod('boss-sva'), ...drill('formal'), bossMod('boss-formal')] },
+      { name: 'Assertions & formal', modules: [...drill('sva'), ...sva('sva-latency', 'sva-reg', 'sva-arbiter', 'sva-fifo', 'sva-valid-ready', 'sva-fsm', 'sva-repeat', 'sva-cover'), bossMod('boss-sva'), ...sva('sva-boss-burst'), ...drill('formal'), ...sva('formal-assume', 'formal-depth', 'formal-fix'), bossMod('boss-formal'), ...sva('formal-boss-wrap')] },
       { name: 'Design for test', modules: [...drill('dft'), bossMod('boss-dft')] },
     ],
   },
