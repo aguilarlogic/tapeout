@@ -1,6 +1,6 @@
 // UVM missions. The scaffold (interface, DUT, transaction, driver, monitor, scoreboard, agent, env, sequence, test, top) is
 // split into pieces; each mission asks the learner to write some of them and supplies the rest.
-import { stat } from './levels-util';
+import { choose, stat } from './levels-util';
 import type { TbGoal, TbLevel, TbMutant } from './types';
 
 const bt = (s: string) => s.replace(/§/g, '`');
@@ -714,4 +714,125 @@ const uvmPhases: TbLevel = {
   }),
 };
 
-export const UVM_LEVELS: TbLevel[] = [uvmSeq, uvmDrv, uvmMonSb, uvmConfig, uvmFactory, uvmCov, uvmPhases];
+
+// ===================================================================== boss: the whole agent
+const BOSS_SEQ = bt(`class alu_seq extends uvm_sequence #(alu_txn);
+  §uvm_object_utils(alu_seq)
+  function new(string name = "alu_seq");
+    super.new(name);
+  endfunction
+  task body();
+    repeat (240) begin
+      alu_txn t;
+      §uvm_do_with(t, { a dist {8'h00 :/ 20, 8'hFF :/ 20, [8'h01:8'hFE] :/ 60}; b dist {8'h00 :/ 20, 8'hFF :/ 20, [8'h01:8'hFE] :/ 60}; })
+    end
+  endtask
+endclass
+`);
+
+const BOSS_STARTER = bt(`${U_HEAD}
+// The transaction (alu_txn), sequence, agent, env, test and top are provided below your code.
+// Write the four components they expect. Names and ports matter: the agent calls
+//   drv.seq_item_port,  mon.ap,  and the env connects  sb.imp  and  cov.analysis_export.
+
+class alu_driver extends uvm_driver #(alu_txn);
+  §uvm_component_utils(alu_driver)
+  virtual alu_if vif;
+  function new(string name, uvm_component parent);
+    super.new(name, parent);
+  endfunction
+  // TODO: build_phase: fetch the virtual interface "vif" from the config_db (fatal if missing)
+  // TODO: run_phase: get_next_item, drive op/a/b with in_valid for one clock, item_done
+endclass
+
+class alu_monitor extends uvm_monitor;
+  §uvm_component_utils(alu_monitor)
+  virtual alu_if vif;
+  uvm_analysis_port #(alu_txn) ap;
+  function new(string name, uvm_component parent);
+    super.new(name, parent);
+  endfunction
+  // TODO: build_phase: create ap, fetch the virtual interface
+  // TODO: run_phase: every clock, when out_valid is high, build a transaction from the inputs
+  //       that were applied one cycle earlier plus the observed y, and ap.write() it
+endclass
+
+class alu_scoreboard extends uvm_scoreboard;
+  §uvm_component_utils(alu_scoreboard)
+  uvm_analysis_imp #(alu_txn, alu_scoreboard) imp;
+  function new(string name, uvm_component parent);
+    super.new(name, parent);
+  endfunction
+  // TODO: build_phase creates imp.  write(t): compare t.y with t.expected(), uvm_error on mismatch
+endclass
+
+class alu_cov extends uvm_subscriber #(alu_txn);
+  §uvm_component_utils(alu_cov)
+  alu_txn cur;
+  function new(string name, uvm_component parent);
+    super.new(name, parent);
+  endfunction
+  // TODO: covergroup cg: the operation, the operand a in lo/mid/hi/max bins (max = 255), and a cross of the two
+  // TODO: write(t) samples it
+endclass
+`);
+const BOSS_COV = bt(`class alu_cov extends uvm_subscriber #(alu_txn);
+  §uvm_component_utils(alu_cov)
+  alu_txn cur;
+  covergroup cg;
+    cp_op: coverpoint cur.op;
+    cp_a: coverpoint cur.a { bins lo = {[0:63]}; bins mid = {[64:254]}; bins max = {255}; }
+    op_x_a: cross cp_op, cp_a;
+  endgroup
+  function new(string name, uvm_component parent);
+    super.new(name, parent);
+    cg = new();
+  endfunction
+  function void write(alu_txn t);
+    cur = t;
+    cg.sample();
+  endfunction
+endclass
+`);
+const BOSS_ENV = U_ENV({ field: '  alu_cov cov;', build: '    cov = alu_cov::type_id::create("cov", this);', connect: '    agent.mon.ap.connect(cov.analysis_export);' });
+const ALU_MUTANTS = (): TbMutant[] => [
+  mut('SUB behaves like ADD', ALU, "2'd1: y <= a - b;", "2'd1: y <= a + b;"),
+  mut('AND behaves like OR', ALU, "2'd2: y <= a & b;", "2'd2: y <= a | b;"),
+  mut('ADD saturates instead of wrapping', ALU, "2'd0: y <= a + b;", "2'd0: y <= ({1'b0, a} + {1'b0, b} > 9'd255) ? 8'hFF : a + b;"),
+  mut('XOR is inverted', ALU, 'default: y <= a ^ b;', 'default: y <= ~(a ^ b);'),
+  mut('a - b clamps to zero when it borrows', ALU, "2'd1: y <= a - b;", "2'd1: y <= (a < b) ? 8'd0 : a - b;"),
+  mut('255 + 255 gives zero', ALU, "2'd0: y <= a + b;", "2'd0: y <= (a == 8'hFF && b == 8'hFF) ? 8'h00 : a + b;"),
+  mut('0 - b gives b', ALU, "2'd1: y <= a - b;", "2'd1: y <= (a == 8'h00) ? b : a - b;"),
+];
+
+const uvmBoss: TbLevel = {
+  id: 'uvm-boss', title: 'Boss: the whole agent', concept: 'driver, monitor, scoreboard and coverage written from a spec', xp: 400, tier: 'boss',
+  ticket: 'A new ALU block arrives with a UVM shell around it and four empty components. Fill them in. Review will run your environment against designs you have not seen.',
+  build: (r) => {
+    const mutants = choose(r, ALU_MUTANTS(), 4);
+    return {
+      mode: 'write',
+      uvm: true,
+      needCatch: true,
+      maxTime: 80000,
+      maxOps: 4_000_000,
+      dut: ALU,
+      brief: `<p>The ALU has two-cycle latency: inputs applied with <code>in_valid</code> for one clock appear on <code>y</code> with <code>out_valid</code> the clock after. The shell below your code provides the transaction (<code>alu_txn</code>, with an <code>expected()</code> function), a 240-transaction sequence that leans on 0 and 255, the agent, the env and the test.</p>
+<p>You write the four components marked in the starter. <b>No hints</b>: use what the earlier missions taught. The checks run your environment against the correct design (it must stay silent, finish, and reach full coverage on <code>cg</code>) and against <b>${mutants.length} hidden buggy designs</b>, each of which must produce a UVM_ERROR.</p>
+<p>Coverage: the covergroup is named <code>cg</code> and needs the operation, operand <code>a</code> in bins <code>lo</code> 0:63, <code>mid</code> 64:254 and <code>max</code> 255, and a cross of the two.</p>`,
+      hints: [],
+      starter: BOSS_STARTER,
+      fixed: `${U_IF}\n${U_TXN}\n${U_AGENT}\n${BOSS_ENV}\n${BOSS_SEQ}\n${U_TEST}\n${U_TOP}\n@@DUT@@`,
+      mutants,
+      coverage: { min: 100, points: 3 },
+      goals: [
+        noUvmErrors,
+        { label: 'cg was sampled for every transaction (240)', check: (r2) => { const g = r2.coverage.find((x) => x.name === 'cg'); return g && g.samples >= 240 ? true : `samples: ${g?.samples ?? 0}`; } },
+        { label: 'the run reports its UVM summary (the report phase ran)', check: (r2) => (r2.log.some((l) => /UVM Report Summary/i.test(l)) ? true : 'no UVM summary was printed') },
+      ],
+      solution: bt(`${U_HEAD}\n`) + [U_DRV, U_MON, U_SB(), BOSS_COV].join('\n'),
+    };
+  },
+};
+
+export const UVM_LEVELS: TbLevel[] = [uvmSeq, uvmDrv, uvmMonSb, uvmConfig, uvmFactory, uvmCov, uvmPhases, uvmBoss];

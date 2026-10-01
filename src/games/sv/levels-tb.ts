@@ -1,6 +1,6 @@
 // Testbench architecture missions: layered testbenches with mailboxes, self-checking scoreboards, register models.
 // Each runs the learner's testbench against the correct design and against hidden buggy variants.
-import { clean, logHas } from './levels-util';
+import { choose, clean, logHas, stat } from './levels-util';
 import type { TbLevel, TbMutant } from './types';
 
 function mut(name: string, golden: string, find: string | RegExp, replace: string): TbMutant {
@@ -433,4 +433,307 @@ const ral: TbLevel = {
   }),
 };
 
-export const TB_ARCH_LEVELS: TbLevel[] = [layered, fifo, ral];
+
+// ===================================================================== boss: environment from a spec
+const ALU8 = `interface alu8_if(input logic clk);
+  logic rst;
+  logic [2:0] op;
+  logic [7:0] a, b;
+  logic in_valid;
+  logic [7:0] y;
+  logic zero, carry;
+  logic out_valid;
+endinterface
+
+module alu8(input logic clk, input logic rst, input logic [2:0] op, input logic [7:0] a, input logic [7:0] b, input logic in_valid, output logic [7:0] y, output logic zero, output logic carry, output logic out_valid);
+  logic [8:0] r;
+  always_comb begin
+    case (op)
+      3'd0: r = {1'b0, a} + {1'b0, b};
+      3'd1: r = {1'b0, a} - {1'b0, b};
+      3'd2: r = {1'b0, a & b};
+      3'd3: r = {1'b0, a | b};
+      3'd4: r = {1'b0, a ^ b};
+      3'd5: r = {1'b0, a << b[2:0]};
+      3'd6: r = {1'b0, a >> b[2:0]};
+      default: r = (a < b) ? 9'd1 : 9'd0;
+    endcase
+  end
+  always_ff @(posedge clk) begin
+    if (rst) begin
+      y <= 8'd0;
+      zero <= 1'b0;
+      carry <= 1'b0;
+      out_valid <= 1'b0;
+    end else begin
+      out_valid <= in_valid;
+      if (in_valid) begin
+        y <= r[7:0];
+        zero <= (r[7:0] == 8'd0);
+        carry <= r[8];
+      end
+    end
+  end
+endmodule
+`;
+
+const envStarter = `// The harness below your code does:   Env e = new(bus);  e.run();  then prints your counters and finishes.
+// Build a complete class-based bench for the ALU: transaction with constraints, a reference model,
+// a self-checking loop, and functional coverage.
+//
+// Interface alu8_if: rst, op[2:0], a[7:0], b[7:0], in_valid, y[7:0], zero, carry, out_valid.
+// Ops: 0 add, 1 sub, 2 and, 3 or, 4 xor, 5 a << b[2:0], 6 a >> b[2:0], 7 (a < b) ? 1 : 0.
+// carry: carry out of add, borrow of sub (a < b), 0 for the others.  zero: y == 0.
+// Timing: apply inputs with in_valid for one clock; y, zero, carry and out_valid are valid after the following edge.
+
+class Txn;
+  // TODO: rand op, a, b and whatever you need to steer them toward the interesting cases
+endclass
+
+class Env;
+  virtual alu8_if vif;
+  int n = 0;            // transactions checked
+  function new(virtual alu8_if v);
+    vif = v;
+  endfunction
+  task run();
+    // TODO: drive about 600 transactions and check y, zero, carry and out_valid on each,
+    //       sample coverage, count them in n.  Report problems with $error.
+  endtask
+endclass
+`;
+const envSolution = `class Txn;
+  rand bit [2:0] op;
+  rand bit [7:0] a, b;
+  rand int mode;
+  constraint c_mode { mode inside {[0:3]}; }
+  constraint c_eq { mode == 2 -> b == a; }
+  constraint c_edge { mode == 3 -> a inside {8'h00, 8'hFF}; }
+  function bit [8:0] model();
+    case (op)
+      0: return {1'b0, a} + {1'b0, b};
+      1: return {1'b0, a} - {1'b0, b};
+      2: return {1'b0, a & b};
+      3: return {1'b0, a | b};
+      4: return {1'b0, a ^ b};
+      5: return {1'b0, 8'(a << b[2:0])};
+      6: return {1'b0, 8'(a >> b[2:0])};
+      default: return (a < b) ? 9'd1 : 9'd0;
+    endcase
+  endfunction
+endclass
+
+class Env;
+  virtual alu8_if vif;
+  int n = 0;
+  Txn cur;
+  covergroup cg;
+    cp_op: coverpoint cur.op;
+    cp_a: coverpoint cur.a { bins zero = {0}; bins low = {[1:127]}; bins high = {[128:254]}; bins max = {255}; }
+    cp_b: coverpoint cur.b { bins zero = {0}; bins low = {[1:127]}; bins high = {[128:254]}; bins max = {255}; }
+    op_x_a: cross cp_op, cp_a;
+  endgroup
+  function new(virtual alu8_if v);
+    vif = v;
+    cg = new();
+  endfunction
+  task run();
+    repeat (600) begin
+      bit [8:0] exp;
+      cur = new();
+      if (!cur.randomize()) $fatal(1, "randomize failed");
+      if (cur.mode == 1) begin
+        cur.op = 0;
+        cur.b = ~cur.a + 8'd1;
+      end
+      exp = cur.model();
+      @(posedge vif.clk);
+      vif.op <= cur.op;
+      vif.a <= cur.a;
+      vif.b <= cur.b;
+      vif.in_valid <= 1;
+      @(posedge vif.clk);
+      vif.in_valid <= 0;
+      @(negedge vif.clk);
+      if (!vif.out_valid) $error("out_valid missing for op %0d", cur.op);
+      if (vif.y !== exp[7:0]) $error("op %0d a=%0d b=%0d: y=%0d, expected %0d", cur.op, cur.a, cur.b, vif.y, exp[7:0]);
+      if (vif.zero !== (exp[7:0] == 0)) $error("op %0d a=%0d b=%0d: zero=%0b", cur.op, cur.a, cur.b, vif.zero);
+      if (vif.carry !== exp[8]) $error("op %0d a=%0d b=%0d: carry=%0b", cur.op, cur.a, cur.b, vif.carry);
+      cg.sample();
+      n++;
+    end
+  endtask
+endclass
+`;
+const envFixed = `module top;
+  logic clk = 0;
+  always #5 clk = ~clk;
+  alu8_if bus(clk);
+  alu8 dut(.clk(clk), .rst(bus.rst), .op(bus.op), .a(bus.a), .b(bus.b), .in_valid(bus.in_valid), .y(bus.y), .zero(bus.zero), .carry(bus.carry), .out_valid(bus.out_valid));
+  initial begin
+    Env e;
+    bus.rst = 1;
+    bus.in_valid = 0;
+    repeat (3) @(posedge clk);
+    bus.rst = 0;
+    e = new(bus);
+    e.run();
+    $display("txns %0d", e.n);
+    $finish;
+  end
+endmodule
+${ALU8}
+@@DUT@@`;
+const ALU8_MUTANTS = (): TbMutant[] => [
+  mut('sub does not report a borrow', ALU8, "3'd1: r = {1'b0, a} - {1'b0, b};", "3'd1: r = {1'b0, a - b};"),
+  mut('shift right uses the wrong bits of b', ALU8, "a >> b[2:0]", "a >> b[3:1]"),
+  mut('the compare is signed', ALU8, "(a < b) ? 9'd1", "($signed(a) < $signed(b)) ? 9'd1"),
+  mut('zero flag looks at the carry too (a + b = 256)', ALU8, "zero <= (r[7:0] == 8'd0);", "zero <= (r == 9'd0);"),
+  mut('shift left by 7 gives zero', ALU8, "3'd5: r = {1'b0, a << b[2:0]};", "3'd5: r = (b[2:0] == 3'd7) ? 9'd0 : {1'b0, a << b[2:0]};"),
+  mut('and of equal operands gives zero', ALU8, "3'd2: r = {1'b0, a & b};", "3'd2: r = (a == b) ? 9'd0 : {1'b0, a & b};"),
+  mut('sub reports a borrow when the operands are equal', ALU8, "3'd1: r = {1'b0, a} - {1'b0, b};", "3'd1: r = ({1'b0, a} - {1'b0, b}) | ((a == b) ? 9'h100 : 9'h000);"),
+  mut('results disappear for the compare op', ALU8, 'out_valid <= in_valid;', "out_valid <= in_valid && (op != 3'd7);"),
+];
+
+const bossEnv: TbLevel = {
+  id: 'tb-boss-env', title: 'Boss: verify the ALU', concept: 'full class-based environment: stimulus, model, checks, coverage', xp: 400, tier: 'boss',
+  ticket: 'A new 8-op ALU with status flags. Write the whole verification environment. It will be run against designs that have bugs you have not seen.',
+  build: (r) => {
+    const mutants = choose(r, ALU8_MUTANTS(), 5);
+    return {
+      mode: 'write',
+      needCatch: true,
+      maxTime: 80000,
+      maxOps: 4_000_000,
+      dut: ALU8,
+      brief: `<p>Nothing is scaffolded this time except the harness: it calls <code>new(bus)</code> and <code>run()</code> on your <code>Env</code>, prints your <code>n</code> counter as <code>txns</code> and finishes. Everything else is yours: transaction class, constraints, reference model, driving, self-checking of <b>all four outputs</b>, coverage.</p>
+<p>It is judged three ways: the bench must be <b>silent</b> on the correct ALU and cover at least <b>85%</b> of your own coverage model (three or more coverpoints or crosses), it must check at least <b>500</b> transactions, and it must <b>raise an error</b> on each of <b>${mutants.length} hidden buggy ALUs</b>. Some of those bugs show up only at specific operand relationships (equal operands, a sum of exactly 256, a shift by 7), so uniform random stimulus will not do: aim your randomization.</p>`,
+      hints: [],
+      starter: envStarter,
+      fixed: envFixed,
+      mutants,
+      coverage: { min: 85, points: 3 },
+      goals: [
+        { label: 'at least 500 transactions were checked', check: (r2) => { const v = stat(r2, 'txns'); return v !== undefined && v >= 500 ? true : `txns: ${v ?? 'not printed'}`; } },
+      ],
+      solution: envSolution,
+    };
+  },
+};
+
+// ===================================================================== boss: debug a broken bench
+const dbgBuggy = `class Txn;
+  rand bit [7:0] a, b;
+  rand bit near;
+  constraint c_near { near dist { 1 := 1, 0 := 2 }; near -> (a + b) inside {[253:258]}; }
+  constraint c_small { a + b < 200; }
+endclass
+
+// the reference model, with a specialised version for the saturating adder
+class Ref;
+  function int expected(Txn t);
+    return t.a + t.b;
+  endfunction
+endclass
+
+class SatRef extends Ref;
+  function int expected(Txn t);
+    int s = t.a + t.b;
+    return s > 255 ? 255 : s;
+  endfunction
+endclass
+
+class Bench;
+  virtual sat_if vif;
+  Ref model;
+  Txn t;
+  int checked = 0;
+  int near_hits = 0;
+
+  function new(virtual sat_if v);
+    SatRef sr = new();
+    vif = v;
+    model = sr;
+  endfunction
+
+  task run(int count);
+    repeat (count) begin
+      int want, got;
+      if (!t.randomize()) $error("randomize failed");
+      @(posedge vif.clk);
+      vif.a <= t.a;
+      vif.b <= t.b;
+      vif.in_valid <= 1;
+      @(posedge vif.clk);
+      vif.in_valid <= 0;
+      got = vif.y;
+      want = model.expected(t);
+      if (!vif.out_valid) $error("no out_valid for %0d + %0d", t.a, t.b);
+      if (got !== want) $error("%0d + %0d: got %0d, expected %0d", t.a, t.b, got, want);
+      if (t.a + t.b >= 253 && t.a + t.b <= 258) near_hits++;
+      checked++;
+    end
+  endtask
+endclass
+
+module tb;
+  logic clk = 0;
+  always #5 clk = ~clk;
+  sat_if bus(clk);
+  satadd dut(.clk(clk), .rst(bus.rst), .a(bus.a), .b(bus.b), .in_valid(bus.in_valid), .y(bus.y), .out_valid(bus.out_valid));
+  int cycles = 0;
+  initial begin
+    Bench bn = new(bus);
+    bus.rst = 1;
+    bus.in_valid = 0;
+    repeat (3) @(posedge clk);
+    bus.rst = 0;
+    fork
+      bn.run(100);
+      forever begin
+        @(posedge clk);
+        cycles++;
+      end
+    join
+    $display("checked %0d", bn.checked);
+    $display("near %0d", bn.near_hits);
+    $finish;
+  end
+endmodule
+`;
+const dbgFixed = dbgBuggy
+  .replace('  constraint c_small { a + b < 200; }\n', '')
+  .replace('  function int expected(Txn t);\n    return t.a + t.b;', '  virtual function int expected(Txn t);\n    return t.a + t.b;')
+  .replace('    vif = v;\n    model = sr;', '    vif = v;\n    t = new();\n    model = sr;')
+  .replace('      got = vif.y;', '      @(posedge vif.clk);\n      got = vif.y;')
+  .replace('    join\n', '    join_any\n    disable fork;\n');
+if (dbgFixed === dbgBuggy) throw new Error('debug boss: no edits applied');
+
+const bossDebug: TbLevel = {
+  id: 'tb-boss-debug', title: 'Boss: debug the testbench', concept: 'finding classic testbench bugs: null handles, virtual, constraints, timing, fork', xp: 350, tier: 'boss',
+  ticket: 'A teammate left this bench half-working on a saturating adder. It crashes, then lies, then hangs. Get it honest.',
+  build: () => ({
+    mode: 'fix',
+    needCatch: true,
+    maxTime: 20000,
+    dut: SAT,
+    brief: `<p>This bench is supposed to hammer a saturating adder (<code>y = min(a + b, 255)</code>, one cycle after <code>in_valid</code>) with a third of the stimulus near the saturation boundary and check every result. It has <b>five independent bugs</b>, in the order you will meet them: one crashes it, one lets the checker disagree with the design's own spec, one is a classic timing slip, one starves the interesting stimulus without any error message, and one makes it hang.</p>
+<p>When it is fixed it must be silent on the real design, report <code>checked 100</code> and at least 20 boundary hits (<code>near</code>), finish, and <b>catch every one of four hidden buggy adders</b>.</p>`,
+    hints: [],
+    starter: dbgBuggy,
+    fixed: '\n@@DUT@@',
+    mutants: [
+      mut('the adder wraps instead of saturating', SAT, '(a + b > 255) ? 8\'d255 : a + b', 'a + b'),
+      mut('saturation starts one count too late (a sum of exactly 256 wraps to 0)', SAT, 'a + b > 255', 'a + b > 256'),
+      mut('a zero operand b leaves the old result in y', SAT, 'if (in_valid) y', 'if (in_valid && b != 0) y'),
+      mut('results are dropped when a is 255', SAT, 'out_valid <= in_valid;', 'out_valid <= in_valid && a != 8\'hFF;'),
+    ],
+    goals: [
+      { label: 'the bench reports checked 100', check: (r) => (stat(r, 'checked') === 100 ? true : `checked: ${stat(r, 'checked') ?? 'not printed'}`) },
+      { label: 'at least 20 transactions landed near the saturation boundary', check: (r) => { const v = stat(r, 'near') ?? 0; return v >= 20 ? true : `only ${v}: is something constraining the operands?`; } },
+    ],
+    solution: dbgFixed,
+  }),
+};
+
+export const TB_ARCH_LEVELS: TbLevel[] = [layered, fifo, ral, bossEnv, bossDebug];

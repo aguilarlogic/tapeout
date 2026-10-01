@@ -7,7 +7,7 @@ describe('testbench missions', () => {
   for (const level of TB_LEVELS) {
     describe(level.id, () => {
       const seeds = level.tier === 'boss' ? [1, 2, 3, 4, 5] : [1, 2];
-      it('has a brief, hints and a solvable reference solution', () => {
+      it('has a brief, hints and a solvable reference solution', { timeout: 60000 }, () => {
         for (const s of seeds) {
           const inst = level.build(rng(s));
           expect(inst.brief.length).toBeGreaterThan(80);

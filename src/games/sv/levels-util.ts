@@ -20,3 +20,10 @@ export const statIs = (label: string, name: string, test: (v: number) => boolean
   label,
   check: (r) => { const v = stat(r, name); if (v === undefined) return `the harness never printed ${name}`; return test(v) ? true : why(v); },
 });
+
+/** n distinct items picked by the seed. */
+export const choose = <T>(r: () => number, xs: T[], n: number): T[] => {
+  const a = [...xs];
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+  return a.slice(0, n);
+};
