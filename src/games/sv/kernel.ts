@@ -645,6 +645,26 @@ export class Sim {
       if (e.k === 'concat') { let w = 0; for (const p of e.parts) { const t = this.lvTy(p, sc); if (t?.k !== 'int') return undefined; w += t.w; } return { k: 'int', w, s: false }; }
       if (e.k === 'slice') { const t = this.lvTy(e.o, sc); if (t?.k === 'int') { const w = this.sliceWidth(e, sc); return { k: 'int', w, s: false }; } }
     } catch { /* unknown */ }
+    return this.staticTy(e, sc);
+  }
+
+  /** Declared type of an expression without evaluating it (works through null handles). */
+  staticTy(e: E, sc: Scope): Ty | undefined {
+    try {
+      if (e.k === 'id') return this.lookup(sc, e.n)?.ty;
+      if (e.k === 'member') {
+        const t = this.staticTy(e.o, sc);
+        if (t?.k === 'class') {
+          const def = this.classDef(t.name);
+          const f = def.fields.find((x) => x.d.name === e.n);
+          if (f) return this.declTy(f.d, f.owner.statics);
+          return this.staticVar(def, e.n)?.ty;
+        }
+        if (t?.k === 'struct') return t.fields.find((f) => f.name === e.n)?.ty;
+        if (t?.k === 'vif') { const m = this.modules.get(t.name); const d = m?.decls.find((x) => x.name === e.n); if (d) return this.declTy(d, this.globals); }
+      }
+      if (e.k === 'index') { const t = this.staticTy(e.o, sc); if (t?.k === 'arr' || t?.k === 'assoc') return t.elem; if (t?.k === 'int') return { k: 'int', w: 1, s: false }; }
+    } catch { /* unknown */ }
     return undefined;
   }
 
@@ -726,7 +746,9 @@ export class Sim {
       }
       case 'lit': return this.evLit(e, sc, hint);
       case 'inside': {
-        const x = this.ev(e.e, sc);
+        let w = this.selfW(e.e, sc);
+        if (w) for (const it of e.set) { const iw = 'lo' in it && !('k' in it) ? Math.max(this.selfW(it.lo, sc), this.selfW(it.hi, sc)) : this.selfW(it as E, sc); w = Math.max(w, iw); }
+        const x = this.ev(e.e, sc, w ? { k: 'int', w, s: false } : undefined);
         return this.one(this.insideSet(x, e.set, sc));
       }
       case 'dist': return this.one(this.insideSet(this.ev(e.e, sc), e.set.map((d) => (d.hi ? { lo: d.lo, hi: d.hi } : d.lo)), sc));

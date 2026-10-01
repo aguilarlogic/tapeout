@@ -82,7 +82,10 @@ function buildPlan(sim: Sim, inst: CgInst): Plan {
     }
     if (!cp.bins.length) {
       // automatic bins from the expression's type
-      const val = sim.evQuiet(cp.e, sc);
+      const ty = sim.staticTy(cp.e, sc);
+      let val: Value = null;
+      if (ty?.k === 'int') val = new Int(0n, ty.w, ty.s, ty.en);
+      else { try { val = sim.evQuiet(cp.e, sc); } catch { val = null; } }
       const w = val instanceof Int ? val.w : 32;
       const max = optNum(sim, g.options, 'auto_bin_max', sc, 64);
       if (val instanceof Int && val.en) {
