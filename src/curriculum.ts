@@ -3,6 +3,7 @@
 import { SCENARIOS } from './games/coverage/scenarios';
 import { LOGIC_LEVELS } from './games/logic/levels';
 import { PCB_LEVELS } from './games/pcb/levels';
+import { CIRCUIT_LEVELS } from './games/circuit/levels';
 import { DEBUG_LEVELS, RTL_LEVELS } from './games/rtl/levels';
 import { TIMING_LEVELS } from './games/timing/levels';
 import { UVM_PUZZLES } from './games/uvm/puzzles';
@@ -11,7 +12,7 @@ import { findIncident } from './incidents';
 import { findBoss, findPractice } from './practice';
 import { levelRecord, profile } from './state';
 
-export type ModKind = 'lesson' | 'practice' | 'boss' | 'incident' | 'logic' | 'cmos' | 'rtl' | 'debug' | 'cov' | 'uvm' | 'sta' | 'pcb' | 'drills' | 'final';
+export type ModKind = 'lesson' | 'practice' | 'boss' | 'incident' | 'logic' | 'cmos' | 'rtl' | 'debug' | 'cov' | 'uvm' | 'sta' | 'pcb' | 'clab' | 'drills' | 'final';
 
 export interface Module {
   id: string;
@@ -26,13 +27,13 @@ export interface Act { id: string; n: number; name: string; tagline: string; reg
 
 export const KIND_LABEL: Record<ModKind, string> = {
   lesson: 'Lesson', practice: 'Practice', boss: 'Boss', incident: 'Incident', logic: 'Logic lab', cmos: 'Transistor lab', rtl: 'Verilog', debug: 'Bug hunt', cov: 'Coverage',
-  uvm: 'UVM', sta: 'Timing', pcb: 'Board', drills: 'Interview', final: 'Final review',
+  uvm: 'UVM', clab: 'Circuit Lab', sta: 'Timing', pcb: 'Board', drills: 'Interview', final: 'Final review',
 };
 
 /** The desktop app a module opens in. */
 export const KIND_APP: Record<ModKind, string> = {
   lesson: 'terminal', practice: 'terminal', boss: 'terminal', incident: 'terminal', logic: 'Logic Lab', cmos: 'Logic Lab', rtl: 'Verilog IDE', debug: 'Verilog IDE', cov: 'Coverage',
-  uvm: 'UVM Builder', sta: 'Timing', pcb: 'Board Router', drills: 'Flashcards', final: 'terminal',
+  uvm: 'UVM Builder', clab: 'Circuit Lab', sta: 'Timing', pcb: 'Board Router', drills: 'Flashcards', final: 'terminal',
 };
 
 const lesson = (id: string): Module => {
@@ -64,18 +65,21 @@ const logic = (ids: string[]) => ids.map((id) => {
   return { id, kind: (l.mode === 'cmos' ? 'cmos' : 'logic') as ModKind, title: l.title, concept: l.concept, xp: l.xp, route: `#/logic/${id}` };
 });
 
+/** Circuit Lab missions by id, in the order given. */
+const clab = (...ids: string[]): Module[] => ids.flatMap((id) => mods(CIRCUIT_LEVELS, 'clab', 'clab', (x) => x.id === id));
+
 export const ACTS: Act[] = [
   {
     id: 'foundations', n: 1, name: 'Foundations', tagline: 'Numbers, circuits, signals, the math and physics under every chip', region: 'STD CELLS',
     chapters: [
       { name: 'Numbers', modules: [...drill('bits', 'twos'), bossMod('boss-numbers')] },
-      { name: 'Circuits', modules: [...drill('ohm', 'rc'), bossMod('boss-circuits1'), ...drill('kcl'), bossMod('boss-kcl'), ...drill('ac'), bossMod('boss-ac')] },
+      { name: 'Circuits', modules: [...drill('ohm', 'rc'), ...clab('clab-divider', 'clab-led'), bossMod('boss-circuits1'), ...clab('clab-boss-ohm'), ...drill('kcl'), ...clab('clab-thevenin', 'clab-bridge'), bossMod('boss-kcl'), ...clab('clab-boss-kcl'), ...drill('ac'), ...clab('clab-lowpass'), bossMod('boss-ac'), ...clab('clab-boss-ac')] },
       { name: 'Calculus & linear algebra', modules: [...drill('calc'), bossMod('boss-calc'), ...drill('linalg'), bossMod('boss-linalg')] },
-      { name: 'Differential equations', modules: [...drill('ode'), bossMod('boss-ode')] },
+      { name: 'Differential equations', modules: [...drill('ode'), ...clab('clab-debounce', 'clab-rlc'), bossMod('boss-ode'), ...clab('clab-boss-ode')] },
       { name: 'Probability & numerics', modules: [...drill('prob'), bossMod('boss-prob'), ...drill('numerics'), bossMod('boss-numerics')] },
       { name: 'Signals & control', modules: [...drill('signals', 'dsp'), bossMod('boss-signals'), ...drill('control'), bossMod('boss-control')] },
       { name: 'Physics', modules: [...drill('semi', 'mosphys', 'em'), bossMod('boss-em')] },
-      { name: 'Electronics', modules: [...drill('electronics'), bossMod('boss-electronics')] },
+      { name: 'Electronics', modules: [...drill('electronics'), ...clab('clab-rectifier', 'clab-bjt'), bossMod('boss-electronics'), ...clab('clab-boss-bjt')] },
       { name: 'Transistors', modules: [...drill('mos'), ...logic(['cmos-inv', 'cmos-nand', 'cmos-nor', 'cmos-and', 'cmos-aoi']), bossMod('boss-devices')] },
     ],
   },
@@ -110,7 +114,7 @@ export const ACTS: Act[] = [
       { name: 'Static timing', modules: [...drill('sta'), ...mods(TIMING_LEVELS, 'sta', 'sta'), bossMod('boss-sta')] },
       { name: 'Circuit design', modules: [...drill('vlsi'), bossMod('boss-circuit')] },
       { name: 'Low power', modules: [...drill('power'), bossMod('boss-lowpower'), bossMod('boss-upf')] },
-      { name: 'Board', modules: [...drill('pcb'), ...mods(PCB_LEVELS, 'pcb', 'pcb'), bossMod('boss-board'), incident('inc-link')] },
+      { name: 'Board', modules: [...drill('pcb'), ...mods(PCB_LEVELS, 'pcb', 'pcb'), ...clab('clab-pdn'), bossMod('boss-board'), ...clab('clab-boss-pdn'), incident('inc-link')] },
     ],
   },
   {
@@ -141,7 +145,7 @@ export const ACTS: Act[] = [
   {
     id: 'roles', n: 7, name: 'Specializations', tagline: 'The roles beyond RTL and DV: analog, RF, physical design, memory, fab, AI, security, quantum', region: 'SPECIALTY IP',
     chapters: [
-      { name: 'Circuits & signals', modules: [...drill('analog'), bossMod('boss-analog'), ...drill('rf'), bossMod('boss-rf'), incident('inc-radio'), ...drill('pmic'), bossMod('boss-pmic'), incident('inc-rail'), lesson('sipi')] },
+      { name: 'Circuits & signals', modules: [...drill('analog'), ...clab('clab-inverting', 'clab-gbw', 'clab-csamp', 'clab-mirror'), bossMod('boss-analog'), ...clab('clab-boss-amp'), ...drill('rf'), ...clab('clab-lcfilter'), bossMod('boss-rf'), incident('inc-radio'), ...drill('pmic'), ...clab('clab-duty', 'clab-buck'), bossMod('boss-pmic'), ...clab('clab-boss-buck'), incident('inc-rail'), lesson('sipi')] },
       { name: 'Silicon & manufacturing', modules: [...drill('pnr'), bossMod('boss-pd'), ...drill('sram'), bossMod('boss-memory'), incident('inc-bitflip'), ...drill('fab'), bossMod('boss-process'), incident('inc-wafer'), ...drill('pkg'), bossMod('boss-pkg'), incident('inc-package')] },
       { name: 'Bring-up & production', modules: [...drill('postsi'), bossMod('boss-postsi'), incident('inc-hang'), ...drill('ate'), bossMod('boss-test'), incident('inc-finaltest'), ...drill('emu'), bossMod('boss-fpga')] },
       { name: 'Domain chips', modules: [...drill('npu'), bossMod('boss-ai'), ...drill('hwsec'), bossMod('boss-hwsec'), incident('inc-key'), ...drill('fusa'), bossMod('boss-fusa'), incident('inc-limp'), ...drill('photonics'), bossMod('boss-photonics'), incident('inc-optical')] },

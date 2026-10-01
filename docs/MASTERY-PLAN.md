@@ -80,7 +80,7 @@ Each phase ships playable content and is committed on its own.
   4. **Wrong-answer message** says "Read the step again" for non-numeric steps; "Check the arithmetic" is for numbers.
   5. **Answer check tightened:** the test now requires a typed question's walkthrough to end on a step the player
      answers, and the two generators that ended on an explanation (python `%`, C++ `use_count`) were reordered.
-- [ ] **Phase 4: Circuit Lab.**
+- [x] **Phase 4: Circuit Lab.** A netlist-based SPICE engine (R, C, L, V, I, diodes, level-1 MOSFETs, Ebers-Moll BJTs, controlled sources, op-amps with GBW and rails, switches; DC, AC and transient with breakpoint alignment), a netlist editor with plots and a hover read-out, and 25 missions (17 guided, 8 randomized no-hint bosses with standard-value parts) wired into Circuits, ODEs, Electronics, Analog, PMIC, RF and Board. Every mission has a reference solution that the tests prove passes all goals while the starter fails. A schematic editor and a phase-margin mission are left for the balancing pass.
 - [ ] **Phase 5: Code Lab and Shell Lab**, with regression triage.
 - [ ] **Phase 6: SV Lab**: SystemVerilog, UVM, SVA, formal, CDC.
 - [ ] **Phase 7: ISA and architecture labs**, OS labs, and the RISC-V project.

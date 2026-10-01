@@ -136,6 +136,7 @@ h4 { margin-top: 1em; font-size: 0.8rem; text-transform: uppercase; letter-spaci
 .title-row h2 { margin: 0; font-size: 1.5rem; }
 .level-grid { display: grid; grid-template-columns: minmax(260px, 360px) minmax(0, 1fr); gap: 14px; align-items: start; }
 .pcb-grid, .sta-grid, .cov-grid { grid-template-columns: minmax(240px, 320px) minmax(0, 1fr) minmax(260px, 360px); }
+.clab-grid { grid-template-columns: minmax(260px, 360px) minmax(0, 1fr); }
 .sta-grid { grid-template-columns: minmax(220px, 270px) minmax(0, 1fr) minmax(280px, 340px); }
 .brief-body p, .brief-body ul { margin: 0.5em 0; }
 .brief-body ul { padding-left: 1.2em; }
@@ -359,3 +360,29 @@ select.blank.wrong { border-color: var(--err); color: var(--err); }
   .uvm-diagram { height: 460px; }
   .wire-label { display: none; }
 }
+
+/* Circuit Lab */
+.clab-grid .editor { min-height: 320px; }
+.parts { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin: 6px 0; }
+.cheat pre { font-size: 11px; white-space: pre; overflow-x: auto; margin: 6px 0 0; }
+.goals { list-style: none; margin: 8px 0; padding: 0; display: grid; gap: 4px; }
+.goals li { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.goals li .mark { width: 1.2em; text-align: center; color: var(--dim, #8a94a6); }
+.goals li.ok .mark { color: #4ade80; }
+.goals li.bad .mark { color: #fb7185; }
+.optable { border-collapse: collapse; font-family: var(--mono, monospace); font-size: 12px; margin: 6px 0 12px; }
+.optable td { padding: 2px 14px 2px 0; }
+.plot-host { display: grid; gap: 14px; margin-top: 8px; }
+.cplot-title { font-weight: 600; margin-bottom: 4px; }
+.cplot-legend { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px; }
+.cplot-legend .chip { border: 1px solid var(--c); color: var(--c); background: transparent; border-radius: 10px; padding: 1px 8px; font-size: 11px; cursor: pointer; }
+.cplot-legend .chip.off { opacity: .35; text-decoration: line-through; }
+.cplot-svg { width: 100%; height: auto; touch-action: none; }
+.cplot-svg .grid { stroke: rgba(138,148,166,.18); }
+.cplot-svg .frame { fill: none; stroke: rgba(138,148,166,.45); }
+.cplot-svg .zero { stroke: rgba(138,148,166,.45); stroke-dasharray: 3 3; }
+.cplot-svg .tick, .cplot-svg .axis { fill: #8a94a6; font-size: 10px; font-family: var(--mono, monospace); }
+.cplot-svg .trace { fill: none; stroke-width: 1.6; vector-effect: non-scaling-stroke; }
+.cplot-svg .cursor { stroke: rgba(138,148,166,.7); }
+.cplot-read { font-family: var(--mono, monospace); font-size: 11px; min-height: 1.4em; overflow-x: auto; white-space: nowrap; }
+.node.k-clab .node-icon { color: #38bdf8; }

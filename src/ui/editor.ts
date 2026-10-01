@@ -9,6 +9,17 @@ function esc(s: string) {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+/** Syntax colours for a SPICE netlist: comments, directives, element names, numbers. */
+export function highlightSpice(src: string): string {
+  const num = /(?<![\w.])([+-]?\d+\.?\d*(?:e[+-]?\d+)?(?:meg|[tgkmunpf])?[a-zµ]*)(?![\w])/gi;
+  return src.split('\n').map((line) => {
+    if (line.trimStart().startsWith('*')) return `<span class="tk-com">${esc(line)}</span>`;
+    const [, lead, head, rest] = /^(\s*)(\S*)(.*)$/.exec(line)!;
+    const body = esc(rest).replace(num, '<span class="tk-num">$1</span>');
+    return `${lead}<span class="${head.startsWith('.') ? 'tk-kw' : 'tk-sys'}">${esc(head)}</span>${body}`;
+  }).join('\n') + '\n';
+}
+
 export function highlight(src: string): string {
   const re = /(\/\/[^\n]*|\/\*[\s\S]*?\*\/)|(\b\d*'[sS]?[bBoOdDhH][0-9a-fA-FxXzZ?_]+|\b\d[\d_]*\b|'[01xz]\b)|([A-Za-z_$][\w$]*)/g;
   let out = '';
@@ -33,17 +44,19 @@ export interface Editor {
   focus(): void;
 }
 
-export function editor(initial: string, onChange: (v: string) => void, onRun: () => void): Editor {
+export interface EditorOptions { highlight?: (src: string) => string; label?: string }
+
+export function editor(initial: string, onChange: (v: string) => void, onRun: () => void, opts: EditorOptions = {}): Editor {
   const gutter = h('div', { class: 'ed-gutter', 'aria-hidden': 'true' });
   const pre = h('pre', { class: 'ed-hl', 'aria-hidden': 'true' });
-  const ta = h('textarea', { class: 'ed-ta', spellcheck: 'false', autocapitalize: 'off', autocomplete: 'off', 'aria-label': 'Verilog source' });
+  const ta = h('textarea', { class: 'ed-ta', spellcheck: 'false', autocapitalize: 'off', autocomplete: 'off', 'aria-label': opts.label ?? 'Verilog source' });
   ta.value = initial;
   const body = h('div', { class: 'ed-body' }, pre, ta);
   const el = h('div', { class: 'editor' }, gutter, body);
   let marks = { err: new Set<number>(), warn: new Set<number>() };
 
   const render = () => {
-    pre.innerHTML = highlight(ta.value);
+    pre.innerHTML = (opts.highlight ?? highlight)(ta.value);
     const n = ta.value.split('\n').length;
     gutter.innerHTML = Array.from({ length: n }, (_, i) => {
       const ln = i + 1;
