@@ -124,6 +124,7 @@ function buildPlan(sim: Sim, inst: CgInst): Plan {
       const walk = (k: number, cur: number[]) => {
         if (k === parts.length) {
           const idx = [...cur];
+          if (ignored.some((b) => b.kind === 'ignore' && selMatch(b.sel, idx))) return;
           combos.push({ name: idx.map((i, pi) => parts[pi].bins[i].name).join(' x '), kind: 'bins', match: (x) => x.every((v, j) => v === idx[j]) });
           return;
         }

@@ -298,7 +298,7 @@ export class RandProblem {
     if (v.excl?.size) for (const x of v.excl) dom = intersect(dom, complement([[x, x]], dom[0]?.[0] ?? 0n, dom[dom.length - 1]?.[1] ?? 0n));
     const total = size(dom);
     if (total === 0n) return [];
-    if (total <= 2048n) {
+    if (total <= 8192n) {
       const all: bigint[] = [];
       for (const [a, b] of dom) for (let x = a; x <= b; x++) all.push(x);
       if (v.wts) {

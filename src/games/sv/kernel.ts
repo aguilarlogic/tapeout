@@ -327,6 +327,9 @@ export class Sim {
       else if (e.k === 'member') {
         const o = this.evQuiet(e.o, sc);
         if (o instanceof ClassObj) ty = o.fields.get(e.n)?.ty;
+      } else if (e.k === 'index') {
+        const t = this.lvTy(e.o, sc);
+        if (t?.k === 'arr' || t?.k === 'assoc') ty = t.elem;
       } else if (e.k === 'this') { for (let s: Scope | null = sc; s; s = s.parent) if (s.cls) return s.cls; }
       if (ty?.k === 'class') return this.classDef(ty.name);
     } catch { /* fall through */ }
@@ -639,6 +642,7 @@ export class Sim {
         if (t?.k === 'arr' || t?.k === 'assoc') return t.elem;
         if (t?.k === 'int') return { k: 'int', w: 1, s: false };
       }
+      if (e.k === 'concat') { let w = 0; for (const p of e.parts) { const t = this.lvTy(p, sc); if (t?.k !== 'int') return undefined; w += t.w; } return { k: 'int', w, s: false }; }
       if (e.k === 'slice') { const t = this.lvTy(e.o, sc); if (t?.k === 'int') { const w = this.sliceWidth(e, sc); return { k: 'int', w, s: false }; } }
     } catch { /* unknown */ }
     return undefined;
@@ -647,6 +651,26 @@ export class Sim {
   sliceWidth(e: Extract<E, { k: 'slice' }>, sc: Scope): number {
     if (e.mode === ':') return Math.abs(this.constEval(e.hi, sc) - this.constEval(e.lo, sc)) + 1;
     return this.constEval(e.lo, sc);
+  }
+
+  /** Self-determined width of an expression, or 0 when unknown (used to size relational operands like a + b > 255). */
+  selfW(e: E, sc: Scope): number {
+    switch (e.k) {
+      case 'num': return e.fill !== undefined ? 0 : e.w ?? 32;
+      case 'id': { const r = this.lookup(sc, e.n); if (r?.ty.k === 'int') return r.ty.w; const en = this.enumConsts.get(e.n); return en ? en.w : 0; }
+      case 'member': case 'index': { const t = this.lvTy(e, sc); return t?.k === 'int' ? t.w : 0; }
+      case 'slice': return this.lvTy(e.o, sc)?.k === 'int' ? this.sliceWidth(e, sc) : 0;
+      case 'un': return e.op === '!' || ['&', '|', '^', '~&', '~|', '~^', '^~'].includes(e.op) ? 1 : this.selfW(e.e, sc);
+      case 'bin': {
+        if (['==', '!=', '===', '!==', '==?', '!=?', '<', '<=', '>', '>=', '&&', '||', '->'].includes(e.op)) return 1;
+        if (['<<', '>>', '<<<', '>>>', '**'].includes(e.op)) return this.selfW(e.l, sc);
+        const a = this.selfW(e.l, sc), b = this.selfW(e.r, sc);
+        return a && b ? Math.max(a, b) : 0;
+      }
+      case 'tern': { const a = this.selfW(e.t, sc), b = this.selfW(e.f, sc); return a && b ? Math.max(a, b) : 0; }
+      case 'concat': { let w = 0; for (const p of e.parts) { const x = this.selfW(p, sc); if (!x) return 0; w += x; } return w; }
+      default: return 0;
+    }
   }
 
   tyWidth(h: Ty | undefined): number { return h && h.k === 'int' ? h.w : 0; }
@@ -912,7 +936,8 @@ export class Sim {
     if (op === '||') { return this.one(truthy(this.ev(e.l, sc)) || truthy(this.ev(e.r, sc))); }
     if (op === '->') return this.one(!truthy(this.ev(e.l, sc)) || truthy(this.ev(e.r, sc)));
     const relational = ['==', '!=', '===', '!==', '==?', '!=?', '<', '<=', '>', '>='].includes(op);
-    const h = relational ? undefined : hint;
+    let h = relational ? undefined : hint;
+    if (relational) { const w = Math.max(this.selfW(e.l, sc), this.selfW(e.r, sc)); if (w) h = { k: 'int', w, s: false }; }
     const l = this.ev(e.l, sc, h);
     const r = this.ev(e.r, sc, op === '<<' || op === '>>' || op === '<<<' || op === '>>>' || op === '**' ? undefined : h);
     this.curLine = e.line;

@@ -146,7 +146,7 @@ class Parser {
       if (this.isOp(']')) { this.next(); out.push({ k: 'dyn' }); continue; }
       if (this.isOp('$')) { this.next(); if (this.accept(':')) this.expr(); this.expect(']'); out.push({ k: 'queue' }); continue; }
       if (this.isOp('*')) { this.next(); this.expect(']'); out.push({ k: 'assoc', key: 'int' }); continue; }
-      if ((this.is('int') || this.is('string') || this.is('integer') || this.is('byte') || this.is('bit') || this.is('logic')) && this.peek().v === ']') { const k = this.next().v; this.next(); out.push({ k: 'assoc', key: k }); continue; }
+      if ((this.is('int') || this.is('string') || this.is('integer') || this.is('byte') || this.is('bit') || this.is('logic') || (this.t.t === 'id' && this.prog.typedefs.some((td) => td.name === this.t.v))) && this.peek().v === ']') { const k = this.next().v; this.next(); out.push({ k: 'assoc', key: k }); continue; }
       const a = this.expr();
       if (this.accept(':')) { const b = this.expr(); this.expect(']'); out.push({ k: 'fixed', lo: a, hi: b }); }
       else { this.expect(']'); out.push({ k: 'fixed', hi: { k: 'bin', op: '-', l: a, r: { k: 'num', v: 1n }, line: this.t.line } }); }
