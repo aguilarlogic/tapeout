@@ -1,6 +1,7 @@
 // TAPE-OS: the desktop the whole game lives in. The terminal (TAPEOUT) is always there; labs, minigames,
 // the map and flashcards open as windows. URLs (#/rtl/fifo, #/learn/cache...) open the matching window.
 import { circuitPage } from '../games/circuit/page';
+import { codePage } from '../games/code/page';
 import { findModule, KIND_APP } from '../curriculum';
 import { coveragePage } from '../games/coverage/page';
 import { drillsPage } from '../games/drills/page';
@@ -23,7 +24,7 @@ import { bindMentorLog } from './mentor';
 import { getWindow, initWM, openWindow } from './wm';
 
 const LABS: Record<string, (id: string) => HTMLElement> = {
-  logic: logicPage, rtl: rtlPage, pcb: pcbPage, sta: timingPage, cov: coveragePage, uvm: uvmPage, clab: circuitPage,
+  logic: logicPage, rtl: rtlPage, pcb: pcbPage, sta: timingPage, cov: coveragePage, uvm: uvmPage, clab: circuitPage, code: codePage,
 };
 
 let term: Terminal;

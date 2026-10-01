@@ -4,6 +4,7 @@ import { SCENARIOS } from './games/coverage/scenarios';
 import { LOGIC_LEVELS } from './games/logic/levels';
 import { PCB_LEVELS } from './games/pcb/levels';
 import { CIRCUIT_LEVELS } from './games/circuit/levels';
+import { CODE_LEVELS } from './games/code/levels';
 import { DEBUG_LEVELS, RTL_LEVELS } from './games/rtl/levels';
 import { TIMING_LEVELS } from './games/timing/levels';
 import { UVM_PUZZLES } from './games/uvm/puzzles';
@@ -12,7 +13,7 @@ import { findIncident } from './incidents';
 import { findBoss, findPractice } from './practice';
 import { levelRecord, profile } from './state';
 
-export type ModKind = 'lesson' | 'practice' | 'boss' | 'incident' | 'logic' | 'cmos' | 'rtl' | 'debug' | 'cov' | 'uvm' | 'sta' | 'pcb' | 'clab' | 'drills' | 'final';
+export type ModKind = 'lesson' | 'practice' | 'boss' | 'incident' | 'logic' | 'cmos' | 'rtl' | 'debug' | 'cov' | 'uvm' | 'sta' | 'pcb' | 'clab' | 'code' | 'drills' | 'final';
 
 export interface Module {
   id: string;
@@ -27,13 +28,13 @@ export interface Act { id: string; n: number; name: string; tagline: string; reg
 
 export const KIND_LABEL: Record<ModKind, string> = {
   lesson: 'Lesson', practice: 'Practice', boss: 'Boss', incident: 'Incident', logic: 'Logic lab', cmos: 'Transistor lab', rtl: 'Verilog', debug: 'Bug hunt', cov: 'Coverage',
-  uvm: 'UVM', clab: 'Circuit Lab', sta: 'Timing', pcb: 'Board', drills: 'Interview', final: 'Final review',
+  uvm: 'UVM', clab: 'Circuit Lab', code: 'Code Lab', sta: 'Timing', pcb: 'Board', drills: 'Interview', final: 'Final review',
 };
 
 /** The desktop app a module opens in. */
 export const KIND_APP: Record<ModKind, string> = {
   lesson: 'terminal', practice: 'terminal', boss: 'terminal', incident: 'terminal', logic: 'Logic Lab', cmos: 'Logic Lab', rtl: 'Verilog IDE', debug: 'Verilog IDE', cov: 'Coverage',
-  uvm: 'UVM Builder', clab: 'Circuit Lab', sta: 'Timing', pcb: 'Board Router', drills: 'Flashcards', final: 'terminal',
+  uvm: 'UVM Builder', clab: 'Circuit Lab', code: 'Code Lab', sta: 'Timing', pcb: 'Board Router', drills: 'Flashcards', final: 'terminal',
 };
 
 const lesson = (id: string): Module => {
@@ -65,6 +66,9 @@ const logic = (ids: string[]) => ids.map((id) => {
   return { id, kind: (l.mode === 'cmos' ? 'cmos' : 'logic') as ModKind, title: l.title, concept: l.concept, xp: l.xp, route: `#/logic/${id}` };
 });
 
+/** Code Lab missions by id, in the order given. */
+const code = (...ids: string[]): Module[] => ids.flatMap((id) => mods(CODE_LEVELS, 'code', 'code', (x) => x.id === id));
+
 /** Circuit Lab missions by id, in the order given. */
 const clab = (...ids: string[]): Module[] => ids.flatMap((id) => mods(CIRCUIT_LEVELS, 'clab', 'clab', (x) => x.id === id));
 
@@ -76,7 +80,7 @@ export const ACTS: Act[] = [
       { name: 'Circuits', modules: [...drill('ohm', 'rc'), ...clab('clab-divider', 'clab-led'), bossMod('boss-circuits1'), ...clab('clab-boss-ohm'), ...drill('kcl'), ...clab('clab-thevenin', 'clab-bridge'), bossMod('boss-kcl'), ...clab('clab-boss-kcl'), ...drill('ac'), ...clab('clab-lowpass'), bossMod('boss-ac'), ...clab('clab-boss-ac')] },
       { name: 'Calculus & linear algebra', modules: [...drill('calc'), bossMod('boss-calc'), ...drill('linalg'), bossMod('boss-linalg')] },
       { name: 'Differential equations', modules: [...drill('ode'), ...clab('clab-debounce', 'clab-rlc'), bossMod('boss-ode'), ...clab('clab-boss-ode')] },
-      { name: 'Probability & numerics', modules: [...drill('prob'), bossMod('boss-prob'), ...drill('numerics'), bossMod('boss-numerics')] },
+      { name: 'Probability & numerics', modules: [...drill('prob'), ...code('code-py-mc'), bossMod('boss-prob'), ...drill('numerics'), ...code('code-py-newton', 'code-py-simpson'), bossMod('boss-numerics'), ...code('code-boss-py-root')] },
       { name: 'Signals & control', modules: [...drill('signals', 'dsp'), bossMod('boss-signals'), ...drill('control'), bossMod('boss-control')] },
       { name: 'Physics', modules: [...drill('semi', 'mosphys', 'em'), bossMod('boss-em')] },
       { name: 'Electronics', modules: [...drill('electronics'), ...clab('clab-rectifier', 'clab-bjt'), bossMod('boss-electronics'), ...clab('clab-boss-bjt')] },
@@ -88,11 +92,11 @@ export const ACTS: Act[] = [
     chapters: [
       { name: 'The shell', modules: [...drill('shell'), bossMod('boss-shell')] },
       { name: 'Git', modules: [...drill('git'), bossMod('boss-git')] },
-      { name: 'Python', modules: [...drill('python'), bossMod('boss-python')] },
-      { name: 'Flows & scripting', modules: [...drill('flows'), bossMod('boss-flows')] },
-      { name: 'C', modules: [...drill('c'), bossMod('boss-c')] },
+      { name: 'Python', modules: [...drill('python'), ...code('code-py-parse', 'code-py-hist', 'code-py-regfield'), bossMod('boss-python'), ...code('code-boss-py-log')] },
+      { name: 'Flows & scripting', modules: [...drill('flows'), ...code('code-py-triage'), bossMod('boss-flows')] },
+      { name: 'C', modules: [...drill('c'), ...code('code-c-swap', 'code-c-strings', 'code-c-array', 'code-c-bits', 'code-c-layout', 'code-c-list', 'code-c-vec', 'code-c-bug-overflow', 'code-c-bug-uaf', 'code-c-bug-leak', 'code-c-bug-dangling', 'code-c-bug-uninit'), bossMod('boss-c'), ...code('code-boss-c-ring', 'code-boss-c-split', 'code-boss-c-crc')] },
       { name: 'C++', modules: [...drill('cpp'), bossMod('boss-cpp')] },
-      { name: 'Algorithms', modules: [...drill('dsa'), bossMod('boss-dsa')] },
+      { name: 'Algorithms', modules: [...drill('dsa'), ...code('code-py-fibmemo', 'code-py-bsearch', 'code-py-bfs', 'code-py-topo', 'code-py-lru'), bossMod('boss-dsa'), ...code('code-boss-py-graph')] },
       { name: 'Hardware/software interface', modules: [...drill('asm'), bossMod('boss-asm')] },
       { name: 'Operating systems', modules: [...drill('os'), bossMod('boss-os')] },
     ],
@@ -120,7 +124,7 @@ export const ACTS: Act[] = [
   {
     id: 'verif', n: 5, name: 'Verification & Test', tagline: 'Debug, coverage, UVM, assertions, formal and DFT', region: 'DV SIGNOFF',
     chapters: [
-      { name: 'Testbenches & debug', modules: [...drill('dv'), ...mods(DEBUG_LEVELS, 'debug', 'rtl'), bossMod('boss-tb'), bossMod('boss-debug')] },
+      { name: 'Testbenches & debug', modules: [...drill('dv'), ...code('code-py-lfsr', 'code-py-uart'), ...mods(DEBUG_LEVELS, 'debug', 'rtl'), bossMod('boss-tb'), bossMod('boss-debug')] },
       { name: 'Random & coverage', modules: [...drill('crv'), bossMod('boss-crv'), prac('practice-cov'), ...mods(SCENARIOS, 'cov', 'cov'), bossMod('boss-coverage')] },
       { name: 'UVM', modules: [...drill('uvm'), ...mods(UVM_PUZZLES, 'uvm', 'uvm'), bossMod('boss-uvm')] },
       { name: 'Assertions & formal', modules: [...drill('sva'), bossMod('boss-sva'), ...drill('formal'), bossMod('boss-formal')] },

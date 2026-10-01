@@ -27,7 +27,7 @@ const isPtr = (t: CType): t is Extract<CType, { k: 'ptr' }> => t.k === 'ptr';
 const ptrTo = (to: CType): CType => ({ k: 'ptr', to });
 const hex = (n: number | bigint) => '0x' + n.toString(16);
 
-export interface COptions { stdin?: string; maxSteps?: number; seed?: number; maxOutput?: number }
+export interface COptions { stdin?: string; maxSteps?: number; seed?: number; maxOutput?: number; leaks?: boolean }
 
 export class CInterp {
   buf = new ArrayBuffer(MEM);
@@ -234,7 +234,10 @@ export class CInterp {
   private link() {
     // functions first, so global initialisers can take their addresses
     for (const d of this.prog.decls) {
-      if (d.t === 'func') { this.funcs.set(d.name, { name: d.name, ty: d.ty, body: d.body }); }
+      if (d.t === 'func') {
+        if (this.funcs.has(d.name)) throw new CError(`redefinition of '${d.name}'`, d.line);
+        this.funcs.set(d.name, { name: d.name, ty: d.ty, body: d.body });
+      }
     }
     const fid = (name: string) => { let i = this.funcList.findIndex((f) => (typeof f === 'string' ? f : f.name) === name); if (i < 0) { i = this.funcList.length; this.funcList.push(this.funcs.get(name) ?? name); } return i; };
     this.fid = fid;
@@ -283,6 +286,10 @@ export class CInterp {
     }
     try {
       const code = it.runMain();
+      if (opts.leaks) {
+        const live = [...it.blocks.values()].filter((b) => b.live);
+        if (live.length) return { stdout: it.stdout, stderr: it.stderr, exit: code, error: `LeakSanitizer: detected memory leaks: ${live.reduce((a, b) => a + b.size, 0)} byte(s) in ${live.length} allocation(s) were never freed.`, line: 0, kind: 'leak', interp: it };
+      }
       return { stdout: it.stdout, stderr: it.stderr, exit: code, interp: it };
     } catch (e) {
       if (e instanceof ExitSignal) return { stdout: it.stdout, stderr: it.stderr, exit: e.code, interp: it };

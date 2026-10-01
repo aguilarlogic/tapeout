@@ -20,6 +20,29 @@ export function highlightSpice(src: string): string {
   }).join('\n') + '\n';
 }
 
+const PY_KW = new Set(['def', 'return', 'if', 'elif', 'else', 'while', 'for', 'in', 'not', 'and', 'or', 'is', 'None', 'True', 'False', 'pass', 'break', 'continue', 'class', 'lambda', 'try', 'except', 'finally', 'raise', 'assert', 'del', 'global', 'nonlocal', 'import', 'from', 'as']);
+const C_KW = new Set(['if', 'else', 'while', 'for', 'do', 'return', 'break', 'continue', 'switch', 'case', 'default', 'struct', 'union', 'enum', 'typedef', 'sizeof', 'static', 'const', 'extern', 'void', 'char', 'short', 'int', 'long', 'float', 'double', 'signed', 'unsigned', 'NULL']);
+
+/** Colours comments, strings, numbers and keywords for a C-like or Python-like language. */
+function highlightWords(src: string, kw: Set<string>, comment: string, strs: string): string {
+  const re = new RegExp(`(${comment})|(${strs})|(\\b0[xX][0-9a-fA-F]+\\b|\\b\\d+\\.?\\d*(?:[eE][+-]?\\d+)?[uUlLfF]*\\b)|([A-Za-z_]\\w*)`, 'gm');
+  let out = '', last = 0;
+  for (let m = re.exec(src); m; m = re.exec(src)) {
+    out += esc(src.slice(last, m.index));
+    if (m[1]) out += `<span class="tk-com">${esc(m[1])}</span>`;
+    else if (m[2]) out += `<span class="tk-str">${esc(m[2])}</span>`;
+    else if (m[3]) out += `<span class="tk-num">${esc(m[3])}</span>`;
+    else if (kw.has(m[4])) out += `<span class="tk-kw">${m[4]}</span>`;
+    else out += esc(m[4]);
+    last = re.lastIndex;
+  }
+  return out + esc(src.slice(last)) + '\n';
+}
+
+const STR = `"(?:\\\\.|[^"\\\\\\n])*"|'(?:\\\\.|[^'\\\\\\n])*'`;
+export const highlightPy = (src: string) => highlightWords(src, PY_KW, '#[^\\n]*', `"""[\\s\\S]*?"""|'''[\\s\\S]*?'''|${STR}`);
+export const highlightC = (src: string) => highlightWords(src, C_KW, '//[^\\n]*|/\\*[\\s\\S]*?\\*/|^[ \\t]*#[^\\n]*', STR);
+
 export function highlight(src: string): string {
   const re = /(\/\/[^\n]*|\/\*[\s\S]*?\*\/)|(\b\d*'[sS]?[bBoOdDhH][0-9a-fA-FxXzZ?_]+|\b\d[\d_]*\b|'[01xz]\b)|([A-Za-z_$][\w$]*)/g;
   let out = '';
