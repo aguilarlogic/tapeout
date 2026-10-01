@@ -1,6 +1,7 @@
 // Skills.app: the curriculum audit as a live screen. Every skill, your level in it (0-3), and what to do next.
 import { findModule, KIND_LABEL } from '../curriculum';
 import { levelRecord, profile } from '../state';
+import { capstoneId, isHired } from './career';
 import { h } from '../ui/dom';
 import { AREAS, findRole, LEVEL_NAME, nextStep, roleReadiness, ROLES, SKILLS, skillCeiling, skillLevel, skillsFor, type RoleId, type Skill } from './skills';
 
@@ -35,12 +36,13 @@ export function skillsApp(focus?: string): HTMLElement {
 
   const head = h('div', { class: 'skills-head' },
     h('div', null,
-      h('p', { class: 'kicker' }, role ? `${role.name} · ${Math.round(roleReadiness(role.id) * 100)}% job-ready` : `${SKILLS.length} skills · the curriculum audit, live`),
+      h('p', { class: 'kicker' }, role ? `${role.name} · ${Math.round(roleReadiness(role.id) * 100)}% job-ready${isHired(role) ? ' · hired ✓' : ''}` : `${SKILLS.length} skills · the curriculum audit, live`),
       h('h2', null, role ? role.name : 'Your skill matrix'),
       h('p', { class: 'dim' }, role ? role.blurb : 'Every row is a skill from the curriculum audit. Level 1 · Aware: you did the lesson. Level 2 · Practised: you passed the practice. Level 3 · Job-ready: you beat the boss, with no hints.'),
       h('div', { class: 'skills-counts' },
         ...[3, 2, 1, 0].map((lv) => h('span', { class: `cnt l${lv}` }, h('b', null, String(counts[lv])), ` ${LEVEL_NAME[lv].toLowerCase()}`)),
         h('span', { class: 'cnt dim' }, `${built}/${list.length} skills fully built`)),
+      role && !isHired(role) && roleReadiness(role.id) >= 0.6 ? h('a', { class: 'btn', href: `#/learn/${capstoneId(role)}` }, '♛ Take the hiring panel') : null,
       suggestion ? h('a', { class: 'btn primary', href: findModule(suggestion.nx!.id)?.module.route ?? '#/' }, `▶ Next: ${findModule(suggestion.nx!.id)?.module.title ?? suggestion.nx!.id}`) : null),
     h('div', { class: 'skills-role' }, h('label', { class: 'dim' }, 'Show skills for'), select));
 
@@ -59,7 +61,7 @@ export function skillsApp(focus?: string): HTMLElement {
     ...[...ROLES].sort((a, b) => roleReadiness(b.id) - roleReadiness(a.id)).map((r) => {
       const pct = Math.round(roleReadiness(r.id) * 100);
       return h('a', { class: `role-row${role?.id === r.id ? ' on' : ''}`, href: `#/skills/${r.id}` },
-        h('span', { class: 'ri' }, r.icon), h('span', { class: 'rn' }, r.name),
+        h('span', { class: 'ri' }, r.icon), h('span', { class: 'rn' }, isHired(r) ? `${r.name} ✓` : r.name),
         h('span', { class: 'track small' }, h('span', { class: 'fill', style: `width:${pct}%` })), h('span', { class: 'rp' }, `${pct}%`));
     }));
 

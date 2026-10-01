@@ -34,7 +34,7 @@ describe('skill matrix', () => {
   it('places every practice set and boss in the campaign and in a skill', () => {
     for (const x of [...PRACTICE, ...BOSSES]) {
       expect(moduleIds.has(x.id), `${x.id} in campaign`).toBe(true);
-      expect(SKILLS.some((s) => s.practice.includes(x.id) || s.boss.includes(x.id)), `${x.id} in a skill`).toBe(true);
+      if (!x.id.startsWith('cap-')) expect(SKILLS.some((s) => s.practice.includes(x.id) || s.boss.includes(x.id)), `${x.id} in a skill`).toBe(true);
     }
   });
   it('explains what is planned for any unbuilt tier', () => {

@@ -5,6 +5,7 @@ import { GLOSSARY, lookup } from '../glossary';
 import { findIncident, INCIDENTS } from '../incidents';
 import { finalExam, FINAL_ID, findLesson } from '../lessons';
 import type { Lesson, Mood, Question } from '../lessons/types';
+import { career, capstoneId } from '../mastery/career';
 import { findSkill, LEVEL_NAME, nextStep, roleReadiness, ROLES, SKILLS, skillCeiling, skillLevel, type RoleId } from '../mastery/skills';
 import { MINIGAMES } from '../minigames/apps';
 import { BOSSES, findBoss, findPractice, PRACTICE, problem } from '../practice';
@@ -158,7 +159,9 @@ export class Shell {
         return this.practiceCmd(arg, true);
       case 'skills': case 'skill': case 'matrix': case 'audit':
         return this.skillsCmd(arg);
-      case 'roles': case 'role': case 'careers': case 'career': case 'jobs':
+      case 'career': case 'promotion': case 'rank':
+        return this.careerCmd();
+      case 'roles': case 'role': case 'careers': case 'jobs':
         return this.rolesCmd(arg);
       case 'boss': case 'bosses': {
         if (!arg) return this.printBosses();
@@ -239,6 +242,7 @@ export class Shell {
       ['incidents [name]', 'on-call investigations: find the root cause against the clock'],
       ['what is <term>', `look up any of ${GLOSSARY.length} terms`],
       ['status', 'your rank, XP and progress'],
+      ['career', 'your rank story, the roles you are hired for, the next hiring panel'],
       ['speed <s>', 'how fast I type: slow | normal | fast | instant'],
       ['settings', 'open Settings.app (typing speed, with a preview)'],
       ['name <n>', 'change your name'],
@@ -454,6 +458,23 @@ export class Shell {
     }
     const nx = nextStep(s);
     if (nx) t.line(h('button', { class: 'term-chip inline', onclick: () => this.run(`learn ${nx.id}`) }, `next step: ${findModule(nx.id)?.module.title ?? nx.id} →`));
+  }
+
+  private async careerCmd() {
+    const t = this.term, c = career();
+    t.print(`CAREER · ${c.title} · ${c.xp} XP`, 'hl');
+    t.print(`${c.scope}: ${c.story}`, 'dim');
+    t.print(`${RANKS.map((x) => (x.title === c.title ? `[${x.title}]` : x.title)).join(' → ')}`, 'dim');
+    if (c.next) t.print(`${bar(c.progress, 20)} ${c.next.need} XP to ${c.next.title}`, 'mono');
+    else t.print('You have reached the top of the ladder. The rest is for the love of it.', 'dim');
+    if (c.hired.length) t.print(`Hired as: ${c.hired.map((r) => r.name).join(', ')}`, 'hl');
+    else t.print('Not hired yet. Each role ends in a hiring panel: 12 hard questions, no hints.', 'dim');
+    if (c.closest.length) {
+      t.print('Closest to a hiring panel:', 'dim');
+      this.term.block(h('div', { class: 'term-ch' }, ...c.closest.map(({ role, readiness }) =>
+        h('button', { class: 'term-mod', onclick: () => this.run(`learn ${capstoneId(role)}`) },
+          h('span', { class: 'chk' }, role.icon), h('span', { class: 'mono' }, `${bar(readiness, 10)} ${String(Math.round(readiness * 100)).padStart(3)}%  `), h('span', null, role.name)))));
+    }
   }
 
   private async rolesCmd(arg: string) {

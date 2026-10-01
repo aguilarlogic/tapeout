@@ -107,14 +107,15 @@ export function totalXp(): number {
   return Math.round(xp);
 }
 
+/** Thresholds are set against the whole campaign (about 80,000 XP): a rank takes noticeably longer than the one before, and Fellow is reachable without finishing every last module. A test keeps them in step with the curriculum. */
 export const RANKS = [
   { xp: 0, title: 'Intern' },
-  { xp: 1000, title: 'Junior Engineer' },
-  { xp: 3000, title: 'Design Engineer' },
-  { xp: 6000, title: 'Senior Engineer' },
-  { xp: 9000, title: 'Staff Engineer' },
-  { xp: 11500, title: 'Principal Engineer' },
-  { xp: 13500, title: 'Fellow' },
+  { xp: 1500, title: 'Junior Engineer' },
+  { xp: 5000, title: 'Design Engineer' },
+  { xp: 14000, title: 'Senior Engineer' },
+  { xp: 28000, title: 'Staff Engineer' },
+  { xp: 44000, title: 'Principal Engineer' },
+  { xp: 62000, title: 'Fellow' },
 ];
 
 export function rank(xp = totalXp()) {

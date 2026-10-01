@@ -18,6 +18,7 @@ import { UVM_PUZZLES } from './games/uvm/puzzles';
 import { FINAL_ID, FINAL_XP, findLesson } from './lessons';
 import { findIncident } from './incidents';
 import { findBoss, findPractice } from './practice';
+import { ROLES } from './mastery/skills';
 import { levelRecord, profile } from './state';
 
 export type ModKind = 'lesson' | 'practice' | 'boss' | 'incident' | 'logic' | 'cmos' | 'rtl' | 'debug' | 'cov' | 'uvm' | 'sta' | 'pcb' | 'clab' | 'code' | 'shell' | 'sva' | 'tb' | 'cdc' | 'isa' | 'arch' | 'rv' | 'dft' | 'pd' | 'sta2' | 'layout' | 'sig' | 'spec' | 'drills' | 'final';
@@ -203,6 +204,7 @@ export const ACTS: Act[] = [
       { name: 'Design tools & clocking', modules: [...drill('eda'), ...code('code-eda-maze', 'code-eda-sta', 'code-eda-dpll'), bossMod('boss-eda'), ...code('code-eda-boss'), ...drill('libchar'), ...spec('lib-table', 'lib-setup'), bossMod('boss-libchar'), ...drill('clocking'), ...spec('pll-loop'), bossMod('boss-clocking'), ...spec('pll-jitter')] },
       { name: 'Chip integration', modules: [...drill('io-esd'), bossMod('boss-io-esd'), incident('inc-esd'), ...drill('soc-int'), bossMod('boss-soc-int'), incident('inc-soc'), ...drill('ae-tpm'), bossMod('boss-ae-tpm'), incident('inc-customer')] },
       { name: 'Sensors & frontier', modules: [...drill('sensors'), bossMod('boss-sensors'), incident('inc-pixel'), ...drill('mems'), bossMod('boss-mems'), ...drill('neuro'), bossMod('boss-neuro'), ...drill('emerging'), bossMod('boss-emerging')] },
+      { name: 'Hiring panels', modules: ROLES.map((r) => bossMod(`cap-${r.id}`)) },
     ],
   },
 ];

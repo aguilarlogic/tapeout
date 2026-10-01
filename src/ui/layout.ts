@@ -1,5 +1,6 @@
 import { findModule, KIND_LABEL, neighbours } from '../curriculum';
 import { avatar, setMood } from '../os/avatar';
+import { STORY } from '../mastery/career';
 import { mentorSay } from '../os/mentor';
 import { playerName, rank, totalXp } from '../state';
 import { h, stars as starEls } from './dom';
@@ -37,7 +38,7 @@ export function celebrate(stars: number, gained: number, notes: string[], nextRo
   const promoted = after.index > before.index;
   const line = (PRAISE[stars] ?? PRAISE[1])[Math.floor(Math.random() * (PRAISE[stars] ?? PRAISE[1]).length)].replace(/\{name\}/g, playerName());
   setMood(stars === 3 ? 'proud' : 'happy');
-  mentorSay(promoted ? `${line} And you just got promoted to ${after.title}!` : line, promoted ? 'excited' : stars === 3 ? 'proud' : 'happy');
+  mentorSay(promoted ? `${line} And you just got promoted to ${after.title}! ${STORY[Math.min(after.index, STORY.length - 1)].line}` : line, promoted ? 'excited' : stars === 3 ? 'proud' : 'happy');
   const close = () => overlay.remove();
   const overlay = h('div', { class: 'modal-bg', onclick: (e: Event) => { if (e.target === overlay) close(); } },
     h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Level complete' },
