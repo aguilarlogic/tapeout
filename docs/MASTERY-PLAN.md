@@ -66,6 +66,28 @@ Each phase ships playable content and is committed on its own.
   same kind of problem with new numbers. Every practice generator in every set has one, and
   `src/practice/teach.test.ts` checks seeds 1-25 at all three difficulties: each walkthrough's steps must accept their
   own canonical answer, and a worked calculation must end on the question's answer.
+- [ ] **Teach-me depth pass.** An audit of all 385 generators (46,200 sampled walkthroughs) found these gaps:
+  1. **17 simulation-style generators show the solved table and only ask the player to count.** This is the original
+     "it just tells you, it does not teach you" complaint in a milder form:
+     - MESI coherence: the table already lists every core's state, and the player just counts writebacks.
+     - DRAM: every request is already labelled hit, empty or conflict, and the player just adds the costs.
+     - Cache: the player works out the block and set for the first address, then the full hit/miss table appears.
+     - Pipeline stalls: the wait for each instruction is given, and the player just adds them up.
+     - Others: the FIFO reference model, the VALID/READY handshake, OS scheduling, FSMs and probability.
+
+     The teach-me plan said to walk the first 2-3 events with the player making each decision (hit or miss? which
+     state now?), then show the rest. Full list: bool/0, prob/1, shell/1, os/2, fsm/1, dv/1, uvm/0, pipe/0, pipe/1,
+     cache/0, coherence/0, coherence/1, dram/0, bus/0, bus/1, pnr/2, fusa/1.
+  2. **28% of walkthroughs have a single step** (about 3,100 of them are a single calculation that gives the answer).
+     For a one-formula question like 1240 / 1.12 that is fine, because the explanation before it does the teaching.
+     On multi-stage problems it feels thin: split those into their stages.
+  3. **About 3,250 multiple-choice walkthroughs have one reasoning step.** Acceptable for concept questions, but a
+     lighter touch than the numeric ones.
+  4. **Wrong-answer message:** "Not quite. Check the arithmetic…" appears on about 3,100 non-numeric steps (regex,
+     commands, text). Those should say something like "Look at that step again."
+  5. **Answer check skipped:** two generators end on an explanation instead of a step the player answers (python `%`,
+     C++ `use_count`), so the test's "lands on the answer" check does not cover them. The game still states the answer
+     at the end, so players are not affected.
 - [ ] **Phase 4: Circuit Lab.**
 - [ ] **Phase 5: Code Lab and Shell Lab**, with regression triage.
 - [ ] **Phase 6: SV Lab**: SystemVerilog, UVM, SVA, formal, CDC.
