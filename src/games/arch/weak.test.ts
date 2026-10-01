@@ -87,3 +87,24 @@ describe('STA missions reject wrong answers', () => {
     expect(ok(run('sta-eco', 1, { eco: 'p1 0 0 0' }))).toBe(false);
   });
 });
+
+describe('Layout missions reject broken layouts', () => {
+  it('drc, lvs, boss', () => {
+    // every mutation of the inverter really breaks something
+    const inst = findArchLevel('layout-drc')!.build(rng(1));
+    const res = inst.run({ layout: String(inst.controls[0].kind === 'text' ? inst.controls[0].value : '') });
+    expect(res.goals.some((g) => !g.ok)).toBe(true);
+    expect((res.extra as { rows: unknown[] } | undefined)?.rows.length ?? 0).toBeGreaterThan(0);
+    expect(ok(run('layout-inv', 1, { layout: 'nwell -2 2 13 12' }))).toBe(false);
+    expect(run('layout-inv', 1, { layout: 'bogus 1 2 3 4' }).error?.message).toMatch(/unknown layer/);
+    // every LVS bug is reported by LVS or DRC
+    for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) { const i = findArchLevel('layout-lvs')!.build(rng(seed)); const r = i.run(defaults(i.controls)); expect(r.goals.every((g) => g.ok), `seed ${seed}`).toBe(false); }
+    // a smaller-area cheat that drops the poly fails
+    expect(ok(run('layout-boss', 1, { layout: 'nwell 0 0 6 6' }))).toBe(false);
+  });
+  it('each drc mutation is flagged', () => {
+    const seen = new Set<string>();
+    for (let s = 1; s <= 12; s++) { const i = findArchLevel('layout-drc')!.build(rng(s)); const r = i.run(defaults(i.controls)); expect(r.goals[0].ok, `seed ${s}`).toBe(false); seen.add(String(r.goals[0].note).split(':')[1]); }
+    expect(seen.size).toBeGreaterThan(2);
+  });
+});
