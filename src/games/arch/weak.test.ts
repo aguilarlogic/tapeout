@@ -76,3 +76,14 @@ describe('weak or wrong answers are rejected', () => {
     expect(ok(run('pd-boss', 1, { pl: 'c1 0 0' }))).toBe(false);
   });
 });
+
+describe('STA missions reject wrong answers', () => {
+  it('report, ocv, mcp, eco', () => {
+    expect(ok(run('sta-report', 1, { ss: '0', hs: '0', fm: '0' }))).toBe(false);
+    expect(ok(run('sta-ocv', 1, { nom: '0', ocv: '0', credit: '0', crpr: '0' }))).toBe(false);
+    const inst = findArchLevel('sta-mcp')!.build(rng(1));
+    const unsafe = inst.run({ cons: 'p1 4 3\np2 4 3\np3 4 3\np4 4 3\np5 4 3' });
+    expect(unsafe.goals.some((g) => !g.ok && /unsafe/.test(g.note ?? ''))).toBe(true);
+    expect(ok(run('sta-eco', 1, { eco: 'p1 0 0 0' }))).toBe(false);
+  });
+});
