@@ -712,7 +712,7 @@ export class Shell {
         if (/^(what|who|define)\b/.test(lc)) { await this.define(v.replace(/^define\s+/i, '')); k--; continue; }
         if (['show', 'show me', 'skip', 'idk', "i don't know", 'hint', 'help'].includes(lc)) break;
         if (b.a.check(v)) { done = true; await t.say(`${pickOne(PRAISE)}${b.why ? ` ${b.why}` : ''}`, 'happy'); }
-        else if (k === 0) await t.say(b.hint ? `Not quite. ${b.hint}` : 'Not quite. Check the arithmetic and try once more.', 'thinking');
+        else if (k === 0) await t.say(b.hint ? `Not quite. ${b.hint}` : /^[-+0-9.]/.test(b.a.canonical) ? 'Not quite. Check the arithmetic and try once more.' : 'Not quite. Read the step again and try once more.', 'thinking');
       }
       if (!done) await t.say(`It comes to **${b.a.canonical}**.${b.why ? ` ${b.why}` : ''}`, 'thinking');
     }

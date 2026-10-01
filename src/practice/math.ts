@@ -414,6 +414,7 @@ export const probPractice = practice('practice-prob', 'Probability Drills', 'yie
     return walk(ask(`Path delay is normal with μ = ${mu} ps, σ = ${s} ps. The clock allows ${mu + z * s} ps. What % of chips fail timing?`, qty(tl, '%', 0.03, `${sig(tl)}%`), `The limit is (${mu + z * s} - ${mu})/${s} = ${z}σ above the mean. One-sided tail: 1 - Φ(${z}) = ${sig(tl)}%.`, 'Compute z = (limit - μ)/σ, then the one-sided tail.'),
       'z-score and tail', idea,
       calc('How many σ above the mean is the limit? z = (limit - μ)/σ:', `(${mu + z * s} - ${mu}) / ${s}`, z, '', String(z), 0.001),
+      choice('Chips fail when they are SLOWER than the limit. Which part of the distribution is that?', 'The tail above +z (one side only)', ['Everything within ±z', 'The tail below -z', 'Both tails together'], 'Slower than the limit means above it, and only one side counts.'),
       show([1, 1.5, 2, 2.5, 3, 3.5, 4].map((x) => `z = ${x}: ${sig(tail(x) * 100)}%`).join('\n'), 'one-sided tail above +z'),
       calc(`Only chips slower than the limit fail, so read the one-sided tail at z = ${z}:`, `tail(${z})`, tl, '%', sig(tl), 0.03));
   },

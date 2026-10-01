@@ -1,6 +1,6 @@
 // Practice banks and bosses for systems software: C, C++, algorithms, assembly and operating systems.
-import { hexa, num, qty } from '../lessons/answers';
-import { calc, choice, count, show, step, walk } from '../lessons/teach';
+import { bin, hexa, num, qty } from '../lessons/answers';
+import { calc, choice, count, show, sim, step, walk } from '../lessons/teach';
 import { art, ask, between, mc, pick, say, type Rng } from '../lessons/types';
 import { boss, practice, tier } from './types';
 import { concept, exact, hex, mcs, shuffle, sig } from './util';
@@ -64,8 +64,10 @@ export const cPractice = practice('practice-c', 'C Drills', 'pointers, struct la
     const ops: string[] = [];
     const vals: number[] = [];
     const steps = tier(d, 1, 2, 3);
+    const bitsAt: number[] = [];
     for (let s = 0; s < steps; s++) {
       const b = between(r, 0, 7);
+      bitsAt.push(b);
       const k = pick(r, [0, 1, 2]);
       if (k === 0) { v |= 1 << b; ops.push(`reg |= (1u << ${b});`); }
       else if (k === 1) { v &= ~(1 << b) & 0xff; ops.push(`reg &= ~(1u << ${b});`); }
@@ -75,7 +77,10 @@ export const cPractice = practice('practice-c', 'C Drills', 'pointers, struct la
     return walk(ask(`${code(`uint8_t reg = ${hex(start)};\n${ops.join('\n')}`)}Final value of reg (hex)?`, hexa(v, 2), `Set (|=), clear (&= ~) and toggle (^=) bits one at a time: ${hex(start)} → ${hex(v)}. These three idioms are half of every device driver.`, 'Work in binary, one line at a time.'),
       'set, clear and toggle bits', 'Three idioms change single bits. 1u << n is a mask with only bit n set. reg |= mask SETS that bit (OR with 1). reg &= ~mask CLEARS it (AND with a mask that is 0 at that bit and 1 elsewhere). reg ^= mask TOGGLES it (XOR with 1 flips). Work in binary, bit 0 on the right.',
       show(`${hex(start)} = ${start.toString(2).padStart(8, '0')}`, 'the starting value'),
-      ...ops.map((op, i) => step(`After \`${op}\`: write reg in hex`, hexa(vals[i], 2))));
+      ...ops.flatMap((op, i) => [
+        step(`\`${op}\` uses the mask 1u << ${bitsAt[i]}. Write that mask in 8-bit binary:`, bin(1 << bitsAt[i], 8), `Bit ${bitsAt[i]} counted from 0 on the right.`),
+        step(`After \`${op}\`: write reg in hex`, hexa(vals[i], 2)),
+      ]));
   },
   (r, d) => {
     const a = between(r, 150, 250), b = between(r, 60, 200);
@@ -145,9 +150,9 @@ export const cppPractice = practice('practice-cpp', 'C++ Drills', 'virtual dispa
     const cnt = 1 + extra - (d === 3 ? 1 : 0);
     return walk(ask(`${code(`${lines.join('\n')}\nstd::cout << a.use_count();`)}Output?`, num(cnt), `Each shared_ptr copy adds one owner; copies inside the braces die at the closing brace${d === 3 ? '; reset() drops b0\'s ownership' : ''}. Count: ${cnt}. The object is freed when the count reaches 0.`, 'Count the live shared_ptr copies at the print.'),
       'shared_ptr reference counts', 'A shared_ptr keeps a count of how many shared_ptr copies point at the same object (use_count). Copying adds one; a copy going away (leaving its scope, or reset()) subtracts one. The object is deleted when the count reaches zero. At the print, count the copies still alive.',
-      count(`The original a, plus the ${extra} cop${extra > 1 ? 'ies' : 'y'} made outside the braces:`, `1 + ${extra}`, 1 + extra),
       inner > 0 && 'The copies made inside the braces { } are destroyed at the closing brace, so they no longer count by the time of the print.',
-      d === 3 && count('b0.reset() makes b0 let go of the object. Owners left:', `${1 + extra} - 1`, cnt));
+      d === 3 ? count(`The original a, plus the ${extra} cop${extra > 1 ? 'ies' : 'y'} made outside the braces, is ${1 + extra} owners. Then b0.reset() makes b0 let go of the object. Owners left:`, `${1 + extra} - 1`, cnt)
+        : count(`The original a, plus the ${extra} cop${extra > 1 ? 'ies' : 'y'} made outside the braces:`, `1 + ${extra}`, cnt));
   },
   (r, d) => {
     const n = between(r, tier(d, 2, 4, 5), tier(d, 4, 6, 8));
@@ -445,12 +450,12 @@ export const osPractice = practice('practice-os', 'OS Drills', 'paging, TLBs, sc
     const rem = [...bursts];
     const done = Array(rem.length).fill(0);
     let t = 0;
-    const slices: string[] = [];
-    while (rem.some((x) => x > 0)) for (let i = 0; i < rem.length; i++) if (rem[i] > 0) { const s = Math.min(q, rem[i]); slices.push(`${t}-${t + s}: J${i}`); t += s; rem[i] -= s; if (!rem[i]) done[i] = t; }
+    const slices: { t0: number; t1: number; i: number; left: number }[] = [];
+    while (rem.some((x) => x > 0)) for (let i = 0; i < rem.length; i++) if (rem[i] > 0) { const s = Math.min(q, rem[i]); slices.push({ t0: t, t1: t + s, i, left: rem[i] - s }); t += s; rem[i] -= s; if (!rem[i]) done[i] = t; }
     const j = between(r, 0, bursts.length - 1);
     return walk(ask(`Round-robin with a ${q} ms quantum, jobs J0..J${bursts.length - 1} arrive together with bursts ${bursts.join(', ')} ms (queue order J0 first). When does J${j} finish, in ms?`, num(done[j]), `Simulate the queue in ${q} ms slices: completion times ${done.map((x, i) => `J${i}=${x}`).join(', ')}.`, 'Cycle through the jobs, each running at most one quantum per turn.'),
       'round-robin scheduling', `Round-robin gives every job a turn of at most ${q} ms, in order, then goes back to the start of the queue. A job that still has work left after its turn waits for its next turn; a job that finishes leaves the queue. Keep a running clock and each job's remaining time.`,
-      show(slices.join('\n'), 'the schedule, slice by slice'),
+      ...sim(slices.map((sl, k) => ({ beats: [count(`Slice ${k + 1}: the clock is at ${sl.t0} and J${sl.i} runs for up to ${q} ms. What is the clock when its turn ends?`, `${sl.t0} + min(${q}, J${sl.i}'s remaining time)`, sl.t1)], row: `${sl.t0}-${sl.t1}: J${sl.i}${sl.left === 0 ? ' (done)' : ''}` })), 3, 'the schedule, slice by slice'),
       count(`The slice where J${j} runs its last piece ends at the clock time:`, `end of J${j}'s last slice`, done[j]));
   },
   (r, d) => {

@@ -1,7 +1,7 @@
 // Practice banks and bosses for the silicon roles of Act 7: physical design, memory, process and yield,
 // packaging, post-silicon validation, production test, and FPGA prototyping / emulation.
 import { num, qty } from '../lessons/answers';
-import { calc, choice, count, show, walk } from '../lessons/teach';
+import { calc, choice, count, sim, walk } from '../lessons/teach';
 import { art, ask, mc, pick, say } from '../lessons/types';
 import { boss, practice, tier } from './types';
 import { concept, sci, sig } from './util';
@@ -67,20 +67,20 @@ export const pnrPractice = practice('practice-pnr', 'Physical Design Drills', 'f
       const lv = pick(r, [3, 4, 5]), s = f ** lv;
       return walk(ask(`A clock tree drives ${s} flops and each buffer drives ${f} loads. How many buffer levels deep is a balanced tree?`, num(lv), `${f}^${lv} = ${s}, so ${lv} levels.`, 'Fan-out per level, to the power of the depth.'),
         'clock tree depth', idea,
-        show(Array.from({ length: lv }, (_, i) => `after level ${i + 1}: ${f ** (i + 1)} loads`).join('\n'), `each level multiplies by ${f}`),
+        ...sim(Array.from({ length: lv }, (_, i) => ({ beats: [count(`After level ${i + 1}, how many loads can the tree drive? Multiply the previous ${i === 0 ? '1' : f ** i} by ${f}:`, `${i === 0 ? 1 : f ** i} × ${f}`, f ** (i + 1))], row: `after level ${i + 1}: ${f ** (i + 1)} loads` })), 3, `each level multiplies by ${f}`),
         count(`How many levels does it take to reach ${s} flops?`, `${f}^levels = ${s}`, lv));
     }
     if (d === 2) {
       const s = pick(r, [1000, 5000, 20000]), lv = Math.ceil(Math.log(s) / Math.log(f));
       return walk(ask(`A clock tree drives ${s} flops with a fan-out of ${f} per buffer. Minimum number of levels?`, num(lv), `${f}^${lv - 1} = ${f ** (lv - 1)} < ${s} ≤ ${f}^${lv} = ${f ** lv}: ${lv} levels.`, 'Smallest L with fanout^L ≥ sinks.'),
         'minimum clock tree depth', `${idea} To find the depth for a given number of flops, find the smallest whole L with f^L at least as big as the number of flops.`,
-        show(Array.from({ length: lv }, (_, i) => `${f}^${i + 1} = ${f ** (i + 1)}`).join('\n'), `powers of ${f}`),
+        ...sim(Array.from({ length: lv }, (_, i) => ({ beats: [count(`${f}^${i + 1} is:`, `${f} to the power ${i + 1}`, f ** (i + 1))], row: `${f}^${i + 1} = ${f ** (i + 1)}` })), 3, `powers of ${f}`),
         count(`The first power of ${f} that reaches ${s} is level:`, `smallest L with ${f}^L ≥ ${s}`, lv));
     }
     const lv = pick(r, [3, 4, 5]), b = (f ** lv - 1) / (f - 1);
     return walk(ask(`A full tree with fan-out ${f} and ${lv} levels of buffers drives ${f ** lv} flops. How many buffers does it use?`, num(b), `1 + ${f} + … + ${f}^${lv - 1} = (${f}^${lv} - 1)/(${f} - 1) = ${b}. Clock trees burn a big share of dynamic power because all of that toggles every cycle.`, 'Count buffers level by level.'),
       'counting clock tree buffers', `${idea} To count the buffers, go level by level: the first level has 1 buffer, the next has f, the next f², and so on, up to f^(L-1). The last level's outputs are the flops themselves.`,
-      show(Array.from({ length: lv }, (_, i) => `level ${i + 1}: ${f ** i} buffer${f ** i > 1 ? 's' : ''}`).join('\n'), `each level has ${f}× more`),
+      ...sim(Array.from({ length: lv }, (_, i) => ({ beats: i === 0 ? [] : [count(`Level ${i + 1} has ${f}× as many buffers as level ${i}, which had ${f ** (i - 1)}:`, `${f ** (i - 1)} × ${f}`, f ** i)], row: `level ${i + 1}: ${f ** i} buffer${f ** i > 1 ? 's' : ''}` })), 4, `each level has ${f}× more`),
       count('Add them all up:', Array.from({ length: lv }, (_, i) => `${f ** i}`).join(' + '), b));
   },
   (r, d) => {

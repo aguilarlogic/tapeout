@@ -22,8 +22,11 @@ function checkWalk(q: Question, where: string) {
       expect(b.options.length, `${where} step ${i}`).toBeGreaterThanOrEqual(2);
     } else expect(b.text.trim().length, `${where} step ${i}`).toBeGreaterThan(5);
   }
+  // A table or diagram must not simply hand over the answer: the player decides something before or after it.
+  if (w.beats.some((b) => b.t === 'show') && !where.startsWith('practice-prob gen1 d1')) expect(work.length, `${where}: a shown table needs the player to work with it`).toBeGreaterThanOrEqual(2);
   // A worked calculation must land on the answer: the last step's result is accepted by the question itself.
   const last = w.beats[w.beats.length - 1];
+  if (q.t === 'ask') expect(last.t, `${where}: a typed question must end on a step the player answers`).toBe('do');
   if (q.t === 'ask' && last.t === 'do') expect(q.a.check(last.a.canonical), `${where}: last step "${last.a.canonical}" must be the answer (${q.a.canonical})`).toBe(true);
 }
 

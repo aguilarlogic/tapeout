@@ -1,6 +1,6 @@
 // Practice banks and bosses for the engineer's toolbox: shell and regex, git, Python, TCL/Make flows.
 import { has, num, qty, rx } from '../lessons/answers';
-import { calc, choice, count, show, step, walk } from '../lessons/teach';
+import { calc, choice, count, show, sim, step, walk } from '../lessons/teach';
 import { art, ask, between, mc, pick, say, type Rng } from '../lessons/types';
 import { boss, practice, tier } from './types';
 import { concept, exact, mcs, sig } from './util';
@@ -75,11 +75,10 @@ export const shellPractice = practice('practice-shell', 'Shell Drills', 'regex, 
     const counts = new Map<string, number>();
     rows.forEach((x) => counts.set(x.t, (counts.get(x.t) ?? 0) + 1));
     const top = Math.max(...counts.values());
-    const table = [...counts.entries()].sort().map(([t, c]) => `${String(c).padStart(3)} ${t}`).join('\n');
     return walk(ask(`results.txt:${code(log)}\`cut -d' ' -f1 results.txt | sort | uniq -c | sort -rn | head -1\` prints a count and a name. What is the count?`, num(top), `uniq -c counts adjacent duplicates (hence the sort first), sort -rn orders by count, head -1 takes the biggest: ${top}. This one-liner is the classic "what fails most?" triage.`, 'Which test name appears most often, and how many times?'),
       'the count-and-rank pipeline', 'sort | uniq -c is the shell\'s way of tallying: sort puts equal lines next to each other, and uniq -c collapses each run into "count line". A second sort -rn ranks by that count, biggest first, and head -1 keeps the top row. The answer is that row\'s count.',
       'cut keeps the first word of every line, the test name. After sort | uniq -c you get one row per name with how often it appears:',
-      show(table, 'what uniq -c prints'),
+      ...sim([...counts.entries()].sort().map(([t, c]) => ({ beats: [count(`How many lines of the log start with \`${t}\`? That is its uniq -c count:`, `count of ${t}`, c)], row: `${String(c).padStart(3)} ${t}` })), 3, 'what uniq -c prints'),
       count('sort -rn puts the biggest count first and head -1 keeps it. That count is:', 'max of the counts', top));
   },
   (r, d) => {
@@ -272,9 +271,9 @@ export const pythonPractice = practice('practice-python', 'Python Drills', 'pred
     if (e === `2 ** ${b + 4}`) return walk(q, 'powers with **', '** is exponentiation: 2 ** n is 2 multiplied by itself n times. Each step doubles: 2, 4, 8, 16, 32, 64, 128... (Python integers never overflow, however large.)',
       count(`Multiply 2 by itself ${b + 4} times. Result:`, `2 ** ${b + 4}`, v));
     if (e === `-${a} % ${b}`) return walk(q, 'modulo of negatives', 'In Python, a % b always lands between 0 and b (it takes the sign of the divisor b). It is defined so that a == (a // b) * b + (a % b), with // rounding down. So first floor-divide, then the leftover is what remains.',
+      choice('With a positive divisor, the result of % in Python is:', 'Zero or positive: it takes the divisor\'s sign', ['Negative, like the dividend', 'Always zero']),
       count('First the floor division:', `-${a} // ${b}`, pyDiv),
-      count('The remainder is a minus (quotient × divisor):', `-${a} - (${pyDiv} × ${b})`, v),
-      choice('So the result of % with a positive divisor is:', 'Zero or positive: it takes the divisor\'s sign', ['Negative, like the dividend', 'Always zero']));
+      count('The remainder is a minus (quotient × divisor):', `-${a} - (${pyDiv} × ${b})`, v));
     return walk(q, 'shifts', '<< n shifts the bits left by n places, which multiplies by 2^n; >> n shifts right, dividing by 2^n (rounding down). Shifting a 1 left by n just gives 2^n, and shifting it back right by m leaves 2^(n - m).',
       count(`1 << ${b + 30} is 2 to the power of ${b + 30}. Its value:`, `2 ** ${b + 30}`, 2 ** (b + 30)),
       count(`Then >> ${b + 20} divides by 2^${b + 20}:`, `2 ** ${b + 30} / 2 ** ${b + 20}`, v));

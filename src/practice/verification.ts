@@ -1,6 +1,6 @@
 // Practice banks and bosses for verification and test: testbenches, debug, constrained random, coverage, UVM, SVA, formal, DFT.
 import { hexa, num, qty, words } from '../lessons/answers';
-import { calc, choice, count, show, step, walk } from '../lessons/teach';
+import { calc, choice, count, show, sim, step, walk } from '../lessons/teach';
 import { art, ask, between, mc, pick, say, type Rng } from '../lessons/types';
 import { boss, practice, tier } from './types';
 import { concept, exact, hex, mcs, sci, sig } from './util';
@@ -58,7 +58,11 @@ export const dvPractice = practice('practice-dv', 'Testbench & Debug Drills', 's
     const k = pops.length;
     return walk(ask(`A reference model for a FIFO${depth < 99 ? ` of depth ${depth} that silently drops pushes when full` : ''} sees:${code(ops.join('\n'))}What does pop number ${k} return?`, num(pops[k - 1]), `Pops return, in order: ${pops.join(', ')}.${depth < 99 ? ' Pushes that arrive while 3 items are waiting are lost: that is exactly the corner a scoreboard must model, or it reports false errors.' : ' First in, first out.'}`, 'Keep a queue: push at the back, pop from the front.'),
       'a FIFO reference model', `A reference model predicts what the DUT should do. For a FIFO it is just a queue: push adds an item at the back, and pop removes and returns the item at the FRONT (the oldest one).${depth < 99 ? ` This FIFO holds at most ${depth} items: a push that arrives while it is full is thrown away, and the model must do the same.` : ''} Replay the operations one at a time, keeping the queue contents.`,
-      show(trace.join('\n'), 'the queue after each operation'),
+      ...sim(trace.map((tr, i) => {
+        const [opName] = ops[i].split(' ');
+        const state = tr.slice(tr.indexOf('->') + 3);
+        return { beats: [step(`Operation ${i + 1} is \`${ops[i]}\`. Write the queue afterwards, front first, as a list like [1, 2] (or [] if empty):`, exact(state, state.replace(/[\[\]]/g, ''), ...(state === '[]' ? ['empty', 'nothing'] : [])), opName === 'push' ? 'A push adds to the back unless the FIFO is full.' : 'A pop removes the item at the front.')], row: tr };
+      }), 3, 'the queue after each operation'),
       count(`Which value does pop number ${k} return?`, `pop #${k}`, pops[k - 1]));
   },
   (r, d) => {
@@ -246,6 +250,7 @@ export const uvmPractice = practice('practice-uvm', 'UVM Drills', 'phases, objec
       return walk(ask(`Which UVM common phase comes right after ${PHASES[i]}_phase?`, a, `${PHASES.join(' → ')}. build runs top-down (parents create children); the rest bottom-up; run is the only time-consuming one.`, 'build, connect, end_of_elaboration, start_of_simulation, run, extract, check, report, final.'),
         'the UVM phase order', idea,
         show(PHASES.map((p, k) => `${k + 1}. ${p}`).join('\n'), 'the common phases, in order'),
+        choice('Only one of these phases consumes simulation time (the rest are instant functions). Which one?', 'run', ['build', 'connect', 'report'], 'run is where the testbench drives stimulus and time passes; everything else just sets up or reports.'),
         step(`Which phase is next after ${PHASES[i]}?`, a));
     }
     return walk(mcs(r, 'In which order are build_phase methods called?', 'Top-down: test, then env, then agents, then drivers/monitors (a parent must build its children)', ['Bottom-up: drivers first', 'Alphabetical', 'In parallel, in random order'], 'build_phase is top-down; connect_phase and later function phases are bottom-up.'),
@@ -458,7 +463,7 @@ export const dftPractice = practice('practice-dft', 'Test Drills', 'stuck-at tes
     const a = exact(seq);
     return walk(ask(`JTAG TAP: which TMS sequence (one bit per TCK) goes from ${from} to ${to}?`, a, `${from} → ${to}: TMS ${seq.split('').join(', ')}. From Run-Test/Idle, 1 goes to Select-DR-Scan, another 1 to Select-IR-Scan, then 0 to Capture, 0 to Shift.`, 'Draw the TAP state diagram: 1 moves toward the IR side and exits, 0 goes deeper.'),
       'walking the JTAG state machine', 'The TAP is a state machine with two arrows out of every state, one for TMS = 0 and one for TMS = 1. To get from one state to another, follow the arrows along the route and write down the TMS value on each arrow. Shift states are entered through a Select and a Capture state; you leave them through Exit1 and Update.',
-      show(path, `the route from ${from} to ${to}, TMS value on each arrow`),
+      ...sim((() => { const parts = path.split(/ -([01])-> /); return Array.from({ length: (parts.length - 1) / 2 }, (_, i) => ({ beats: [choice(`Hop ${i + 1}: from ${parts[2 * i]} the machine must move to ${parts[2 * i + 2]}. Which TMS value takes that arrow?`, parts[2 * i + 1], [parts[2 * i + 1] === '0' ? '1' : '0'], 'Every state has exactly one arrow for TMS = 0 and one for TMS = 1.')], row: `${parts[2 * i]} -${parts[2 * i + 1]}-> ${parts[2 * i + 2]}` })); })(), 4, `the route from ${from} to ${to}, TMS value on each arrow`),
       step('Write the TMS values along that route, in order:', a));
   },
   (r) => concept(r, [

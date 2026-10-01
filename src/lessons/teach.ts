@@ -31,3 +31,13 @@ export const choice = (q: string, right: string, wrong: readonly string[], why?:
 
 /** A diagram, table or snippet shown during the walkthrough. */
 export const show = (text: string, caption?: string): Beat => ({ t: 'show', text: text.replace(/^\n/, '').replace(/\n\s*$/, ''), caption });
+
+/**
+ * Teach a simulation by playing its first events with the player deciding each one, then showing the whole table.
+ * Each event carries the steps that decide it and the row it adds to the table.
+ */
+export function sim(events: { beats: Beat[]; row: string }[], lead = 3, caption = 'every event, worked the same way'): Part[] {
+  const out: Part[] = events.slice(0, lead).flatMap((e) => e.beats);
+  if (events.length > lead) out.push(show(events.map((e) => e.row).join('\n'), caption));
+  return out;
+}

@@ -1,6 +1,6 @@
 // Practice banks and bosses for Act 1: numbers, circuits, CMOS basics.
 import { bin, expr, hexa, num, qty } from '../lessons/answers';
-import { calc, choice, count, show, step, walk, type Part } from '../lessons/teach';
+import { calc, choice, count, show, sim, step, walk, type Part } from '../lessons/teach';
 import { ask, between, mc, pick } from '../lessons/types';
 import { boss, practice, tier } from './types';
 import { eng, hex, pow2, sig, toSigned } from './util';
@@ -199,15 +199,6 @@ export const twosPractice = practice('practice-twos', 'Signed Number Drills', "t
   },
 ]);
 
-/** A truth table as text. */
-const truthTable = (vars: readonly string[], f: (v: Record<string, boolean>) => boolean) => {
-  const n = vars.length;
-  const rows = Array.from({ length: 2 ** n }, (_, i) => {
-    const env = Object.fromEntries(vars.map((x, k) => [x, !!((i >> (n - 1 - k)) & 1)]));
-    return `${vars.map((x) => +env[x]).join(' ')} | ${+f(env)}`;
-  });
-  return `${vars.join(' ')} | out\n${'-'.repeat(2 * n)}+----\n${rows.join('\n')}`;
-};
 const sopOf = (vars: readonly string[], f: (v: Record<string, boolean>) => boolean) => {
   const n = vars.length;
   const terms: string[] = [];
@@ -232,12 +223,14 @@ export const boolPractice = practice('practice-bool', 'Boolean Drills', 'truth t
     ] as const;
     const [desc, vars, f, canon] = pick(r, d === 1 ? cases.slice(0, 3) : d === 2 ? cases.slice(3, 6) : cases.slice(5));
     const n = vars.length;
-    const row = between(r, 0, 2 ** n - 1), env = Object.fromEntries(vars.map((x, k) => [x, !!((row >> (n - 1 - k)) & 1)]));
     const sop = sopOf(vars, f);
     return walk(ask(`Write a boolean expression (use & | ^ ~ or a b' notation) for: ${desc}.`, expr(canon, [...vars], f), `One answer: ${canon}. Any equivalent expression is accepted, because I check it against the full truth table.`, 'Write the truth table first, then OR together the rows where the output is 1.'),
       'truth table, then sum of products', 'When a description is hard to turn into logic directly, list every input combination (the truth table) and decide the output for each row. Then write one AND term for every row whose output is 1 (a variable if it is 1 in that row, ~variable if it is 0) and OR those terms together. It always works; simplifying comes later.',
-      step(`Try one row. When ${vars.map((x) => `${x} = ${+env[x]}`).join(', ')}, is the output 0 or 1?`, num(+f(env))),
-      show(truthTable(vars, f), 'the whole truth table'),
+      ...sim(Array.from({ length: 2 ** n }, (_, i) => {
+        const e = Object.fromEntries(vars.map((x, k) => [x, !!((i >> (n - 1 - k)) & 1)]));
+        const label = vars.map((x) => `${x} = ${+e[x]}`).join(', ');
+        return { beats: [step(`Row ${i}: ${label}. Output?`, num(+f(e)), `Check it against the description: ${desc}.`)], row: `${vars.map((x) => +e[x]).join(' ')}  →  ${+f(e)}` };
+      }), 3, 'the whole truth table'),
       `Each row with output 1 becomes an AND term. For example, the row ${vars.join('')} = ${vars.map(() => '1').join('')} would be ${vars.join('&')}, and a row with ${vars[0]} = 0 uses ~${vars[0]}.`,
       step('Write the OR of the AND terms for every 1-row (any equivalent expression is fine):', expr(sop, [...vars], f)));
   },

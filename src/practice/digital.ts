@@ -1,6 +1,6 @@
 // Practice banks and bosses for digital design: combinational and sequential logic, FSMs, Verilog, datapaths, clocking.
 import { bin, expr, hexa, num, qty } from '../lessons/answers';
-import { calc, choice, count, show, step, walk } from '../lessons/teach';
+import { calc, choice, count, show, sim, step, walk } from '../lessons/teach';
 import { art, ask, between, mc, pick, say, type Rng } from '../lessons/types';
 import { boss, practice, tier } from './types';
 import { concept, type ConceptQ, exact, hex, mcs, shuffle, sig } from './util';
@@ -78,10 +78,12 @@ export const combPractice = practice('practice-comb', 'Building Block Drills', '
     if (d < 3) return walk(ask(`A ${w}-input priority encoder (highest bit wins) sees ${bitsText}. What index does it output?`, num(Math.floor(Math.log2(v))), `The highest set bit is bit ${Math.floor(Math.log2(v))}. Interrupt controllers and arbiters are built on priority encoders.`, 'Find the leftmost 1.'),
       'priority encoding', 'A priority encoder looks at many request lines and reports the INDEX of the one that wins. When several lines are 1, a fixed rule decides: here the highest-numbered line wins. Bits are numbered from 0 at the right, so the leftmost 1 is the winner.',
       show(positions, 'bit numbers, 0 on the right'),
+      ...sim(Array.from({ length: w - Math.floor(Math.log2(v)) }, (_, i) => { const bt = w - 1 - i, on = (v >> bt) & 1; return { beats: [choice(`Look at bit ${bt}, the next one from the left. Is it a 1?`, on ? 'Yes: the winner' : 'No: keep looking', [on ? 'No: keep looking' : 'Yes: the winner'])], row: `bit ${bt}: ${on}` }; }), 3, 'scanning from the left until the first 1'),
       count('Index of the leftmost 1:', `leftmost 1 in ${bitsText}`, Math.floor(Math.log2(v))));
     return walk(ask(`Same 8-bit input ${bitsText}, but the encoder picks the LOWEST set bit. Index?`, num(Math.log2(v & -v)), `v & -v = ${(v & -v).toString(2)} → bit ${Math.log2(v & -v)}.`, 'Find the rightmost 1.'),
       'priority encoding, lowest wins', 'This encoder reports the index of the LOWEST-numbered request that is 1. Bits are numbered from 0 at the right, so the winner is the rightmost 1. (The expression v & -v isolates exactly that bit.)',
       show(positions, 'bit numbers, 0 on the right'),
+      ...sim(Array.from({ length: Math.log2(v & -v) + 1 }, (_, i) => { const on = (v >> i) & 1; return { beats: [choice(`Look at bit ${i}, the next one from the right. Is it a 1?`, on ? 'Yes: the winner' : 'No: keep looking', [on ? 'No: keep looking' : 'Yes: the winner'])], row: `bit ${i}: ${on}` }; }), 3, 'scanning from the right until the first 1'),
       count('Index of the rightmost 1:', `rightmost 1 in ${bitsText}`, Math.log2(v & -v)));
   },
   (r, d) => {
@@ -214,11 +216,10 @@ export const fsmPractice = practice('practice-fsm', 'State Machine Drills', 'enc
     const pat = bits(r, tier(d, 2, 3, 4)).replace(/^0*$/, '101');
     const s = bits(r, tier(d, 10, 14, 20));
     const n = matches(s, pat);
-    const windows = Array.from({ length: s.length - pat.length + 1 }, (_, i) => `${String(i).padStart(2)}: ${s.slice(i, i + pat.length)}${s.slice(i, i + pat.length) === pat ? '  <- match' : ''}`).join('\n');
     return walk(ask(`A detector fires each time the last ${pat.length} input bits are ${pat} (overlapping matches count). Input stream (first to last): ${s}. How many times does it fire?`, num(n), `Slide a ${pat.length}-bit window along the stream: ${n} match${n === 1 ? '' : 'es'}. The FSM must keep the longest suffix that is still a prefix of ${pat}, which is what makes overlap work.`, 'Check every position, including overlapping ones.'),
       'sequence detection', `A sequence detector fires every time the most recent ${pat.length} bits equal the pattern. Overlaps count: in 10101 the pattern 101 appears twice, sharing a bit. To count by hand, slide a window of ${pat.length} bits along the stream one position at a time and compare it to ${pat}.`,
       count(`The stream has ${s.length} bits, so it has this many windows of ${pat.length}:`, `${s.length} - ${pat.length} + 1`, s.length - pat.length + 1),
-      show(windows, `every window compared with ${pat}`),
+      ...sim(Array.from({ length: s.length - pat.length + 1 }, (_, i) => { const w = s.slice(i, i + pat.length); return { beats: [choice(`Window ${i} is ${w}. Does it equal ${pat}?`, w === pat ? 'Yes: a match' : 'No', [w === pat ? 'No' : 'Yes: a match'])], row: `${String(i).padStart(2)}: ${w}${w === pat ? '  <- match' : ''}` }; }), 3, `every window compared with ${pat}`),
       count('How many windows match?', 'number of "match" lines', n));
   },
   (r, d) => {

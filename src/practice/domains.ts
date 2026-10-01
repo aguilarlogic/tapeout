@@ -1,7 +1,7 @@
 // Practice banks and bosses for the domain chips of Act 7: AI accelerators, hardware security, functional
 // safety, silicon photonics, qubits and quantum control electronics.
 import { num, qty } from '../lessons/answers';
-import { calc, choice, count, show, step, walk } from '../lessons/teach';
+import { calc, choice, count, sim, step, walk } from '../lessons/teach';
 import { art, ask, mc, pick, say } from '../lessons/types';
 import { boss, practice, tier } from './types';
 import { concept, exact, hex, sci, sig } from './util';
@@ -254,16 +254,16 @@ export const fusaPractice = practice('practice-fusa', 'Functional Safety Drills'
     let rr = 1;
     while (2 ** rr < k + rr + 1) rr++;
     const idea = 'A Hamming code adds r check bits to k data bits so that one flipped bit can be located and fixed. The r check bits must be able to say which of the k + r bit positions is wrong, or that none is: 2^r ≥ k + r + 1. SECDED adds one more overall parity bit, so a double-bit error is detected too (but not corrected).';
-    const table = show(Array.from({ length: rr }, (_, i) => `r = ${i + 1}: 2^${i + 1} = ${2 ** (i + 1)}  vs  k + r + 1 = ${k + i + 2}  ${2 ** (i + 1) >= k + i + 2 ? '✓ enough' : '✗ too small'}`).join('\n'), `try r = 1, 2, 3… for k = ${k}`);
+    const table = sim(Array.from({ length: rr }, (_, i) => { const ok = 2 ** (i + 1) >= k + i + 2; return { beats: [choice(`Try r = ${i + 1}: 2^${i + 1} = ${2 ** (i + 1)} against k + r + 1 = ${k} + ${i + 1} + 1 = ${k + i + 2}. Enough check bits?`, ok ? 'Yes: 2^r is at least k + r + 1' : 'No: too small', [ok ? 'No: too small' : 'Yes: 2^r is at least k + r + 1'])], row: `r = ${i + 1}: 2^${i + 1} = ${2 ** (i + 1)}  vs  k + r + 1 = ${k + i + 2}  ${ok ? '✓ enough' : '✗ too small'}` }; }), 3, `try r = 1, 2, 3… for k = ${k}`);
     if (d === 1) return walk(ask(`How many check bits does a Hamming single-error-correcting (SEC) code need for ${k} data bits?`, num(rr), `Smallest r with 2^r ≥ k + r + 1: r = ${rr}.`, '2^r must name every bit position plus "no error".'),
-      'Hamming check bits', idea, table,
+      'Hamming check bits', idea, ...table,
       count('The smallest r that is enough:', 'first ✓', rr));
     if (d === 2) return walk(ask(`How many check bits does SECDED (single-correct, double-detect) need for ${k} data bits?`, num(rr + 1), `SEC needs ${rr}; one overall parity bit adds double detection: ${rr + 1}.`, 'SEC plus one parity bit.'),
-      'SECDED check bits', idea, table,
+      'SECDED check bits', idea, ...table,
       count('SEC needs this many check bits (first ✓):', 'first ✓', rr),
       count('SECDED adds one overall parity bit:', `${rr} + 1`, rr + 1));
     return walk(ask(`SECDED on ${k}-bit words. Storage overhead, in %?`, qty(((rr + 1) / k) * 100, '%', 0.02, sig(((rr + 1) / k) * 100)), `${rr + 1} / ${k} = ${sig(((rr + 1) / k) * 100)}%. Wider words amortize the check bits better.`, 'Check bits / data bits.'),
-      'ECC storage overhead', idea, table,
+      'ECC storage overhead', idea, ...table,
       count('SECDED check bits = SEC bits + 1:', `${rr} + 1`, rr + 1),
       calc('Overhead = check bits ÷ data bits, as a %:', `${rr + 1} / ${k} × 100`, ((rr + 1) / k) * 100, '%', sig(((rr + 1) / k) * 100), 0.02));
   },

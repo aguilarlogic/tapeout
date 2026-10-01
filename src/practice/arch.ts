@@ -1,7 +1,7 @@
 // Practice banks and bosses for computer architecture: pipelines, out-of-order cores, caches, coherence,
 // DRAM, buses, NoCs, SerDes and performance modeling. Most questions come from small simulators.
 import { hexa, num, qty } from '../lessons/answers';
-import { calc, choice, count, show, step, walk } from '../lessons/teach';
+import { calc, choice, count, sim, step, walk } from '../lessons/teach';
 import { art, ask, between, mc, pick, say, type Beat, type Rng } from '../lessons/types';
 import { boss, practice, tier } from './types';
 import { concept, hex, mcs, sig } from './util';
@@ -81,7 +81,11 @@ export const pipePractice = practice('practice-pipe', 'Pipeline Drills', 'hazard
       : 'With NO forwarding, a result only reaches the register file at the WB stage, so a consumer has to wait in ID until its producer has finished WB. The register file writes in the first half of a cycle and reads in the second, so the consumer can read in the same cycle as the WB. Directly after its producer that means 2 stalls; one instruction later, 1 stall; two or more later, none. Stalls push everything behind them back, which can change later distances.';
     return walk(ask(`5-stage pipeline (IF ID EX MEM WB), ${fwd ? 'full forwarding' : 'NO forwarding (the register file writes in the first half of a cycle and reads in the second)'}. How many stall cycles does this code need?${code(prog.map((x) => x.text).join('\n'))}`, num(s), `${fwd ? 'With forwarding only a load feeding the very next instruction stalls (1 cycle: the value exists after MEM).' : 'Without forwarding a consumer waits in ID until its producer reaches WB: 2 stalls at distance 1, 1 at distance 2.'} Total: ${s}. Runtime = ${prog.length} + 4 + ${s} = ${prog.length + 4 + s} cycles.`, fwd ? 'Look for lw followed immediately by a use of its result.' : 'Check every read against producers 1 and 2 instructions earlier (after stalls shift things).'),
       fwd ? 'counting load-use stalls' : 'counting stalls without forwarding', `A stall is a cycle where an instruction has to wait because an earlier one has not produced its input yet. To count them, find each instruction's inputs, find who produced them, and ask whether the value is ready in time. ${rule}`,
-      show(prog.map((x, i) => `${i + 1}. ${x.text.padEnd(20)} waits ${waits[i]} cycle${waits[i] === 1 ? '' : 's'}`).join('\n'), 'each instruction, with the stalls it has to wait'),
+      ...sim(prog.map((x, i) => {
+        const prod = [...prog.slice(0, i).keys()].reverse().find((j) => prog[j].op !== 'sw' && x.rs.includes(prog[j].rd));
+        const why = i === 0 ? 'The first instruction has nobody to wait for.' : waits[i] === 0 ? 'Nothing it needs is late, so it flows straight through.' : `It needs a result from instruction ${prod! + 1} (\`${prog[prod!].text.trim()}\`) that is not ready in time.`;
+        return { beats: i === 0 ? [] : [count(`Instruction ${i + 1} is \`${x.text.trim()}\`. How many cycles must it wait?`, 'its stall cycles', waits[i])].map((b) => ({ ...b, why }) as Beat), row: `${i + 1}. ${x.text.padEnd(20)} waits ${waits[i]} cycle${waits[i] === 1 ? '' : 's'}` };
+      }), 3, 'each instruction, with the stalls it has to wait'),
       count('Total stall cycles is the sum of all the waits:', waits.join(' + '), s));
   },
   (r, d) => {
@@ -92,8 +96,9 @@ export const pipePractice = practice('practice-pipe', 'Pipeline Drills', 'hazard
     const m = predict(pattern, bits as 1 | 2, start);
     const max = bits === 1 ? 1 : 3, thr = bits === 1 ? 1 : 2;
     let s = start;
-    const rows: string[] = [];
+    const rows: string[] = [], trace: number[] = [];
     for (const c of pattern) {
+      trace.push(s);
       const taken = c === 'T', pr = s >= thr;
       rows.push(`${c}  predict ${pr ? 'T' : 'N'}  ${pr === taken ? 'ok  ' : 'MISS'}  counter ${s} → ${taken ? Math.min(max, s + 1) : Math.max(0, s - 1)}`);
       s = taken ? Math.min(max, s + 1) : Math.max(0, s - 1);
@@ -101,7 +106,13 @@ export const pipePractice = practice('practice-pipe', 'Pipeline Drills', 'hazard
     return walk(ask(`A loop branch goes ${pattern} (T = taken). A ${bits}-bit predictor starts ${bits === 1 ? '"taken"' : start === 3 ? 'strongly taken' : 'strongly NOT taken'}. How many mispredictions?`, num(m), `${bits === 1 ? 'A 1-bit predictor flips on every surprise, so it mispredicts twice per loop exit: the N and the T after it (except at the very start).' : 'A 2-bit counter needs two surprises in a row to change its mind, so a loop exit costs only one misprediction.'}${start === 0 ? ' Starting at strongly not-taken costs 2 extra warm-up misses.' : ''} Total ${m}.`, 'Simulate it: predict, compare, update.'),
       'simulating a branch predictor', bits === 1 ? 'A 1-bit predictor remembers only the last outcome and predicts the same again (counter 1 = predict taken, 0 = predict not taken). For each branch, compare the prediction with what really happened (a mismatch is a MISPREDICTION), then update the counter to the outcome.'
         : 'A 2-bit predictor is a counter from 0 to 3: 0-1 predict not-taken, 2-3 predict taken. For each branch, compare the prediction with what really happened (a mismatch is a MISPREDICTION), then move the counter one step toward the outcome (up if taken, down if not), never past 0 or 3. One surprise only nudges it, so it takes two in a row to change its mind.',
-      show(rows.join('\n'), 'the predictor, one branch at a time'),
+      ...sim(Array.from(pattern).map((c, i) => {
+        const taken = c === 'T', before = trace[i], after = taken ? Math.min(max, before + 1) : Math.max(0, before - 1), pr = before >= thr;
+        return { beats: [
+          choice(`Branch ${i + 1} actually goes ${c}. The counter is ${before}, so the predictor says ${pr ? 'T' : 'N'}. Right or wrong?`, pr === taken ? 'Right' : 'MISS: wrong', [pr === taken ? 'MISS: wrong' : 'Right'], 'A MISS is a misprediction: the guess differs from what really happened.'),
+          count(`Now move the counter one step toward ${c} (${bits === 1 ? 'it becomes 1 for T and 0 for N' : 'up for T, down for N, between 0 and 3'}). New counter:`, `counter ${before}, outcome ${c}`, after),
+        ], row: rows[i] };
+      }), 3, 'the predictor, one branch at a time'),
       count('Count the MISS lines:', 'number of MISS rows', m));
   },
   (r, d) => {
@@ -199,11 +210,21 @@ export const cachePractice = practice('practice-cache', 'Cache Drills', 'simulat
     const hits = cacheHits(addrs, sets, ways, line);
     const n = hits.filter(Boolean).length;
     const b0 = Math.floor(addrs[0] / line);
+    const contents: number[][][] = [];
+    { const live: number[][] = Array.from({ length: sets }, () => []);
+      for (const a of addrs) {
+        contents.push(live.map((q) => [...q]));
+        const blk = Math.floor(a / line), q = live[blk % sets], k = q.indexOf(blk);
+        if (k >= 0) q.splice(k, 1); q.push(blk); if (q.length > ways) q.shift();
+      } }
     return walk(ask(`A ${ways === 1 ? 'direct-mapped' : `${ways}-way LRU`} cache, ${sets} sets, ${line}-byte lines, starts empty. How many HITS for this address trace?${code(addrs.map((a) => hex(a, 3)).join(' '))}`, num(n), `Block = addr / ${line}; set = block mod ${sets}. Results: ${addrs.map((a, i) => `${hex(a, 3)} ${hits[i] ? 'H' : 'M'}`).join(', ')}. ${n} hits.`, 'Drop the low 4 bits (offset), then the next bits pick the set.'),
       'simulating a cache', `A cache stores whole ${line}-byte LINES. For each address: (1) find its block, the address divided by the line size (the low bits just say where in the line); (2) the block number mod the number of sets says which set it must live in; (3) if that block is already in the set it is a HIT, otherwise a MISS and it is brought in${ways === 1 ? ', replacing whatever was in that set' : `, evicting the least recently used block if the set already holds ${ways}`}. Two addresses in the same block share a line.`,
       count(`The first address is ${addrs[0]} in decimal. Its block is the address divided by ${line}, rounded down:`, `floor(${addrs[0]} / ${line})`, b0),
       count(`Its set is the block number mod ${sets}:`, `${b0} mod ${sets}`, b0 % sets),
-      show(addrs.map((a, i) => `${hex(a, 3)}  block ${Math.floor(a / line)}  set ${Math.floor(a / line) % sets}  ${hits[i] ? 'HIT' : 'miss'}`).join('\n'), 'the whole trace: a miss brings the block in, so a later access to it can hit'),
+      ...sim(addrs.map((a, i) => {
+        const blk = Math.floor(a / line), set = blk % sets, held = contents[i][set];
+        return { beats: [choice(`Next: ${hex(a, 3)} is block ${blk}, set ${set}. Set ${set} currently holds ${held.length ? `block${held.length > 1 ? 's' : ''} ${held.join(', ')}` : 'nothing'}. Hit or miss?`, hits[i] ? 'Hit' : 'Miss', [hits[i] ? 'Miss' : 'Hit'], hits[i] ? 'The block is already there, so it is a hit.' : 'The block is not in the set, so it is a miss and gets brought in.')], row: `${hex(a, 3)}  block ${blk}  set ${set}  ${hits[i] ? 'HIT' : 'miss'}` };
+      }), 3, 'the whole trace: a miss brings the block in, so a later access to it can hit'),
       count('Count the HIT lines:', 'number of hits', n));
   },
   (r, d) => {
@@ -283,7 +304,11 @@ export const coherencePractice = practice('practice-coherence', 'Coherence Drill
     const c = between(r, 0, cores - 1);
     return walk(mcs(r, `MESI, one cache line, all caches start Invalid. Operations in order: ${ops.map(([k, o]) => `C${k} ${o === 'R' ? 'reads' : 'writes'}`).join(', ')}. Final state of the line in C${c}?`, st[c], (['M', 'E', 'S', 'I'] as const).filter((s) => s !== st[c]), `Final states: ${st.map((s, i) => `C${i}=${s}`).join(', ')}. A read with no other copies gives E; with other copies, S (an M owner writes back and drops to S). A write gives M and invalidates everyone else.`),
       'tracing MESI', 'MESI labels each cache\'s copy of a line: Modified (only copy, changed), Exclusive (only copy, clean), Shared (maybe others have it, clean), Invalid (no copy). Rules: a READ miss gives E if nobody else has it, otherwise S (and any other copy becomes S; a Modified owner writes its data back first). A WRITE makes the writer M and Invalidates every other copy. A read or write that already hits keeps its state (a hit in E/M stays quiet; a write to S or E goes to M). Update the states after each operation.',
-      show(ops.map((_, i) => `${`C${ops[i][0]} ${ops[i][1]}`}  →  ${mesi(ops.slice(0, i + 1), cores).st.map((s, k) => `C${k}=${s}`).join(' ')}`).join('\n'), 'the states after each operation'),
+      ...sim(ops.map(([k, o], i) => {
+        const before = mesi(ops.slice(0, i), cores).st, after = mesi(ops.slice(0, i + 1), cores).st;
+        const why = o === 'W' ? 'A write always makes the writer Modified and Invalidates every other copy.' : before[k] !== 'I' ? 'It is a read hit, so the state stays as it was.' : after[k] === 'S' ? 'Another cache holds the line, so the reader gets it Shared.' : 'Nobody else has it, so the reader gets it Exclusive.';
+        return { beats: [choice(`C${k} ${o === 'R' ? 'reads' : 'writes'}. Before: ${before.map((x, j) => `C${j}=${x}`).join(' ')}. What state is the line in C${k} afterwards?`, after[k], (['M', 'E', 'S', 'I'] as const).filter((x) => x !== after[k]), why)], row: `C${k} ${o}  →  ${after.map((x, j) => `C${j}=${x}`).join(' ')}` };
+      }), 3, 'the states after each operation'),
       choice(`So the final state in C${c} is:`, st[c], (['M', 'E', 'S', 'I'] as const).filter((s) => s !== st[c])));
   },
   (r, d) => {
@@ -292,7 +317,10 @@ export const coherencePractice = practice('practice-coherence', 'Coherence Drill
     const { wb } = mesi(ops, cores);
     return walk(ask(`MESI, ${cores} cores, one line, all start Invalid: ${ops.map(([k, o]) => `C${k}${o}`).join(' ')} (R = read, W = write). How many times must a Modified copy be written back (or forwarded) because ANOTHER core accessed the line?`, num(wb), `Each access by another core to a line held in M forces the owner to supply the dirty data: ${wb} time${wb === 1 ? '' : 's'}. Ping-ponging writes between cores is expensive for exactly this reason.`, 'Track who holds M; count every other-core access that finds it there.'),
       'counting writebacks', 'A line in state M holds the only up-to-date copy. When ANOTHER core reads or writes that line, the owner has to supply the data (write it back): that is one writeback. So step through the operations, keep track of which core holds M, and count each access by a different core that finds it there.',
-      show(ops.map((o, i) => { const a = mesi(ops.slice(0, i), cores), b = mesi(ops.slice(0, i + 1), cores); return `${o[1] === 'R' ? `C${o[0]} R` : `C${o[0]} W`}  states ${b.st.map((s, k) => `C${k}=${s}`).join(' ')}${b.wb > a.wb ? '   ← writeback' : ''}`; }).join('\n'), 'each operation and the resulting states'),
+      ...sim(ops.map((o, i) => {
+        const a = mesi(ops.slice(0, i), cores), b = mesi(ops.slice(0, i + 1), cores), wbNow = b.wb > a.wb;
+        return { beats: [choice(`${o[1] === 'R' ? `C${o[0]} reads` : `C${o[0]} writes`}. Before: ${a.st.map((x, k) => `C${k}=${x}`).join(' ')}. Must a Modified copy be written back?`, wbNow ? 'Yes: another core holds M' : 'No', [wbNow ? 'No' : 'Yes: another core holds M'], wbNow ? 'Another core had the only up-to-date copy, so it has to supply it.' : 'No other core holds the line Modified, so there is nothing to write back.')], row: `${o[1] === 'R' ? `C${o[0]} R` : `C${o[0]} W`}  states ${b.st.map((x, k) => `C${k}=${x}`).join(' ')}${wbNow ? '   ← writeback' : ''}` };
+      }), 3, 'each operation and the resulting states'),
       count('Count the writeback arrows:', 'number of ← writeback rows', wb));
   },
   (r) => concept(r, [
@@ -324,16 +352,24 @@ export const dramPractice = practice('practice-dram', 'DRAM Drills', 'row hits a
     let open = -1;
     const costs = rows.map((row) => { const c = row === open ? cl : open < 0 ? rcd + cl : rp + rcd + cl; const kind = row === open ? 'row HIT' : open < 0 ? 'bank empty' : 'row CONFLICT'; open = row; return [kind, c] as const; });
     const idea = `A DRAM bank reads from one "open" row at a time. Three cases for each request: the row is already open (row HIT): just the column access time CL. The bank has nothing open (empty): activate the row first, tRCD, then CL. A DIFFERENT row is open (row CONFLICT): precharge it (tRP), activate the new one (tRCD), then CL. Go request by request, remembering which row is open.`;
-    const table = show(rows.map((row, i) => `row ${String(row).padStart(2)}  ${costs[i][0].padEnd(12)} ${costs[i][1]} cycles`).join('\n'), 'each request classified, with its cost');
+    const kinds = ['row HIT', 'bank empty', 'row CONFLICT'];
+    const table = sim(rows.map((row, i) => {
+      const was = i === 0 ? -1 : rows[i - 1];
+      const ctx = i === 0 ? 'The bank starts precharged (nothing open).' : `Row ${was} is open.`;
+      return { beats: [
+        choice(`Request ${i + 1} is row ${row}. ${ctx} Which case is it?`, costs[i][0], kinds.filter((k) => k !== costs[i][0]), costs[i][0] === 'row HIT' ? 'The row it wants is already open.' : costs[i][0] === 'bank empty' ? 'Nothing is open, so it only has to activate the row.' : 'A different row is open, so it must be closed first.'),
+        count(`So this request costs (${costs[i][0] === 'row HIT' ? 'CL' : costs[i][0] === 'bank empty' ? 'tRCD + CL' : 'tRP + tRCD + CL'}) cycles:`, costs[i][0] === 'row HIT' ? `${cl}` : costs[i][0] === 'bank empty' ? `${rcd} + ${cl}` : `${rp} + ${rcd} + ${cl}`, costs[i][1]),
+      ], row: `row ${String(row).padStart(2)}  ${costs[i][0].padEnd(12)} ${costs[i][1]} cycles` };
+    }), 3, 'each request classified, with its cost');
     if (d < 3) return walk(ask(`One DRAM bank, open-page policy, starts precharged. CL = ${cl}, tRCD = ${rcd}, tRP = ${rp}. Requests to rows: ${rows.join(', ')}. Total latency (sum over requests, served one at a time), in cycles?`, num(o.t), `Row hit: CL. First access: tRCD + CL. Row conflict: tRP + tRCD + CL. ${o.hits} hit${o.hits === 1 ? '' : 's'}: total ${o.t} cycles.`, 'Classify each request as hit, empty or conflict.'),
       'DRAM row hits and conflicts', idea,
       `The costs here: hit = CL = ${cl}; empty = tRCD + CL = ${rcd + cl}; conflict = tRP + tRCD + CL = ${rp + rcd + cl}.`,
-      table,
+      ...table,
       count('Add up the costs:', costs.map((c) => c[1]).join(' + '), o.t));
     const closed = rows.length * (rcd + cl);
     return walk(ask(`Same bank (CL ${cl}, tRCD ${rcd}, tRP ${rp}), rows ${rows.join(', ')}. A close-page policy precharges right after every access (hidden), so each request costs tRCD + CL. Open-page total minus close-page total, in cycles? (negative = open page wins)`, num(o.t - closed), `Open page: ${o.t}; close page: ${rows.length} × ${rcd + cl} = ${closed}. Difference ${o.t - closed}. Open page wins when locality is high; close page when accesses are random.`, 'Compute both totals.'),
       'open-page versus close-page', `${idea} A CLOSE-page policy precharges right after every access, hiding that cost, so every request is an "empty bank" case: tRCD + CL, whatever the pattern.`,
-      table,
+      ...table,
       count('Open-page total, the sum of the costs:', costs.map((c) => c[1]).join(' + '), o.t),
       count(`Close-page total: every request costs tRCD + CL = ${rcd + cl}, and there are ${rows.length}:`, `${rows.length} × ${rcd + cl}`, closed),
       count('Open minus close:', `${o.t} - ${closed}`, o.t - closed));
@@ -351,7 +387,8 @@ export const dramPractice = practice('practice-dram', 'DRAM Drills', 'row hits a
     const f = (trfc / trefi) * 100;
     return walk(ask(`Each bank is refreshed every tREFI = ${trefi} ns and each refresh blocks it for tRFC = ${trfc} ns. What % of the time is it unavailable?`, qty(f, '%', 0.02, sig(f)), `${trfc}/${trefi} = ${sig(f)}%.${d === 3 ? ' Denser chips have longer tRFC, which is why DDR5 adds same-bank refresh.' : ' Refresh is a tax on bandwidth and latency.'}`, 'tRFC / tREFI.'),
       'refresh overhead', 'DRAM cells leak, so every row must be refreshed regularly. Every tREFI a refresh command starts, and it blocks the bank for tRFC. The fraction of time lost is the blocked time over the period: tRFC ÷ tREFI.',
-      calc('Fraction of time blocked, as a %:', `${trfc} / ${trefi} × 100`, f, '%', sig(f), 0.02));
+      calc('First the fraction of each period that is blocked:', `${trfc} / ${trefi}`, trfc / trefi, '', sig(trfc / trefi, 3), 0.02),
+      calc('As a percentage, multiply by 100:', `${sig(trfc / trefi, 3)} × 100`, f, '%', sig(f), 0.03));
   },
   (r) => concept(r, [
     ['Why do memory controllers interleave consecutive cache lines across banks and channels?', 'So streaming accesses spread out and many banks work in parallel instead of conflicting in one', ['To save power', 'For security', 'To simplify refresh'], 'address interleaving', 'Each bank can only serve one row at a time and takes a long time to switch. If consecutive addresses went to the same bank, a streaming read would queue up there. Spreading them across banks and channels lets many work at the same time.', ['Consecutive lines placed in different banks can be:', 'Accessed in parallel', ['Accessed only one at a time', 'Never accessed']]],
@@ -377,7 +414,10 @@ export const busPractice = practice('practice-bus', 'Bus & Protocol Drills', 'VA
     const w = (a: number[]) => a.map((x) => String(x).padStart(3)).join('');
     return walk(ask(`How many transfers happen on this channel?${code(`cycle ${w(Array.from({ length: n }, (_, i) => i))}\nVALID ${w(valid)}\nREADY ${w(ready)}`)}`, num(k), `A transfer happens in each cycle where VALID and READY are both 1: ${k}. ${d === 3 ? 'Note: in a real trace, once VALID rises it must stay high until the transfer; this random trace ignores that rule.' : 'Either side can stall the other.'}`, 'Count cycles with both high.'),
       'the VALID/READY handshake', 'The sender raises VALID when it has data, and the receiver raises READY when it can take data. A transfer happens only in a cycle where BOTH are 1 at the same clock edge. If only one is high, nothing moves that cycle: the other side is holding things up.',
-      show(`cycle ${w(Array.from({ length: n }, (_, i) => i))}\nVALID ${w(valid)}\nREADY ${w(ready)}\nboth  ${w(valid.map((v, i) => (v && ready[i] ? 1 : 0)))}`, 'a 1 in the last row means a transfer'),
+      ...sim(valid.map((v, i) => {
+        const go = !!(v && ready[i]);
+        return { beats: [choice(`Cycle ${i}: VALID = ${v}, READY = ${ready[i]}. Does a transfer happen?`, go ? 'Yes: both are 1' : 'No', [go ? 'No' : 'Yes: both are 1'], go ? 'Both sides agree at this clock edge, so the data moves.' : v ? 'The sender has data but the receiver is not ready, so nothing moves.' : ready[i] ? 'The receiver is ready but the sender has nothing valid, so nothing moves.' : 'Neither side is ready to move anything.')], row: `cycle ${String(i).padStart(2)}  VALID ${v}  READY ${ready[i]}  ${go ? 'transfer' : '-'}` };
+      }), 3, 'every cycle, with a transfer wherever both are 1'),
       count('Count the 1s in the "both" row:', 'cycles with VALID and READY', k));
   },
   (r, d) => {
@@ -395,7 +435,7 @@ export const busPractice = practice('practice-bus', 'Bus & Protocol Drills', 'VA
         step(`Add that to the start address ${hex(start, 4)}. Beat ${k} is at (hex):`, hexa(a, 4))]
         : [count('The window size in bytes is beat size × number of beats:', `${size} × ${len}`, span),
           step(`The window containing the start ${hex(start, 4)} begins at the nearest multiple of ${span} below it (hex):`, hexa(base, 4)),
-          show(Array.from({ length: len }, (_, i) => `beat ${i}  ${hex(axiBeat(start, size, len, kind, i), 4)}`).join('\n'), `start at ${hex(start, 4)}, go forward, wrap at the window end ${hex(base + span, 4)}`),
+          ...sim(Array.from({ length: k - 1 }, (_, j) => ({ beats: [step(`Beat ${j + 1}: add ${size} to the previous address, and wrap back to ${hex(base, 4)} if you pass ${hex(base + span, 4)}. Address (hex):`, hexa(axiBeat(start, size, len, kind, j + 1), 4))], row: `beat ${j + 1}  ${hex(axiBeat(start, size, len, kind, j + 1), 4)}` })), Math.min(3, k - 1), `the whole burst: start at ${hex(start, 4)}, go forward, wrap at the window end ${hex(base + span, 4)}`),
           step(`Beat ${k} in hex:`, hexa(a, 4))]));
   },
   (r, d) => {
