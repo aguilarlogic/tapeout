@@ -450,3 +450,25 @@ table.cases.cdc tr.bad td:last-child { color: #fb7185; }
 .isa-list, .isa-trace { margin: 0; padding: 8px 10px; max-height: 240px; overflow: auto; border-radius: 6px; background: rgba(138,148,166,.12); font-size: 12px; white-space: pre; }
 .isa-addr { width: 7em; font: 12px ui-monospace, monospace; }
 .isa-case { max-width: 22em; }
+
+/* ---- Architecture Lab */
+.arch-controls { display: flex; flex-wrap: wrap; gap: 10px 18px; margin: 10px 0; }
+.arch-field { display: flex; flex-direction: column; gap: 3px; min-width: 190px; font-size: 13px; }
+.arch-field.toggle { flex-direction: row; align-items: center; gap: 8px; min-width: 260px; flex-wrap: wrap; }
+.arch-field .lbl { color: var(--dim, #9aa); }
+.arch-field select, .arch-field input[type=number] { background: var(--panel2, #12161c); color: inherit; border: 1px solid var(--line, #2a313b); border-radius: 6px; padding: 5px 8px; font: inherit; }
+.arch-metrics { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 6px 14px; margin: 10px 0; }
+.arch-metric { display: flex; flex-direction: column; font-size: 13px; }
+.arch-metric b { font-variant-numeric: tabular-nums; font-weight: 600; }
+.arch-view h4 { margin: 8px 0 4px; font-size: 13px; color: var(--dim, #9aa); }
+.arch-scroll { overflow-x: auto; max-width: 100%; }
+table.pipe, table.arch-table { border-collapse: collapse; font: 11px/1.3 ui-monospace, Menlo, monospace; }
+table.pipe th, table.pipe td, table.arch-table th, table.arch-table td { border: 1px solid var(--line, #2a313b); padding: 2px 5px; text-align: center; white-space: nowrap; }
+table.pipe td.pipe-ins { text-align: left; min-width: 150px; }
+table.pipe td.st-IF { background: #2d3b52; } table.pipe td.st-ID { background: #3a3358; } table.pipe td.st-EX { background: #2f5440; }
+table.pipe td.st-MEM { background: #5a4a2a; } table.pipe td.st-WB { background: #4a3a3a; } table.pipe td.st-s { background: #6a2d2d; color: #fff; }
+table.arch-table tr.hit td:last-child { color: #6c6; } table.arch-table tr.miss td:last-child { color: #e88; }
+.arch-bar { display: grid; grid-template-columns: 130px 1fr 60px; gap: 8px; align-items: center; margin: 3px 0; font-size: 12px; }
+.arch-bar .track { height: 10px; background: var(--panel2, #12161c); border-radius: 5px; overflow: hidden; }
+.arch-bar .fill { display: block; height: 100%; background: #4d8bd6; }
+pre.arch-listing { margin: 6px 0 0; padding: 8px 10px; background: var(--panel2, #12161c); border: 1px solid var(--line, #2a313b); border-radius: 6px; font: 12px/1.45 ui-monospace, Menlo, monospace; overflow-x: auto; white-space: pre; position: static; }

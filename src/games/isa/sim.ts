@@ -3,7 +3,12 @@ import { disasm, MEM_SIZE, type Program } from './asm';
 
 export const STACK_TOP = MEM_SIZE;
 
-export interface Step { pc: number; word: number; text: string; rd?: number; value?: number; mem?: { addr: number; size: number; write: boolean; value: number } }
+export type OpKind = 'alu' | 'mul' | 'div' | 'load' | 'store' | 'branch' | 'jal' | 'jalr' | 'sys';
+export interface Step {
+  pc: number; word: number; text: string; rd?: number; value?: number; mem?: { addr: number; size: number; write: boolean; value: number };
+  /** decoded for the architecture labs */
+  kind: OpKind; rs1?: number; rs2?: number; taken?: boolean; target?: number;
+}
 
 export type StopReason = 'running' | 'exit' | 'ebreak' | 'limit' | 'error';
 
@@ -20,6 +25,7 @@ export class Machine {
   histogram = new Map<string, number>();
   trace: Step[] = [];
   keepTrace = false;
+  traceLimit = 5000;
   /** lowest stack pointer seen, to tell that a recursion really used the stack */
   minSp = 0;
   readonly textEnd: number;
@@ -153,7 +159,16 @@ export class Machine {
       if (res !== undefined && rd !== 0) r[rd] = res;
       if ((r[2] >>> 0) < this.minSp) this.minSp = r[2] >>> 0;
       this.steps++;
-      if (this.keepTrace && this.trace.length < 5000) this.trace.push({ pc, word: w >>> 0, text, rd: res !== undefined && rd !== 0 ? rd : undefined, value: res, mem: memEv });
+      if (this.keepTrace && this.trace.length < this.traceLimit) {
+        const kind: OpKind = opcode === 0x03 ? 'load' : opcode === 0x23 ? 'store' : opcode === 0x63 ? 'branch' : opcode === 0x6f ? 'jal' : opcode === 0x67 ? 'jalr' : opcode === 0x73 ? 'sys' : opcode === 0x33 && f7 === 1 ? (f3 < 4 ? 'mul' : 'div') : 'alu';
+        const useRs1 = opcode === 0x33 || opcode === 0x13 || opcode === 0x03 || opcode === 0x67 || opcode === 0x23 || opcode === 0x63;
+        const useRs2 = opcode === 0x33 || opcode === 0x23 || opcode === 0x63;
+        this.trace.push({
+          pc, word: w >>> 0, text, rd: res !== undefined && rd !== 0 ? rd : undefined, value: res, mem: memEv, kind,
+          rs1: useRs1 && rs1 !== 0 ? rs1 : undefined, rs2: useRs2 && rs2 !== 0 ? rs2 : undefined,
+          taken: kind === 'branch' ? next !== pc + 4 : undefined, target: kind === 'branch' || kind === 'jal' || kind === 'jalr' ? next : undefined,
+        });
+      }
       this.pc = next;
     } catch (e) {
       if ((this.stopped as StopReason) !== 'error') throw e;

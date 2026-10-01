@@ -9,6 +9,7 @@ import { SHELL_LEVELS } from './games/shell/levels';
 import { SVA_LEVELS } from './games/sva/levels';
 import { TB_LEVELS } from './games/sv/levels';
 import { CDC_LEVELS } from './games/cdc/levels';
+import { ARCH_LEVELS } from './games/arch/levels';
 import { ISA_LEVELS } from './games/isa/levels';
 import { DEBUG_LEVELS, RTL_LEVELS } from './games/rtl/levels';
 import { TIMING_LEVELS } from './games/timing/levels';
@@ -18,7 +19,7 @@ import { findIncident } from './incidents';
 import { findBoss, findPractice } from './practice';
 import { levelRecord, profile } from './state';
 
-export type ModKind = 'lesson' | 'practice' | 'boss' | 'incident' | 'logic' | 'cmos' | 'rtl' | 'debug' | 'cov' | 'uvm' | 'sta' | 'pcb' | 'clab' | 'code' | 'shell' | 'sva' | 'tb' | 'cdc' | 'isa' | 'drills' | 'final';
+export type ModKind = 'lesson' | 'practice' | 'boss' | 'incident' | 'logic' | 'cmos' | 'rtl' | 'debug' | 'cov' | 'uvm' | 'sta' | 'pcb' | 'clab' | 'code' | 'shell' | 'sva' | 'tb' | 'cdc' | 'isa' | 'arch' | 'drills' | 'final';
 
 export interface Module {
   id: string;
@@ -33,13 +34,13 @@ export interface Act { id: string; n: number; name: string; tagline: string; reg
 
 export const KIND_LABEL: Record<ModKind, string> = {
   lesson: 'Lesson', practice: 'Practice', boss: 'Boss', incident: 'Incident', logic: 'Logic lab', cmos: 'Transistor lab', rtl: 'Verilog', debug: 'Bug hunt', cov: 'Coverage',
-  uvm: 'UVM', clab: 'Circuit Lab', code: 'Code Lab', shell: 'Shell Lab', sva: 'Assertions', tb: 'Testbench', cdc: 'Clock crossing', isa: 'Assembly', sta: 'Timing', pcb: 'Board', drills: 'Interview', final: 'Final review',
+  uvm: 'UVM', clab: 'Circuit Lab', code: 'Code Lab', shell: 'Shell Lab', sva: 'Assertions', tb: 'Testbench', cdc: 'Clock crossing', isa: 'Assembly', arch: 'Architecture lab', sta: 'Timing', pcb: 'Board', drills: 'Interview', final: 'Final review',
 };
 
 /** The desktop app a module opens in. */
 export const KIND_APP: Record<ModKind, string> = {
   lesson: 'terminal', practice: 'terminal', boss: 'terminal', incident: 'terminal', logic: 'Logic Lab', cmos: 'Logic Lab', rtl: 'Verilog IDE', debug: 'Verilog IDE', cov: 'Coverage',
-  uvm: 'UVM Builder', clab: 'Circuit Lab', code: 'Code Lab', shell: 'Shell Lab', sva: 'SVA Lab', tb: 'SV Lab', cdc: 'CDC Lab', isa: 'ISA Lab', sta: 'Timing', pcb: 'Board Router', drills: 'Flashcards', final: 'terminal',
+  uvm: 'UVM Builder', clab: 'Circuit Lab', code: 'Code Lab', shell: 'Shell Lab', sva: 'SVA Lab', tb: 'SV Lab', cdc: 'CDC Lab', isa: 'ISA Lab', arch: 'Arch Lab', sta: 'Timing', pcb: 'Board Router', drills: 'Flashcards', final: 'terminal',
 };
 
 const lesson = (id: string): Module => {
@@ -83,6 +84,9 @@ const tb = (...ids: string[]): Module[] => ids.flatMap((id) => mods(TB_LEVELS, '
 /** CDC Lab missions by id, in the order given. */
 const cdc = (...ids: string[]): Module[] => ids.flatMap((id) => mods(CDC_LEVELS, 'cdc', 'cdc', (x) => x.id === id));
 
+/** Architecture Lab missions by id, in the order given. */
+const arch = (...ids: string[]): Module[] => ids.flatMap((id) => mods(ARCH_LEVELS, 'arch', 'arch', (x) => x.id === id));
+
 /** ISA Lab missions by id, in the order given. */
 const isa = (...ids: string[]): Module[] => ids.flatMap((id) => mods(ISA_LEVELS, 'isa', 'isa', (x) => x.id === id));
 
@@ -118,7 +122,7 @@ export const ACTS: Act[] = [
       { name: 'C++', modules: [...drill('cpp'), bossMod('boss-cpp')] },
       { name: 'Algorithms', modules: [...drill('dsa'), ...code('code-py-fibmemo', 'code-py-bsearch', 'code-py-bfs', 'code-py-topo', 'code-py-lru'), bossMod('boss-dsa'), ...code('code-boss-py-graph')] },
       { name: 'Hardware/software interface', modules: [...drill('asm'), ...isa('isa-first', 'isa-branch', 'isa-loop', 'isa-array', 'isa-strlen', 'isa-popcount', 'isa-mul', 'isa-gcd', 'isa-copy', 'isa-reverse', 'isa-abi', 'isa-fix-signed', 'isa-fix-max', 'isa-fib', 'isa-sort'), bossMod('boss-asm'), ...isa('isa-boss-str', 'isa-boss-perf', 'isa-boss-rec')] },
-      { name: 'Operating systems', modules: [...drill('os'), bossMod('boss-os')] },
+      { name: 'Operating systems', modules: [...drill('os'), ...code('code-os-rr', 'code-os-paging', 'code-os-deadlock', 'code-os-alloc'), bossMod('boss-os'), ...code('code-os-boss-sched')] },
     ],
   },
   {
@@ -154,8 +158,8 @@ export const ACTS: Act[] = [
   {
     id: 'arch', n: 6, name: 'Architecture', tagline: 'Out-of-order cores, memory systems, interconnect and modeling', region: 'CACHE · NOC',
     chapters: [
-      { name: 'Cores', modules: [...drill('pipe', 'ooo'), bossMod('boss-cpu')] },
-      { name: 'Memory hierarchy', modules: [...drill('cache', 'coherence', 'dram'), bossMod('boss-mem')] },
+      { name: 'Cores', modules: [...drill('pipe'), ...arch('pipe-fwd', 'pipe-branch', 'pipe-sched', 'pipe-unroll'), ...drill('ooo'), ...arch('ooo-rename', 'ooo-window', 'ooo-diagnose'), bossMod('boss-cpu'), ...arch('pipe-boss', 'ooo-boss')] },
+      { name: 'Memory hierarchy', modules: [...drill('cache'), ...arch('cache-predict', 'cache-block', 'cache-conflict', 'cache-policy', 'cache-tile', 'cache-write'), ...drill('coherence', 'dram'), bossMod('boss-mem'), ...arch('cache-boss')] },
       { name: 'Interconnect', modules: [...drill('bus'), bossMod('boss-protocols'), ...drill('noc', 'serdes'), bossMod('boss-interconnect')] },
       { name: 'Modeling', modules: [...drill('perf'), bossMod('boss-perf')] },
       {

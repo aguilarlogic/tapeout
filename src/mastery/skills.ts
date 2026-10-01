@@ -88,7 +88,7 @@ export const SKILLS: Skill[] = [
   S('cpp', 'Software', 'C++ programming', ['eda', 'arch', 'dv'], ['cpp'], ['practice-cpp'], ['boss-cpp']),
   S('dsa', 'Software', 'Data structures and algorithms', ['eda', 'arch', 'dv', 'firmware'], ['dsa'], ['practice-dsa', 'code-py-fibmemo', 'code-py-bsearch', 'code-py-bfs', 'code-py-topo', 'code-py-lru'], ['boss-dsa', 'code-boss-py-graph']),
   S('asm', 'Software', 'Assembly and the hardware/software interface', ['firmware', 'arch', 'rtl', 'dv', 'postsi'], ['asm'], ['practice-asm', 'isa-first', 'isa-branch', 'isa-loop', 'isa-array', 'isa-strlen', 'isa-popcount', 'isa-mul', 'isa-gcd', 'isa-copy', 'isa-reverse', 'isa-abi', 'isa-fix-signed', 'isa-fix-max', 'isa-fib', 'isa-sort'], ['boss-asm', 'isa-boss-str', 'isa-boss-perf', 'isa-boss-rec']),
-  S('os', 'Software', 'Operating systems', ['firmware', 'arch', 'postsi'], ['os'], ['practice-os'], ['boss-os']),
+  S('os', 'Software', 'Operating systems', ['firmware', 'arch', 'postsi'], ['os'], ['practice-os', 'code-os-rr', 'code-os-paging', 'code-os-deadlock', 'code-os-alloc'], ['boss-os', 'code-os-boss-sched']),
   S('shell', 'Tooling', 'Linux shell, pipes and regular expressions', 'all', ['shell'], ['practice-shell', 'sh-nav', 'sh-grep', 'sh-pipes', 'sh-find', 'sh-awk', 'sh-sed', 'sh-perm', 'sh-loop', 'sh-script'], ['boss-shell', 'sh-boss-triage']),
   S('git', 'Tooling', 'Version control with git', 'all', ['git'], ['practice-git', 'git-first', 'git-branch', 'git-undo', 'git-conflict', 'git-stash', 'git-bisect'], ['boss-git', 'git-boss-merge', 'git-boss-bisect']),
   S('python', 'Tooling', 'Python scripting', 'all', ['python'], ['practice-python', 'code-py-parse', 'code-py-hist', 'code-py-regfield'], ['boss-python', 'code-boss-py-log']),
@@ -117,8 +117,8 @@ export const SKILLS: Skill[] = [
 
   // ------------------------------------------------ roles
   S('rtl-craft', 'Design craft', 'RTL craft: synthesis, PPA trade-offs, design reviews', ['rtl', 'soc', 'ai'], [], [], [], 'RV32I core project'),
-  S('cpu-arch', 'Architecture', 'Cores: pipelines, superscalar, OoO, branch prediction', ['arch', 'rtl', 'dv', 'postsi'], ['pipe', 'ooo'], ['practice-pipe', 'practice-ooo'], ['boss-cpu']),
-  S('mem-hier', 'Architecture', 'Caches, coherence, consistency, DRAM', ['arch', 'rtl', 'dv', 'memory'], ['cache', 'coherence', 'dram'], ['practice-cache', 'practice-coherence', 'practice-dram'], ['boss-mem']),
+  S('cpu-arch', 'Architecture', 'Cores: pipelines, superscalar, OoO, branch prediction', ['arch', 'rtl', 'dv', 'postsi'], ['pipe', 'ooo'], ['practice-pipe', 'practice-ooo', 'pipe-fwd', 'pipe-branch', 'pipe-sched', 'pipe-unroll', 'ooo-rename', 'ooo-window', 'ooo-diagnose'], ['boss-cpu', 'pipe-boss', 'ooo-boss']),
+  S('mem-hier', 'Architecture', 'Caches, coherence, consistency, DRAM', ['arch', 'rtl', 'dv', 'memory'], ['cache', 'coherence', 'dram'], ['practice-cache', 'practice-coherence', 'practice-dram', 'cache-predict', 'cache-block', 'cache-conflict', 'cache-policy', 'cache-tile', 'cache-write'], ['boss-mem', 'cache-boss']),
   S('interconnect', 'Architecture', 'Buses, NoCs, SerDes, PCIe/CXL', ['arch', 'soc', 'rtl', 'dv', 'board'], ['bus', 'noc', 'serdes'], ['practice-bus', 'practice-noc', 'practice-serdes'], ['boss-interconnect']),
   S('perf', 'Architecture', 'Performance modeling (gem5, roofline)', ['arch', 'ai'], ['perf'], ['practice-perf'], ['boss-perf']),
   S('sta', 'Implementation', 'Static timing analysis', ['pd', 'rtl', 'circuit', 'libchar'], ['sta'], ['sta-slack', 'sta-battles', 'sta-hold', 'sta-skew', 'sta-pipeline', 'practice-sta'], ['boss-sta']),

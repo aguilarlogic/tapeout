@@ -6,6 +6,7 @@ import { shellPage } from '../games/shell/page';
 import { svaPage } from '../games/sva/page';
 import { svPage } from '../games/sv/page';
 import { cdcPage } from '../games/cdc/page';
+import { archPage } from '../games/arch/page';
 import { isaPage } from '../games/isa/page';
 import { findModule, KIND_APP } from '../curriculum';
 import { coveragePage } from '../games/coverage/page';
@@ -29,7 +30,7 @@ import { bindMentorLog } from './mentor';
 import { getWindow, initWM, openWindow } from './wm';
 
 const LABS: Record<string, (id: string) => HTMLElement> = {
-  logic: logicPage, rtl: rtlPage, pcb: pcbPage, sta: timingPage, cov: coveragePage, uvm: uvmPage, clab: circuitPage, code: codePage, shell: shellPage, sva: svaPage, tb: svPage, cdc: cdcPage, isa: isaPage,
+  logic: logicPage, rtl: rtlPage, pcb: pcbPage, sta: timingPage, cov: coveragePage, uvm: uvmPage, clab: circuitPage, code: codePage, shell: shellPage, sva: svaPage, tb: svPage, cdc: cdcPage, isa: isaPage, arch: archPage,
 };
 
 let term: Terminal;
