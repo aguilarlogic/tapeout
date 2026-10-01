@@ -439,3 +439,14 @@ table.cases.cov tr.bad td:last-child { color: #fb7185; }
 table.cases.cdc td, table.cases.cdc th { text-align: left; padding: 3px 8px; vertical-align: top; }
 table.cases.cdc tr.bad td:last-child { color: #fb7185; }
 .cdc-sim .mut { margin: 3px 0; }
+
+/* ISA Lab */
+.isa-regs { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 2px 8px; margin: 8px 0; font: 12px ui-monospace, monospace; }
+.isa-reg { padding: 1px 4px; border-radius: 4px; white-space: nowrap; }
+.isa-reg b { display: inline-block; min-width: 3.2em; }
+.isa-reg.chg { background: rgba(250, 204, 21, .28); }
+.isa-reg.pc { background: rgba(20, 184, 166, .16); }
+.isa-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 8px; }
+.isa-list, .isa-trace { margin: 0; padding: 8px 10px; max-height: 240px; overflow: auto; border-radius: 6px; background: rgba(138,148,166,.12); font-size: 12px; white-space: pre; }
+.isa-addr { width: 7em; font: 12px ui-monospace, monospace; }
+.isa-case { max-width: 22em; }
