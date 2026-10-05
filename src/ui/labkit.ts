@@ -3,13 +3,22 @@
 /** Hints cost a star: 3 for a clean solve, 2 if any hint was used. (Circuit and logic labs add their own par rules.) */
 export const starsFor = (hintsUsed: number) => (hintsUsed > 0 ? 2 : 3);
 
-/** Run a heavy, synchronous check without freezing the page unannounced: disable the buttons, say so, let it paint, then run. */
-export function busy(status: HTMLElement, work: () => void | Promise<void>) {
+/**
+ * Run a heavy check without freezing the page unannounced: disable the toolbar, say so, let it paint, then run.
+ * `work` may register a cancel function; while it runs, a Cancel button sits next to the status line.
+ */
+export function busy(status: HTMLElement, work: (onCancel: (fn: () => void) => void) => void | Promise<void>) {
   const btns = [...document.querySelectorAll<HTMLButtonElement>('.level .toolbar button')];
   btns.forEach((b) => { b.disabled = true; });
   status.className = 'status idle';
   status.textContent = 'Running…';
-  setTimeout(() => { void Promise.resolve().then(work).finally(() => btns.forEach((b) => { b.disabled = false; })); }, 0);
+  let cancel: (() => void) | undefined;
+  const cancelBtn = h('button', { class: 'btn ghost small', onclick: () => cancel?.() }, 'Cancel');
+  cancelBtn.hidden = true;
+  status.after(cancelBtn);
+  setTimeout(() => {
+    void Promise.resolve().then(() => work((fn) => { cancel = fn; cancelBtn.hidden = false; })).finally(() => { btns.forEach((b) => { b.disabled = false; }); cancelBtn.remove(); });
+  }, 0);
 }
 
 import { h } from './dom';

@@ -1,5 +1,6 @@
 // Testbench Lab page: write or repair a SystemVerilog testbench (plain classes or UVM), run it on the correct design and on
 // hidden buggy variants, and see the simulation log and functional coverage.
+import { evaluateInWorker } from '../../ui/evalclient';
 import { award } from '../../mastery/promotion';
 import { mentorSay } from '../../os/mentor';
 import { clearDraft, levelRecord, loadDraft, saveDraft } from '../../state';
@@ -12,7 +13,7 @@ import type { CovGroupReport } from './cover';
 import { findTbLevel } from './levels';
 
 export { starsFor } from '../../ui/labkit';
-import { starsFor, useHints, loadSeed, newVariantButton } from '../../ui/labkit';
+import { starsFor, useHints, loadSeed, newVariantButton, busy } from '../../ui/labkit';
 
 function coverageView(cov: CovGroupReport[]): HTMLElement | string {
   if (!cov.length) return '';
@@ -77,12 +78,12 @@ export function svPage(id: string): HTMLElement {
     if (ev.error?.line) ed.markLines([ev.error.line], []); else ed.markLines([], []);
   };
 
-  const run = (submit: boolean) => {
-    status.className = 'status idle';
-    status.textContent = 'Simulating…';
-    // yield once so the status paints before the (synchronous) simulation
-    setTimeout(() => {
-      const ev = evaluate(inst, ed.value);
+  const run = (submit: boolean) => busy(status, async (onCancel) => {
+    {
+      const job = evaluateInWorker<Evaluation>({ kind: 'tb', levelId: level.id, seed, code: ed.value }, { fallback: () => evaluate(inst, ed.value) });
+      onCancel(job.cancel);
+      let ev: Evaluation;
+      try { ev = await job.promise; } catch (e) { status.className = 'status err'; status.textContent = (e as Error).message; return; }
       show(ev);
       if (ev.error) {
         status.className = 'status err';
@@ -103,8 +104,8 @@ export function svPage(id: string): HTMLElement {
       const stars = starsFor(usage.hints);
       const aw = award(level.id, level.xp, stars);
       celebrate(stars, aw, usage.hints ? ['Solve it without hints for another star.'] : [], nextHref(level.id));
-    }, 20);
-  };
+    }
+  });
 
   const toolbar = h('div', { class: 'toolbar' },
     h('button', { class: 'btn', onclick: () => run(false), title: 'Ctrl+Enter' }, '▶ Run'),

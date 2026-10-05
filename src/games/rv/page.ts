@@ -1,5 +1,6 @@
 // RV32 core project page: write the Verilog core, run it against the ISA simulator on whole programs, and read where
 // the first store or the first pc diverges.
+import { evaluateInWorker } from '../../ui/evalclient';
 import { busy, useHints, loadSeed, newVariantButton } from '../../ui/labkit';
 import { award } from '../../mastery/promotion';
 import { mentorSay } from '../../os/mentor';
@@ -56,10 +57,16 @@ export function rvPage(id: string): HTMLElement {
     resultBox.replaceChildren(...rep.results.map(row));
     ed.markLines(rep.error?.line ? [rep.error.line] : [], []);
   };
-  const check = (submit: boolean) => busy(status, async () => {
+  const check = (submit: boolean) => busy(status, async (onCancel) => {
     const specs = inst.programs.filter((p) => submit || !p.hidden);
-    // Yields between programs, so the page repaints and shows how far along it is.
-    const rep = await evaluateCoreAsync(ed.value, specs, { onProgress: (n, total) => { status.textContent = `Running… program ${n} of ${total}`; } });
+    // In a worker, so a slow core cannot freeze the page; it reports "program n of m" and can be cancelled or time out.
+    const job = evaluateInWorker<CoreReport>({ kind: 'rv', levelId: level.id, seed, code: ed.value, submit }, {
+      onProgress: (n, total) => { status.textContent = `Running… program ${n} of ${total}`; },
+      fallback: () => evaluateCoreAsync(ed.value, specs, { onProgress: (n, total) => { status.textContent = `Running… program ${n} of ${total}`; } }),
+    });
+    onCancel(job.cancel);
+    let rep: CoreReport;
+    try { rep = await job.promise; } catch (e) { status.className = 'status err'; status.textContent = (e as Error).message; return; }
     show(rep);
     if (rep.error) {
       status.className = 'status err';

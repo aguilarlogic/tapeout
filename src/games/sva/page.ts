@@ -1,5 +1,6 @@
 // SVA Lab page: write assertions (or assumptions, or fix the RTL) and see them judged against the correct design,
 // hidden buggy mutants, random simulation and bounded exhaustive search, with counterexample waveforms.
+import { evaluateInWorker } from '../../ui/evalclient';
 import { busy, useHints, loadSeed, newVariantButton } from '../../ui/labkit';
 import { award } from '../../mastery/promotion';
 import { mentorSay } from '../../os/mentor';
@@ -76,8 +77,11 @@ export function svaPage(id: string): HTMLElement {
     else ed.markLines([], []);
   };
 
-  const run = (submit: boolean) => busy(status, () => {
-    const ev = evaluate(inst, ed.value);
+  const run = (submit: boolean) => busy(status, async (onCancel) => {
+    const job = evaluateInWorker<Evaluation>({ kind: 'sva', levelId: level.id, seed, code: ed.value }, { fallback: () => evaluate(inst, ed.value) });
+    onCancel(job.cancel);
+    let ev: Evaluation;
+    try { ev = await job.promise; } catch (e) { status.className = 'status err'; status.textContent = (e as Error).message; return; }
     show(ev);
     if (ev.error) {
       status.className = 'status err';
