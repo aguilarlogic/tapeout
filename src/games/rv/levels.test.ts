@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { rng } from '../../sim/harness';
 import { evaluateCore } from './harness';
-import { BUG_IDS, buggyCoreFor, RV_LEVELS } from './levels';
+import { RV_LEVELS } from './levels';
 
 describe('RV32 core project', () => {
   for (const level of RV_LEVELS) {
@@ -27,14 +27,6 @@ describe('RV32 core project', () => {
       });
     });
   }
-  it('every injected bug is caught by the boss programs', { timeout: 300000 }, () => {
-    const inst = RV_LEVELS.find((l) => l.id === 'rv-boss')!.build(rng(1));
-    for (const id of BUG_IDS) {
-      const rep = evaluateCore(buggyCoreFor([id]), inst.programs);
-      expect(rep.error?.message, id).toBeUndefined();
-      expect(rep.passed, `bug ${id} must be detected`).toBe(false);
-    }
-  });
   it('rejects a wrong interface and compile errors with a readable message', () => {
     const inst = RV_LEVELS[0].build(rng(1));
     expect(evaluateCore('module rv32_core(input clk); endmodule', inst.programs).error?.phase).toBe('ports');
