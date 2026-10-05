@@ -22,10 +22,10 @@ numbers refer to that commit.
 | A8 Daily Mix | done | one `mix-daily` record, capped streak bonuses, migration |
 | A9 reset leaves drafts | done | |
 | A10 orphan modules | done | `skills.test.ts` fails on orphans |
-| B1 responsiveness | done | busy state on RV, SV, SVA, ISA, Circuit; RV, SV and SVA checks run in a Web Worker (`eval.worker.ts`, `evalclient.ts`) with a 20 s timeout and a main-thread fallback. Longest frame gap at 4x CPU throttle fell from 1.2 / 10.2 / 6.9 s to 62-83 ms. Cost: about +375 KB in the single file. No unit test of the worker itself |
+| B1 responsiveness | done | busy state on RV, SV, SVA, ISA, Circuit; RV, SV and SVA checks run in a Web Worker (`eval.worker.ts`, `evalclient.ts`) with a 20 s timeout and a main-thread fallback. Longest frame gap at 4x CPU throttle fell from 1.2 / 10.2 / 6.9 s to 62-83 ms. Cost: about +375 KB in the single file. The job logic is in `eval.job.ts` and `eval.job.test.ts` pins it: every reply survives `structuredClone` (it fails without the sanitiser), and results match the main-thread evaluation |
 | B2 startup | done | hosted build with lazy lab chunks (`vite build --mode hosted`), Pages workflow, `scripts/profile-startup.cjs`. Measured: single file 215 ms / 1020 ms (1x / 4x CPU), hosted 186 ms / 440 ms |
-| B3 shared lab kit | partial | one `starsFor`, one PRNG, shared busy/seed/hint helpers; about 140 lines removed against the 400 target. The rtl, logic, timing, pcb, uvm, coverage and drill pages are not ported |
-| B4 faster tests | partial | RV bug test split out and stops at the first failing program; wall time on 4 cores is unchanged at about 50 s, so the 32 s target is not met |
+| B3 shared lab kit | done | `ui/labkit.ts` holds `starsFor` (in `lib/stars.ts`), `useHints`, `briefPanel`, `labPage`, `checkToolbar`, `goalItems`, `draftEditor`, `resetButton`, `newVariantButton`, `verdict`, `setStatus`, `finish`, `busy`, `loadSeed`; one PRNG in `lib/rng.ts`. `src/games/*/page.ts` is 406 lines shorter than at v0.4.0 (2880 → 2474); the kit adds about 140, so the net is about 270. `timing`, `pcb`, `drills` and `logic` keep their own board/canvas code, and `circuit`/`logic` keep their own star rules |
+| B4 faster tests | partial | wall time on 4 cores 64 s → about 41 s with the same coverage: the lab suites are sharded across files, the arch run is memoised, SV's random solver draws without BigInt where it is exact (same stream), the RV starter check stops at the first failure, and the config uses one worker per core. The 32 s target is not met: the rest is the Verilog and SV simulators, and getting lower means fewer seeds or a faster simulator |
 | B5 CI once per push | done | |
 
 ## How to work

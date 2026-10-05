@@ -1,18 +1,15 @@
 // Architecture Lab page: configure a pipeline, cache or out-of-order core (and optionally edit the program), see the
 // measurements and timeline, and bank the result when every goal is met.
-import { award } from '../../mastery/promotion';
 import { mentorSay } from '../../os/mentor';
-import { clearDraft, levelRecord, loadDraft, saveDraft } from '../../state';
+import { clearDraft, loadDraft, saveDraft } from '../../state';
 import { rng } from '../../sim/harness';
 import { h } from '../../ui/dom';
 import { editor } from '../../ui/editor';
-import { celebrate, levelHeader, nextHref } from '../../ui/layout';
 import { highlightAsm } from '../isa/page';
 import { findArchLevel } from './levels';
 import { defaults, type ArchResult, type Control, type Values, type View } from './types';
 
-export { starsFor } from '../../ui/labkit';
-import { starsFor, useHints, loadSeed, newVariantButton } from '../../ui/labkit';
+import { briefPanel, finish, goalItems, labPage, loadSeed, newVariantButton, starsFor, useHints } from '../../ui/labkit';
 
 const PLOT_COLORS = ['#6cc8ff', '#ffb454', '#8be28b', '#ff7a90'];
 
@@ -82,16 +79,9 @@ export function archPage(id: string): HTMLElement {
 
   const ed = inst.code ? editor(loadDraft<string>(draftKey) ?? inst.code.starter, (v) => saveDraft(draftKey, v), () => check(false), { highlight: highlightAsm, label: inst.code.label }) : undefined;
 
-  const { hintBtn, hintList, usage } = useHints(inst.hints, `${draftKey}.usage`);
+  const { hintBox, usage } = useHints(inst.hints, `${draftKey}.usage`);
 
-  const brief = h('aside', { class: 'brief panel' },
-    h('div', { class: 'tag' }, `${level.lab} Lab · ${level.concept}`),
-    h('p', { class: 'dim small' }, level.ticket),
-    h('div', { class: 'brief-body', html: inst.brief }),
-    inst.listing ? h('details', { class: 'src-view', open: '' }, h('summary', null, inst.listing.label), h('pre', { class: 'arch-listing' }, inst.listing.text)) : '',
-    boss ? h('p', { class: 'dim small' }, 'Boss mission: no hints. A new variant changes the workload and the targets.') : '',
-    inst.hints.length ? h('div', { class: 'hint-box' }, hintBtn, hintList) : '',
-  );
+  const brief = briefPanel({ tag: `${level.lab} Lab · ${level.concept}`, ticket: level.ticket, html: inst.brief, note: boss ? 'Boss mission: no hints. A new variant changes the workload and the targets.' : undefined, hintBox }, inst.listing ? h('details', { class: 'src-view', open: '' }, h('summary', null, inst.listing.label), h('pre', { class: 'arch-listing' }, inst.listing.text)) : '');
 
   // ---- controls
   const form = h('div', { class: 'arch-controls' });
@@ -120,13 +110,11 @@ export function archPage(id: string): HTMLElement {
   const goalList = h('ul', { class: 'goals' });
   const metricBox = h('div', { class: 'arch-metrics' });
   const viewBox = h('div', { class: 'arch-viewbox' });
-  let last: ArchResult | undefined;
   // Boss labs grade like an exam: live runs show metrics and the view, but not which goals are met until you submit.
   let showGoals = !boss, wrongSubmits = 0;
   const run = (): ArchResult => {
     let res: ArchResult;
     try { res = inst.run(values, ed?.value); } catch (e) { res = { goals: [], metrics: [], error: { message: (e as Error).message } }; }
-    last = res;
     if (!showGoals && !res.error) {
       goalList.replaceChildren(h('li', { class: 'dim' }, 'Goals are hidden until you submit.'));
       metricBox.replaceChildren(...res.metrics.map(([k, v]) => h('div', { class: 'arch-metric' }, h('span', { class: 'dim small' }, k), h('b', null, v))));
@@ -134,7 +122,7 @@ export function archPage(id: string): HTMLElement {
       status.className = 'status idle'; status.textContent = 'Boss mission: Submit to find out whether the goals are met. A second wrong submit caps the result at 2 stars.';
       return res;
     }
-    goalList.replaceChildren(...res.goals.map((g) => h('li', { class: g.ok ? 'ok' : 'bad' }, h('span', { class: 'mark' }, g.ok ? '✓' : '✗'), h('span', null, g.label, g.note ? h('span', { class: 'dim small' }, ` — ${g.note}`) : ''))));
+    goalList.replaceChildren(...goalItems(res.goals));
     metricBox.replaceChildren(...res.metrics.map(([k, v]) => h('div', { class: 'arch-metric' }, h('span', { class: 'dim small' }, k), h('b', null, v))));
     viewBox.replaceChildren(...[res.view, res.extra].map((x) => (x ? viewEl(x) : '')));
     ed?.markLines(res.error?.line ? [res.error.line] : [], []);
@@ -154,10 +142,8 @@ export function archPage(id: string): HTMLElement {
     if (!submit) return;
     status.textContent = `PASS: all ${res.goals.length} goals met.`;
     const stars = Math.min(starsFor(usage.hints), wrongSubmits >= 2 ? 2 : 3);
-    const aw = award(level.id, level.xp, stars);
-    celebrate(stars, aw, [usage.hints ? 'Solve it without hints for another star.' : '', wrongSubmits >= 2 ? 'Two wrong submits cap a boss at 2 stars.' : ''].filter(Boolean), nextHref(level.id));
+    finish(level.id, level.xp, stars, [usage.hints ? 'Solve it without hints for another star.' : '', wrongSubmits >= 2 ? 'Two wrong submits cap a boss at 2 stars.' : ''].filter(Boolean));
   };
-  void last;
 
   const toolbar = h('div', { class: 'toolbar' },
     h('button', { class: 'btn', onclick: () => check(false), title: 'Ctrl+Enter' }, '▶ Run'),
@@ -166,11 +152,7 @@ export function archPage(id: string): HTMLElement {
     boss ? newVariantButton(seedKey, () => archPage(level.id)) : '',
   );
 
-  const page = h('div', { class: 'level', id: 'lab-slot' },
-    levelHeader(level.title, level.id, levelRecord(level.id)?.stars ?? 0, level.xp),
-    h('div', { class: 'level-grid clab-grid' }, brief, h('section', { class: 'work panel' }, toolbar, form, ed ? ed.el : '')),
-    h('section', { class: 'results panel' }, status, goalList, metricBox, viewBox),
-  );
+  const page = labPage(level, brief, [toolbar, form, ed ? ed.el : ''], [status, goalList, metricBox, viewBox]);
   run();
   return page;
 }

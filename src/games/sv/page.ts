@@ -1,19 +1,14 @@
 // Testbench Lab page: write or repair a SystemVerilog testbench (plain classes or UVM), run it on the correct design and on
 // hidden buggy variants, and see the simulation log and functional coverage.
 import { evaluateInWorker } from '../../ui/evalclient';
-import { award } from '../../mastery/promotion';
-import { mentorSay } from '../../os/mentor';
-import { clearDraft, levelRecord, loadDraft, saveDraft } from '../../state';
 import { h } from '../../ui/dom';
-import { editor, highlight } from '../../ui/editor';
-import { celebrate, levelHeader, nextHref } from '../../ui/layout';
+import { highlight } from '../../ui/editor';
 import { rng } from '../../sim/harness';
 import { evaluate, type Evaluation } from './check';
 import type { CovGroupReport } from './cover';
 import { findTbLevel } from './levels';
 
-export { starsFor } from '../../ui/labkit';
-import { starsFor, useHints, loadSeed, newVariantButton, busy } from '../../ui/labkit';
+import { briefPanel, busy, checkToolbar, draftEditor, goalItems, labPage, loadSeed, newVariantButton, useHints, verdict } from '../../ui/labkit';
 
 function coverageView(cov: CovGroupReport[]): HTMLElement | string {
   if (!cov.length) return '';
@@ -39,20 +34,14 @@ export function svPage(id: string): HTMLElement {
   const draftKey = `tb.${level.id}.${seed}`;
   const fix = inst.mode === 'fix';
 
-  const ed = editor(loadDraft<string>(draftKey) ?? inst.starter, (v) => saveDraft(draftKey, v), () => run(false), {
+  const ed = draftEditor(draftKey, inst.starter, () => run(false), {
     highlight, label: fix ? 'SystemVerilog testbench to repair' : 'SystemVerilog testbench',
   });
 
   // --- brief and hints
-  const { hintBtn, hintList, usage } = useHints(inst.hints, `${draftKey}.usage`);
+  const { hintBox, usage } = useHints(inst.hints, `${draftKey}.usage`);
 
-  const brief = h('aside', { class: 'brief panel' },
-    h('div', { class: 'tag' }, `${inst.uvm ? 'UVM' : 'Testbench'} · ${level.concept}`),
-    h('p', { class: 'dim small' }, level.ticket),
-    h('div', { class: 'brief-body', html: inst.brief }),
-    boss ? h('p', { class: 'dim small' }, 'Boss mission: no hints. Hidden bugs are checked on every run.') : '',
-    inst.hints.length ? h('div', { class: 'hint-box' }, hintBtn, hintList) : '',
-  );
+  const brief = briefPanel({ tag: `${inst.uvm ? 'UVM' : 'Testbench'} · ${level.concept}`, ticket: level.ticket, html: inst.brief, note: boss ? 'Boss mission: no hints. Hidden bugs are checked on every run.' : undefined, hintBox });
 
   // --- code provided around the learner's (read only)
   const provided = inst.fixed.replace('@@DUT@@', inst.dut ?? '').trim();
@@ -68,7 +57,7 @@ export function svPage(id: string): HTMLElement {
   const logBox = h('pre', { class: 'sim-log' });
 
   const show = (ev: Evaluation) => {
-    goalList.replaceChildren(...ev.goals.map((g) => h('li', { class: g.ok ? 'ok' : 'bad' }, h('span', { class: 'mark' }, g.ok ? '✓' : '✗'), h('span', null, g.label, g.note ? h('span', { class: 'dim small' }, ` — ${g.note}`) : ''))));
+    goalList.replaceChildren(...goalItems(ev.goals));
     mutList.replaceChildren(...(ev.mutants.length ? [h('h4', null, boss ? 'Hidden bugs' : 'Buggy designs'), ...ev.mutants.map((m, i) => h('div', { class: m.caught ? 'mut ok' : 'mut bad' }, m.caught ? '✓ caught: ' : '✗ MISSED: ', boss ? `bug ${i + 1}` : m.name, m.note ? h('span', { class: 'dim small' }, ` (${m.note})`) : ''))] : []));
     const run0 = ev.run;
     covBox.replaceChildren(...(run0 && !run0.parseError && run0.coverage.length ? [coverageView(run0.coverage)] : []));
@@ -85,38 +74,11 @@ export function svPage(id: string): HTMLElement {
       let ev: Evaluation;
       try { ev = await job.promise; } catch (e) { status.className = 'status err'; status.textContent = (e as Error).message; return; }
       show(ev);
-      if (ev.error) {
-        status.className = 'status err';
-        status.textContent = ev.error.message + (ev.error.line ? ` (line ${ev.error.line})` : '');
-        mentorSay(status.textContent, 'concerned');
-        return;
-      }
-      if (!ev.passed) {
-        const bad = ev.goals.filter((g) => !g.ok);
-        status.className = 'status err';
-        status.textContent = `${bad.length} of ${ev.goals.length} goals not met.`;
-        mentorSay(`Not yet: ${bad[0].label}${bad[0].note ? ` (${bad[0].note})` : ''}.`, 'concerned');
-        return;
-      }
-      status.className = 'status ok';
-      if (!submit) { status.textContent = `All ${ev.goals.length} goals met. Submit to bank the result.`; return; }
-      status.textContent = `PASS: all ${ev.goals.length} goals met.`;
-      const stars = starsFor(usage.hints);
-      const aw = award(level.id, level.xp, stars);
-      celebrate(stars, aw, usage.hints ? ['Solve it without hints for another star.'] : [], nextHref(level.id));
+      verdict(status, ev, submit, level, usage.hints);
     }
   });
 
-  const toolbar = h('div', { class: 'toolbar' },
-    h('button', { class: 'btn', onclick: () => run(false), title: 'Ctrl+Enter' }, '▶ Run'),
-    h('button', { class: 'btn primary', onclick: () => run(true) }, '✔ Submit'),
-    h('button', { class: 'btn ghost', onclick: () => { if (confirm('Reset to the starter?')) { ed.value = inst.starter; clearDraft(draftKey); } } }, 'Reset'),
-    boss ? newVariantButton(seedKey, () => svPage(level.id)) : '',
-  );
+  const toolbar = checkToolbar(run, ed, inst.starter, draftKey, { label: '▶ Run', variant: boss && newVariantButton(seedKey, () => svPage(level.id)) });
 
-  return h('div', { class: 'level', id: 'lab-slot' },
-    levelHeader(level.title, level.id, levelRecord(level.id)?.stars ?? 0, level.xp),
-    h('div', { class: 'level-grid clab-grid' }, brief, h('section', { class: 'work panel' }, toolbar, shown, ed.el)),
-    h('section', { class: 'results panel' }, status, goalList, mutList, covBox, logBox),
-  );
+  return labPage(level, brief, [toolbar, shown, ed.el], [status, goalList, mutList, covBox, logBox]);
 }

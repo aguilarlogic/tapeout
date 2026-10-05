@@ -1,20 +1,13 @@
 // ISA Lab page: edit RISC-V assembly, judge it against hidden cases, and step through it in a debugger with registers,
 // memory, the machine-code listing and an execution trace.
-import { busy, useHints, loadSeed, newVariantButton } from '../../ui/labkit';
-import { award } from '../../mastery/promotion';
-import { mentorSay } from '../../os/mentor';
-import { clearDraft, levelRecord, loadDraft, saveDraft } from '../../state';
+import { briefPanel, busy, checkToolbar, draftEditor, goalItems, labPage, loadSeed, newVariantButton, useHints, verdict } from '../../ui/labkit';
 import { h } from '../../ui/dom';
-import { editor } from '../../ui/editor';
-import { celebrate, levelHeader, nextHref } from '../../ui/layout';
 import { rng } from '../../sim/harness';
 import { AsmError, assemble, MNEMONICS, REG_NAMES, type Program } from './asm';
 import { evaluate, setupMachine, SENTINEL, type Evaluation } from './check';
 import { findIsaLevel } from './levels';
 import { Machine, STACK_TOP } from './sim';
 
-export { starsFor } from '../../ui/labkit';
-import { starsFor } from '../../ui/labkit';
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const PSEUDO = ['nop', 'li', 'la', 'mv', 'not', 'neg', 'seqz', 'snez', 'sltz', 'sgtz', 'beqz', 'bnez', 'blez', 'bgez', 'bltz', 'bgtz', 'bgt', 'ble', 'bgtu', 'bleu', 'j', 'jr', 'ret', 'call', 'tail'];
@@ -44,49 +37,24 @@ export function isaPage(id: string): HTMLElement {
   const inst = level.build(rng(seed));
   const draftKey = `isa.${level.id}.${seed}`;
 
-  const ed = editor(loadDraft<string>(draftKey) ?? inst.starter, (v) => saveDraft(draftKey, v), () => check(false), { highlight: highlightAsm, label: 'RISC-V assembly' });
+  const ed = draftEditor(draftKey, inst.starter, () => check(false), { highlight: highlightAsm, label: 'RISC-V assembly' });
 
-  const { hintBtn, hintList, usage } = useHints(inst.hints, `${draftKey}.usage`);
+  const { hintBox, usage } = useHints(inst.hints, `${draftKey}.usage`);
 
-  const brief = h('aside', { class: 'brief panel' },
-    h('div', { class: 'tag' }, `ISA Lab · ${level.concept}`),
-    h('p', { class: 'dim small' }, level.ticket),
-    h('div', { class: 'brief-body', html: inst.brief }),
-    inst.fixed ? h('details', { class: 'src-view' }, h('summary', null, 'Provided code (appended after yours)'), h('pre', { class: 'ed-hl src', html: highlightAsm(inst.fixed) })) : '',
-    boss ? h('p', { class: 'dim small' }, 'Boss mission: no hints, hidden cases. A new variant picks a different routine.') : '',
-    inst.hints.length ? h('div', { class: 'hint-box' }, hintBtn, hintList) : '',
-  );
+  const brief = briefPanel({ tag: `ISA Lab · ${level.concept}`, ticket: level.ticket, html: inst.brief, note: boss ? 'Boss mission: no hints, hidden cases. A new variant picks a different routine.' : undefined, hintBox }, inst.fixed ? h('details', { class: 'src-view' }, h('summary', null, 'Provided code (appended after yours)'), h('pre', { class: 'ed-hl src', html: highlightAsm(inst.fixed) })) : '');
 
   // ---- results
   const status = h('div', { class: 'status idle' }, 'Check assembles your code and runs every case. Submit also banks the result.');
   const goalList = h('ul', { class: 'goals' });
   const show = (ev: Evaluation) => {
-    goalList.replaceChildren(...ev.goals.map((g) => h('li', { class: g.ok ? 'ok' : 'bad' }, h('span', { class: 'mark' }, g.ok ? '✓' : '✗'), h('span', null, g.label, g.note ? h('span', { class: 'dim small' }, ` — ${g.note}`) : ''))));
+    goalList.replaceChildren(...goalItems(ev.goals));
     ed.markLines(ev.error?.line ? [ev.error.line] : [], []);
   };
   const check = (submit: boolean) => busy(status, () => {
     const ev = evaluate(inst, ed.value);
     show(ev);
     resetDebug();
-    if (ev.error) {
-      status.className = 'status err';
-      status.textContent = ev.error.message + (ev.error.line ? ` (line ${ev.error.line})` : '');
-      mentorSay(status.textContent, 'concerned');
-      return;
-    }
-    if (!ev.passed) {
-      const bad = ev.goals.filter((g) => !g.ok);
-      status.className = 'status err';
-      status.textContent = `${bad.length} of ${ev.goals.length} goals not met.`;
-      mentorSay(`Not yet: ${bad[0].label}${bad[0].note ? ` (${bad[0].note})` : ''}.`, 'concerned');
-      return;
-    }
-    status.className = 'status ok';
-    if (!submit) { status.textContent = `All ${ev.goals.length} goals met. Submit to bank the result.`; return; }
-    status.textContent = `PASS: all ${ev.goals.length} goals met.`;
-    const stars = starsFor(usage.hints);
-    const aw = award(level.id, level.xp, stars);
-    celebrate(stars, aw, usage.hints ? ['Solve it without hints for another star.'] : [], nextHref(level.id));
+    verdict(status, ev, submit, level, usage.hints);
   });
 
   // ---- debugger
@@ -159,16 +127,7 @@ export function isaPage(id: string): HTMLElement {
     h('div', { class: 'dim small' }, `Memory is 64 KiB: code at 0, data at 0x2000, stack top ${hx(STACK_TOP)}.`),
   );
 
-  const toolbar = h('div', { class: 'toolbar' },
-    h('button', { class: 'btn', onclick: () => check(false), title: 'Ctrl+Enter' }, '▶ Check'),
-    h('button', { class: 'btn primary', onclick: () => check(true) }, '✔ Submit'),
-    h('button', { class: 'btn ghost', onclick: () => { if (confirm('Reset to the starter?')) { ed.value = inst.starter; clearDraft(draftKey); } } }, 'Reset'),
-    boss ? newVariantButton(seedKey, () => isaPage(level.id)) : '',
-  );
+  const toolbar = checkToolbar(check, ed, inst.starter, draftKey, { variant: boss && newVariantButton(seedKey, () => isaPage(level.id)) });
 
-  return h('div', { class: 'level', id: 'lab-slot' },
-    levelHeader(level.title, level.id, levelRecord(level.id)?.stars ?? 0, level.xp),
-    h('div', { class: 'level-grid clab-grid' }, brief, h('section', { class: 'work panel' }, toolbar, ed.el)),
-    h('section', { class: 'results panel' }, status, goalList, debug),
-  );
+  return labPage(level, brief, [toolbar, ed.el], [status, goalList, debug]);
 }

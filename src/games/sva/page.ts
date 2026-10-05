@@ -1,21 +1,15 @@
 // SVA Lab page: write assertions (or assumptions, or fix the RTL) and see them judged against the correct design,
 // hidden buggy mutants, random simulation and bounded exhaustive search, with counterexample waveforms.
 import { evaluateInWorker } from '../../ui/evalclient';
-import { busy, useHints, loadSeed, newVariantButton } from '../../ui/labkit';
-import { award } from '../../mastery/promotion';
-import { mentorSay } from '../../os/mentor';
-import { clearDraft, levelRecord, loadDraft, saveDraft } from '../../state';
+import { briefPanel, busy, checkToolbar, draftEditor, labPage, loadSeed, newVariantButton, useHints, verdict } from '../../ui/labkit';
 import { h } from '../../ui/dom';
-import { editor, highlight } from '../../ui/editor';
-import { celebrate, levelHeader, nextHref } from '../../ui/layout';
+import { highlight } from '../../ui/editor';
 import { rng } from '../../sim/harness';
 import { evaluate, type Evaluation } from './check';
 import { bmc, type BmcResult, type Cex } from './formal';
 import { findSvaLevel } from './levels';
 import { parseSva } from './sva';
 
-export { starsFor } from '../../ui/labkit';
-import { starsFor } from '../../ui/labkit';
 
 function cexTable(cex: Cex, clock: string): HTMLElement {
   const sigs = [...cex.trace.vals.keys()].filter((k) => k !== clock);
@@ -35,21 +29,14 @@ export function svaPage(id: string): HTMLElement {
   const draftKey = `sva.${level.id}.${seed}`;
   const fix = inst.mode === 'fix';
 
-  const ed = editor(loadDraft<string>(draftKey) ?? inst.starter, (v) => saveDraft(draftKey, v), () => run(false), {
+  const ed = draftEditor(draftKey, inst.starter, () => run(false), {
     highlight: highlight, label: fix ? 'Verilog source' : 'SystemVerilog assertions',
   });
 
   // --- brief and hints
-  const { hintBtn, hintList, usage } = useHints(inst.hints, `${draftKey}.usage`);
+  const { hintBox, usage } = useHints(inst.hints, `${draftKey}.usage`);
 
-  const modeTag = inst.mode === 'write' ? 'Write the assertions' : inst.mode === 'assume' ? 'Write the assumptions' : 'Fix the RTL';
-  const brief = h('aside', { class: 'brief panel' },
-    h('div', { class: 'tag' }, `SVA · ${level.concept}`),
-    h('p', { class: 'dim small' }, level.ticket),
-    h('div', { class: 'brief-body', html: inst.brief }),
-    boss ? h('p', { class: 'dim small' }, 'Boss mission: no hints. Hidden bugs are checked on Submit.') : '',
-    inst.hints.length ? h('div', { class: 'hint-box' }, hintBtn, hintList) : '',
-  );
+  const brief = briefPanel({ tag: `SVA · ${level.concept}`, ticket: level.ticket, html: inst.brief, note: boss ? 'Boss mission: no hints. Hidden bugs are checked on Submit.' : undefined, hintBox });
 
   // --- the design (read only) and any given directives
   const shown = h('details', { class: 'src-view', open: '' },
@@ -83,25 +70,7 @@ export function svaPage(id: string): HTMLElement {
     let ev: Evaluation;
     try { ev = await job.promise; } catch (e) { status.className = 'status err'; status.textContent = (e as Error).message; return; }
     show(ev);
-    if (ev.error) {
-      status.className = 'status err';
-      status.textContent = ev.error.message + (ev.error.line ? ` (line ${ev.error.line})` : '');
-      mentorSay(status.textContent, 'concerned');
-      return;
-    }
-    if (!ev.passed) {
-      const bad = ev.goals.filter((g) => !g.ok);
-      status.className = 'status err';
-      status.textContent = `${bad.length} of ${ev.goals.length} goals not met.`;
-      mentorSay(`Not yet: ${bad[0].label}.`, 'concerned');
-      return;
-    }
-    status.className = 'status ok';
-    if (!submit) { status.textContent = `All ${ev.goals.length} goals met. Submit to bank the result.`; return; }
-    status.textContent = `PASS: all ${ev.goals.length} goals met.`;
-    const stars = starsFor(usage.hints);
-    const aw = award(level.id, level.xp, stars);
-    celebrate(stars, aw, usage.hints ? ['Solve it without hints for another star.'] : [], nextHref(level.id));
+    verdict(status, ev, submit, level, usage.hints);
   });
 
   // --- formal button (assume and fix missions)
@@ -124,18 +93,7 @@ export function svaPage(id: string): HTMLElement {
     } else formalOut.replaceChildren(h('div', { class: 'status err' }, `Inconclusive: ${r.note ?? 'budget reached'}.`));
   };
 
-  const toolbar = h('div', { class: 'toolbar' },
-    h('button', { class: 'btn', onclick: () => run(false), title: 'Ctrl+Enter' }, '▶ Check'),
-    h('button', { class: 'btn primary', onclick: () => run(true) }, '✔ Submit'),
-    inst.mode !== 'write' ? h('span', { class: 'formal-ctl' }, h('button', { class: 'btn', onclick: formal }, 'Run formal'), h('label', { class: 'dim small' }, ' depth ', depthIn)) : '',
-    h('button', { class: 'btn ghost', onclick: () => { if (confirm('Reset to the starter?')) { ed.value = inst.starter; clearDraft(draftKey); } } }, 'Reset'),
-    boss ? newVariantButton(seedKey, () => svaPage(level.id)) : '',
-  );
+  const toolbar = checkToolbar(run, ed, inst.starter, draftKey, { extra: inst.mode !== 'write' && h('span', { class: 'formal-ctl' }, h('button', { class: 'btn', onclick: formal }, 'Run formal'), h('label', { class: 'dim small' }, ' depth ', depthIn)), variant: boss && newVariantButton(seedKey, () => svaPage(level.id)) });
 
-  void modeTag;
-  return h('div', { class: 'level', id: 'lab-slot' },
-    levelHeader(level.title, level.id, levelRecord(level.id)?.stars ?? 0, level.xp),
-    h('div', { class: 'level-grid clab-grid' }, brief, h('section', { class: 'work panel' }, toolbar, fix ? shown : h('div', null, shown), given, ed.el, formalOut)),
-    h('section', { class: 'results panel' }, status, goalList, table, mutList, cexBox),
-  );
+  return labPage(level, brief, [toolbar, fix ? shown : h('div', null, shown), given, ed.el, formalOut], [status, goalList, table, mutList, cexBox]);
 }

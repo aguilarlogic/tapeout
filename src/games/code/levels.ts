@@ -14,4 +14,4 @@ export const findCodeLevel = (id: string) => CODE_LEVELS.find((l) => l.id === id
 export const instanceFor = (level: CodeLevel, seed: number) => level.build(rng(seed));
 
 /** Hints cap the result at 2 stars. */
-export { starsFor } from '../../ui/labkit';
+export { starsFor } from '../../lib/stars';

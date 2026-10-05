@@ -1,9 +1,9 @@
-import { award } from '../../mastery/promotion';
 import { mentorSay } from '../../os/mentor';
 import { levelRecord, loadDraft, saveDraft } from '../../state';
 import { h, toast } from '../../ui/dom';
-import { celebrate, levelHeader, nextHref } from '../../ui/layout';
+import { levelHeader } from '../../ui/layout';
 import { defaultPhase, Phase, RunOutcome, SCENARIOS, score } from './scenarios';
+import { briefPanel, finish } from '../../ui/labkit';
 
 export function coveragePage(id: string): HTMLElement {
   const sc = SCENARIOS.find((s) => s.id === id);
@@ -97,8 +97,7 @@ export function coveragePage(id: string): HTMLElement {
     const s = score(sc, outcome);
     if (!s.done) mentorSay(outcome.log.some((l) => l.error) ? 'You found the bug, but coverage still has holes. Shape the distributions toward the red bins.' : 'Coverage holes and no bug yet. Random alone will not get there: aim a phase at the corners.', 'thinking');
     if (s.done) {
-      const aw = award(sc.id, sc.xp, s.stars);
-      celebrate(s.stars, aw, s.stars < 3 ? [`${outcome.total} transactions - do it in ${sc.par} or fewer for 3 stars.`] : [], nextHref(sc.id));
+      finish(sc.id, sc.xp, s.stars, s.stars < 3 ? [`${outcome.total} transactions - do it in ${sc.par} or fewer for 3 stars.`] : []);
     }
   };
 
@@ -108,7 +107,7 @@ export function coveragePage(id: string): HTMLElement {
   return h('div', { class: 'level' },
     levelHeader(sc.title, sc.id, levelRecord(sc.id)?.stars ?? 0, sc.xp),
     h('div', { class: 'level-grid cov-grid' },
-      h('aside', { class: 'brief panel' }, h('div', { class: 'tag' }, sc.concept), h('div', { class: 'brief-body', html: sc.brief })),
+      briefPanel({ tag: sc.concept, html: sc.brief }),
       h('section', { class: 'work panel' },
         h('div', { class: 'toolbar' },
           h('label', null, '+ntb_random_seed=', seedInput),

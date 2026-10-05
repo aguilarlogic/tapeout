@@ -1,11 +1,11 @@
 // Logic Lab: a drag-and-wire schematic editor with live simulation, for gate-level and transistor-level levels.
-import { award } from '../../mastery/promotion';
 import { mentorSay } from '../../os/mentor';
 import { clearDraft, levelRecord, loadDraft, saveDraft } from '../../state';
 import { h, svg, toast } from '../../ui/dom';
-import { celebrate, levelHeader, nextHref } from '../../ui/layout';
+import { levelHeader } from '../../ui/layout';
 import { Circuit, counts, Kind, Part, PINS, Sim, SIZE, starsFor, V, verify } from './circuit';
 import { CANVAS, findLogicLevel, starter } from './levels';
+import { briefPanel, finish, hintNote, useHints } from '../../ui/labkit';
 
 const GRID = 10;
 const snap = (v: number) => Math.round(v / GRID) * GRID;
@@ -73,7 +73,7 @@ export function logicPage(id: string): HTMLElement {
   if (!level) return h('p', null, 'Unknown level.');
   const key = `logic.${level.id}`;
   let circ: Circuit = loadDraft<Circuit>(key) ?? starter(level);
-  const usage = loadDraft<{ hints: number }>(`${key}.usage`) ?? { hints: 0 };
+  const { hintBox, usage } = useHints(level.hints, `${key}.usage`, { text: true, ask: 'Ask TAPEOUT for a hint', cost: 'costs a star' });
   const inputs: Record<string, 0 | 1> = Object.fromEntries(level.inputs.map((n) => [n, 0]));
   let sim = new Sim(circ);
   let cycles = 0;
@@ -275,30 +275,15 @@ export function logicPage(id: string): HTMLElement {
     }
     let st = starsFor(v, level.par);
     st = Math.max(1, st - usage.hints);
-    const aw = award(level.id, level.xp, st);
-    const notes = [
+    finish(level.id, level.xp, st, [
       v.count > level.par ? `You used ${v.count}; par is ${level.par}. Fewer parts earn more stars.` : '',
-      usage.hints ? 'Solve it without hints for another star.' : '',
-    ].filter(Boolean);
-    celebrate(st, aw, notes, nextHref(level.id));
+      ...hintNote(usage.hints),
+    ].filter(Boolean));
   };
-
-  const hintList = h('ol', { class: 'hints' });
-  const hintBtn = h('button', { class: 'btn ghost small', onclick: () => { usage.hints = Math.min(level.hints.length, usage.hints + 1); saveDraft(`${key}.usage`, usage); renderHints(); mentorSay(`Hint: ${level.hints[usage.hints - 1]}`, 'thinking'); } });
-  const renderHints = () => {
-    hintList.replaceChildren(...level.hints.slice(0, usage.hints).map((t) => h('li', null, t)));
-    hintBtn.textContent = usage.hints >= level.hints.length ? 'No more hints' : `Ask TAPEOUT for a hint (${level.hints.length - usage.hints} left, costs a star)`;
-    (hintBtn as HTMLButtonElement).disabled = usage.hints >= level.hints.length;
-  };
-  renderHints();
 
   const palette = h('div', { class: 'palette' }, ...level.palette.map((k) => h('button', { class: 'chip', onclick: () => addPart(k), title: `Add a ${k}` }, `+ ${k}`)));
-  const brief = h('aside', { class: 'brief panel' },
-    h('div', { class: 'tag' }, level.concept),
-    h('div', { class: 'brief-body', html: level.brief }),
-    h('h4', null, 'Parts bin'), palette,
-    h('p', { class: 'dim small' }, 'Drag parts to move them. Drag from pin to pin (or click one pin, then another) to wire. Click an input switch to toggle it. Select + Delete removes; double-click a wire to cut it.'),
-    h('div', { class: 'hint-box' }, hintBtn, hintList));
+  const brief = briefPanel({ tag: level.concept, html: level.brief, hintBox }, h('h4', null, 'Parts bin'), palette,
+    h('p', { class: 'dim small' }, 'Drag parts to move them. Drag from pin to pin (or click one pin, then another) to wire. Click an input switch to toggle it. Select + Delete removes; double-click a wire to cut it.'));
 
   resim(true);
   draw();

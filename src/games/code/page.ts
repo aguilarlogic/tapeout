@@ -1,11 +1,8 @@
 // Code Lab page: an editor, example runs, a Submit that checks every case against the reference solution.
-import { useHints, loadSeed } from '../../ui/labkit';
-import { award } from '../../mastery/promotion';
+import { briefPanel, checkToolbar, draftEditor, finish, hintNote, labPage, loadSeed, newVariantButton, setStatus, useHints } from '../../ui/labkit';
 import { mentorSay } from '../../os/mentor';
-import { clearDraft, levelRecord, loadDraft, saveDraft } from '../../state';
 import { h } from '../../ui/dom';
-import { editor, highlightC, highlightPy } from '../../ui/editor';
-import { celebrate, levelHeader, nextHref } from '../../ui/layout';
+import { highlightC, highlightPy } from '../../ui/editor';
 import { findCodeLevel, instanceFor, starsFor } from './levels';
 import { runCode, type CodeReport } from './run';
 
@@ -19,21 +16,15 @@ export function codePage(id: string): HTMLElement {
   const draftKey = `code.${level.id}.${seed}`;
   const langName = level.lang === 'py' ? 'Python' : 'C';
 
-  const ed = editor(loadDraft<string>(draftKey) ?? inst.starter, (v) => saveDraft(draftKey, v), () => run(false), {
+  const ed = draftEditor(draftKey, inst.starter, () => run(false), {
     highlight: level.lang === 'py' ? highlightPy : highlightC, label: `${langName} source`,
   });
 
   // --- brief and hints
-  const { hintBtn, hintList, usage } = useHints(inst.hints, `${draftKey}.usage`);
+  const { hintBox, usage } = useHints(inst.hints, `${draftKey}.usage`);
 
   const tierNote = level.tier === 'debug' ? 'Bug hunt: run it, read the sanitizer report, find the root cause.' : boss ? 'Boss mission: no hints. Hidden cases run on Submit.' : '';
-  const brief = h('aside', { class: 'brief panel' },
-    h('div', { class: 'tag' }, `${langName} · ${level.concept}`),
-    h('p', { class: 'dim small' }, level.ticket),
-    h('div', { class: 'brief-body', html: inst.brief }),
-    tierNote ? h('p', { class: 'dim small' }, tierNote) : '',
-    inst.hints.length ? h('div', { class: 'hint-box' }, hintBtn, hintList) : '',
-  );
+  const brief = briefPanel({ tag: `${langName} · ${level.concept}`, ticket: level.ticket, html: inst.brief, note: tierNote, hintBox });
 
   // --- results
   const status = h('div', { class: 'status idle' }, 'Run (Ctrl+Enter) tries the example cases. Submit checks everything, including the hidden cases.');
@@ -76,38 +67,17 @@ export function codePage(id: string): HTMLElement {
     if (!rep.passed) {
       const first = rep.results.find((r) => !r.ok);
       const failedRule = rep.rules.find((r) => !r.ok);
-      status.className = 'status err';
-      status.textContent = `${rep.results.filter((r) => !r.ok).length} of ${rep.results.length} cases fail${failedRule ? ` and a rule is broken` : ''}.`;
+      setStatus(status, 'err', `${rep.results.filter((r) => !r.ok).length} of ${rep.results.length} cases fail${failedRule ? ` and a rule is broken` : ''}.`);
       if (first) mentorSay(first.error ? `${first.error}` : `On ${first.call} I expected ${first.expected} but your code gave ${first.got}.`, 'concerned');
       else if (failedRule) mentorSay(`Rule not met: ${failedRule.label}.`, 'concerned');
       return;
     }
     const stars = starsFor(usage.hints);
-    status.className = 'status ok';
-    status.textContent = `PASS: all ${rep.results.length} cases${rep.rules.length ? ' and every rule' : ''}.`;
-    const aw = award(level.id, level.xp, stars);
-    celebrate(stars, aw, usage.hints ? ['Solve it without hints for another star.'] : [], nextHref(level.id));
+    setStatus(status, 'ok', `PASS: all ${rep.results.length} cases${rep.rules.length ? ' and every rule' : ''}.`);
+    finish(level.id, level.xp, stars, hintNote(usage.hints));
   };
 
-  const rebuild = () => {
-    saveDraft(seedKey, Math.floor(Math.random() * 1e6) + 1);
-    const host = document.getElementById('lab-slot');
-    if (host) host.replaceWith(codePage(level.id)); else location.reload();
-  };
+  const toolbar = checkToolbar(run, ed, inst.starter, draftKey, { label: '▶ Run examples', what: 'the starter code', variant: boss && newVariantButton(seedKey, () => codePage(level.id), 'Roll a new set of test cases? This clears your current code.') });
 
-  const toolbar = h('div', { class: 'toolbar' },
-    h('button', { class: 'btn', onclick: () => run(false), title: 'Ctrl+Enter' }, '▶ Run examples'),
-    h('button', { class: 'btn primary', onclick: () => run(true) }, '✔ Submit'),
-    h('button', { class: 'btn ghost', onclick: () => { if (confirm('Reset to the starter code?')) { ed.value = inst.starter; clearDraft(draftKey); } } }, 'Reset'),
-    boss ? h('button', { class: 'btn ghost', onclick: () => { if (confirm('Roll a new set of test cases? This clears your current code.')) rebuild(); } }, 'New variant') : '',
-  );
-
-  return h('div', { class: 'level', id: 'lab-slot' },
-    levelHeader(level.title, level.id, levelRecord(level.id)?.stars ?? 0, level.xp),
-    h('div', { class: 'level-grid clab-grid' },
-      brief,
-      h('section', { class: 'work panel' }, toolbar, ed.el),
-    ),
-    h('section', { class: 'results panel' }, status, rules, table, consoleBox),
-  );
+  return labPage(level, brief, [toolbar, ed.el], [status, rules, table, consoleBox]);
 }

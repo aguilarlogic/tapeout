@@ -1,12 +1,10 @@
 // Shell Lab page: a real-feeling terminal over the virtual machine, a live goal list, hints, and a Check button.
-import { useHints, loadSeed } from '../../ui/labkit';
-import { award } from '../../mastery/promotion';
+import { briefPanel, finish, hintNote, labPage, loadSeed, newVariantButton, setStatus, useHints } from '../../ui/labkit';
 import { mentorSay } from '../../os/mentor';
-import { clearDraft, levelRecord, loadDraft, saveDraft } from '../../state';
+import { clearDraft, loadDraft, saveDraft } from '../../state';
 import { h } from '../../ui/dom';
-import { celebrate, levelHeader, nextHref } from '../../ui/layout';
 import { findShellLevel, shellInstanceFor, starsFor } from './levels';
-import { boot, evaluate, exec, passed, replay, type Machine } from './run';
+import { evaluate, exec, passed, replay, type Machine } from './run';
 import { parseScript } from './sh';
 
 /** True when the text so far is an unfinished command (open quote, compound statement or here-document). */
@@ -34,15 +32,9 @@ export function shellPage(id: string): HTMLElement {
   let m: Machine = replay(inst, history);
 
   // --- brief and hints
-  const { hintBtn, hintList, usage } = useHints(inst.hints, `${draftKey}.usage`);
+  const { hintBox, usage } = useHints(inst.hints, `${draftKey}.usage`);
 
-  const brief = h('aside', { class: 'brief panel' },
-    h('div', { class: 'tag' }, `Shell · ${level.concept}`),
-    h('p', { class: 'dim small' }, level.ticket),
-    h('div', { class: 'brief-body', html: inst.brief }),
-    boss ? h('p', { class: 'dim small' }, 'Boss mission: no hints. Check runs hidden verification.') : '',
-    inst.hints.length ? h('div', { class: 'hint-box' }, hintBtn, hintList) : '',
-  );
+  const brief = briefPanel({ tag: `Shell · ${level.concept}`, ticket: level.ticket, html: inst.brief, note: boss ? 'Boss mission: no hints. Check runs hidden verification.' : undefined, hintBox });
 
   // --- terminal
   const screen = h('div', { class: 'sh-screen', tabindex: '-1' });
@@ -125,16 +117,13 @@ export function shellPage(id: string): HTMLElement {
     showGoals(res);
     if (!passed(res)) {
       const bad = res.filter((r) => !r.ok);
-      status.className = 'status err';
-      status.textContent = `${bad.length} of ${res.length} goals not met yet.`;
+      setStatus(status, 'err', `${bad.length} of ${res.length} goals not met yet.`);
       mentorSay(`Not yet: ${bad[0].label}.`, 'concerned');
       return;
     }
     const stars = starsFor(usage.hints);
-    status.className = 'status ok';
-    status.textContent = `PASS: all ${res.length} goals met.`;
-    const aw = award(level.id, level.xp, stars);
-    celebrate(stars, aw, usage.hints ? ['Solve it without hints for another star.'] : [], nextHref(level.id));
+    setStatus(status, 'ok', `PASS: all ${res.length} goals met.`);
+    finish(level.id, level.xp, stars, hintNote(usage.hints));
   };
 
   const reset = () => {
@@ -143,29 +132,17 @@ export function shellPage(id: string): HTMLElement {
     buffer = '';
     echoHistory();
     showGoals();
-    status.className = 'status idle';
-    status.textContent = 'Machine reset to its starting state.';
+    setStatus(status, 'idle', 'Machine reset to its starting state.');
     refreshPrompt();
   };
-  const rebuild = () => {
-    saveDraft(seedKey, Math.floor(Math.random() * 1e6) + 1);
-    const host = document.getElementById('lab-slot');
-    if (host) host.replaceWith(shellPage(level.id)); else location.reload();
-  };
-
   const toolbar = h('div', { class: 'toolbar' },
     h('button', { class: 'btn primary', onclick: check }, '✔ Check goals'),
     h('button', { class: 'btn ghost', onclick: () => { if (confirm('Reset the machine to its starting state? Your command history is cleared.')) reset(); } }, 'Reset machine'),
-    boss ? h('button', { class: 'btn ghost', onclick: () => { if (confirm('Roll a new variant of this mission? The machine resets.')) rebuild(); } }, 'New variant') : '',
+    boss && newVariantButton(seedKey, () => shellPage(level.id), 'Roll a new variant of this mission? The machine resets.'),
   );
 
   echoHistory();
   refreshPrompt();
-  void boot;
   const term = h('div', { class: 'sh-term', onclick: () => input.focus() }, screen, h('div', { class: 'sh-row' }, promptLabel, input));
-  return h('div', { class: 'level', id: 'lab-slot' },
-    levelHeader(level.title, level.id, levelRecord(level.id)?.stars ?? 0, level.xp),
-    h('div', { class: 'level-grid clab-grid' }, brief, h('section', { class: 'work panel' }, toolbar, term)),
-    h('section', { class: 'results panel' }, status, goalList),
-  );
+  return labPage(level, brief, [toolbar, term], [status, goalList]);
 }

@@ -2,7 +2,7 @@
 // The worker is inlined into the bundle (so the single-file build still works from file://) and is created on first use.
 // If a worker cannot be made, or the result cannot be cloned, the caller's fallback runs on the main thread instead.
 import EvalWorker from '../games/eval.worker?worker&inline';
-import type { EvalJob, EvalReply } from '../games/eval.worker';
+import type { EvalJob, EvalReply } from '../games/eval.job';
 
 type Job = EvalJob extends infer J ? (J extends { id: number } ? Omit<J, 'id'> : never) : never;
 let worker: Worker | undefined;

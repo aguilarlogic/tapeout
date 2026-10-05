@@ -1,12 +1,12 @@
-import { award } from '../../mastery/promotion';
 import { mentorSay } from '../../os/mentor';
 import { levelRecord, loadDraft, saveDraft } from '../../state';
 import { h, toast } from '../../ui/dom';
-import { celebrate, levelHeader, nextHref } from '../../ui/layout';
+import { levelHeader } from '../../ui/layout';
 import {
   analyze, Analysis, BoardState, compsOf, emptyBoard, erase, key, Layer, moveComp, netAt, padsOf, placeVia, route, unkey,
 } from './board';
 import { PCB_LEVELS } from './levels';
+import { briefPanel, finish } from '../../ui/labkit';
 
 type Tool = 'route' | 'via' | 'erase' | 'move';
 const CELL = 34;
@@ -84,14 +84,13 @@ export function pcbPage(id: string): HTMLElement {
       mentorSay(first ? `DRC says: ${first.message}` : 'Some nets are still open. Follow the white ratsnest lines.', 'concerned');
       return;
     }
-    const aw = award(level.id, level.xp, analysis.stars);
     const notes: string[] = [];
     if (analysis.stars < 3) {
       if (analysis.issues.length) notes.push('Clear the warnings too.');
       if (analysis.totalLength > level.par.length) notes.push(`Total length ${analysis.totalLength} - par is ${level.par.length}.`);
       if (analysis.totalVias > level.par.vias) notes.push(`${analysis.totalVias} vias - par is ${level.par.vias}.`);
     }
-    celebrate(analysis.stars, aw, notes, nextHref(level.id));
+    finish(level.id, level.xp, analysis.stars, notes);
   };
 
   // ---------------------------------------------------------------- side panel
@@ -380,7 +379,7 @@ export function pcbPage(id: string): HTMLElement {
   return h('div', { class: 'level' },
     levelHeader(level.title, level.id, levelRecord(level.id)?.stars ?? 0, level.xp),
     h('div', { class: 'level-grid pcb-grid' },
-      h('aside', { class: 'brief panel' }, h('div', { class: 'tag' }, level.concept), h('div', { class: 'brief-body', html: level.brief }),
+      briefPanel({ tag: level.concept, html: level.brief },
         h('p', { class: 'dim small' }, 'Keys: R route · V via · E erase · L switch layer · Ctrl+Z undo. Click a DRC message to highlight it.')),
       h('section', { class: 'work panel' }, toolbar, h('div', { class: 'pcb-wrap' }, canvas), legend),
       h('aside', { class: 'panel drc' }, h('h4', null, 'Nets'), statsEl, h('h4', null, 'Design rule check'), issuesEl),
