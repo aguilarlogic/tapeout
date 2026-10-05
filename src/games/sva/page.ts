@@ -1,5 +1,6 @@
 // SVA Lab page: write assertions (or assumptions, or fix the RTL) and see them judged against the correct design,
 // hidden buggy mutants, random simulation and bounded exhaustive search, with counterexample waveforms.
+import { busy } from '../../ui/labkit';
 import { award } from '../../mastery/promotion';
 import { mentorSay } from '../../os/mentor';
 import { clearDraft, levelRecord, loadDraft, saveDraft } from '../../state';
@@ -91,7 +92,7 @@ export function svaPage(id: string): HTMLElement {
     else ed.markLines([], []);
   };
 
-  const run = (submit: boolean) => {
+  const run = (submit: boolean) => busy(status, () => {
     const ev = evaluate(inst, ed.value);
     show(ev);
     if (ev.error) {
@@ -113,7 +114,7 @@ export function svaPage(id: string): HTMLElement {
     const stars = starsFor(usage.hints);
     const aw = award(level.id, level.xp, stars);
     celebrate(stars, aw, usage.hints ? ['Solve it without hints for another star.'] : [], nextHref(level.id));
-  };
+  });
 
   // --- formal button (assume and fix missions)
   const depthIn = h('input', { type: 'number', class: 'depth-in', min: '1', max: String(inst.depth + 2), value: String(Math.min(5, inst.depth)) }) as HTMLInputElement;

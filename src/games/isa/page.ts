@@ -1,5 +1,6 @@
 // ISA Lab page: edit RISC-V assembly, judge it against hidden cases, and step through it in a debugger with registers,
 // memory, the machine-code listing and an execution trace.
+import { busy } from '../../ui/labkit';
 import { award } from '../../mastery/promotion';
 import { mentorSay } from '../../os/mentor';
 import { clearDraft, levelRecord, loadDraft, saveDraft } from '../../state';
@@ -79,7 +80,7 @@ export function isaPage(id: string): HTMLElement {
     goalList.replaceChildren(...ev.goals.map((g) => h('li', { class: g.ok ? 'ok' : 'bad' }, h('span', { class: 'mark' }, g.ok ? '✓' : '✗'), h('span', null, g.label, g.note ? h('span', { class: 'dim small' }, ` — ${g.note}`) : ''))));
     ed.markLines(ev.error?.line ? [ev.error.line] : [], []);
   };
-  const check = (submit: boolean) => {
+  const check = (submit: boolean) => busy(status, () => {
     const ev = evaluate(inst, ed.value);
     show(ev);
     resetDebug();
@@ -102,7 +103,7 @@ export function isaPage(id: string): HTMLElement {
     const stars = starsFor(usage.hints);
     const aw = award(level.id, level.xp, stars);
     celebrate(stars, aw, usage.hints ? ['Solve it without hints for another star.'] : [], nextHref(level.id));
-  };
+  });
 
   // ---- debugger
   const caseSel = h('select', { class: 'isa-case', 'aria-label': 'Case to debug' }, ...inst.cases.map((c, i) => h('option', { value: String(i) }, c.hidden ? `case ${i + 1}: ${c.label}` : c.label))) as HTMLSelectElement;

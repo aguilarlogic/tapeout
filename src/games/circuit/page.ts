@@ -1,4 +1,5 @@
 // Circuit Lab page: a netlist editor, a simulator, goal checks and plots.
+import { busy } from '../../ui/labkit';
 import { award } from '../../mastery/promotion';
 import { mentorSay } from '../../os/mentor';
 import { rng } from '../../sim/harness';
@@ -136,7 +137,7 @@ export function circuitPage(id: string): HTMLElement {
     if (!l.circuit.analyses.length) plotHost.append(h('p', { class: 'dim' }, 'Add a .tran, .ac or .dc line to see a plot.'));
   };
 
-  const run = (check: boolean) => {
+  const run = (check: boolean) => busy(status, () => {
     messages.replaceChildren();
     ed.markLines([], []);
     let l: Lab;
@@ -174,7 +175,7 @@ export function circuitPage(id: string): HTMLElement {
       inst.par !== undefined && res.parts > inst.par ? `Use ${inst.par} parts or fewer for the third star (you used ${res.parts}).` : '',
     ].filter(Boolean);
     celebrate(stars, aw, notes, nextHref(level.id));
-  };
+  });
 
   // --- parts palette
   const insert = (tpl: string) => {

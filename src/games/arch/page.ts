@@ -136,10 +136,19 @@ export function archPage(id: string): HTMLElement {
   const metricBox = h('div', { class: 'arch-metrics' });
   const viewBox = h('div', { class: 'arch-viewbox' });
   let last: ArchResult | undefined;
+  // Boss labs grade like an exam: live runs show metrics and the view, but not which goals are met until you submit.
+  let showGoals = !boss, wrongSubmits = 0;
   const run = (): ArchResult => {
     let res: ArchResult;
     try { res = inst.run(values, ed?.value); } catch (e) { res = { goals: [], metrics: [], error: { message: (e as Error).message } }; }
     last = res;
+    if (!showGoals && !res.error) {
+      goalList.replaceChildren(h('li', { class: 'dim' }, 'Goals are hidden until you submit.'));
+      metricBox.replaceChildren(...res.metrics.map(([k, v]) => h('div', { class: 'arch-metric' }, h('span', { class: 'dim small' }, k), h('b', null, v))));
+      viewBox.replaceChildren(...[res.view, res.extra].map((x) => (x ? viewEl(x) : '')));
+      status.className = 'status idle'; status.textContent = 'Boss mission: Submit to find out whether the goals are met. A second wrong submit caps the result at 2 stars.';
+      return res;
+    }
     goalList.replaceChildren(...res.goals.map((g) => h('li', { class: g.ok ? 'ok' : 'bad' }, h('span', { class: 'mark' }, g.ok ? '✓' : '✗'), h('span', null, g.label, g.note ? h('span', { class: 'dim small' }, ` — ${g.note}`) : ''))));
     metricBox.replaceChildren(...res.metrics.map(([k, v]) => h('div', { class: 'arch-metric' }, h('span', { class: 'dim small' }, k), h('b', null, v))));
     viewBox.replaceChildren(...[res.view, res.extra].map((x) => (x ? viewEl(x) : '')));
@@ -151,15 +160,17 @@ export function archPage(id: string): HTMLElement {
   };
   const changed = () => { saveValues(); run(); };
   const check = (submit: boolean) => {
+    showGoals = !boss || submit;
     const res = run();
     if (res.error) { mentorSay(status.textContent ?? '', 'concerned'); return; }
     const bad = res.goals.filter((g) => !g.ok);
+    if (bad.length && submit) wrongSubmits++;
     if (bad.length) { if (submit) mentorSay(`Not yet: ${bad[0].label}${bad[0].note ? ` (${bad[0].note})` : ''}.`, 'concerned'); return; }
     if (!submit) return;
     status.textContent = `PASS: all ${res.goals.length} goals met.`;
-    const stars = starsFor(usage.hints);
+    const stars = Math.min(starsFor(usage.hints), wrongSubmits >= 2 ? 2 : 3);
     const aw = award(level.id, level.xp, stars);
-    celebrate(stars, aw, usage.hints ? ['Solve it without hints for another star.'] : [], nextHref(level.id));
+    celebrate(stars, aw, [usage.hints ? 'Solve it without hints for another star.' : '', wrongSubmits >= 2 ? 'Two wrong submits cap a boss at 2 stars.' : ''].filter(Boolean), nextHref(level.id));
   };
   void last;
 

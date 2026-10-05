@@ -1,5 +1,6 @@
 // RV32 core project page: write the Verilog core, run it against the ISA simulator on whole programs, and read where
 // the first store or the first pc diverges.
+import { busy } from '../../ui/labkit';
 import { award } from '../../mastery/promotion';
 import { mentorSay } from '../../os/mentor';
 import { clearDraft, levelRecord, loadDraft, saveDraft } from '../../state';
@@ -70,7 +71,7 @@ export function rvPage(id: string): HTMLElement {
     resultBox.replaceChildren(...rep.results.map(row));
     ed.markLines(rep.error?.line ? [rep.error.line] : [], []);
   };
-  const check = (submit: boolean) => {
+  const check = (submit: boolean) => busy(status, () => {
     const specs = inst.programs.filter((p) => submit || !p.hidden);
     const rep = evaluateCore(ed.value, specs);
     show(rep);
@@ -93,7 +94,7 @@ export function rvPage(id: string): HTMLElement {
     const stars = starsFor(usage.hints);
     const aw = award(level.id, level.xp, stars);
     celebrate(stars, aw, usage.hints ? ['Solve it without hints for another star.'] : [], nextHref(level.id));
-  };
+  });
 
   const toolbar = h('div', { class: 'toolbar' },
     h('button', { class: 'btn', onclick: () => check(false), title: 'Ctrl+Enter' }, '▶ Check'),
