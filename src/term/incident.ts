@@ -169,6 +169,15 @@ async function diagnose(t: Terminal, inv: Investigation, arg: string, struck: Se
     const i = await t.choose(open.map((c) => (struck.has(c.id) ? `${c.name} (crossed off)` : c.name)), 'root cause>');
     pick = open[i];
   }
+  // Committing while the readings still leave several causes standing is a guess, and a guess cannot close an incident.
+  const live = inv.byEvidence();
+  if (live.length > 1 && !inv.guessed) {
+    const nm = (id: string) => `**${inc.causes.find((c) => c.id === id)!.name}**`;
+    await t.say(live.length <= 3 ? `${live.length === 2 ? 'Two causes' : 'Three causes'} still fit everything you have seen: ${live.map(nm).join(' and ')}. Diagnose anyway?`
+      : `${live.length} causes still fit everything you have seen. Diagnose anyway?`, 'concerned');
+    const go = await t.choose(['Take another reading', 'Diagnose anyway'], 'sure?');
+    if (go === 0) return undefined;
+  }
   if (!inv.diagnose(pick.id)) {
     void t.print(`✗ −${WRONG_COST} min · ${hm(inv.left)} left`, 'err');
     await t.say(`You roll out a fix for **${pick.name.charAt(0).toLowerCase() + pick.name.slice(1)}**. Two days later the failure is back, exactly as before. That cause is off the list, and the clock kept running.`, 'concerned');
@@ -197,6 +206,17 @@ function expertMinutes(inv: Investigation): number {
 }
 
 async function finish(t: Terminal, inv: Investigation): Promise<IncidentResult> {
+  if (inv.guessed && !inv.over && inv.left >= 0) {
+    const nx = inv.guessHint;
+    void t.block(h('div', { class: 'term-done' },
+      h('div', null, h('b', null, 'RIGHT ANSWER, NOT PROVEN'), ' ', starEls(0)),
+      h('div', { class: 'dim' }, `${n(inv.notes.size, 'reading')} · ${n(inv.mistakes, 'wrong call')} · no new XP`),
+      h('ul', { class: 'recap' },
+        h('li', null, ...rich(`**What happened:** ${inv.cause.story}`)),
+        h('li', null, ...rich(`**The fix:** ${inv.cause.fix}`)))), 'type', 1.6);
+    await t.say(`Right answer, but the evidence did not single it out yet. A review board would send this back.${nx ? ` \`${key(nx.ins.cmd, nx.arg)}\` would have separated what was left.` : ''} Replay it; the root cause will be different.`, 'concerned');
+    return { solved: false, stars: 0 };
+  }
   const st = inv.stars();
   const before = rank().index;
   const gained = st ? complete(inv.inc.id, inv.inc.xp, st) : 0;

@@ -38,6 +38,10 @@ export class Investigation {
   readonly ruledOut = new Set<string>();
   diagnosed = false;
   solved = false;
+  /** Set when any call was made while the readings alone still left several causes standing. */
+  guessed = false;
+  /** A reading that would have split the candidates at the moment of the first guess. */
+  guessHint: { ins: Instrument; arg: string } | undefined;
 
   constructor(readonly inc: Incident, seed: number, cause?: string) {
     const v = inc.setup?.(seeded(hash(seed, 'setup'))) ?? {};
@@ -79,6 +83,15 @@ export class Investigation {
     }));
   }
 
+  /** Causes the readings alone cannot tell apart (wrong calls do not count as evidence). */
+  byEvidence(): string[] {
+    const keep = new Set(this.ruledOut);
+    this.ruledOut.clear();
+    const c = this.consistent();
+    keep.forEach((k) => this.ruledOut.add(k));
+    return c;
+  }
+
   /**
    * The most useful next reading: the one whose worst case leaves the fewest candidates, cheapest first on ties.
    * This is what the senior engineer suggests, and what the solvability tests play.
@@ -107,6 +120,10 @@ export class Investigation {
 
   /** Commit to a root cause. A wrong one costs time and is crossed off. */
   diagnose(id: string): boolean {
+    if (!this.guessed && this.byEvidence().length > 1) {
+      this.guessHint = this.bestNext();
+      this.guessed = true;
+    }
     if (id === this.world.cause) { this.diagnosed = true; return true; }
     this.mistakes++;
     this.spent += WRONG_COST;
@@ -134,9 +151,9 @@ export class Investigation {
     return false;
   }
 
-  /** 3: clean and quick. 2: one slip or hint. 1: solved anyway. 0: not solved within budget. */
+  /** 3: clean and quick. 2: one slip or hint. 1: solved anyway. 0: not solved within budget, or the diagnosis was a guess. */
   stars(): number {
-    if (!this.solved || this.left < 0) return 0;
+    if (!this.solved || this.left < 0 || this.guessed) return 0;
     const slips = this.mistakes + this.hints;
     if (slips === 0 && this.left >= this.inc.budget * 0.25) return 3;
     return slips <= 1 ? 2 : 1;

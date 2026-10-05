@@ -131,6 +131,8 @@ describe('investigation rules', () => {
     expect(clean.stars()).toBe(3);
 
     const messy = new Investigation(inc, 1, 'firmware');
+    messy.measure(messy.find('logs')!);
+    messy.measure(messy.find('idle')!);
     messy.diagnose('droop');
     messy.hint();
     messy.diagnose('firmware');
@@ -141,5 +143,36 @@ describe('investigation rules', () => {
     late.spent = inc.budget + 1;
     late.applyFix({ text: '', right: true, why: '' });
     expect(late.stars()).toBe(0);
+  });
+});
+
+describe('evidence before diagnosis', () => {
+  it('blind guessing never completes an incident', () => {
+    for (const inc of INCIDENTS) for (let seed = 1; seed <= 200; seed++) {
+      const inv = new Investigation(inc, seed);
+      for (const c of inc.causes) if (inv.diagnose(c.id)) break;
+      inv.applyFix({ text: '', right: true, why: '' });
+      expect(inv.stars(), `${inc.id} seed ${seed}`).toBe(0);
+    }
+  });
+  it('careful play is never flagged as a guess', () => {
+    for (const inc of INCIDENTS) for (let seed = 1; seed <= 15; seed++) for (const c of inc.causes) {
+      const inv = new Investigation(inc, seed, c.id);
+      for (let g = 0; g < 50; g++) { const nx = inv.bestNext(); if (!nx) break; inv.measure(nx.ins, nx.arg); }
+      expect(inv.diagnose(c.id)).toBe(true);
+      expect(inv.guessed, `${inc.id} seed ${seed} cause ${c.id}`).toBe(false);
+    }
+  });
+  it('evidence, then one wrong call, still earns 1-2 stars', () => {
+    for (const inc of INCIDENTS) {
+      const c = inc.causes[0];
+      const inv = new Investigation(inc, 3, c.id);
+      for (let g = 0; g < 50; g++) { const nx = inv.bestNext(); if (!nx) break; inv.measure(nx.ins, nx.arg); }
+      inv.diagnose(inc.causes[1].id);
+      inv.diagnose(c.id);
+      inv.applyFix({ text: '', right: true, why: '' });
+      expect(inv.stars(), inc.id).toBeGreaterThanOrEqual(1);
+      expect(inv.stars(), inc.id).toBeLessThanOrEqual(2);
+    }
   });
 });
