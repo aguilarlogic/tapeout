@@ -1,22 +1,7 @@
 // TAPE-OS: the desktop the whole game lives in. The terminal (TAPEOUT) is always there; labs, minigames,
 // the map and flashcards open as windows. URLs (#/rtl/fifo, #/learn/cache...) open the matching window.
-import { circuitPage } from '../games/circuit/page';
-import { codePage } from '../games/code/page';
-import { shellPage } from '../games/shell/page';
-import { svaPage } from '../games/sva/page';
-import { svPage } from '../games/sv/page';
-import { cdcPage } from '../games/cdc/page';
-import { archPage } from '../games/arch/page';
-import { isaPage } from '../games/isa/page';
-import { rvPage } from '../games/rv/page';
 import { findModule, KIND_APP } from '../curriculum';
-import { coveragePage } from '../games/coverage/page';
 import { drillsPage } from '../games/drills/page';
-import { logicPage } from '../games/logic/page';
-import { pcbPage } from '../games/pcb/page';
-import { rtlPage } from '../games/rtl/page';
-import { timingPage } from '../games/timing/page';
-import { uvmPage } from '../games/uvm/page';
 import { skillsApp } from '../mastery/app';
 import { MINIGAMES } from '../minigames/apps';
 import { onChange, profile, rank, resetAll, totalXp } from '../state';
@@ -30,8 +15,31 @@ import { settingsApp } from './settings';
 import { bindMentorLog } from './mentor';
 import { getWindow, initWM, openWindow } from './wm';
 
-const LABS: Record<string, (id: string) => HTMLElement> = {
-  logic: logicPage, rtl: rtlPage, pcb: pcbPage, sta: timingPage, cov: coveragePage, uvm: uvmPage, clab: circuitPage, code: codePage, shell: shellPage, sva: svaPage, tb: svPage, cdc: cdcPage, isa: isaPage, arch: archPage, rv: rvPage, dft: archPage, pd: archPage, sta2: archPage, layout: archPage, sig: archPage, spec: archPage,
+/** Each lab's page is its own chunk in the hosted build, so its engine (simulator, interpreter...) loads only when a lab opens. The single-file build inlines them. */
+type Lab = (id: string) => HTMLElement;
+const lazy = (load: () => Promise<Lab>) => load;
+const LABS: Record<string, () => Promise<Lab>> = {
+  logic: lazy(() => import('../games/logic/page').then((m) => m.logicPage)),
+  rtl: lazy(() => import('../games/rtl/page').then((m) => m.rtlPage)),
+  pcb: lazy(() => import('../games/pcb/page').then((m) => m.pcbPage)),
+  sta: lazy(() => import('../games/timing/page').then((m) => m.timingPage)),
+  cov: lazy(() => import('../games/coverage/page').then((m) => m.coveragePage)),
+  uvm: lazy(() => import('../games/uvm/page').then((m) => m.uvmPage)),
+  clab: lazy(() => import('../games/circuit/page').then((m) => m.circuitPage)),
+  code: lazy(() => import('../games/code/page').then((m) => m.codePage)),
+  shell: lazy(() => import('../games/shell/page').then((m) => m.shellPage)),
+  sva: lazy(() => import('../games/sva/page').then((m) => m.svaPage)),
+  tb: lazy(() => import('../games/sv/page').then((m) => m.svPage)),
+  cdc: lazy(() => import('../games/cdc/page').then((m) => m.cdcPage)),
+  isa: lazy(() => import('../games/isa/page').then((m) => m.isaPage)),
+  arch: lazy(() => import('../games/arch/page').then((m) => m.archPage)),
+  rv: lazy(() => import('../games/rv/page').then((m) => m.rvPage)),
+  dft: lazy(() => import('../games/arch/page').then((m) => m.archPage)),
+  pd: lazy(() => import('../games/arch/page').then((m) => m.archPage)),
+  sta2: lazy(() => import('../games/arch/page').then((m) => m.archPage)),
+  layout: lazy(() => import('../games/arch/page').then((m) => m.archPage)),
+  sig: lazy(() => import('../games/arch/page').then((m) => m.archPage)),
+  spec: lazy(() => import('../games/arch/page').then((m) => m.archPage)),
 };
 
 let term: Terminal;
@@ -99,7 +107,10 @@ function route() {
   if (lab && id) {
     const m = findModule(id);
     const app = m ? KIND_APP[m.module.kind] : 'Lab';
-    openWindow({ id: 'lab', title: `${app} — ${m?.module.title ?? id}`, icon: '▣', content: lab(id), maximized: true, onClose: home, loading: `${app}: ${m?.module.title ?? id}` });
+    const win = openWindow({ id: 'lab', title: `${app} — ${m?.module.title ?? id}`, icon: '▣', content: h('div', { class: 'dim' }), maximized: true, onClose: home, loading: `${app}: ${m?.module.title ?? id}` });
+    // The chunk may still be loading; the loading screen covers the gap, and a later route to another lab wins.
+    const want = location.hash;
+    void lab().then((page) => { if (location.hash === want) win.setContent(page(id)); });
     return;
   }
   home();
