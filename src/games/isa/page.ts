@@ -12,7 +12,8 @@ import { evaluate, setupMachine, SENTINEL, type Evaluation } from './check';
 import { findIsaLevel } from './levels';
 import { Machine, STACK_TOP } from './sim';
 
-export const starsFor = (hintsUsed: number) => (hintsUsed > 0 ? 2 : 3);
+export { starsFor } from '../../ui/labkit';
+import { starsFor } from '../../ui/labkit';
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const PSEUDO = ['nop', 'li', 'la', 'mv', 'not', 'neg', 'seqz', 'snez', 'sltz', 'sgtz', 'beqz', 'bnez', 'blez', 'bgez', 'bltz', 'bgtz', 'bgt', 'ble', 'bgtu', 'bleu', 'j', 'jr', 'ret', 'call', 'tail'];

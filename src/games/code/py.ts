@@ -2,6 +2,7 @@
 // Values: int = bigint, float = number, bool = boolean, str = string, None = null, list = array,
 // tuple = PyTuple, dict = PyDict, set = PySet, range = PyRange.
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { mulberry32 } from '../../lib/rng';
 import { Node, parse, parseExpr, PySyntaxError } from './pyparse';
 
 export { PySyntaxError };
@@ -1084,12 +1085,9 @@ export class Interp {
   }
 
   nextRandom(): number {
-    // mulberry32
+    const r = mulberry32(this.rngState);
     this.rngState = (this.rngState + 0x6d2b79f5) >>> 0;
-    let t = this.rngState;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    return r();
   }
 
   private mods?: Record<string, PyModule>;

@@ -8,4 +8,4 @@ export type { ShellLevel };
 export const SHELL_LEVELS: ShellLevel[] = [...SH_LEVELS, ...GIT_LEVELS];
 export const findShellLevel = (id: string) => SHELL_LEVELS.find((l) => l.id === id);
 export const shellInstanceFor = (level: ShellLevel, seed: number) => level.build(rng(seed));
-export const starsFor = (hintsUsed: number) => (hintsUsed > 0 ? 2 : 3);
+export { starsFor } from '../../ui/labkit';

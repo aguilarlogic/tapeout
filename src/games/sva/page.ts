@@ -12,7 +12,8 @@ import { bmc, type BmcResult, type Cex } from './formal';
 import { findSvaLevel } from './levels';
 import { parseSva } from './sva';
 
-export const starsFor = (hintsUsed: number) => (hintsUsed > 0 ? 2 : 3);
+export { starsFor } from '../../ui/labkit';
+import { starsFor } from '../../ui/labkit';
 
 function cexTable(cex: Cex, clock: string): HTMLElement {
   const sigs = [...cex.trace.vals.keys()].filter((k) => k !== clock);

@@ -9,7 +9,8 @@ import { rng } from '../../sim/harness';
 import { evaluate, type Evaluation } from './check';
 import { findCdcLevel } from './levels';
 
-export const starsFor = (hintsUsed: number) => (hintsUsed > 0 ? 2 : 3);
+export { starsFor } from '../../ui/labkit';
+import { starsFor } from '../../ui/labkit';
 
 export function cdcPage(id: string): HTMLElement {
   const level = findCdcLevel(id);

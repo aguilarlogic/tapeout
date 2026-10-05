@@ -11,7 +11,8 @@ import { evaluate, type Evaluation } from './check';
 import type { CovGroupReport } from './cover';
 import { findTbLevel } from './levels';
 
-export const starsFor = (hintsUsed: number) => (hintsUsed > 0 ? 2 : 3);
+export { starsFor } from '../../ui/labkit';
+import { starsFor } from '../../ui/labkit';
 
 function coverageView(cov: CovGroupReport[]): HTMLElement | string {
   if (!cov.length) return '';

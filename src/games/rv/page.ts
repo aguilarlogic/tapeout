@@ -10,7 +10,8 @@ import { celebrate, levelHeader, nextHref } from '../../ui/layout';
 import { evaluateCore, type CoreReport, type ProgramResult } from './harness';
 import { findRvLevel } from './levels';
 
-export const starsFor = (hintsUsed: number) => (hintsUsed > 0 ? 2 : 3);
+export { starsFor } from '../../ui/labkit';
+import { starsFor } from '../../ui/labkit';
 const hx = (n: number) => '0x' + (n >>> 0).toString(16);
 
 export function rvPage(id: string): HTMLElement {

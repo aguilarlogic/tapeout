@@ -7,10 +7,7 @@ import { near, r1, r2 } from './common';
 const SBOX = [0xc, 5, 6, 0xb, 9, 0, 0xa, 0xd, 3, 0xe, 0xf, 8, 4, 7, 1, 2];
 const HW = (x: number) => { let n = 0; for (let v = x & 0xf; v; v >>= 1) n += v & 1; return n; };
 
-function prng(seed: number) {
-  let a = seed >>> 0;
-  return () => { a = (a + 0x6d2b79f5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
-}
+import { mulberry32 as prng } from '../../lib/rng';
 const gauss = (r: () => number) => Math.sqrt(-2 * Math.log(Math.max(r(), 1e-12))) * Math.cos(2 * Math.PI * r());
 
 interface Device { key: number; mask: boolean; shuffle: number; sigma: number }

@@ -11,7 +11,8 @@ import { highlightAsm } from '../isa/page';
 import { findArchLevel } from './levels';
 import { defaults, type ArchResult, type Control, type Values, type View } from './types';
 
-export const starsFor = (hintsUsed: number) => (hintsUsed > 0 ? 2 : 3);
+export { starsFor } from '../../ui/labkit';
+import { starsFor } from '../../ui/labkit';
 
 const PLOT_COLORS = ['#6cc8ff', '#ffb454', '#8be28b', '#ff7a90'];
 
