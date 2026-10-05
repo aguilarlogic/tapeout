@@ -8,6 +8,26 @@ This is a work order for a coding agent. It has two parts:
 Every number below was measured on commit `cc14574` (release v0.4.0) with probe scripts run against the real code. Line
 numbers refer to that commit.
 
+## Status
+
+| Item | State | Note |
+|---|---|---|
+| A1 practice grading | done | `grading.test.ts` enumerates all 1024 runs |
+| A2 incident evidence rule | done | guesses score 0; the terminal warns first |
+| A3 answer-length balance | done | `mc-balance.test.ts` gates every pool on both the longest and the shortest side |
+| A4 hiring panels | done | per-attempt deal; thin roles padded from boss lessons; foundations capped at 2 |
+| A5 difficulty and variety | partial | `variety.test.ts` gates new offenders; 66 and 112 listed generators still to fix |
+| A6 promotion beats | done | `mastery/promotion.ts`; `complete()` only called from there and `state.ts` |
+| A7 labs passable by fiddling | partial | boss labs hide goals until submit; guided cache/OoO targets and the random-settings test are open |
+| A8 Daily Mix | done | one `mix-daily` record, capped streak bonuses, migration |
+| A9 reset leaves drafts | done | |
+| A10 orphan modules | done | `skills.test.ts` fails on orphans |
+| B1 responsiveness | partial | step 1 busy state done; async RV and the worker are open |
+| B2 startup | open | |
+| B3 shared lab kit | partial | one `starsFor`, one PRNG; the hint/draft/finish consolidation is open |
+| B4 faster tests | partial | RV bug test split out; no wall-time gain measured on 4 cores |
+| B5 CI once per push | done | |
+
 ## How to work
 
 - Branch: `claude/serene-gates-uei2k6`. Commit each work item separately (A1, A2, …), with a message that names it, and
