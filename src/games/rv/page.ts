@@ -8,7 +8,7 @@ import { rng } from '../../sim/harness';
 import { h } from '../../ui/dom';
 import { editor } from '../../ui/editor';
 import { celebrate, levelHeader, nextHref } from '../../ui/layout';
-import { evaluateCore, type CoreReport, type ProgramResult } from './harness';
+import { evaluateCoreAsync, type CoreReport, type ProgramResult } from './harness';
 import { findRvLevel } from './levels';
 
 export { starsFor } from '../../ui/labkit';
@@ -71,9 +71,10 @@ export function rvPage(id: string): HTMLElement {
     resultBox.replaceChildren(...rep.results.map(row));
     ed.markLines(rep.error?.line ? [rep.error.line] : [], []);
   };
-  const check = (submit: boolean) => busy(status, () => {
+  const check = (submit: boolean) => busy(status, async () => {
     const specs = inst.programs.filter((p) => submit || !p.hidden);
-    const rep = evaluateCore(ed.value, specs);
+    // Yields between programs, so the page repaints and shows how far along it is.
+    const rep = await evaluateCoreAsync(ed.value, specs, { onProgress: (n, total) => { status.textContent = `Running… program ${n} of ${total}`; } });
     show(rep);
     if (rep.error) {
       status.className = 'status err';

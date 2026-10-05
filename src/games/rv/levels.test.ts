@@ -33,3 +33,16 @@ describe('RV32 core project', () => {
     expect(evaluateCore('module rv32_core(', inst.programs).error?.phase).toBe('compile');
   });
 });
+
+describe('async evaluation', () => {
+  it('matches the synchronous result and reports progress', async () => {
+    const { evaluateCoreAsync } = await import('./harness');
+    const inst = RV_LEVELS[0].build(rng(1));
+    const seen: number[] = [];
+    const a = await evaluateCoreAsync(inst.solution, inst.programs, { onProgress: (n) => seen.push(n) });
+    const s = evaluateCore(inst.solution, inst.programs);
+    expect(a.passed).toBe(s.passed);
+    expect(a.results.map((r) => r.ok)).toEqual(s.results.map((r) => r.ok));
+    expect(seen).toEqual(inst.programs.map((_, i) => i + 1));
+  });
+});

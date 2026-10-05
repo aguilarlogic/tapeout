@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { rng } from '../../sim/harness';
 import { ARCH_LEVELS } from './levels';
-import { defaults } from './types';
+import { defaults, type Control, type Values } from './types';
 
 describe('architecture missions', () => {
   for (const level of ARCH_LEVELS) {
@@ -29,4 +29,50 @@ describe('architecture missions', () => {
       });
     });
   }
+});
+
+/** Levels the audit found too easy to pass by fiddling. Fix the targets, then delete the id: the test also fails when a listed level has been fixed. */
+const FIDDLEABLE: string[] = [
+  'cache-block',
+  'cache-conflict',
+  'cache-policy',
+  'cache-tile',
+  'cache-write',
+  'ooo-window',
+  'sig-fft',
+  'sig-pid',
+  'ai-boss',
+  'pll-jitter',
+];
+
+const randomValues = (cs: Control[], r: () => number): Values => Object.fromEntries(cs.map((c) => {
+  if (c.kind === 'select') return [c.id, c.options[Math.floor(r() * c.options.length)].value];
+  if (c.kind === 'toggle') return [c.id, r() < 0.5];
+  if (c.kind === 'number') { const st = c.step ?? 1, n = Math.floor((c.max - c.min) / st); return [c.id, c.min + st * Math.floor(r() * (n + 1))]; }
+  return [c.id, c.value];
+}));
+
+describe('random settings do not pass', () => {
+  const rate = (level: (typeof ARCH_LEVELS)[number]) => {
+    let pass = 0, n = 0;
+    for (const seed of [1, 2, 3, 4]) {
+      const inst = level.build(rng(seed));
+      if (inst.controls.some((c) => c.kind === 'text') || inst.code) return undefined;
+      const r = rng(seed * 977);
+      for (let i = 0; i < 150; i++) { const res = inst.run(randomValues(inst.controls, r), undefined); n++; if (!res.error && res.goals.length && res.goals.every((g) => g.ok)) pass++; }
+    }
+    return pass / n;
+  };
+  it('fiddling with the controls passes at most 10% of guided labs and 3% of boss labs (except the listed ones)', { timeout: 120000 }, () => {
+    const bad: string[] = [], fixed: string[] = [];
+    for (const level of ARCH_LEVELS) {
+      const p = rate(level);
+      if (p === undefined) continue;
+      const limit = level.tier === 'boss' ? 0.03 : 0.1, over = p > limit;
+      if (over && !FIDDLEABLE.includes(level.id)) bad.push(`${level.id} ${(p * 100).toFixed(0)}%`);
+      if (!over && FIDDLEABLE.includes(level.id)) fixed.push(level.id);
+    }
+    expect(bad, `passable by random settings: ${bad.join(', ')}`).toEqual([]);
+    expect(fixed, `fixed, remove from FIDDLEABLE: ${fixed.join(', ')}`).toEqual([]);
+  });
 });

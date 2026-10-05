@@ -8,7 +8,7 @@ describe('RV32 injected bugs', () => {
   it('every injected bug is caught by the boss programs', { timeout: 300000 }, () => {
     const inst = RV_LEVELS.find((l) => l.id === 'rv-boss')!.build(rng(1));
     for (const id of BUG_IDS) {
-      const rep = evaluateCore(buggyCoreFor([id]), inst.programs);
+      const rep = evaluateCore(buggyCoreFor([id]), inst.programs, { stopOnFail: true });
       expect(rep.error?.message, id).toBeUndefined();
       expect(rep.passed, `bug ${id} must be detected`).toBe(false);
     }

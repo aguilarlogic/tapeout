@@ -133,26 +133,61 @@ export function runProgram(d: Design, src: string, name: string, hidden: boolean
 
 export interface ProgramSpec { name: string; src: string; hidden: boolean }
 
-export function evaluateCore(coreSrc: string, programs: ProgramSpec[]): CoreReport {
+export interface EvalOptions {
+  /** Stop at the first failing program (tests that only need to know "does anything fail"). The page runs them all. */
+  stopOnFail?: boolean;
+  /** Called after each program, so a page can show "program 3 of 8". */
+  onProgress?: (done: number, total: number) => void;
+}
+
+/** Everything before the programs run: parse, lint, port check. */
+function prepare(coreSrc: string): { report: CoreReport; ast?: ReturnType<typeof parseModule> } {
   const report: CoreReport = { lints: [], results: [], passed: false };
   let ast;
   try { ast = parseModule(coreSrc); new Design(ast); }
   catch (e) {
     const msg = e instanceof VerilogError ? e.message.replace(/^line \d+: /, '') : e instanceof Error ? e.message : String(e);
     report.error = { message: msg, line: e instanceof VerilogError ? Number(/^line (\d+)/.exec(e.message)?.[1]) || undefined : undefined, phase: 'compile' };
-    return report;
+    return { report };
   }
   const probe = new Design(ast);
   report.lints = probe.lints.map((l) => l.message);
   const portErr = checkPorts(probe);
-  if (portErr) { report.error = { message: portErr, phase: 'ports' }; return report; }
-  for (const p of programs) {
-    try { report.results.push(runProgram(new Design(ast), p.src, p.name, p.hidden)); }
-    catch (e) {
-      if (e instanceof AsmError) { report.error = { message: `internal: test program does not assemble: ${e.message}`, phase: 'program' }; return report; }
-      throw e;
-    }
+  if (portErr) { report.error = { message: portErr, phase: 'ports' }; return { report }; }
+  return { report, ast };
+}
+
+/** Run one program, turning an assembler error in a test program into the report's error. Returns false to stop. */
+function step(report: CoreReport, ast: NonNullable<ReturnType<typeof prepare>['ast']>, p: ProgramSpec): boolean {
+  try { report.results.push(runProgram(new Design(ast), p.src, p.name, p.hidden)); return true; }
+  catch (e) {
+    if (e instanceof AsmError) { report.error = { message: `internal: test program does not assemble: ${e.message}`, phase: 'program' }; return false; }
+    throw e;
   }
-  report.passed = report.results.length > 0 && report.results.every((r) => r.ok);
-  return report;
+}
+
+const finish = (report: CoreReport): CoreReport => { report.passed = report.results.length > 0 && report.results.every((r) => r.ok); return report; };
+
+export function evaluateCore(coreSrc: string, programs: ProgramSpec[], opts: EvalOptions = {}): CoreReport {
+  const { report, ast } = prepare(coreSrc);
+  if (!ast) return report;
+  for (const [i, p] of programs.entries()) {
+    if (!step(report, ast, p)) return report;
+    opts.onProgress?.(i + 1, programs.length);
+    if (opts.stopOnFail && !report.results[report.results.length - 1].ok) break;
+  }
+  return finish(report);
+}
+
+/** The same evaluation, but it hands the thread back between programs so the page stays responsive and can show progress. */
+export async function evaluateCoreAsync(coreSrc: string, programs: ProgramSpec[], opts: EvalOptions = {}): Promise<CoreReport> {
+  const { report, ast } = prepare(coreSrc);
+  if (!ast) return report;
+  for (const [i, p] of programs.entries()) {
+    await new Promise((r) => setTimeout(r, 0));
+    if (!step(report, ast, p)) return report;
+    opts.onProgress?.(i + 1, programs.length);
+    if (opts.stopOnFail && !report.results[report.results.length - 1].ok) break;
+  }
+  return finish(report);
 }
