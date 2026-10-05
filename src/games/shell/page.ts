@@ -1,6 +1,7 @@
 // Shell Lab page: a real-feeling terminal over the virtual machine, a live goal list, hints, and a Check button.
+import { award } from '../../mastery/promotion';
 import { mentorSay } from '../../os/mentor';
-import { clearDraft, complete, levelRecord, loadDraft, saveDraft } from '../../state';
+import { clearDraft, levelRecord, loadDraft, saveDraft } from '../../state';
 import { h } from '../../ui/dom';
 import { celebrate, levelHeader, nextHref } from '../../ui/layout';
 import { findShellLevel, shellInstanceFor, starsFor } from './levels';
@@ -147,8 +148,8 @@ export function shellPage(id: string): HTMLElement {
     const stars = starsFor(usage.hints);
     status.className = 'status ok';
     status.textContent = `PASS: all ${res.length} goals met.`;
-    const gained = complete(level.id, level.xp, stars);
-    celebrate(stars, gained, usage.hints ? ['Solve it without hints for another star.'] : [], nextHref(level.id));
+    const aw = award(level.id, level.xp, stars);
+    celebrate(stars, aw, usage.hints ? ['Solve it without hints for another star.'] : [], nextHref(level.id));
   };
 
   const reset = () => {

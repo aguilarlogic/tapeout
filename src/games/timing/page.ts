@@ -1,5 +1,6 @@
+import { award } from '../../mastery/promotion';
 import { mentorSay } from '../../os/mentor';
-import { complete, levelRecord, loadDraft, saveDraft } from '../../state';
+import { levelRecord, loadDraft, saveDraft } from '../../state';
 import { h, svg, toast } from '../../ui/dom';
 import { celebrate, levelHeader, nextHref } from '../../ui/layout';
 import { TIMING_LEVELS } from './levels';
@@ -215,8 +216,8 @@ export function timingPage(id: string): HTMLElement {
       mentorSay(`Not yet: ${why}. Click the worst path in the table and read its report from the top.`, 'concerned');
       return;
     }
-    const gained = complete(level.id, level.xp, rep.stars);
-    celebrate(rep.stars, gained, rep.stars < 3 ? [`Area ${rep.area} - hit ${level.par.area} or less for 3 stars.`] : [], nextHref(level.id));
+    const aw = award(level.id, level.xp, rep.stars);
+    celebrate(rep.stars, aw, rep.stars < 3 ? [`Area ${rep.area} - hit ${level.par.area} or less for 3 stars.`] : [], nextHref(level.id));
   };
 
   const reset = () => {

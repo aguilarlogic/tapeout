@@ -1,7 +1,8 @@
 // Circuit Lab page: a netlist editor, a simulator, goal checks and plots.
+import { award } from '../../mastery/promotion';
 import { mentorSay } from '../../os/mentor';
 import { rng } from '../../sim/harness';
-import { clearDraft, complete, levelRecord, loadDraft, saveDraft } from '../../state';
+import { clearDraft, levelRecord, loadDraft, saveDraft } from '../../state';
 import { h } from '../../ui/dom';
 import { editor, highlightSpice } from '../../ui/editor';
 import { celebrate, levelHeader, nextHref } from '../../ui/layout';
@@ -167,12 +168,12 @@ export function circuitPage(id: string): HTMLElement {
     const stars = starsFor(inst, res.parts, usage.hints);
     status.className = 'status ok';
     status.textContent = `PASS — all ${inst.goals.length} goals met with ${res.parts} parts.`;
-    const gained = complete(level.id, level.xp, stars);
+    const aw = award(level.id, level.xp, stars);
     const notes = [
       usage.hints ? 'Solve it without hints for another star.' : '',
       inst.par !== undefined && res.parts > inst.par ? `Use ${inst.par} parts or fewer for the third star (you used ${res.parts}).` : '',
     ].filter(Boolean);
-    celebrate(stars, gained, notes, nextHref(level.id));
+    celebrate(stars, aw, notes, nextHref(level.id));
   };
 
   // --- parts palette

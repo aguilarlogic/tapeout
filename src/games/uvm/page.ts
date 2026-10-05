@@ -1,5 +1,6 @@
+import { award } from '../../mastery/promotion';
 import { mentorSay } from '../../os/mentor';
-import { complete, levelRecord } from '../../state';
+import { levelRecord } from '../../state';
 import { h, svg, toast } from '../../ui/dom';
 import { celebrate, levelHeader, nextHref } from '../../ui/layout';
 import { ArchPuzzle, CodePuzzle, OrderPuzzle, UVM_PUZZLES } from './puzzles';
@@ -10,8 +11,8 @@ export function uvmPage(id: string): HTMLElement {
   let mistakes = 0;
   const finish = () => {
     const stars = mistakes === 0 ? 3 : mistakes <= 2 ? 2 : 1;
-    const gained = complete(pz.id, pz.xp, stars);
-    celebrate(stars, gained, mistakes ? [`${mistakes} wrong attempt${mistakes > 1 ? 's' : ''} - a perfect run earns 3 stars.`] : [], nextHref(pz.id));
+    const aw = award(pz.id, pz.xp, stars);
+    celebrate(stars, aw, mistakes ? [`${mistakes} wrong attempt${mistakes > 1 ? 's' : ''} - a perfect run earns 3 stars.`] : [], nextHref(pz.id));
   };
   const miss = () => { mistakes++; if (mistakes === 3) mentorSay('Three misses. Think about who talks to whom: sequences make items, drivers drive pins, monitors only watch.', 'thinking'); };
 

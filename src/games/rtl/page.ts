@@ -1,6 +1,7 @@
+import { award } from '../../mastery/promotion';
 import { mentorSay } from '../../os/mentor';
 import { run, RunResult } from '../../sim/harness';
-import { clearDraft, complete, levelRecord, loadDraft, saveDraft } from '../../state';
+import { clearDraft, levelRecord, loadDraft, saveDraft } from '../../state';
 import { h } from '../../ui/dom';
 import { editor } from '../../ui/editor';
 import { celebrate, levelHeader, nextHref } from '../../ui/layout';
@@ -84,13 +85,13 @@ export function rtlPage(id: string): HTMLElement {
       if (res.lints.length) stars--;
       if (usage.hints > 0) stars--;
       if (usage.solution) stars = 1;
-      const gained = complete(level.id, level.xp, stars);
+      const aw = award(level.id, level.xp, stars);
       const notes = [
         res.lints.length ? 'Clean up the lint warnings for another star.' : '',
         usage.hints ? 'Solve it without hints for another star.' : '',
         usage.solution ? 'You viewed the solution, so this counts for 1 star.' : '',
       ].filter(Boolean);
-      celebrate(stars, gained, notes, nextHref(level.id));
+      celebrate(stars, aw, notes, nextHref(level.id));
     }
     renderWave();
   };

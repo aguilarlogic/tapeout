@@ -1,6 +1,7 @@
 // Code Lab page: an editor, example runs, a Submit that checks every case against the reference solution.
+import { award } from '../../mastery/promotion';
 import { mentorSay } from '../../os/mentor';
-import { clearDraft, complete, levelRecord, loadDraft, saveDraft } from '../../state';
+import { clearDraft, levelRecord, loadDraft, saveDraft } from '../../state';
 import { h } from '../../ui/dom';
 import { editor, highlightC, highlightPy } from '../../ui/editor';
 import { celebrate, levelHeader, nextHref } from '../../ui/layout';
@@ -99,8 +100,8 @@ export function codePage(id: string): HTMLElement {
     const stars = starsFor(usage.hints);
     status.className = 'status ok';
     status.textContent = `PASS: all ${rep.results.length} cases${rep.rules.length ? ' and every rule' : ''}.`;
-    const gained = complete(level.id, level.xp, stars);
-    celebrate(stars, gained, usage.hints ? ['Solve it without hints for another star.'] : [], nextHref(level.id));
+    const aw = award(level.id, level.xp, stars);
+    celebrate(stars, aw, usage.hints ? ['Solve it without hints for another star.'] : [], nextHref(level.id));
   };
 
   const rebuild = () => {

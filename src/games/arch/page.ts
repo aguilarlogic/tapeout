@@ -1,7 +1,8 @@
 // Architecture Lab page: configure a pipeline, cache or out-of-order core (and optionally edit the program), see the
 // measurements and timeline, and bank the result when every goal is met.
+import { award } from '../../mastery/promotion';
 import { mentorSay } from '../../os/mentor';
-import { clearDraft, complete, levelRecord, loadDraft, saveDraft } from '../../state';
+import { clearDraft, levelRecord, loadDraft, saveDraft } from '../../state';
 import { rng } from '../../sim/harness';
 import { h } from '../../ui/dom';
 import { editor } from '../../ui/editor';
@@ -156,8 +157,8 @@ export function archPage(id: string): HTMLElement {
     if (!submit) return;
     status.textContent = `PASS: all ${res.goals.length} goals met.`;
     const stars = starsFor(usage.hints);
-    const gained = complete(level.id, level.xp, stars);
-    celebrate(stars, gained, usage.hints ? ['Solve it without hints for another star.'] : [], nextHref(level.id));
+    const aw = award(level.id, level.xp, stars);
+    celebrate(stars, aw, usage.hints ? ['Solve it without hints for another star.'] : [], nextHref(level.id));
   };
   void last;
 

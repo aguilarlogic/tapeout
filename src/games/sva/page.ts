@@ -1,7 +1,8 @@
 // SVA Lab page: write assertions (or assumptions, or fix the RTL) and see them judged against the correct design,
 // hidden buggy mutants, random simulation and bounded exhaustive search, with counterexample waveforms.
+import { award } from '../../mastery/promotion';
 import { mentorSay } from '../../os/mentor';
-import { clearDraft, complete, levelRecord, loadDraft, saveDraft } from '../../state';
+import { clearDraft, levelRecord, loadDraft, saveDraft } from '../../state';
 import { h } from '../../ui/dom';
 import { editor, highlight } from '../../ui/editor';
 import { celebrate, levelHeader, nextHref } from '../../ui/layout';
@@ -109,8 +110,8 @@ export function svaPage(id: string): HTMLElement {
     if (!submit) { status.textContent = `All ${ev.goals.length} goals met. Submit to bank the result.`; return; }
     status.textContent = `PASS: all ${ev.goals.length} goals met.`;
     const stars = starsFor(usage.hints);
-    const gained = complete(level.id, level.xp, stars);
-    celebrate(stars, gained, usage.hints ? ['Solve it without hints for another star.'] : [], nextHref(level.id));
+    const aw = award(level.id, level.xp, stars);
+    celebrate(stars, aw, usage.hints ? ['Solve it without hints for another star.'] : [], nextHref(level.id));
   };
 
   // --- formal button (assume and fix missions)

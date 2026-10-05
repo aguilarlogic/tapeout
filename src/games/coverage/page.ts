@@ -1,5 +1,6 @@
+import { award } from '../../mastery/promotion';
 import { mentorSay } from '../../os/mentor';
-import { complete, levelRecord, loadDraft, saveDraft } from '../../state';
+import { levelRecord, loadDraft, saveDraft } from '../../state';
 import { h, toast } from '../../ui/dom';
 import { celebrate, levelHeader, nextHref } from '../../ui/layout';
 import { defaultPhase, Phase, RunOutcome, SCENARIOS, score } from './scenarios';
@@ -96,8 +97,8 @@ export function coveragePage(id: string): HTMLElement {
     const s = score(sc, outcome);
     if (!s.done) mentorSay(outcome.log.some((l) => l.error) ? 'You found the bug, but coverage still has holes. Shape the distributions toward the red bins.' : 'Coverage holes and no bug yet. Random alone will not get there: aim a phase at the corners.', 'thinking');
     if (s.done) {
-      const gained = complete(sc.id, sc.xp, s.stars);
-      celebrate(s.stars, gained, s.stars < 3 ? [`${outcome.total} transactions - do it in ${sc.par} or fewer for 3 stars.`] : [], nextHref(sc.id));
+      const aw = award(sc.id, sc.xp, s.stars);
+      celebrate(s.stars, aw, s.stars < 3 ? [`${outcome.total} transactions - do it in ${sc.par} or fewer for 3 stars.`] : [], nextHref(sc.id));
     }
   };
 

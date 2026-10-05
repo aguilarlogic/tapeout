@@ -1,5 +1,6 @@
+import { award } from '../../mastery/promotion';
 import { mentorSay } from '../../os/mentor';
-import { complete, levelRecord, loadDraft, saveDraft } from '../../state';
+import { levelRecord, loadDraft, saveDraft } from '../../state';
 import { h, toast } from '../../ui/dom';
 import { celebrate, levelHeader, nextHref } from '../../ui/layout';
 import {
@@ -83,14 +84,14 @@ export function pcbPage(id: string): HTMLElement {
       mentorSay(first ? `DRC says: ${first.message}` : 'Some nets are still open. Follow the white ratsnest lines.', 'concerned');
       return;
     }
-    const gained = complete(level.id, level.xp, analysis.stars);
+    const aw = award(level.id, level.xp, analysis.stars);
     const notes: string[] = [];
     if (analysis.stars < 3) {
       if (analysis.issues.length) notes.push('Clear the warnings too.');
       if (analysis.totalLength > level.par.length) notes.push(`Total length ${analysis.totalLength} - par is ${level.par.length}.`);
       if (analysis.totalVias > level.par.vias) notes.push(`${analysis.totalVias} vias - par is ${level.par.vias}.`);
     }
-    celebrate(analysis.stars, gained, notes, nextHref(level.id));
+    celebrate(analysis.stars, aw, notes, nextHref(level.id));
   };
 
   // ---------------------------------------------------------------- side panel
