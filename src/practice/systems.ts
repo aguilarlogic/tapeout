@@ -214,7 +214,7 @@ function pair(r: Rng, n: number): [number, number] {
 
 export const dsaPractice = practice('practice-dsa', 'Algorithm Drills', 'complexity, graphs, longest paths, hashing, bit tricks', [
   (r, d) => {
-    const n = pick(r, tier(d, [7, 15, 100], [1000, 1e6, 5000], [1e9, 3e7, 65536]));
+    const n = pick(r, tier(d, [7, 15, 100], [1000, 1e6, 5000], [1e9, 3e7, 65536, 1e8, 2e6, 1048576, 262144, 8e5, 4e9]));
     const k = Math.floor(Math.log2(n)) + 1;
     return walk(ask(`Binary search over ${n.toLocaleString('en-US')} sorted items: worst-case number of comparisons?`, num(k), `floor(log2(${n})) + 1 = ${k}. A billion items in about 30 steps: that is the power of O(log n).`, 'Each comparison halves the range.'),
       'binary search cost', 'Binary search compares with the middle item and throws away the half that cannot contain the target, so each comparison halves the range. The number of halvings until one item is left is about log2(n); in the worst case you also make one final comparison: floor(log2 n) + 1.',
@@ -234,7 +234,7 @@ export const dsaPractice = practice('practice-dsa', 'Algorithm Drills', 'complex
       }));
   },
   (r, d) => {
-    const n = pick(r, tier(d, [10, 100], [1000, 50], [1e4, 2000]));
+    const n = pick(r, tier(d, [10, 100], [1000, 50], [1e4, 2000, 5000, 3000, 8000, 1e5, 4000, 7000]));
     const variants = [
       [1, `for (i = 0; i < n; i++)\n  for (j = 0; j < n; j++)\n    work();`, n * n],
       [2, `for (i = 0; i < n; i++)\n  for (j = 0; j < i; j++)\n    work();`, (n * (n - 1)) / 2],

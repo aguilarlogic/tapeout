@@ -89,7 +89,7 @@ export const libcharPractice = practice('practice-libchar', 'Characterization Dr
       calc('Halfway between those two:', `(${sig(dl0)} + ${sig(dl1)}) / 2`, dd, 'ps', sig(dd), 0.02));
   },
   (r, d) => {
-    const nom = pick(r, [60, 80, 100]);
+    const nom = pick(r, [50, 60, 70, 80, 90, 100, 120]);
     const th = nom * 1.1;
     const pts: [number, number][] = [[200, nom], [100, nom + 2], [60, nom + 5], [40, nom + 10], [30, nom + 18], [20, nom + 45]];
     // find the pair of rows that straddle the threshold and interpolate the offset
@@ -135,7 +135,7 @@ export const libcharBoss = bossOf(libcharPractice, 'boss-libchar', 'Signing Off 
 
 export const ioesdPractice = practice('practice-io-esd', 'I/O & ESD Drills', 'HBM currents, clamp sizing, supply bounce, termination', [
   (r, d) => {
-    const v = pick(r, [500, 1000, 2000, 4000, 8000]);
+    const v = pick(r, [250, 500, 750, 1000, 1500, 2000, 3000, 4000, 6000, 8000]);
     if (d === 1) {
       const i = v / 1500;
       return walk(ask(`An HBM zap of ${v} V discharges through the standard 1.5 kΩ. What is the peak current, in A?`, qty(i, 'A', 0.03, sig(i)), `I = ${v} / 1500 = ${sig(i)} A.`, 'Ohm\'s law.'),
@@ -231,7 +231,7 @@ export const socintPractice = practice('practice-soc-int', 'SoC Integration Dril
       calc('Time = cycles ÷ frequency (MHz), in ns:', `${cyc} / ${f} × 1000`, t, 'ns', sig(t), 0.02));
   },
   (r, d) => {
-    const n = tier(d, pick(r, [64, 128]), pick(r, [200, 500]), pick(r, [1000, 3000]));
+    const n = tier(d, pick(r, [64, 128]), pick(r, [200, 500]), pick(r, [1000, 3000, 1500, 2000, 4000, 5000, 6000, 10000]));
     const bytes = n * 4;
     const bits = Math.ceil(Math.log2(bytes));
     return walk(ask(`A peripheral has ${n} 32-bit registers, each 4 bytes apart. How many address bits does its window need (round up to a power of two)?`, qty(bits, '', 0.001, String(bits)), `${n} × 4 = ${bytes} bytes; the next power of two is 2^${bits}.`, 'Bytes, then log2, rounded up.'),

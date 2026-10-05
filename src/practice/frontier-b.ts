@@ -167,7 +167,7 @@ export const neuroPractice = practice('practice-neuro', 'Neuromorphic Drills', '
       calc('Period in ms:', `${sig(t)} + ${ref}`, t + ref, 'ms', sig(t + ref), 0.01), calc('Rate = 1000 ÷ period (ms), in Hz:', `1000 / ${sig(t + ref)}`, rate, 'Hz', sig(rate), 0.03));
   },
   (r, d) => {
-    const bits = tier(d, 3, 4, 6), gmax = pick(r, [50, 100]), levels = 2 ** bits;
+    const bits = tier(d, 3, 4, 6), gmax = pick(r, [20, 25, 50, 80, 100, 120, 200]), levels = 2 ** bits;
     if (d < 3) return walk(ask(`A memristor cell stores ${bits} bits. How many distinct conductance levels must it hold, reliably?`, qty(levels, '', 0.001, String(levels)), `2^${bits} = ${levels} levels. A cell with ${levels} reliably distinguishable states stores ${bits} bits.`, 'Two to the number of bits.'),
       'conductance levels', 'A cell that stores n bits must distinguish 2^n separate conductance values. Noise, drift and variability limit how many a real device can hold, which is why analog weights are often 4 bits or fewer per cell.',
       count(`2^${bits}:`, `2^${bits}`, levels));
@@ -211,14 +211,14 @@ export const emergingPractice = practice('practice-emerging', 'Emerging Device D
       calc('ΔV = I × ΔR, in mV (µA × kΩ):', `${iread} × ${sig(rap - rp)}`, iread * (rap - rp), 'mV', sig(iread * (rap - rp)), 0.03));
   },
   (r, d) => {
-    const cpp = pick(r, [45, 48, 54]), th = pick(r, [5, 6]), w = pick(r, [3, 4]);
+    const cpp = pick(r, [42, 45, 48, 54, 57, 60]), th = pick(r, [4, 5, 6, 7]), w = pick(r, [2, 3, 4, 5]);
     const area = w * cpp * th * 28;
     if (d === 1) return walk(ask(`A logic cell is ${w} contact pitches wide (CPP = ${cpp} nm) and ${th} metal tracks tall (28 nm pitch). What is its area, in nm²?`, qty(area, 'nm²', 0.01, String(area)), `${w} × ${cpp} × ${th} × 28 = ${area} nm².`, 'Width times height.'),
       'standard-cell area', 'A cell\'s width is its number of contact pitches times the CPP; its height is the number of tracks times the track pitch. Area is the product.',
       count('Width in nm:', `${w} × ${cpp}`, w * cpp), count('Height in nm:', `${th} × 28`, th * 28), count('Area in nm²:', `${w * cpp} × ${th * 28}`, area));
     const th2 = th - 1;
     const sav = (1 - th2 / th) * 100;
-    return walk(ask(`Stacking NMOS over PMOS (a CFET) cuts the cell height from ${th} tracks to ${th2}. What percentage of area does that save? (same width)`, qty(sav, '%', 0.03, sig(sav)), `1 − ${th2}/${th} = ${sig(sav)}%.`, 'One minus the height ratio.'),
+    return walk(ask(`A cell is ${w} contact pitches wide (CPP = ${cpp} nm). Stacking NMOS over PMOS (a CFET) cuts the cell height from ${th} tracks to ${th2}. What percentage of area does that save? (same width)`, qty(sav, '%', 0.03, sig(sav)), `1 − ${th2}/${th} = ${sig(sav)}%.`, 'One minus the height ratio.'),
       'CFET area benefit', 'The cell width stays the same, so the area scales with the height in tracks. The saving is one minus the new height over the old height.',
       calc('Height ratio:', `${th2} / ${th}`, th2 / th, '', sig(th2 / th), 0.01), calc('Saving in %:', `(1 − ${sig(th2 / th)}) × 100`, sav, '%', sig(sav), 0.03));
   },

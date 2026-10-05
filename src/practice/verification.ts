@@ -93,7 +93,7 @@ export const dvPractice = practice('practice-dv', 'Testbench & Debug Drills', 's
         ['A better wait is for an:', 'Event', ['Delay', 'Clock period']]],
   ], (why) => `${why}.`),
   (r, d) => {
-    const n = pick(r, tier(d, [1000, 4000], [1e5, 1e6], [5e6, 1e7]));
+    const n = pick(r, tier(d, [1000, 4000], [1e5, 1e6], [5e6, 1e7, 2e7, 3e6, 8e6, 5e7, 1e8]));
     const k = Math.ceil(Math.log2(n));
     return walk(ask(`A failure appears somewhere in a ${n.toLocaleString('en-US')}-cycle run, and you can rerun with a checkpoint at any cycle. How many bisection runs to narrow it to a single cycle?`, num(k), `Each run halves the window: ⌈log2(${n.toLocaleString('en-US')})⌉ = ${k}. Bisection (on cycles, on commits, on seeds) is the debugger's most reliable tool.`, 'Halve the window each time.'),
       'bisection debugging', 'Bisection finds where something went wrong by binary search: test the middle of the window, see whether the failure has already happened, and throw away the half that cannot contain the start of it. Each run halves the window, so the number of runs to get down to a single cycle is log2 of the window, rounded up.',
@@ -227,7 +227,7 @@ export const covPractice = practice('practice-cov', 'Coverage Drills', 'bins, cr
       calc('Equal weights, so the group score is the average of the two:', `(${sig((h1 / n1) * 100, 4)} + ${sig((h2 / n2) * 100, 4)}) / 2`, cov, '%', sig(cov), 0.01));
   },
   (r, d) => {
-    const N = pick(r, tier(d, [2, 4], [6, 8], [16, 32]));
+    const N = pick(r, tier(d, [2, 4], [6, 8], [16, 32, 48, 64, 100, 128, 24]));
     let H = 0;
     for (let i = 1; i <= N; i++) H += 1 / i;
     return walk(ask(`A random test hits one of ${N} equally likely bins per transaction. On average, how many transactions until every bin is hit?`, qty(N * H, '', 0.03, sig(N * H)), `The coupon collector problem: N·(1 + 1/2 + … + 1/N) = ${N} × ${sig(H)} = ${sig(N * H)}. The last bins take the longest, which is why closure needs directed tests or tuned constraints.`, 'Expected time = N × H_N (the N-th harmonic number).'),
@@ -265,9 +265,13 @@ export const uvmPractice = practice('practice-uvm', 'UVM Drills', 'phases, objec
         choice('Only one of these phases consumes simulation time (the rest are instant functions). Which one?', 'run', ['build', 'connect', 'report'], 'run is where the testbench drives stimulus and time passes; everything else just sets up or reports.'),
         step(`Which phase is next after ${PHASES[i]}?`, a));
     }
-    return walk(mcs(r, 'In which order are build_phase methods called?', 'Top-down: parents build their children', ['Bottom-up: drivers and monitors build first, then their agents', 'Alphabetical, by the instance names of the components', 'In parallel, in an order the simulator picks at random'], 'Test, then env, then agents, then drivers/monitors: a parent must build its children, so build_phase is top-down; connect_phase and later function phases are bottom-up.'),
-      'build is top-down', idea,
-      choice('A parent has to create its children in its own build_phase. So the parent\'s build must run:', 'Before its children\'s build', ['After its children\'s build', 'At the same instant']));
+    const PH: [string, 'down' | 'up' | 'parallel'][] = [['build', 'down'], ['connect', 'up'], ['end_of_elaboration', 'up'], ['start_of_simulation', 'up'], ['run', 'parallel'], ['extract', 'up'], ['check', 'up'], ['report', 'up'], ['final', 'down']];
+    const [ph, dir] = pick(r, PH);
+    const right = dir === 'down' ? 'Top-down: parents before their children' : dir === 'up' ? 'Bottom-up: children before their parents' : 'In parallel: every component runs at once';
+    const wrong = [dir !== 'down' ? 'Top-down: parents before their children' : 'Bottom-up: children before their parents', dir === 'parallel' ? 'Bottom-up: children before their parents' : 'In parallel: every component runs at once', 'Alphabetical, by the instance names of the components'];
+    return walk(mcs(r, `In which order does UVM call the ${ph}_phase methods of a component tree?`, right, wrong, `${ph}_phase is ${dir === 'down' ? 'top-down' : dir === 'up' ? 'bottom-up' : 'the only phase that runs in parallel, and it consumes time'}. Only build and final are top-down; run is concurrent; the rest are bottom-up.`),
+      'phase direction', idea,
+      choice(dir === 'down' ? 'A parent has to create its children in its own build_phase. So the parent\'s build must run:' : dir === 'up' ? 'Connecting needs the children to exist and be built first, so a child\'s method runs:' : 'run_phase is a task that consumes simulation time, so the components run it:', dir === 'down' ? 'Before its children\'s build' : dir === 'up' ? 'Before its parent\'s' : 'Concurrently', dir === 'down' ? ['After its children\'s build', 'At the same instant'] : dir === 'up' ? ['After its parent\'s', 'At the same instant'] : ['One after another', 'Bottom-up']));
   },
   (r, d) => {
     const tDrop = pick(r, [500, 800, 1000]), sDrop = tDrop + pick(r, [-200, 100, 300]), drain = d > 1 ? pick(r, [50, 100]) : 0;
@@ -373,7 +377,7 @@ export const svaPractice = practice('practice-sva', 'Assertion Drills', 'evaluat
 
 export const formalPractice = practice('practice-formal', 'Formal Drills', 'state spaces, BMC depth, vacuity, equivalence, induction', [
   (r, d) => {
-    const n = pick(r, tier(d, [8, 10, 16], [32, 40, 64], [100, 128, 256]));
+    const n = pick(r, tier(d, [8, 10, 16], [32, 40, 64], [100, 128, 256, 150, 200, 300, 400, 500]));
     const s = 2 ** n;
     const disp = n <= 16 ? String(s) : sci(s, 2);
     return walk(ask(`A block has ${n} flip-flops. At most how many states can it be in?`, qty(s, '', 0.03, disp), `2^${n} = ${n <= 16 ? s : sci(s, 2)}. Simulation can never visit them all; formal tools reason about them symbolically instead.`, 'Each flop doubles it.'),

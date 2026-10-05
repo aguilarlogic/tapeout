@@ -32,7 +32,7 @@ export const staPractice = practice('practice-sta', 'Timing Drills', 'setup/hold
       calc('Hold slack = arrival - required:', `${tcq + tmin} - ${th + skew + unc}`, slack, 'ps', String(slack), 0.01));
   },
   (r, d) => {
-    const T = pick(r, [500, 800, 1000]), n = pick(r, [2, 3]), tl = between(r, T + 100, n * T - 150), tcq = 50, ts = 40;
+    const T = pick(r, [400, 500, 600, 800, 1000, 1250]), n = pick(r, [2, 3, 4]), tl = between(r, T + 100, n * T - 150), tcq = 50, ts = 40;
     if (d < 3) {
       const slack = n * T - ts - (tcq + tl);
       return walk(ask(`A path with ${tl} ps of logic is declared \`set_multicycle_path ${n} -setup\` at a ${T} ps period (clock-to-Q 50, setup 40). Setup slack, in ps?`, qty(slack, 'ps', 0.01, String(slack)), `The capture edge moves to ${n} cycles later: ${n * T} - 40 - (50 + ${tl}) = ${slack} ps. Only valid if the design really holds the data ${n} cycles (an enable).`, 'Required time uses n periods.'),
@@ -41,7 +41,7 @@ export const staPractice = practice('practice-sta', 'Timing Drills', 'setup/hold
         calc(`When it is required, ${n} periods minus setup:`, `${n} × ${T} - 40`, n * T - ts, 'ps', String(n * T - ts), 0.001),
         calc('Slack = required - arrival:', `${n * T - ts} - ${tcq + tl}`, slack, 'ps', String(slack), 0.01));
     }
-    return walk(mcs(r, `You add \`set_multicycle_path ${n} -setup\` but forget the matching \`-hold ${n - 1}\`. What happens to the hold check?`, `Hold moves ${n - 1} cycles later and is nearly impossible to meet`, ['Nothing changes: hold stays at the launch edge of the path', 'Hold is disabled for the path, since setup was relaxed', 'The hold requirement relaxes by one cycle on that path'], `The hold check moves to the edge before the new setup edge, ${n - 1} cycles after launch. By default the hold check follows the setup edge minus one cycle. Always pair -setup N with -hold N-1 to bring it back to the launch edge.`),
+    return walk(mcs(r, `At a ${T} ps clock you add \`set_multicycle_path ${n} -setup\` but forget the matching \`-hold ${n - 1}\`. What happens to the hold check?`, `Hold moves ${n - 1} cycles later and is nearly impossible to meet`, ['Nothing changes: hold stays at the launch edge of the path', 'Hold is disabled for the path, since setup was relaxed', 'The hold requirement relaxes by one cycle on that path'], `The hold check moves to the edge before the new setup edge, ${n - 1} cycles after launch. By default the hold check follows the setup edge minus one cycle. Always pair -setup N with -hold N-1 to bring it back to the launch edge.`),
       'pairing multicycle setup and hold', 'The hold check is tied to the setup check: by default it is taken one cycle BEFORE the capture edge used for setup. If you move the setup capture edge later by n cycles, the hold check moves with it, to a point far after the launch. To put hold back at the launch edge, add -hold n-1, which moves it back by n-1 cycles.',
       choice('By default the hold edge is tied to:', 'The setup capture edge, one cycle earlier', ['The launch edge always', 'Nothing: hold is independent']));
   },
@@ -117,7 +117,7 @@ export const vlsiPractice = practice('practice-vlsi', 'Circuit Drills', 'Elmore 
       'resistance of a wire', 'A conductor\'s resistance is R = ρ × L / A: the resistivity ρ times the length, divided by the cross-section area A. A wire\'s cross-section is its width times its thickness. Convert everything to metres first (1 µm = 10⁻⁶ m).',
       calc('Cross-section area W × t, in m²:', `${sig(W * 1e6)}e-6 × ${sig(t * 1e6)}e-6`, W * t, '', sig(W * t), 0.001),
       calc('Resistance R = ρ × L / area:', `2.2e-8 × ${sig(L)} / ${sig(W * t)}`, R, 'Ω', sig(R), 0.02));
-    const n = pick(r, [2, 4, 5]);
+    const n = pick(r, [2, 3, 4, 5, 6, 8, 10]);
     return walk(ask(`A long wire is split by ${n - 1} repeater${n > 2 ? 's' : ''} into ${n} equal segments. Ignoring repeater delay, the total wire delay becomes what fraction of the original?`, qty(1 / n, '', 0.01, sig(1 / n)), `Each segment has (L/${n})², and there are ${n}: ${n} × 1/${n * n} = 1/${n}. Quadratic becomes linear, at the cost of repeater delay and power.`, 'n segments, each (1/n)² of the delay.'),
       'splitting a wire with repeaters', rcIdea,
       calc(`Each segment is 1/${n} as long, so its delay is (1/${n})² of the original:`, `(1/${n})²`, 1 / (n * n), '', sig(1 / (n * n), 4), 0.005),
@@ -155,7 +155,7 @@ export const vlsiPractice = practice('practice-vlsi', 'Circuit Drills', 'Elmore 
       'sizing the PMOS', 'A MOSFET\'s drive current is proportional to its mobility times its width. Holes (which carry current in a PMOS) are slower than electrons (in an NMOS), so for the PMOS to pull up as hard as the NMOS pulls down, it has to be proportionally wider.',
       choice('The PMOS carries holes, which move:', 'More slowly than electrons, so it must be wider', ['Faster than electrons, so it can be narrower', 'At the same speed']),
       calc('Width ratio = electron mobility ÷ hole mobility:', `${mu} ÷ 1`, mu, 'x', String(mu), 0.01));
-    const n = pick(r, [2, 3]);
+    const n = pick(r, [2, 3, 4, 5, 6, 7, 8]);
     return walk(ask(`In a NAND${n}, the NMOS devices are in series. To match a unit inverter's pull-down (NMOS width 1), how wide must each NMOS be?`, num(n), `${n} in series act like one device of width 1/${n}, so each must be ${n}× wider. The parallel PMOS stay at ${mu} each (worst case, one of them conducts).`, 'Series stacks divide the drive.'),
       'sizing series transistors', 'Transistors in series are like resistors in series: n of the same size conduct only 1/n as well as one of them. To keep the pull-down as strong as a single unit NMOS, make each one n times wider.',
       choice('n equal transistors in series conduct:', 'Only 1/n as well as one of them', ['n times as well', 'Exactly as well as one']),
@@ -197,17 +197,17 @@ export const powerPractice = practice('practice-power', 'Power Drills', 'dynamic
       calc('The fall, (1 - ratio) as a %:', `(1 - ${sig(P2 / P, 4)}) × 100`, (1 - P2 / P) * 100, '%', sig((1 - P2 / P) * 100), 0.02));
   },
   (r, d) => {
-    const cells = pick(r, [1e6, 1e7, 5e7]), cn = sci(cells, 0), il = pick(r, [1, 5, 10]) * 1e-9, V = pick(r, [0.75, 0.8]);
+    const cells = pick(r, [1e6, 2e6, 5e6, 1e7, 2e7, 5e7, 1e8]), cn = sci(cells, 0), il = pick(r, [1, 2, 5, 10, 20]) * 1e-9, V = pick(r, [0.7, 0.75, 0.8, 0.85, 0.9]);
     const P = cells * il * V;
     const idea = 'Leakage is current that flows through every transistor even when nothing switches. Total leakage power = (number of cells) × (leakage current per cell) × (supply voltage). It is paid all the time, which is why idle chips still drain batteries.';
     if (d < 3) return walk(ask(`${cn} cells each leak ${eng(il, 'A')} at ${V} V. Total leakage power, in mW?`, qty(P * 1000, 'mW', 0.02), `${cn} × ${eng(il, 'A')} × ${V} V = ${eng(P, 'W')}. It flows whether or not the chip does anything.`, 'P = N × I_leak × V.'),
       'leakage power', idea,
       calc('Total leakage current, cells × current each (in amps):', `${cn} × ${il}`, cells * il, 'A', sig(cells * il), 0.005),
       calc('Power = current × voltage, in mW (× 1000):', `${sig(cells * il)} × ${V} × 1000`, P * 1000, 'mW', sig(P * 1000), 0.02));
-    const hvt = pick(r, [0.6, 0.8]), ratio = pick(r, [5, 10]);
+    const hvt = pick(r, [0.5, 0.6, 0.7, 0.8]), ratio = pick(r, [4, 5, 8, 10]);
     const P2 = cells * il * V * (1 - hvt + hvt / ratio);
     const fac = 1 - hvt + hvt / ratio;
-    return walk(ask(`Swap ${hvt * 100}% of those cells to high-Vt versions that leak ${ratio}× less (they are slower, so only non-critical cells). New leakage, in mW?`, qty(P2 * 1000, 'mW', 0.02), `${sig(1 - hvt)} × full + ${hvt} × 1/${ratio} → ${sig((1 - hvt + hvt / ratio) * 100)}% of ${eng(P, 'W')} = ${eng(P2, 'W')}. Multi-Vt optimization is standard in every flow.`, 'Weight the leakage by the cell mix.'),
+    return walk(ask(`${cn} cells each leak ${eng(il, 'A')} at ${V} V. Swap ${hvt * 100}% of those cells to high-Vt versions that leak ${ratio}× less (they are slower, so only non-critical cells). New leakage, in mW?`, qty(P2 * 1000, 'mW', 0.02), `${sig(1 - hvt)} × full + ${hvt} × 1/${ratio} → ${sig((1 - hvt + hvt / ratio) * 100)}% of ${eng(P, 'W')} = ${eng(P2, 'W')}. Multi-Vt optimization is standard in every flow.`, 'Weight the leakage by the cell mix.'),
       'multi-Vt leakage savings', `${idea} High-threshold (high-Vt) cells leak far less but switch more slowly. Swapping a fraction of the cells keeps the rest at full leakage, while the swapped ones leak 1/ratio as much, so the new total is the old total times (unswapped share + swapped share ÷ ratio).`,
       calc('Old total leakage, in mW:', `${cn} × ${il} × ${V} × 1000`, P * 1000, 'mW', sig(P * 1000), 0.005),
       calc(`The new fraction of the old leakage, (1 - ${hvt}) + ${hvt} / ${ratio}:`, `${sig(1 - hvt)} + ${sig(hvt / ratio)}`, fac, '', sig(fac, 4), 0.005),

@@ -72,7 +72,7 @@ export const analogPractice = practice('practice-analog', 'Analog Drills', 'op-a
         calc('4kTRB in V² (R in ohms, B in hertz):', `4 × 4.14e-21 × ${rk}e3 × ${b}e6`, v2, '', sci(v2, 2), 0.03),
         calc('Square root, in µV (× 1e6):', `sqrt(${sci(v2, 2)}) × 1e6`, v, 'uV', sig(v), 0.03));
     }
-    const vt = pick(r, [50, 100, 200]), c = (kT / (vt * 1e-6) ** 2) * 1e12;
+    const vt = pick(r, [30, 50, 70, 100, 150, 200, 300, 400]), c = (kT / (vt * 1e-6) ** 2) * 1e12;
     const v2 = (vt * 1e-6) ** 2;
     return walk(ask(`Your sampler may add at most ${vt} µV rms of kT/C noise. What is the smallest sampling capacitor, in pF?`, qty(c, 'pF', 0.03, sig(c)), `C = kT / v² = 4.14e-21 / (${vt}e-6)² = ${sig(c)} pF. Halving the noise needs 4× the capacitance, and 4× the power to drive it: the core trade-off of every ADC front end.`, 'Solve v = √(kT/C) for C.'),
       'sizing a capacitor for kT/C noise', 'The noise voltage is v = √(kT ÷ C). To find the capacitor for a noise budget, turn it around: square both sides to get v² = kT ÷ C, so C = kT ÷ v². Convert µV to volts first (× 1e-6).',
@@ -189,7 +189,7 @@ export const rfPractice = practice('practice-rf', 'RF Drills', 'dBm, wavelength,
       calc('λ in mm = 300 ÷ (f × √εr):', `300 / (${ff} × ${sig(Math.sqrt(er), 4)})`, l, 'mm', sig(l), 0.02));
   },
   (r, d) => {
-    const zl = pick(r, [10, 25, 75, 100, 150]), g = (zl - 50) / (zl + 50);
+    const zl = pick(r, [10, 25, 75, 100, 150, 20, 30, 40, 60, 90, 200, 300, 12]), g = (zl - 50) / (zl + 50);
     const idea = 'When a load ZL is not equal to the line impedance Z0 (50 Ω), part of the wave reflects. The reflection coefficient Γ = (ZL - Z0) ÷ (ZL + Z0) says how much: 0 means a perfect match, ±1 means everything reflects. It is negative when ZL is below Z0.';
     if (d === 1) return walk(ask(`A ${zl} Ω load on a 50 Ω line. Reflection coefficient Γ?`, qty(g, '', 0.02, sig(g)), `Γ = (${zl} - 50)/(${zl} + 50) = ${sig(g)}.${g < 0 ? ' Negative: the reflected wave is inverted.' : ''}`, 'Γ = (ZL - Z0)/(ZL + Z0).'),
       'the reflection coefficient', idea,

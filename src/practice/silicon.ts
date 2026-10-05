@@ -227,7 +227,7 @@ export const sramPractice = practice('practice-sram', 'Memory Drills', 'array ar
         'refresh interval', 'Every row has to be refreshed within the retention window. The controller spreads the work evenly: one refresh command per row-share, so the interval between commands is the window divided by the number of rows. ms ÷ rows × 1000 gives µs.',
         calc('Interval = window ÷ rows, in µs (× 1000 to go from ms):', `${w} / ${rows} × 1000`, t, 'us', sig(t), 0.02));
     }
-    const trfc = pick(r, [260, 350, 550]), trefi = d === 3 ? 3.9 : 7.8, o = (trfc / (trefi * 1000)) * 100;
+    const trfc = pick(r, [160, 260, 300, 350, 400, 450, 500, 550, 700]), trefi = d === 3 ? 3.9 : 7.8, o = (trfc / (trefi * 1000)) * 100;
     return walk(ask(`Each refresh blocks the bank for tRFC = ${trfc} ns and refreshes come every ${trefi} µs${d === 3 ? ' (above 85 °C, where refresh rate doubles)' : ''}. What fraction of time is lost, in %?`, qty(o, '%', 0.02, sig(o)), `${trfc} ns / ${trefi * 1000} ns = ${sig(o)}%. Bigger chips have longer tRFC, so refresh overhead grows with density${d === 3 ? ', and heat makes it twice as bad' : ''}.`, 'Busy time / period.'),
       'refresh overhead', 'The time lost to refresh is the time busy (tRFC) divided by the time between refreshes (tREFI). Put both in the same unit first: 1 µs = 1000 ns.',
       calc('The period in ns (µs × 1000):', `${trefi} × 1000`, trefi * 1000, 'ns', String(trefi * 1000), 0.001),
@@ -368,7 +368,7 @@ export const fabPractice = practice('practice-fab', 'Fab & Yield Drills', 'litho
       calc('Cost per good die = wafer cost ÷ good dies, in dollars:', `${cost} / ${sig(good, 4)}`, per, '', sig(per), 0.03));
   },
   (r, d) => {
-    const lsl = pick(r, [0.9, 1.0]), usl = +(lsl + pick(r, [0.2, 0.3])).toFixed(2), s = pick(r, [0.02, 0.025, 0.03]);
+    const lsl = pick(r, [0.8, 0.9, 1.0, 1.1, 1.2]), usl = +(lsl + pick(r, [0.2, 0.3])).toFixed(2), s = pick(r, [0.015, 0.02, 0.025, 0.03, 0.035, 0.04]);
     const idea = 'Process capability says how comfortably a process fits inside its spec limits (LSL lower, USL upper). Cp = (USL - LSL) ÷ (6σ) compares the spec width with the process spread (±3σ), assuming it is centred. Cpk also includes how far the mean is from centre: Cpk = (distance from the mean to the NEARER limit) ÷ (3σ). A Cpk of 1.33 or more is a common target.';
     if (d === 1) {
       const cp = (usl - lsl) / (6 * s);
@@ -449,7 +449,7 @@ export const pkgPractice = practice('practice-pkg', 'Packaging Drills', 'chiplet
       calc('Cost ratio = chiplet yield ÷ big-die yield:', `${sig(ys, 4)} / ${sig(yb, 4)}`, ys / yb, 'x', sig(ys / yb), 0.02));
   },
   (r, d) => {
-    const tech = tier<[string, number]>(d, ['C4 bumps', 130], ['micro-bumps', 40], ['hybrid bonding', 9]), side = pick(r, [5, 10, 20]), n = ((side * 1000) / tech[1]) ** 2;
+    const tech = tier<[string, number]>(d, ['C4 bumps', 130], ['micro-bumps', 40], ['hybrid bonding', 9]), side = pick(r, [5, 8, 10, 12, 15, 20, 25]), n = ((side * 1000) / tech[1]) ** 2;
     return walk(ask(`A ${side} mm × ${side} mm area uses ${tech[0]} on a ${tech[1]} µm grid. About how many connections?`, qty(n, '', 0.03, String(Math.round(n))), `(${side * 1000} / ${tech[1]})² = ${Math.round(n).toLocaleString('en-US')}. From solder bumps to hybrid bonding, density goes up by about 200×: that is what makes 3D stacking and wide die-to-die links possible.`, 'Connections per side, squared.'),
       'connection density', 'Connections sit on a square grid with a fixed spacing (the pitch). Along one side of the area, the number that fit is the side length divided by the pitch. The grid is square, so the total is that number squared. Put both in µm: 1 mm = 1000 µm.',
       calc(`Connections along one side = ${side} mm × 1000 ÷ pitch ${tech[1]} µm:`, `${side * 1000} / ${tech[1]}`, (side * 1000) / tech[1], '', sig((side * 1000) / tech[1], 4), 0.005),
@@ -579,7 +579,7 @@ export const postsiPractice = practice('practice-postsi', 'Post-Silicon Drills',
       count(`Entries = time in ns × ${f} cycles per ns:`, `${w * 1000} × ${f}`, need));
   },
   (r, d) => {
-    const rate = pick(r, [0.1, 0.5, 2]), hrs = pick(r, [1, 4, 24]), lam = rate * hrs;
+    const rate = pick(r, [0.05, 0.1, 0.2, 0.5, 1, 2, 5]), hrs = pick(r, [1, 2, 4, 8, 12, 24, 48]), lam = rate * hrs;
     const idea = 'A rare random bug occurring on average "rate" times per hour follows a Poisson process. Over h hours the expected number of occurrences is λ = rate × h. The probability of seeing NONE in that time is e^(-λ), so the probability of seeing it at least once is 1 - e^(-λ).';
     if (d === 1) return walk(ask(`A bug shows up ${rate} times per hour on average. Expected occurrences in ${hrs} h?`, qty(lam, '', 0.02, sig(lam)), `${rate} per hour × ${hrs} h = ${sig(lam)} expected occurrences.`, 'Rate × time.'),
       'expected occurrences', idea,
@@ -595,7 +595,7 @@ export const postsiPractice = practice('practice-postsi', 'Post-Silicon Drills',
       calc('t = ln(20) ÷ rate, in hours:', `${sig(Math.log(20), 4)} / ${rate}`, t, 'h', sig(t), 0.03));
   },
   (r, d) => {
-    const v1 = 0.7, v2 = 0.9, f1 = pick(r, [1.8, 2.0]), f2 = +(f1 + pick(r, [0.8, 1.0])).toFixed(1), k = (f2 - f1) / (v2 - v1);
+    const v1 = 0.7, v2 = 0.9, f1 = pick(r, [1.6, 1.8, 2.0, 2.2]), f2 = +(f1 + pick(r, [0.6, 0.8, 1.0, 1.2])).toFixed(1), k = (f2 - f1) / (v2 - v1);
     const idea = 'A shmoo plot maps which combinations of voltage and frequency a chip passes. Fmax rises with voltage, roughly as a straight line over a small range. Given two points, the slope is (F2 - F1) ÷ (V2 - V1) in GHz per volt, and any other point on the line follows from it.';
     if (d < 3) {
       const v = pick(r, [0.75, 0.8, 0.85]), f = f1 + k * (v - v1);
@@ -679,7 +679,7 @@ export const atePractice = practice('practice-ate', 'Production Test Drills', 't
       calc('The fraction surviving the later stages, assembly × final test:', `${as} × ${ft}`, as * ft, '', sig(as * ft, 4), 0.005),
       calc('Cost per shipped part = die cost ÷ that fraction, in dollars:', `${pc} / ${sig(as * ft, 4)}`, cost, '', sig(cost), 0.02));
   },
-  (_r, d) => {
+  (r, d) => {
     const bins = [[0.2, 400], [0.5, 300], [0.3, 200]] as const, asp = bins.reduce((a, [f, p]) => a + f * p, 0);
     const idea = 'Speed binning sorts parts by the speed they can run at, and each bin sells for a different price. The average selling price is the average of the bin prices weighted by the fraction of parts in each bin: add up (fraction × price).';
     if (d < 3) return walk(ask(`Speed binning: 20% of parts sell at $400, 50% at $300, 30% at $200. Average selling price, in $?`, qty(asp, '', 0.01, String(asp)), `0.2 × 400 + 0.5 × 300 + 0.3 × 200 = $${asp}.`, 'Weighted average.'),
@@ -687,11 +687,14 @@ export const atePractice = practice('practice-ate', 'Production Test Drills', 't
       calc('The $400 bin contributes fraction × price:', '0.2 × 400', 80, '', '80', 0.001),
       calc('The $300 bin:', '0.5 × 300', 150, '', '150', 0.001),
       calc('The $200 bin, then add all three:', '0.3 × 200 + 80 + 150', asp, '', String(asp), 0.01));
-    return walk(ask('Binning: 20% at $400, 50% at $300, 30% at $200. A process fix moves 10 points from the $200 bin to the $400 bin. New average price, in $?', qty(asp + 0.1 * 200, '', 0.01, String(asp + 0.1 * 200)), `+0.1 × ($400 - $200) = +$20 → $${asp + 20}. Speed-bin mix is money.`, 'Only the moved fraction changes.'),
-      'the value of a better bin mix', `${idea} After the fix the fractions are 30% at $400, 50% at $300, 20% at $200. (Or: only the moved 10% changes, and each moved part is worth $200 more.)`,
-      calc('New contribution of the $400 bin:', '0.3 × 400', 120, '', '120', 0.001),
-      calc('New contribution of the $200 bin:', '0.2 × 200', 40, '', '40', 0.001),
-      calc('Add the unchanged $300 bin (0.5 × 300 = 150) for the new average:', '120 + 150 + 40', asp + 20, '', String(asp + 20), 0.01));
+    const split = pick(r, [[0.2, 0.5, 0.3], [0.3, 0.4, 0.3], [0.1, 0.5, 0.4], [0.25, 0.5, 0.25], [0.4, 0.4, 0.2]] as const), price = pick(r, [[400, 300, 200], [500, 350, 250], [600, 400, 250], [450, 320, 180]] as const), m = pick(r, [0.05, 0.1]);
+    const base = split[0] * price[0] + split[1] * price[1] + split[2] * price[2], gain = m * (price[0] - price[2]), after = base + gain;
+    const pc = (x: number) => `${Math.round(x * 100)}%`;
+    return walk(ask(`Binning: ${pc(split[0])} at $${price[0]}, ${pc(split[1])} at $${price[1]}, ${pc(split[2])} at $${price[2]}. A process fix moves ${Math.round(m * 100)} points from the $${price[2]} bin to the $${price[0]} bin. New average price, in $?`, qty(after, '', 0.01, sig(after)), `Only the moved ${Math.round(m * 100)}% changes: each moved part is worth $${price[0] - price[2]} more, so the average rises by ${sig(gain)} to $${sig(after)}.`, 'Weighted average, before and after.'),
+      'the value of a better bin mix', `${idea} After the fix the fractions are ${pc(split[0] + m)} at $${price[0]}, ${pc(split[1])} at $${price[1]}, ${pc(split[2] - m)} at $${price[2]}. (Or: only the moved ${Math.round(m * 100)}% changes, and each moved part is worth $${price[0] - price[2]} more.)`,
+      calc('Old average price, the weighted sum:', `${split[0]} × ${price[0]} + ${split[1]} × ${price[1]} + ${split[2]} × ${price[2]}`, base, '', sig(base), 0.01),
+      calc('Gain from the moved parts, fraction × price difference:', `${m} × (${price[0]} - ${price[2]})`, gain, '', sig(gain), 0.01),
+      calc('New average = old + gain:', `${sig(base)} + ${sig(gain)}`, after, '', sig(after), 0.01));
   },
   (r) => concept(r, [
     ['Difference between wafer sort and final test?', 'Sort probes bare dies; final tests packaged parts', ['They are the same test', 'Final test happens first', 'Wafer sort tests only the memory, and final test only the logic'], 'two test stages', 'Wafer sort tests bare dies on the wafer with needle probes, so bad dies are found before the cost of packaging is spent on them. Final test happens after packaging, to catch assembly damage and to verify speed and temperature specs.', ['Wafer sort happens:', 'Before packaging', ['After packaging', 'After shipping']], 'Wafer sort probes each die before dicing, so bad dies are not packaged; final test checks packaged parts, often at temperature and speed'],
@@ -741,7 +744,7 @@ export const emuPractice = practice('practice-emu', 'Prototyping Drills', 'LUTs,
       count('LUTs needed = signals to remove ÷ removed per LUT, rounded up:', `ceil(${n - 1} / ${k - 1})`, l));
   },
   (r, d) => {
-    const cyc = pick(r, [2, 5, 20]), f = tier(d, 1, pick(r, [1, 2]), 0.5), min = (cyc * 1e9) / (f * 1e6) / 60;
+    const cyc = pick(r, [1, 2, 3, 5, 10, 20, 50]), f = tier(d, 1, pick(r, [1, 2]), pick(r, [0.5, 0.25, 0.4, 0.8])), min = (cyc * 1e9) / (f * 1e6) / 60;
     return walk(ask(`Booting Linux takes ${cyc} billion cycles. On an emulator at ${f} MHz, how many minutes?`, qty(min, 'min', 0.03, sig(min)), `${cyc}e9 / ${f}e6 = ${sig(min * 60)} s = ${sig(min)} min. RTL simulation at 100 Hz would take years.`, 'Cycles / frequency.'),
       'boot time on an emulator', 'Time = number of cycles ÷ cycles per second. An emulator at f MHz does f million cycles per second. That gives seconds; divide by 60 for minutes.',
       calc('Seconds = cycles ÷ rate (billion = 1e9, MHz = 1e6):', `${cyc}e9 / ${f}e6`, (cyc * 1e9) / (f * 1e6), 's', sig((cyc * 1e9) / (f * 1e6), 4), 0.005),

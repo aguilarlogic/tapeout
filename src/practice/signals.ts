@@ -32,7 +32,7 @@ export const signalsPractice = practice('practice-signals', 'Signals Drills', 's
       calc('The frequency it appears at:', m > fs / 2 ? `${fs} - ${+m.toPrecision(6)}` : `${+m.toPrecision(6)}`, a, 'Hz', String(+a.toPrecision(6)), 0.01));
   },
   (r, d) => {
-    const k = pick(r, tier(d, [3], [3, 5, 7], [5, 7, 9]));
+    const k = pick(r, tier(d, [3], [3, 5, 7], [5, 7, 9, 11, 13, 15, 17]));
     const idea = 'A square wave is the sum of sine waves at the fundamental and its ODD multiples (3f, 5f, 7f...). The n-th harmonic has amplitude 1/n of the fundamental. In decibels, an amplitude ratio is 20·log10(ratio).';
     if (d === 1) return walk(ask('A square wave\'s 3rd harmonic has what amplitude relative to the fundamental? (a fraction)', qty(1 / 3, '', 0.02, '0.333'), 'A square wave contains only odd harmonics, with amplitudes 1, 1/3, 1/5, 1/7…: the 3rd is 1/3 of the fundamental.', 'Odd harmonics at 1/n.'),
       'harmonics of a square wave', idea,
@@ -44,7 +44,7 @@ export const signalsPractice = practice('practice-signals', 'Signals Drills', 's
       calc('In dB, 20·log10(ratio):', `20 × log10(${sig(1 / k)})`, db, '', sig(db), 0.02));
   },
   (r, d) => {
-    const tr = pick(r, tier(d, [1e-9, 350e-12], [100e-12, 50e-12, 2e-9], [35e-12, 20e-12, 70e-12]));
+    const tr = pick(r, tier(d, [1e-9, 350e-12], [100e-12, 50e-12, 2e-9], [35e-12, 20e-12, 70e-12, 25e-12, 40e-12, 15e-12, 60e-12, 80e-12]));
     const bw = 0.35 / tr;
     return walk(ask(`A digital edge has a 10-90% rise time of ${eng(tr, 's')}. Its effective bandwidth (0.35/t_r), in GHz?`, qty(bw / 1e9, 'GHz', 0.02, sig(bw / 1e9)), `0.35/${eng(tr, 's')} = ${eng(bw, 'Hz')}. The edge rate, not the clock frequency, sets how much bandwidth the channel, probe and scope need.`, 'BW ≈ 0.35 / t_r.'),
       'edge rate sets bandwidth', 'A fast edge contains high frequencies. For a single-pole response, the 10-90% rise time and the -3 dB bandwidth are tied: BW ≈ 0.35 / t_r. So a 35 ps edge needs about 10 GHz of bandwidth, whatever the clock rate.',
@@ -79,7 +79,7 @@ export const signalsPractice = practice('practice-signals', 'Signals Drills', 's
         calc('The pole\'s angular frequency ω (rad/s), from 1 + s/a = 0:', `a`, a, '', sig(a), 0.001),
         calc('Convert to Hz, ω/(2π):', `${sig(a)} / (2π)`, f, 'Hz', undefined, 0.02));
     }
-    const poles = pick(r, [['-2', '-5'], ['-1 ± 3j'], ['+1', '-4'], ['±2j'], ['-3 ± 1j', '+0.5']]);
+    const poles = pick(r, [['-2', '-5'], ['-1 ± 3j'], ['+1', '-4'], ['±2j'], ['-3 ± 1j', '+0.5'], ['-10'], ['-0.5 ± 4j'], ['+2', '-1'], ['0', '-3'], ['-6', '-1', '-2'], ['+0.1 ± 5j']]);
     const stable = poles.every((p) => p.startsWith('-'));
     const marginal = poles.some((p) => p.startsWith('±'));
     const right = marginal ? 'Marginally stable: it oscillates forever at constant amplitude' : stable ? 'Stable: every mode decays' : 'Unstable: some mode grows';
@@ -124,7 +124,7 @@ export const dspPractice = practice('practice-dsp', 'DSP Drills', 'FIR/IIR, z-do
       calc('Add the terms:', b.map((c, k) => `(${c * x[n - k]})`).join(' + '), y, '', String(y), 0.001));
   },
   (r, d) => {
-    const a = pick(r, tier(d, [0.5, 0.9], [0.8, 0.95, -0.5], [1.1, -1.2, 0.99, 0.999]));
+    const a = pick(r, tier(d, [0.5, 0.9], [0.8, 0.95, -0.5], [1.1, -1.2, 0.99, 0.999, 1.05, -1.5, 0.98, 1.3, -0.995]));
     const idea = 'The IIR y[n] = a·y[n-1] + x[n] feeds its own output back. Its single pole is at z = a. It is stable only if the pole is inside the unit circle, |a| < 1. At steady state with a constant input, the output stops changing, so y[n] = y[n-1] = y and y = a·y + x, giving y = x/(1 - a).';
     if (d < 3) {
       const X = pick(r, [1, 2, 10]);
@@ -157,14 +157,14 @@ export const dspPractice = practice('practice-dsp', 'DSP Drills', 'FIR/IIR, z-do
       calc(`${cycles} cycles means bin ${cycles}: f = M × bin width:`, `${cycles} × ${sig(fs / NN, 6)}`, (cycles * fs) / NN, 'Hz', sig((cycles * fs) / NN, 6), 0.001));
   },
   (r, d) => {
-    const bits = pick(r, [8, 10, 12, 16]);
+    const bits = pick(r, [6, 7, 8, 9, 10, 11, 12, 13, 14, 16, 18]);
     const sqnr = 6.02 * bits + 1.76;
     const idea = 'An ideal N-bit quantizer driven by a full-scale sine has a signal-to-quantization-noise ratio of 6.02·N + 1.76 dB: each extra bit halves the step size and buys about 6 dB. Real converters are worse; ENOB turns their measured SINAD back into an equivalent bit count: ENOB = (SINAD - 1.76)/6.02.';
     if (d < 3) return walk(ask(`Ideal SQNR of a ${bits}-bit quantizer with a full-scale sine, in dB?`, qty(sqnr, '', 0.01, sig(sqnr)), `6.02·N + 1.76 = ${sig(sqnr)} dB. Each bit buys about 6 dB.`, 'SQNR = 6.02N + 1.76 dB.'),
       'quantization noise', idea,
       calc('6.02 × N:', `6.02 × ${bits}`, 6.02 * bits, '', sig(6.02 * bits, 4), 0.005),
       calc('Plus 1.76 dB:', `${sig(6.02 * bits, 4)} + 1.76`, sqnr, '', sig(sqnr), 0.01));
-    const sinad = pick(r, [56, 62, 68, 74]);
+    const sinad = pick(r, [50, 54, 56, 58, 60, 62, 64, 66, 68, 70, 72, 74, 76]);
     const enob = (sinad - 1.76) / 6.02;
     return walk(ask(`A "12-bit" ADC measures SINAD = ${sinad} dB. Effective number of bits (ENOB)?`, qty(enob, '', 0.02, sig(enob)), `ENOB = (SINAD - 1.76)/6.02 = ${sig(enob)} bits. Noise, distortion and jitter eat the rest.`, 'Invert 6.02N + 1.76.'),
       'effective number of bits', idea,
@@ -172,7 +172,7 @@ export const dspPractice = practice('practice-dsp', 'DSP Drills', 'FIR/IIR, z-do
       calc('Divide by 6.02 dB per bit:', `${sig(sinad - 1.76, 4)} / 6.02`, enob, '', sig(enob), 0.02));
   },
   (r, d) => {
-    const M = pick(r, tier(d, [2, 4], [4, 8, 16], [16, 64, 256]));
+    const M = pick(r, tier(d, [2, 4], [4, 8, 16], [16, 64, 256, 32, 128, 512, 1024]));
     if (d < 3) {
       const fs = pick(r, [48e3, 1e6, 96e3]) * M;
       return walk(ask(`A signal at ${eng(fs, 'Hz')} is decimated by ${M}. New sample rate, in Hz?`, qty(fs / M, 'Hz', 0.01), `${eng(fs, 'Hz')}/${M} = ${eng(fs / M, 'Hz')}. Filter first, or everything above the new fs/2 aliases down.`, 'Divide by M.'),
@@ -210,7 +210,7 @@ export const dspPractice = practice('practice-dsp', 'DSP Drills', 'FIR/IIR, z-do
 
 export const controlPractice = practice('practice-control', 'Loop Drills', 'loop gain, steady-state error, GBW, phase margin, PID', [
   (r, d) => {
-    const K = pick(r, tier(d, [9, 99, 1], [19, 49, 999], [4, 24, 199]));
+    const K = pick(r, tier(d, [9, 99, 1], [19, 49, 999], [4, 24, 199, 9, 49, 74, 149, 399, 999]));
     const e = 1 / (1 + K);
     return walk(ask(`A proportional loop with DC loop gain K = ${K} and a step input. Steady-state error, in %?`, qty(e * 100, '%', 0.02, sig(e * 100)), `e_ss = 1/(1 + K) = ${sig(e * 100)}%. An integrator (infinite DC gain) would drive it to zero.`, 'e = 1/(1 + K).'),
       'steady-state error', 'A proportional controller only pushes when there is an error, so some error must remain to keep it pushing. With loop gain K, the output settles where the error is 1/(1 + K) of the step. More gain, less error; an integrator (infinite DC gain) removes it entirely.',
@@ -286,7 +286,7 @@ export const controlPractice = practice('practice-control', 'Loop Drills', 'loop
         'windup', 'If the output is stuck at its limit, the error stays and the integral keeps adding up. When the error finally reverses, it takes a long time to unwind, causing a big overshoot.',
         ['The fix is to stop integrating while:', 'The output is saturated', ['The error is small', 'The clock is slow']]],
     ], (right) => `${right}. PM ≈ 100·ζ for ζ below ~0.7: low margin means low damping.`);
-    const pm = pick(r, [30, 45, 60, 70]);
+    const pm = pick(r, [20, 30, 35, 40, 45, 50, 55, 60, 65, 70]);
     const z = pm / 100;
     const ex = (-Math.PI * z) / Math.sqrt(1 - z * z);
     const os = Math.exp(ex) * 100;
@@ -391,7 +391,7 @@ export const emPractice = practice('practice-em', 'Field & Wave Drills', 'capaci
       calc('After the reflection returns: V_incident × (1 + Γ):', `${V / 2} × (1 + ${sig(G)})`, (V / 2) * (1 + G), 'V', sig((V / 2) * (1 + G)), 0.02));
   },
   (r, d) => {
-    const f = pick(r, tier(d, [1e6, 1e9], [100e6, 10e9], [28e9, 56e9, 2.4e9]));
+    const f = pick(r, tier(d, [1e6, 1e9], [100e6, 10e9], [28e9, 56e9, 2.4e9, 5e9, 10e9, 24e9, 77e9, 40e9, 60e9]));
     const rho = 1.68e-8, mu = 4 * Math.PI * 1e-7;
     const den = Math.PI * f * mu;
     const delta = Math.sqrt(rho / den);
@@ -409,7 +409,7 @@ export const emPractice = practice('practice-em', 'Field & Wave Drills', 'capaci
         calc('λ = 3e8 / f, in metres:', `3e8 / ${f}`, 3e8 / f, '', sig(3e8 / f)),
         calc('In cm:', `${sig(3e8 / f)} × 100`, (3e8 / f) * 100, '', sig((3e8 / f) * 100), 0.02));
     }
-    const G = pick(r, [0.1, 0.2, 0.33, 0.05]);
+    const G = pick(r, [0.1, 0.2, 0.33, 0.05, 0.15, 0.25, 0.4, 0.5, 0.07, 0.02]);
     const rl = -20 * Math.log10(G);
     return walk(ask(`|Γ| = ${G}. Return loss, in dB?`, qty(rl, '', 0.02, sig(rl)), `RL = -20·log10|Γ| = ${sig(rl)} dB. Specs often ask for > 10-15 dB.${d === 3 ? ` VSWR = (1 + |Γ|)/(1 - |Γ|) = ${sig((1 + G) / (1 - G))}.` : ''}`, 'RL = -20 log10 |Γ|.'),
       'return loss', 'Return loss says how far below the incident wave the reflection is, in dB. Γ is a voltage ratio, so RL = -20·log10|Γ|. Bigger return loss is better: less reflected.',

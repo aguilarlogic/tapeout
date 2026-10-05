@@ -108,8 +108,11 @@ export const combPractice = practice('practice-comb', 'Building Block Drills', '
       ['the carry-out of a full adder with inputs a, b, cin', ['a', 'b', 'cin'], (v: Record<string, boolean>) => +v.a + +v.b + +v.cin >= 2, 'a&b | cin&(a^b)', ['A full adder carries out when:', 'At least two of the three inputs are 1', ['Exactly one input is 1', 'All inputs are 0']]],
       ['the sum of a full adder with inputs a, b, cin', ['a', 'b', 'cin'], (v: Record<string, boolean>) => (+v.a + +v.b + +v.cin) % 2 === 1, 'a ^ b ^ cin', ['The sum bit of a full adder is 1 when:', 'An odd number of the inputs are 1', ['At least two inputs are 1', 'All inputs are equal']]],
       ['a 2:1 mux: y = d1 when s, else d0', ['s', 'd0', 'd1'], (v: Record<string, boolean>) => (v.s ? v.d1 : v.d0), 's&d1 | ~s&d0', ['A 2:1 mux passes:', 'd1 when s = 1, and d0 when s = 0', ['d0 when s = 1', 'Both at once']]],
+      ['y = 1 when {a1,a0} < {b1,b0} (unsigned)', ['a1', 'a0', 'b1', 'b0'], (v: Record<string, boolean>) => 2 * +v.a1 + +v.a0 < 2 * +v.b1 + +v.b0, '~a1&b1 | ~(a1^b1)&~a0&b0', ['To compare two numbers, which bit decides first?', 'The most significant bit that differs', ['The least significant bit', 'The sum of the bits']]],
+      ['y = 1 when {a1,a0} + {b1,b0} carries out of 2 bits (the sum is 4 or more)', ['a1', 'a0', 'b1', 'b0'], (v: Record<string, boolean>) => 2 * +v.a1 + +v.a0 + 2 * +v.b1 + +v.b0 >= 4, 'a1&b1 | (a1|b1)&a0&b0', ['A 2-bit add carries out when:', 'The top bits both 1, or one is 1 and the low bits carry', ['Either low bit is 1', 'The inputs are equal']]],
+      ['y = 1 when exactly one of a, b, c is 1', ['a', 'b', 'c'], (v: Record<string, boolean>) => +v.a + +v.b + +v.c === 1, 'a&~b&~c | ~a&b&~c | ~a&~b&c', ['Exactly one input is 1 means:', 'Only the three single-1 rows give y = 1', ['Every row with any 1 gives y = 1', 'Only the all-ones row gives y = 1']]],
     ] as const;
-    const [desc, vars, f, canon, [pq, pr, pw]] = pick(r, d === 1 ? cases.slice(2) : d === 2 ? cases.slice(0, 4) : cases.slice(0, 2));
+    const [desc, vars, f, canon, [pq, pr, pw]] = pick(r, d === 1 ? cases.slice(2, 5) : d === 2 ? cases.slice(0, 4) : [cases[0], cases[1], cases[2], cases[5], cases[6], cases[7]]);
     const a = expr(canon, [...vars], f);
     return walk(ask(`Write a boolean expression for ${desc}. (& | ^ ~, any equivalent form)`, a, `One answer: ${canon}. Checked against the full truth table.`, 'Write the truth table rows where y = 1.'),
       'from a truth table to an expression', 'Any logic function can be written from its truth table: list every input combination and mark where y is 1. Each 1-row becomes an AND of the inputs (an input that is 0 in that row is written with ~), and you OR the rows together (sum of products). Then simplify by spotting patterns like XOR. Operators here: & AND, | OR, ^ XOR, ~ NOT.',
@@ -218,7 +221,7 @@ export const seqPractice = practice('practice-seq', 'Flop & Counter Drills', 'co
   },
   (r, d) => concept(r, tier(d, Q_SEQ1, Q_SEQ2, Q_SEQ3), (why) => `${why}.`),
   (r, d) => {
-    const n = pick(r, tier(d, [10, 60, 100], [1000, 1e6], [48e6, 1e9]));
+    const n = pick(r, tier(d, [10, 60, 100], [1000, 1e6], [48e6, 1e9, 2e9, 3e8, 5e7, 24e6, 125e6, 1e10]));
     const k = Math.ceil(Math.log2(n));
     return walk(ask(`${d === 3 ? `A timer counts ${n.toLocaleString('en-US')} cycles of a clock and then fires.` : `A counter must count from 0 to ${n - 1}.`} How many flip-flops does it need at minimum?`, num(k), `ceil(log2 ${n}) = ${k}${d === 3 ? ` (2^${k} = ${(2 ** k).toLocaleString('en-US')} ≥ ${n.toLocaleString('en-US')})` : ''}.`, 'Smallest k with 2^k ≥ n.'),
       'how many flops to count', `Each flip-flop stores one bit, and k bits can tell 2^k different values apart. A counter that must reach ${n} different values therefore needs the smallest k with 2^k at least ${n}: that is log2 of ${n}, rounded UP.`,
@@ -371,12 +374,19 @@ export const verilogPractice = practice('practice-verilog', 'Verilog Drills', 'w
     const ones = v.toString(2).split('').filter((c) => c === '1').length;
     const bv = v.toString(2).padStart(8, '0');
     const H = v.toString(16).toUpperCase();
+    const idea4 = 'Verilog has four values: 0, 1, x (unknown) and z. An unknown input makes the output unknown UNLESS the other inputs already settle it: AND with a 0 is always 0 and OR with a 1 is always 1, whatever x is.';
     const variants = [
       [1, `&8'h${H}`, v === 255 ? 1 : 0, 'AND-reduce is 1 only if every bit is 1.', 'reduction AND', 'A reduction operator folds all the bits of a vector into one bit with the same gate. &x is the AND of every bit: it is 1 only when every bit is 1.', [step('Write the value in binary:', bin(v, 8)), count('Are all eight bits 1? (1 for yes, 0 for no)', '&x', v === 255 ? 1 : 0)]],
       [1, `|8'h${H}`, 1, 'OR-reduce is 1 if any bit is 1.', 'reduction OR', 'A reduction operator folds all the bits of a vector into one bit with the same gate. |x is the OR of every bit: it is 1 when at least one bit is 1.', [step('Write the value in binary:', bin(v, 8)), count('Is at least one bit 1? (1 for yes, 0 for no)', '|x', 1)]],
       [2, `^8'h${H}`, ones % 2, `XOR-reduce is the parity: ${ones} ones → ${ones % 2}.`, 'reduction XOR (parity)', 'A reduction operator folds all the bits of a vector into one bit with the same gate. ^x is the XOR of every bit, which is 1 exactly when the number of 1 bits is odd: the parity.', [step('Write the value in binary:', bin(v, 8)), count('How many of the bits are 1?', `ones in ${bv}`, ones), count('Odd count gives 1, even gives 0. The result:', `${ones} mod 2`, ones % 2)]],
       [3, `(1'bx & 1'b0) | (1'bx & 1'b1 & 1'b0)`, 0, 'x & 0 = 0 in 4-state logic, so both terms are 0.', 'x in 4-state logic', 'Verilog has four values: 0, 1, x (unknown) and z. An unknown input makes the output unknown UNLESS the other inputs already settle it: AND with a 0 is always 0 and OR with a 1 is always 1, whatever x is.', [choice('x AND 0 is:', '0: a 0 forces an AND to 0', ['x', '1']), choice('x AND 1 AND 0 is:', '0: the 0 settles it', ['x', '1']), count('OR of the two terms (0 | 0):', '0 | 0', 0)]],
       [3, `1'bx | 1'b1`, 1, 'x | 1 = 1: whatever x is, the OR is 1.', 'x in 4-state logic', 'Verilog has four values: 0, 1, x (unknown) and z. An unknown input makes the output unknown UNLESS the other inputs already settle it: AND with a 0 is always 0 and OR with a 1 is always 1, whatever x is.', [choice('x OR 1 is:', '1: a 1 forces an OR to 1', ['x', '0']), count('The result:', "1'bx | 1'b1", 1)]],
+      [3, `1'b0 & 1'bz`, 0, 'z & 0 = 0: a 0 settles an AND, whatever z is.', 'x in 4-state logic', idea4, [choice('z AND 0 is:', '0: a 0 forces an AND to 0', ['x', '1']), count('The result:', "1'b0 & 1'bz", 0)]],
+      [3, `1'b1 | 1'bz`, 1, 'z | 1 = 1: a 1 settles an OR, whatever z is.', 'x in 4-state logic', idea4, [choice('z OR 1 is:', '1: a 1 forces an OR to 1', ['x', '0']), count('The result:', "1'b1 | 1'bz", 1)]],
+      [3, `(1'bx | 1'b1) & 1'b1`, 1, 'x | 1 = 1, then 1 & 1 = 1.', 'x in 4-state logic', idea4, [choice('x OR 1 is:', '1: a 1 forces an OR to 1', ['x', '0']), count('Then 1 AND 1:', '1 & 1', 1)]],
+      [3, `~(1'bx | 1'b1)`, 0, 'x | 1 = 1, and the inverse of 1 is 0.', 'x in 4-state logic', idea4, [choice('x OR 1 is:', '1: a 1 forces an OR to 1', ['x', '0']), count('The inverse of that:', '~1', 0)]],
+      [3, `(1'bx & 1'b0) | 1'b1`, 1, 'x & 0 = 0, and 0 | 1 = 1.', 'x in 4-state logic', idea4, [choice('x AND 0 is:', '0: a 0 forces an AND to 0', ['x', '1']), count('Then 0 OR 1:', '0 | 1', 1)]],
+      [3, `1'bz & 1'b0 & 1'b1`, 0, 'z & 0 & 1 = 0: the 0 settles the AND.', 'x in 4-state logic', idea4, [choice('z AND 0 is:', '0: a 0 forces an AND to 0', ['x', '1']), count('The result:', "1'bz & 1'b0 & 1'b1", 0)]],
     ] as const;
     const [, e, val, why, method, idea, beats] = pick(r, variants.filter((q) => q[0] === d));
     return walk(ask(`What does ${e} evaluate to? (0 or 1)`, num(val), why, 'Reduction operators fold every bit with the same gate.'), method, idea, ...beats);
@@ -441,7 +451,7 @@ export const aluPractice = practice('practice-alu', 'Datapath Drills', 'ALU flag
       step('In hex:', hexa(v, 2)));
   },
   (r, d) => {
-    const n = pick(r, [8, 16, 32, 64]);
+    const n = pick(r, [8, 16, 32, 64, 12, 24, 48, 128]);
     const mult = 'Multiplying is adding shifted copies: for each bit of the multiplier that is 1, you add a copy of the multiplicand shifted into that bit\'s position. Each copy is a partial product, and all of them must be added. Fewer partial products means a smaller, faster adder tree. Booth recoding reads the multiplier two bits at a time to halve the count.';
     if (d === 1) return walk(ask(`A plain n×n array multiplier makes one partial product per multiplier bit. For ${n}×${n}, how many partial products?`, num(n), `${n}: one per bit of the multiplier, each an AND of the multiplicand with that bit.`, 'One per multiplier bit.'),
       'partial products', mult,
@@ -547,7 +557,7 @@ export const clkPractice = practice('practice-clk', 'Clock Domain Drills', 'MTBF
       count('Depth = burst words minus words read, rounded up (never below 0):', `max(0, ceil(${B} - ${sig((B / fwEff) * fr, 4)}))`, Math.max(0, depth)));
   },
   (r, d) => {
-    const f = pick(r, [100, 200, 400]), n = pick(r, tier(d, [2, 4], [3, 5, 8], [3, 5, 7]));
+    const f = pick(r, [100, 200, 400, 50, 250, 500, 800, 1000]), n = pick(r, tier(d, [2, 4], [3, 5, 8], [3, 5, 7, 9, 11, 13]));
     if (d < 3) return walk(ask(`A counter-based divider divides a ${f} MHz clock by ${n}. Output frequency, in MHz?`, qty(f / n, 'MHz', 0.01), `${f}/${n} = ${sig(f / n)} MHz.`, 'Divide.'),
       'clock dividers', 'A divide-by-n circuit produces one output cycle for every n input cycles, so the output frequency is the input frequency divided by n.',
       calc('Output frequency = input ÷ n:', `${f} / ${n}`, f / n, 'MHz', sig(f / n, 4), 0.01));

@@ -142,7 +142,7 @@ export const hwsecPractice = practice('practice-hwsec', 'Security Drills', 'brut
       'a timing side channel', 'If the check stops at the first wrong byte, it takes longer when more of the start is right. An attacker can try all 256 values for the first byte and pick the one that takes longest; that byte is now known, so repeat for the next. Each byte is solved separately, so the work ADDS up instead of multiplying.',
       count('Worst case for ONE byte, trying every value:', '2^8', 256),
       count(`Do that for each of the ${n} bytes in turn:`, `${n} × 256`, n * 256));
-    const [bits, rate] = pick(r, [[40, 1e9], [56, 1e12], [64, 1e12]] as const), s = 2 ** bits / rate, hrs = s / 3600;
+    const [bits, rate] = pick(r, [[40, 1e9], [56, 1e12], [64, 1e12], [48, 1e9], [44, 1e9], [52, 1e12], [60, 1e12], [72, 1e12], [80, 1e15]] as const), s = 2 ** bits / rate, hrs = s / 3600;
     return walk(ask(`A ${bits}-bit key, and an attacker can try ${rate === 1e9 ? 'a billion' : 'a trillion'} keys per second. Worst-case time, in hours?`, qty(hrs, 'h', 0.03, sig(hrs)), `2^${bits} / ${rate} = ${sig(s)} s = ${sig(hrs)} h. Every extra bit doubles it; at 128 bits the answer is longer than the age of the universe.`, 'Keys / rate.'),
       'time to brute force a key', 'A key of N bits has 2^N possible values. The attacker tries them at some rate per second, so the worst-case time is (number of keys) ÷ (keys per second). Divide by 3600 to turn seconds into hours.',
       calc(`Number of keys = 2^${bits}:`, `2^${bits}`, 2 ** bits, '', sci(2 ** bits, 3), 0.01),
@@ -259,7 +259,7 @@ export const fusaPractice = practice('practice-fusa', 'Functional Safety Drills'
       calc('FIT = failures ÷ device-hours × 10⁹:', `${fails} / ${n * h} × 1e9`, f, '', sig(f), 0.02));
   },
   (r, d) => {
-    const k = pick(r, [8, 16, 32, 64, 128]);
+    const k = pick(r, [8, 16, 32, 64, 128, 12, 20, 24, 48, 96, 256]);
     let rr = 1;
     while (2 ** rr < k + rr + 1) rr++;
     const idea = 'A Hamming code adds r check bits to k data bits so that one flipped bit can be located and fixed. The r check bits must be able to say which of the k + r bit positions is wrong, or that none is: 2^r ≥ k + r + 1. SECDED adds one more overall parity bit, so a double-bit error is detected too (but not corrected).';
@@ -277,7 +277,7 @@ export const fusaPractice = practice('practice-fusa', 'Functional Safety Drills'
       calc('Overhead = check bits ÷ data bits, as a %:', `${rr + 1} / ${k} × 100`, ((rr + 1) / k) * 100, '%', sig(((rr + 1) / k) * 100), 0.02));
   },
   (r, d) => {
-    const safe = pick(r, [0.3, 0.4, 0.5]);
+    const safe = pick(r, [0.2, 0.25, 0.3, 0.35, 0.4, 0.5, 0.6]);
     const idea = 'Faults can be SAFE (they cannot cause a dangerous failure) or dangerous. A safety mechanism detects a fraction DC (diagnostic coverage) of the dangerous faults. The rest are RESIDUAL faults: dangerous and undetected. The single-point fault metric SPFM = 1 - (residual faults ÷ all faults). So residual = (1 - safe) × (1 - DC), as a fraction of ALL faults. ASIL D needs SPFM ≥ 99%.';
     if (d < 3) {
       const dc = pick(r, [0.9, 0.97, 0.99]), spfm = (1 - (1 - safe) * (1 - dc)) * 100;
@@ -296,7 +296,7 @@ export const fusaPractice = practice('practice-fusa', 'Functional Safety Drills'
       calc('DC = 1 minus that, as a %:', `(1 - ${sig(0.01 / (1 - safe), 5)}) × 100`, dc, '%', sig(dc, 4), 0.002));
   },
   (r, d) => {
-    const parts = tier(d, [['CPU', 20], ['RAM', 30]], [['CPU', 40], ['RAM', 60], ['bus', 10]], [['CPU', 80], ['RAM', 120], ['bus', 20], ['clock', 5]]) as [string, number][];
+    const parts = tier(d, [['CPU', 20], ['RAM', 30]], [['CPU', 40], ['RAM', 60], ['bus', 10]], [['CPU', pick(r, [60, 80, 100])], ['RAM', pick(r, [100, 120, 150])], ['bus', pick(r, [10, 20, 30])], ['clock', pick(r, [5, 8])]]) as [string, number][];
     const dc = pick(r, [0.9, 0.95, 0.99]), total = parts.reduce((a, [, f]) => a + f, 0), res = total * (1 - dc);
     return walk(ask(`Raw dangerous FIT: ${parts.map(([n, f]) => `${n} ${f}`).join(', ')}. Every part has ${dc * 100}% diagnostic coverage. Residual FIT (PMHF contribution)?`, qty(res, '', 0.02, sig(res)), `(${parts.map(([, f]) => f).join(' + ')}) × ${sig(1 - dc)} = ${sig(res)} FIT. ASIL D requires under 10 FIT for the whole item${res >= 10 ? ', so this fails' : ''}.`, 'Sum × (1 - coverage).'),
       'residual FIT (PMHF)', 'The probabilistic metric for random hardware failures (PMHF) adds up the failure rate (in FIT) of all the dangerous faults that are NOT caught by a safety mechanism. For each block the undetected part is FIT × (1 - coverage). When all blocks have the same coverage, add the raw FITs first and multiply once.',
@@ -337,13 +337,13 @@ export const fusaBoss = boss({
 
 export const photonicsPractice = practice('practice-photonics', 'Photonics Drills', 'band gaps, WDM, energy per bit, link budgets, photodetectors', [
   (r, d) => {
-    const m = pick(r, [['Silicon', 1.12], ['Germanium', 0.66], ['InP', 1.34], ['GaAs', 1.42]] as const);
+    const m = pick(r, [['Silicon', 1.12], ['Germanium', 0.66], ['InP', 1.34], ['GaAs', 1.42], ['InGaAs', 0.75], ['GaP', 2.26]] as const);
     const idea = 'Light comes in particles called photons, and each photon of wavelength λ carries energy E = h·c ÷ λ. In convenient units: E (in eV) = 1.24 ÷ λ (in µm). A semiconductor can absorb a photon only if its energy is at least the material\'s band gap Eg. So the LONGEST wavelength a material absorbs is where the photon energy equals the band gap: λ = 1.24 ÷ Eg.';
     if (d < 3) return walk(ask(`${m[0]} has a band gap of ${m[1]} eV. Longest wavelength it absorbs, in µm? (λ = 1.24/Eg)`, qty(1.24 / m[1], 'um', 0.02, sig(1.24 / m[1])), `1.24 / ${m[1]} = ${sig(1.24 / m[1])} µm. Silicon is transparent at 1.31 and 1.55 µm, which is why it makes good waveguides and needs germanium to detect light.`, 'Photon energy must exceed the band gap.'),
       'the absorption edge', idea,
       choice('A photon can be absorbed only if its energy is:', 'At least the band gap', ['Below the band gap', 'Exactly zero']),
       calc('λ = 1.24 ÷ Eg, in µm:', `1.24 / ${m[1]}`, 1.24 / m[1], 'um', sig(1.24 / m[1]), 0.02));
-    const lam = pick(r, [1.31, 1.55]), e = 1.24 / lam;
+    const lam = pick(r, [1.31, 1.55, 0.85, 1.27, 1.33, 1.49, 1.61, 1.0]), e = 1.24 / lam;
     return walk(ask(`What is the energy of a ${lam} µm photon, in eV?`, qty(e, 'eV', 0.02, sig(e)), `1.24 / ${lam} = ${sig(e)} eV: below silicon's 1.12 eV band gap, so silicon cannot absorb it.`, 'E = 1.24/λ with λ in µm.'),
       'photon energy', idea,
       calc('E = 1.24 ÷ λ, in eV:', `1.24 / ${lam}`, e, 'eV', sig(e), 0.02));
@@ -447,7 +447,7 @@ export const qubitPractice = practice('practice-qubit', 'Qubit Drills', 'state s
         calc('Number of amplitudes, 2^n:', `2^${n}`, 2 ** n, '', sci(2 ** n, 3), 0.01),
         calc('GB = amplitudes × 16 bytes ÷ 1e9:', `${sci(2 ** n, 3)} × 16 / 1e9`, gb, 'GB', sig(gb), 0.02));
     }
-    const tb = pick(r, [1, 100]), n = Math.floor(Math.log2((tb * 1e12) / 16));
+    const tb = pick(r, [1, 10, 50, 100, 200, 500, 1000]), n = Math.floor(Math.log2((tb * 1e12) / 16));
     return walk(ask(`How many qubits can a full state-vector simulation hold in ${tb} TB (16 bytes per amplitude)?`, num(n), `2^n × 16 ≤ ${tb}e12 → n = ${n}. A hundred times the memory buys only ${Math.round(Math.log2(100))} more qubits.`, 'log2(memory / 16), rounded down.'),
       'how many qubits fit in memory', `${idea} To find how many qubits fit, ask how many amplitudes the memory can hold, then how many times 2 doubles to that (log base 2), rounded down.`,
       calc('Amplitudes that fit = memory in bytes ÷ 16:', `${tb}e12 / 16`, (tb * 1e12) / 16, '', sci((tb * 1e12) / 16, 3), 0.01),
@@ -466,7 +466,7 @@ export const qubitPractice = practice('practice-qubit', 'Qubit Drills', 'state s
         choice('The amplitude of |1⟩ is ' + b + '. The probability of reading 1 is the amplitude:', 'Squared', ['Itself', 'Doubled']),
         calc('Probability = amplitude squared, as a % (× 100):', `${b}^2 × 100`, b * b * 100, '%', sig(b * b * 100), 0.01));
     }
-    const th = pick(r, [30, 60, 90, 120]), p = Math.sin(((th / 2) * Math.PI) / 180) ** 2 * 100;
+    const th = pick(r, [20, 30, 40, 50, 60, 75, 90, 105, 120, 150]), p = Math.sin(((th / 2) * Math.PI) / 180) ** 2 * 100;
     return walk(ask(`A qubit in |0⟩ is rotated by θ = ${th}° about the X axis, giving cos(θ/2)|0⟩ - i·sin(θ/2)|1⟩. Probability of measuring 1, in %?`, qty(p, '%', 0.02, sig(p)), `sin²(${th / 2}°) = ${sig(p)}%. A π rotation (180°) flips the qubit completely.`, 'sin²(θ/2).'),
       'the Born rule after a rotation', `${idea} After the rotation, the amplitude of |1⟩ is sin(θ/2) (the factor -i only changes its phase, not its size). So the probability of 1 is sin²(θ/2).`,
       calc('Half the angle, θ/2, in degrees:', `${th} / 2`, th / 2, '', String(th / 2), 0.001),
@@ -474,7 +474,7 @@ export const qubitPractice = practice('practice-qubit', 'Qubit Drills', 'state s
       calc('Probability = amplitude squared, as a %:', `${sig(Math.sin(((th / 2) * Math.PI) / 180), 4)}^2 × 100`, p, '%', sig(p), 0.02));
   },
   (r, d) => {
-    const f = pick(r, [0.99, 0.995, 0.999]);
+    const f = pick(r, [0.97, 0.98, 0.99, 0.995, 0.998, 0.999, 0.9995]);
     const idea = 'If each gate succeeds with probability f (its fidelity), and errors are independent, then a circuit of n gates runs error-free with probability f^n: the chances multiply. Even very good gates compound into a poor result over many operations.';
     if (d < 3) {
       const n = pick(r, [50, 100, 500]), p = f ** n * 100;
@@ -575,12 +575,12 @@ export const qctrlPractice = practice('practice-qctrl', 'Quantum Control Drills'
       calc('New length = old length ÷ amplitude scale, in ns:', `${t0} / ${s}`, t, 'ns', sig(t), 0.02));
   },
   (r, d) => {
-    const a = pick(r, [10, 20, 30]), al = 10 ** (a / 10);
+    const a = pick(r, [10, 15, 20, 25, 30, 40]), al = 10 ** (a / 10);
     const idea = 'An attenuator of A dB lets through only 1 ÷ 10^(A/10) of the power. It also adds its own thermal noise, at the temperature it sits at. So the noise temperature at its output is (noise in ÷ attenuation) + (its own temperature × (1 - 1/attenuation)). The hot noise from room temperature is reduced at each cold stage, but never below that stage\'s own temperature.';
     if (d === 1) return walk(ask(`A ${a} dB attenuator passes what fraction of the input power? (answer as 1/N: give N)`, qty(al, '', 0.01, String(al)), `10^(${a}/10) = ${al}: only 1/${al} gets through.`, 'Undo the dB.'),
       'attenuation in dB', idea,
       calc('N = 10^(dB ÷ 10):', `10^(${a} / 10)`, al, '', String(al), 0.01));
-    const tin = pick(r, [300, 50]), ts = pick(r, [4, 0.8]), tout = tin / al + ts * (1 - 1 / al);
+    const tin = pick(r, [300, 50, 77, 100, 150]), ts = pick(r, [4, 0.8]), tout = tin / al + ts * (1 - 1 / al);
     if (d === 2) return walk(ask(`${tin} K of thermal noise enters a ${a} dB attenuator sitting at ${ts} K. Effective noise temperature at its output, in K?`, qty(tout, 'K', 0.02, sig(tout)), `T = ${tin}/${al} + ${ts} × (1 - 1/${al}) = ${sig(tout)} K. An attenuator at T emits noise at T, so each stage can only cool the noise to near its own temperature.`, 'Attenuated input plus the attenuator\'s own noise.'),
       'noise through an attenuator', idea,
       calc('The attenuation N = 10^(dB ÷ 10):', `10^(${a} / 10)`, al, '', String(al), 0.01),

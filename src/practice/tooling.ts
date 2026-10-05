@@ -22,6 +22,11 @@ const REGEX_TASKS = [
   [3, 'bus references like data_q[7] or addr[15:0]', '\\w+\\[\\d+(:\\d+)?\\]', ['data_q[7]', 'addr[15:0]', 'x[0]'], ['data_q[]', 'addr[15:]', 'data_q'], 'escapes and optional groups', ['To match a literal square bracket you write:', '\\[ (escape it)', ['[ (unescaped)', '{ }']]],
   [3, "Verilog sized literals like 8'hFF, 4'b1010 or 32'd7", "[0-9]+'[bdh][0-9a-fA-F_]+", ["8'hFF", "4'b1010", "32'd7"], ["'hFF", "8'q12", "8'h"], 'escapes and optional groups', ['After the size and the apostrophe, one base letter b, d or h is:', "[bdh]", ['(bdh)', 'bdh+']]],
   [3, 'lines that do NOT contain PASS anywhere', '^(?!.*PASS)', ['FAIL fifo_test', 'timeout in axi'], ['PASS fifo_test', 'test 3 PASS'], 'negative lookahead', ['Which piece says "from the start of the line, PASS never appears after this point"?', '(?!.*PASS)', ['[^PASS]', '!PASS']]],
+  [3, 'Verilog identifiers that start with a letter or underscore, like clk_en or _tmp1', '^[A-Za-z_][A-Za-z0-9_]*$', ['clk_en', '_tmp1', 'a'], ['1abc', 'clk-en', 'a b'], 'anchors, classes and repeats', ['Why anchor the pattern with ^ and $?', 'So the whole line must be an identifier, not just contain one', ['To make the match run faster', 'To allow any characters in between']]],
+  [3, 'dotted quads such as 192.168.0.1 (four groups of 1 to 3 digits)', '^[0-9]{1,3}(\\.[0-9]{1,3}){3}$', ['192.168.0.1', '10.0.0.255'], ['192.168.0', '1.2.3.4.5', 'a.b.c.d'], 'counted repeats', ['To repeat a group exactly three times you write:', '(...){3}', ['(...)+3', '(...)*3']]],
+  [3, 'lines containing PASS or FAIL as a whole word, not inside another word', '\\b(PASS|FAIL)\\b', ['test PASS', 'FAIL fifo', 'x: FAIL.'], ['PASSED', 'BYPASS', 'FAILURE'], 'word boundaries', ['Which symbol marks a word boundary?', '\\b', ['\\w', '^']]],
+  [3, 'a hex literal with optional underscores, like 0xDEAD_BEEF', '0x[0-9a-fA-F]+(_[0-9a-fA-F]+)*', ['0xDEAD_BEEF', '0x1F', '0x12_34_56'], ['0x', '0xZZ', 'DEAD_BEEF'], 'optional repeating groups', ['Which suffix means "zero or more of the group"?', '*', ['+', '?']]],
+  [3, "a Verilog sized binary like 4'b1010 or 8'b0000_1111", "[0-9]+'b[01_]+", ["4'b1010", "8'b0000_1111"], ["4'bx", "8'hFF", "'b01"], 'classes inside literals', ['Which class allows only the digits 0 and 1, and underscores?', '[01_]', ['[0-9]', '[01-]']]],
 ] as const;
 
 const TESTS = ['fifo_test', 'axi_test', 'dma_test', 'irq_test', 'cdc_test'];
@@ -42,6 +47,11 @@ const SHELL_TASKS = [
   [3, 'Print only the 3rd whitespace-separated column of report.txt, for lines whose 2nd column is FAIL.', "awk '$2 == \"FAIL\" {print $3}' report.txt", [['awk'], ['$2'], ['fail'], ['print $3'], ['report.txt']], 'awk fields', 'awk splits every line into columns called $1, $2, $3. A condition picks which lines to act on, and the braces say what to do: awk \'condition {action}\' file.', ['How does awk name the 3rd column?', '$3', ['%3', '3$']]],
   [3, 'Run make, and only if it succeeds, run ./sim.', 'make && ./sim', [['make'], ['&&'], ['./sim']], 'chaining with &&', 'Every command ends with an exit status: 0 means success. && runs the next command only if the previous one succeeded, so a failed build never reaches the simulator.', ['Which joiner runs the second command only if the first succeeded?', '&&', [';', '|']]],
   [3, 'Send both stdout and stderr of ./sim into sim.log.', './sim > sim.log 2>&1', [['./sim'], ['sim.log'], ['2>&1', '&>']], 'redirecting both streams', 'A program writes normal output to stream 1 (stdout) and errors to stream 2 (stderr). > file sends stdout to a file; 2>&1 sends stderr to wherever stdout is going. Order matters: redirect to the file first, then add 2>&1.', ['To send stderr to the same place as stdout, add:', '2>&1', ['1>&2', '>> 2']]],
+  [3, 'Print how many different tests appear in the first column of results.txt.', "cut -d' ' -f1 results.txt | sort -u | wc -l", [['cut', 'awk'], ['sort'], ['-u', 'uniq'], ['wc'], ['results.txt']], 'sort -u and wc', 'sort -u prints each distinct line once, and wc -l counts lines. Pipe them: pull out the column, remove the duplicates, then count.', ['Which sort option drops duplicate lines?', '-u', ['-r', '-n']]],
+  [3, 'List the 5 largest files in the current directory, biggest first.', 'ls -S | head -n 5', [['ls'], ['-s'], ['head'], ['5']], 'ls -S', 'ls -S sorts by size, largest first, and head -n 5 keeps just the first five lines.', ['Which ls option sorts by size?', '-S', ['-t', '-r']]],
+  [3, 'Run ./sim in the background so you can keep using the terminal.', './sim &', [['./sim'], ['&']], 'background jobs', 'A trailing & starts the command in the background and gives the prompt back. jobs lists them and fg brings one to the front.', ['Which symbol at the end of a command runs it in the background?', '&', ['|', ';']]],
+  [3, 'Print every line of run.log that does NOT contain PASS.', 'grep -v PASS run.log', [['grep'], ['-v'], ['pass'], ['run.log']], 'inverting grep', 'grep -v prints the lines that do NOT match. It hides the noise and keeps what is left.', ['Which grep option inverts the match?', '-v', ['-i', '-c']]],
+  [3, 'Delete every .tmp file under the current directory, in one command.', 'find . -name "*.tmp" -delete', [['find'], ['-name', '-iname'], ['.tmp'], ['-delete', 'xargs rm', '-exec rm']], 'find -delete', 'find can act on what it finds: -delete removes each match. Try it with -print first, because there is no undo.', ['Which find action removes the matched files?', '-delete', ['-remove', '-kill']]],
 ] as const;
 
 export const shellPractice = practice('practice-shell', 'Shell Drills', 'regex, pipes, grep/sort/uniq, permissions', [
@@ -127,11 +137,16 @@ const GIT_TASKS = [
   [3, 'Copy one commit (def456) from another branch onto yours.', 'git cherry-pick def456', [['git cherry-pick'], ['def456']], 'cherry-picking', 'Merge brings a whole branch; cherry-pick copies just one commit, named by its hash, onto the branch you are on (as a new commit).', ['Which command copies one single commit onto the current branch?', 'git cherry-pick', ['git merge', 'git rebase']]],
   [3, 'Find the commit where HEAD pointed before a bad reset, so you can recover it.', 'git reflog', [['git reflog']], 'the reflog', 'git reflog is a private diary of everywhere HEAD has been, including commits no branch points to any more. After a bad reset, the lost commit\'s hash is still listed there.', ['Which command lists where HEAD used to point?', 'git reflog', ['git status', 'git log --all']]],
   [3, 'Show who last changed each line of fifo.sv.', 'git blame fifo.sv', [['git blame', 'git annotate'], ['fifo.sv']], 'git blame', 'git blame prints the file with, on every line, the commit and author that last changed it. Use it to find out why a line is the way it is.', ['Which command shows who last changed each line?', 'git blame', ['git diff', 'git log']]],
+  [3, 'Replay your branch commits on top of main, one by one.', 'git rebase main', [['git rebase'], ['main']], 'rebasing', 'git rebase main sets your commits aside, moves the branch to the tip of main, and replays them on top. History stays linear, but the replayed commits are new ones.', ['Which command replays your commits on top of main?', 'git rebase', ['git merge', 'git cherry-pick']]],
+  [3, 'Start a binary search for a bug between the known good tag v1.0 and now.', 'git bisect start HEAD v1.0', [['git bisect'], ['start'], ['v1.0']], 'starting a bisect', 'git bisect start <bad> <good> begins a binary search over the commits between a bad one and a good one. You then test each commit it checks out and answer good or bad.', ['What does git bisect need to start?', 'One bad and one good commit', ['Only the bad commit', 'A list of every commit']]],
+  [3, 'Show the full history of one file, fifo.sv, following it across renames.', 'git log --follow fifo.sv', [['git log'], ['--follow'], ['fifo.sv']], 'following a file', 'git log <file> lists the commits that touched it; --follow keeps following it across renames, which a plain git log would lose.', ['Which flag follows a file across renames?', '--follow', ['--rename', '--all']]],
+  [3, 'Squash your last 3 commits into one by editing them interactively.', 'git rebase -i HEAD~3', [['git rebase'], ['-i', '--interactive'], ['head~3']], 'interactive rebase', 'git rebase -i HEAD~3 opens the last three commits in an editor. Mark the later ones squash (or fixup) to fold them into the first.', ['Which flag makes a rebase interactive?', '-i', ['-s', '-f']]],
+  [3, 'Delete the local branch fix-fifo after it has been merged.', 'git branch -d fix-fifo', [['git branch'], ['-d', '-D', '--delete'], ['fix-fifo']], 'deleting a branch', 'git branch -d deletes a branch and refuses if it has unmerged commits (-D forces it). Deleting a merged branch loses nothing.', ['Which flag deletes a branch safely?', '-d', ['-m', '-a']]],
 ] as const;
 
 export const gitPractice = practice('practice-git', 'Git Drills', 'commits, branches, merge vs rebase, bisect, recovery', [
   (r, d) => {
-    const n = pick(r, tier(d, [8, 16, 100], [300, 1000, 50], [5000, 12345, 777]));
+    const n = pick(r, tier(d, [8, 16, 100], [300, 1000, 50], [5000, 12345, 777, 20000, 100000, 3000, 65000, 9999, 250000]));
     const k = Math.ceil(Math.log2(n));
     return walk(ask(`A test broke somewhere in the last ${n} commits. At most how many test runs does \`git bisect\` need?`, num(k), `Each run halves the range: ceil(log2(${n})) = ${k}. With \`git bisect run ./test.sh\` it runs unattended.`, 'Binary search: log2 of the number of commits.'),
       'binary search with git bisect', `git bisect finds the commit that broke something by binary search: it checks out the middle commit, you say good or bad, and half of the suspects are eliminated. Halving ${n} commits over and over until one is left takes about log2(${n}) rounds, rounded UP because you cannot run part of a test.`,
@@ -289,7 +304,7 @@ export const pythonPractice = practice('practice-python', 'Python Drills', 'pred
         choice('After b = a, how many lists exist?', 'One, with two names on it', ['Two, an independent copy', 'None until append']),
         count(`a started with ${n} items; b.append(99) adds one to the shared list. Items a sees:`, `${n} + 1`, n + 1));
     }
-    const n = between(r, 2, 4);
+    const n = between(r, 2, 8);
     return walk(ask(`${code(`def add(x, acc=[]):\n    acc.append(x)\n    return acc\n\nfor i in range(${n}):\n    out = add(i)\nprint(len(out))`)}Output?`, num(n), `The default list is created once, when the function is defined, and shared by every call: it collects all ${n} items. Use acc=None and create the list inside. A classic interview bug.`, 'When is the default [] created?'),
       'mutable default arguments', 'A default value like acc=[] is created ONCE, when the def line runs, not each time the function is called. If you call add without passing acc, every call gets that same list and keeps appending to it. That is why the list grows across calls. The fix is acc=None and creating a new list inside.',
       choice('When is the default [] created?', 'Once, when the def statement runs', ['On every call', 'Only on the first call that needs it']),
@@ -318,7 +333,7 @@ function rebuilt(touched: string) {
 
 export const flowsPractice = practice('practice-flows', 'Flow Drills', 'Make dependencies, TCL, SDC basics, farm arithmetic', [
   (r) => {
-    const touched = pick(r, ['rtl.sv', 'constraints.sdc', 'floorplan.tcl', 'activity.saif', 'place.def']);
+    const touched = pick(r, [...new Set(MAKE_RULES.flatMap(([, deps]) => [...deps]))]);
     const rb = rebuilt(touched);
     const out = new Set<string>();
     const checks = MAKE_RULES.map(([t, deps]) => {

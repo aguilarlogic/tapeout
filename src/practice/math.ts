@@ -329,7 +329,7 @@ export const odePractice = practice('practice-ode', 'Transient Drills', 'RC/RLC 
         count('The smaller of the two numbers:', `p × q = ${p1 * p2}, p + q = ${p1 + p2}`, p1),
         step(`So the roots are -${p1} and -${p2}. The least negative (slowest) root:`, num(-p1)));
     }
-    const z = pick(r, [0.1, 0.2, 0.3, 0.5, 0.7]);
+    const z = pick(r, [0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]);
     const ex = (-Math.PI * z) / Math.sqrt(1 - z * z);
     const os = Math.exp(ex) * 100;
     return walk(ask(`A supply loop has ζ = ${z}. What is the percent overshoot of its step response?`, qty(os, '%', 0.03, `${os.toFixed(1)}%`), `%OS = e^(-πζ/√(1-ζ²)) = ${os.toFixed(1)}%. (Q = 1/(2ζ) = ${sig(1 / (2 * z))}.)`, '%OS = exp(-πζ / √(1 - ζ²)).'),
@@ -470,7 +470,7 @@ export const probPractice = practice('practice-prob', 'Probability Drills', 'yie
       calc('Share of flagged dies that are defective, true / (true + false), as a %:', `${sig(tp, 4)} / (${sig(tp, 4)} + ${sig(fp, 4)}) × 100`, post * 100, '%', sig(post * 100), 0.03));
   },
   (r, d) => {
-    const N = pick(r, tier(d, [2, 3, 4], [8, 10, 16], [32, 50, 100]));
+    const N = pick(r, tier(d, [2, 3, 4], [8, 10, 16], [32, 50, 100, 24, 40, 64, 75, 128, 200]));
     let H = 0;
     for (let k = 1; k <= N; k++) H += 1 / k;
     return walk(ask(`A coverage point has ${N} equally likely bins. Purely random tests each hit one bin. On average, how many tests until every bin is hit?`, qty(N * H, '', 0.03, sig(N * H)), `Coupon collector: N·(1 + 1/2 + … + 1/N) = ${N} × ${sig(H)} ≈ ${sig(N * H)}. The last few bins take the longest, which is why DV engineers write directed tests or constraints to close coverage.`, 'Expected tests = N × H(N), the harmonic number.'),
@@ -480,13 +480,13 @@ export const probPractice = practice('practice-prob', 'Probability Drills', 'yie
       calc('Expected tests = N × H(N):', `${N} × ${sig(H, 4)}`, N * H, '', sig(N * H), 0.03));
   },
   (r, d) => {
-    const s = pick(r, [10, 20, 50]), n = pick(r, tier(d, [100, 400], [25, 2500], [10000, 1600]));
+    const s = pick(r, [10, 20, 50]), n = pick(r, tier(d, [100, 400], [25, 2500], [10000, 1600, 2500, 4900, 6400, 40000, 900]));
     const idea = 'Averaging n independent samples shrinks the random error by √n: the standard error of the mean is σ/√n. For estimating a probability p from n runs, the relative error is about √((1-p)/(n·p)), so rare events need enormous n.';
     if (d < 3) return walk(ask(`Monte Carlo on a delay with σ = ${s} ps, ${n} runs. Standard error of the mean, in ps?`, qty(s / Math.sqrt(n), 'ps', 0.01), `σ/√n = ${s}/${Math.sqrt(n)} = ${sig(s / Math.sqrt(n))} ps.`, 'Standard error = σ/√n.'),
       'standard error', idea,
       count(`√${n}:`, `√${n}`, Math.sqrt(n)),
       calc('σ / √n:', `${s} / ${Math.sqrt(n)}`, s / Math.sqrt(n), 'ps', sig(s / Math.sqrt(n)), 0.01));
-    const p = pick(r, [1e-3, 1e-4]), rel = pick(r, [0.1, 0.2]);
+    const p = pick(r, [1e-2, 1e-3, 1e-4, 1e-5, 1e-6]), rel = pick(r, [0.05, 0.1, 0.2, 0.25]);
     const need = (1 - p) / (p * rel * rel);
     return walk(ask(`You estimate a failure probability of about ${p} by plain Monte Carlo and want ±${rel * 100}% relative error (1σ). About how many runs?`, qty(need, '', 0.05, String(Math.round(need))), `Relative error of a proportion ≈ √((1-p)/(np)); set it to ${rel}: n ≈ (1-p)/(p·${rel}²) ≈ ${sig(need)}. Rare events need huge sample counts; this is why high-sigma SRAM analysis uses importance sampling.`, 'Relative std of a proportion is √((1-p)/(n·p)).'),
       'sample size for a rare event', idea,
@@ -515,8 +515,8 @@ export const numericsPractice = practice('practice-numerics', 'Numerics Drills',
         count('The exponent of the spacing, k - 23:', `${k} - 23`, k - 23),
         calc(`2^${k - 23}:`, `2^${k - 23}`, ulp, '', String(ulp), 0.01));
     }
-    const b = pick(r, [24, 11]);
-    return walk(ask(`A ${b === 24 ? 'float32' : 'float16'} counter does x = x + 1 in a loop. Past what value does x + 1 == x (it stops counting)?`, num(2 ** b), `Above 2^${b} = ${2 ** b}, the spacing between ${b === 24 ? 'float32' : 'float16'} numbers is 2, so adding 1 rounds away. Performance-model cycle counters in float32 silently freeze here: use integers or doubles.`, 'Where does the spacing between floats become 2?'),
+    const b = pick(r, [24, 11, 53, 8, 10, 12, 16, 20, 32]);
+    return walk(ask(`A ${({ 24: 'float32', 11: 'float16', 53: 'float64', 8: 'bfloat16' } as Record<number, string>)[b] ?? `${b}-bit-precision float`} counter does x = x + 1 in a loop. Past what value does x + 1 == x (it stops counting)?`, num(2 ** b), `Above 2^${b} = ${2 ** b}, the spacing between ${b === 24 ? 'float32' : 'float16'} numbers is 2, so adding 1 rounds away. Performance-model cycle counters in float32 silently freeze here: use integers or doubles.`, 'Where does the spacing between floats become 2?'),
       'when floats stop counting', idea,
       choice('Adding 1 stops working when the spacing between numbers becomes:', '2 (so x + 1 rounds back to x)', ['1', '0.5']),
       count(`The spacing near 2^k is 2^(k - ${b - 1}). It equals 2 when k = ${b}. So counting stops at 2^${b}:`, `2^${b}`, 2 ** b));
@@ -599,7 +599,7 @@ export const numericsPractice = practice('practice-numerics', 'Numerics Drills',
         count('First + 2 × middle + last:', `${ys[0]} + 2×${ys[1]} + ${ys[2]}`, ys[0] + 2 * ys[1] + ys[2]),
         calc('Times h/2:', `${h}/2 × ${ys[0] + 2 * ys[1] + ys[2]}`, I, 'pC', sig(I), 0.01));
     }
-    const k = pick(r, [3, 5, 8, 12]);
+    const k = pick(r, [3, 4, 5, 6, 8, 10, 12, 16]);
     return walk(ask(`A matrix has condition number 10^${k}. Solving with double precision (≈16 digits), about how many correct significant digits can you expect?`, num(16 - k), `You lose about log10(κ) = ${k} digits: 16 - ${k} = ${16 - k}. Ill-conditioned matrices come from wildly different conductances (1 mΩ next to 1 GΩ), which is why SPICE adds GMIN.`, 'Digits lost ≈ log10(condition number).'),
       'condition number', 'The condition number κ of a matrix says how much it can amplify tiny rounding errors in the input. You lose roughly log10(κ) decimal digits of accuracy. Double precision starts with about 16.',
       count('Digits lost, log10(κ):', `log10(10^${k})`, k),

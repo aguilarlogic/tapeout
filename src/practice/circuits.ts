@@ -269,7 +269,7 @@ export const electronicsPractice = practice('practice-electronics', 'Amplifier D
         count('How many 60 mV steps (decades) is that?', `${60 * k} / 60`, k),
         count('Each decade is ×10, so the current grows by:', `10^${k}`, 10 ** k));
     }
-    const ratio = pick(r, tier(d, [10], [100, 1000, 2], [8, 50, 4]));
+    const ratio = pick(r, tier(d, [10, 100], [100, 1000, 2, 20, 5], [8, 50, 4, 3, 6, 12, 20, 64, 16, 7]));
     const dv = VT * Math.log(ratio) * 1000;
     return walk(ask(`At room temperature (V_T = 25.85 mV), how much more forward voltage makes a diode carry ${ratio}× the current, in mV?`, qty(dv, 'mV', 0.02), `ΔV = V_T·ln(${ratio}) = ${sig(dv)} mV. (Bandgap references use exactly this ΔV between two diodes: it is proportional to temperature.)`, 'I ∝ e^(V/V_T) → ΔV = V_T ln(ratio).'),
       'the diode equation', idea,
@@ -356,6 +356,9 @@ export const electronicsPractice = practice('practice-electronics', 'Amplifier D
     const stages = [
       ['common source', 'High voltage gain, inverting', ['Gain ≈ 1, low output resistance (a buffer)', 'Low input resistance, non-inverting gain'], ['the gate', 'the drain'], 'the drain current, set by the gate, flows through the load: big gain, and rising input pulls the drain down (inverting)'],
       ['common drain (source follower)', 'Gain ≈ 1, low output resistance (a buffer)', ['High voltage gain, inverting', 'Low input resistance, non-inverting gain'], ['the gate', 'the source'], 'the source just follows the gate, one V_GS below it: gain ≈ 1, and a source is a low-resistance node'],
+      ['cascode (a common source with a common gate on top)', 'Very high output resistance and high gain', ['Gain ≈ 1, low output resistance (a buffer)', 'Low input resistance, non-inverting gain'], ['the gate', 'the drain'], 'the top transistor holds the bottom one\'s drain voltage steady, which raises the output resistance a lot'],
+      ['source-degenerated common source (a resistor in the source)', 'Lower gain, but more linear and less sensitive to the device', ['Higher gain than a plain common source', 'Gain ≈ 1, low output resistance (a buffer)'], ['the gate', 'the drain'], 'the source resistor feeds part of the output current back, trading gain for linearity'],
+      ['differential pair', 'Amplifies the difference of its inputs and rejects what they share', ['High voltage gain, inverting, for one input only', 'Gain ≈ 1, low output resistance (a buffer)'], ['the two gates', 'the two drains'], 'the tail current steers between the two sides, so only the difference changes the output'],
       ['common gate', 'Low input resistance, non-inverting gain', ['High voltage gain, inverting', 'Gain ≈ 1, low output resistance (a buffer)'], ['the source', 'the drain'], 'looking into a source you see only 1/g_m (low), and pushing the source down pulls the drain down too (non-inverting)'],
     ] as const;
     const [name, right, wrong, [inp, out], why] = pick(r, stages);
@@ -404,7 +407,7 @@ export const semiPractice = practice('practice-semi', 'Silicon Drills', 'carrier
       calc('Net doping, N_D - N_A:', `${sci(N, 0)} - ${sci(NA, 1)}`, n, '', sci(n, 2), 0.02));
   },
   (r, d) => {
-    const T = tier(d, 300, pick(r, [77, 400, 4]), pick(r, [358, 233, 398]));
+    const T = tier(d, 300, pick(r, [77, 400, 4, 150, 350, 250]), pick(r, [358, 233, 398, 248, 323, 373, 263, 343, 423, 213]));
     const vt = 8.617e-5 * T * 1000;
     const shown = d === 3 ? `${T - 273} °C` : `${T} K`;
     return walk(ask(`Thermal voltage kT/q at ${shown}, in mV?`, qty(vt, 'mV', 0.02), `kT/q = 0.08617 mV/K × ${T} K = ${sig(vt)} mV.${T < 10 ? ' At 4 K, thermal energy is tiny: that is why qubits and cryo-CMOS behave so differently.' : ''}`, 'k/q = 86.17 µV per kelvin.'),
@@ -413,7 +416,7 @@ export const semiPractice = practice('practice-semi', 'Silicon Drills', 'carrier
       calc('Multiply by 0.08617 mV/K:', `0.08617 × ${T}`, vt, 'mV', undefined, 0.02));
   },
   (r, d) => {
-    const mats: [string, number][] = tier(d, [['Silicon', 1.12]], [['GaAs', 1.42], ['Germanium', 0.66], ['Silicon', 1.12]], [['GaN', 3.4], ['SiC', 3.26], ['InP', 1.34], ['InGaAs', 0.75]]);
+    const mats: [string, number][] = tier(d, [['Silicon', 1.12]], [['GaAs', 1.42], ['Germanium', 0.66], ['Silicon', 1.12]], [['GaN', 3.4], ['SiC', 3.26], ['InP', 1.34], ['InGaAs', 0.75], ['AlN', 6.2], ['Diamond', 5.47], ['ZnO', 3.37], ['GaP', 2.26], ['CdTe', 1.5], ['InAs', 0.36]]);
     const [m, eg] = pick(r, mats);
     return walk(ask(`${m} has a band gap of ${eg} eV. What is the longest wavelength of light it can absorb, in nm?`, qty(1240 / eg, 'nm', 0.02), `λ = hc/E = 1240/${eg} = ${sig(1240 / eg)} nm. ${eg > 3 ? 'That is ultraviolet: wide-bandgap materials also survive high voltage, which is why GaN and SiC power electronics exist.' : eg < 1 ? 'Infrared: that is why telecom photodetectors use it at 1310/1550 nm, where silicon is transparent.' : 'Photons with longer wavelengths pass straight through.'}`, 'λ(nm) ≈ 1240 / E(eV).'),
       'photon energy and wavelength', 'A photon is absorbed only if its energy is at least the band gap. Photon energy and wavelength are inversely related: E = hc/λ, which in handy units is λ(nm) = 1240 / E(eV). Longer wavelength = less energy, so the band gap sets the LONGEST wavelength absorbed.',
@@ -434,7 +437,7 @@ export const semiPractice = practice('practice-semi', 'Silicon Drills', 'carrier
         calc('Number of squares, L/W:', `${L} / ${W}`, L / W, '', sig(L / W)),
         calc('R = R_sheet × squares, in kΩ:', `${Rs} × ${sig(L / W)} / 1000`, (Rs * L) / W / 1000, 'kΩ', undefined, 0.02));
     }
-    const N = pick(r, [1e15, 1e16, 1e17]), mu = N >= 1e17 ? 800 : N >= 1e16 ? 1200 : 1350;
+    const N = pick(r, [1e14, 1e15, 3e15, 1e16, 3e16, 1e17, 3e17]), mu = N >= 1e17 ? 800 : N >= 1e16 ? 1200 : 1350;
     const rho = 1 / (1.602e-19 * N * mu);
     return walk(ask(`n-type silicon, N_D = ${sci(N, 0)} cm⁻³, electron mobility ${mu} cm²/V·s. Resistivity, in Ω·cm?`, qty(rho, '', 0.03, sig(rho)), `ρ = 1/(q·n·µ) = 1/(1.602e-19 × ${sci(N, 0)} × ${mu}) = ${sig(rho)} Ω·cm.`, 'ρ = 1/(q n µ).'),
       'resistivity from doping', `${idea} Conductivity σ = q·n·µ: charge per carrier × carriers per cm³ × how fast they move. Resistivity is its inverse.`,
@@ -450,7 +453,7 @@ export const semiPractice = practice('practice-semi', 'Silicon Drills', 'carrier
       calc('N_A × N_D / n_i² (n_i² = 1e20):', `${sci(NA, 0)} × ${sci(ND, 0)} / 1e20`, (NA * ND) / 1e20, '', sci((NA * ND) / 1e20, 0)),
       calc('Natural log of that:', `ln(${sci((NA * ND) / 1e20, 0)})`, Math.log((NA * ND) / 1e20), '', sig(Math.log((NA * ND) / 1e20))),
       calc('Times V_T = 0.02585 V:', `0.02585 × ${sig(Math.log((NA * ND) / 1e20))}`, vbi, 'V', undefined, 0.02));
-    const k = pick(r, [4, 9]);
+    const k = pick(r, [4, 9, 16, 25, 36, 49, 64, 100]);
     return walk(ask(`A one-sided junction's depletion width ∝ √(V_bi + V_R). Reverse bias is raised so that V_bi + V_R becomes ${k}× larger. How does the junction capacitance change? (factor, e.g. 0.5)`, qty(1 / Math.sqrt(k), '', 0.02, sig(1 / Math.sqrt(k))), `W grows by √${k} = ${Math.sqrt(k)}, and C = εA/W shrinks by the same factor: ${sig(1 / Math.sqrt(k))}×. This voltage-dependent capacitance is a varactor, the tuning element in every LC oscillator.`, 'C ∝ 1/W ∝ 1/√(V).'),
       'junction capacitance scaling', 'The depletion region acts like the gap in a parallel-plate capacitor: C = εA/W. More reverse bias widens the gap as √(V_bi + V_R), so the capacitance falls as 1/√(V_bi + V_R).',
       calc('The width grows by √(factor):', `√${k}`, Math.sqrt(k), '', String(Math.sqrt(k)), 0.001),
@@ -473,6 +476,12 @@ export const semiPractice = practice('practice-semi', 'Silicon Drills', 'carrier
       ['What happens to intrinsic carrier density n_i as temperature rises?', 'It rises exponentially, so leakage rises too', ['It falls, since the lattice scatters the carriers more often', 'It stays constant, because it is set by the band gap alone', 'It becomes negative, once the temperature passes a threshold'],
         'thermal generation', 'Heat gives electrons energy. The chance that one gets enough to jump the band gap grows exponentially with temperature (like e^(-Eg/2kT)), so n_i, and every leakage current that depends on it, climbs fast when the chip warms up.',
         ['As temperature rises, electrons get:', 'More thermal energy, so more of them jump the gap', ['Less energy', 'Heavier']]],
+      ['Why does heavier doping make the depletion region narrower?', 'More fixed charge per volume, so less width balances the field', ['The extra dopant atoms conduct current across the gap', 'Heavier doping removes the built-in field altogether', 'The dopants repel the free carriers from the junction'],
+        'doping and depletion width', 'Each side of the junction must hold equal and opposite fixed charge. If the doping is heavy, a thin slice already contains enough charge, so the depletion region is narrow: lightly doped sides get a wide one.',
+        ['A thinner depletion region means a junction capacitance that is:', 'Larger', ['Smaller', 'Unchanged']]],
+      ['What does the bulk (body) terminal of an NMOS usually connect to?', 'The lowest voltage, so the junctions stay reverse biased', ['The highest voltage, to turn the channel on harder', 'The gate, to tie the channel to the input', 'Nothing: it must be left floating'],
+        'the body terminal', 'The source and drain are n-type islands in a p-type body. Tying the body to the lowest voltage keeps those p-n junctions reverse biased, so they do not conduct and the transistor only works through its channel.',
+        ['A forward-biased source-to-body junction would:', 'Conduct unwanted current', ['Block all current', 'Raise the gate voltage']]],
     ] as const;
     return concept(r, qs, (why) => `${why}.`);
   },
@@ -482,7 +491,7 @@ export const semiPractice = practice('practice-semi', 'Silicon Drills', 'carrier
 
 export const mosphysPractice = practice('practice-mosphys', 'Transistor Physics Drills', 'Cox, regions, subthreshold leakage, short-channel effects', [
   (r, d) => {
-    const S = tier(d, 60, pick(r, [70, 80, 90]), pick(r, [65, 75, 85]));
+    const S = tier(d, 60, pick(r, [70, 80, 90]), pick(r, [65, 75, 85, 70, 95, 100, 68, 78]));
     const idea = 'Below threshold, drain current changes exponentially with gate voltage. The subthreshold swing S is how many mV of gate voltage change the current by 10× (one decade). The ideal at room temperature is V_T·ln10 ≈ 59.5 mV/decade; real devices are n times worse.';
     if (d < 3) {
       const dv = pick(r, [60, 100, 120, 180]);

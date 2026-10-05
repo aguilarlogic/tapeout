@@ -89,7 +89,7 @@ export const pipePractice = practice('practice-pipe', 'Pipeline Drills', 'hazard
       count('Total stall cycles is the sum of all the waits:', waits.join(' + '), s));
   },
   (r, d) => {
-    const n = pick(r, [4, 5, 8]), loops = tier(d, 2, 3, 3);
+    const n = pick(r, [4, 5, 6, 7, 8, 9, 10, 12]), loops = tier(d, 2, 3, 3);
     const pattern = Array.from({ length: loops }, () => 'T'.repeat(n - 1) + 'N').join('');
     const bits = d === 1 ? 1 : 2;
     const start = bits === 1 ? 1 : d === 3 ? 0 : 3;
@@ -566,7 +566,7 @@ export const nocPractice = practice('practice-noc', 'NoC Drills', 'mesh hops, wo
 
 export const serdesPractice = practice('practice-serdes', 'SerDes Drills', 'line rates, encoding, BER, jitter budgets, PCIe bandwidth', [
   (r, d) => {
-    const gbps = pick(r, [8, 16, 25, 32, 56]);
+    const gbps = pick(r, [8, 16, 25, 32, 56, 10, 12, 20, 28, 40, 64, 100, 112]);
     if (d === 1) return walk(ask(`A ${gbps} Gb/s NRZ link: unit interval, in ps?`, qty(1000 / gbps, 'ps', 0.01), `UI = 1/${gbps} GHz = ${sig(1000 / gbps)} ps.`, 'One bit time.'),
       'the unit interval', 'The unit interval (UI) is the time of one bit on the wire: 1 divided by the bit rate. At a rate in Gb/s, 1 ÷ rate gives nanoseconds, and × 1000 turns that into picoseconds.',
       calc('UI in ps = 1000 ÷ rate in Gb/s:', `1000 / ${gbps}`, 1000 / gbps, 'ps', sig(1000 / gbps), 0.01));

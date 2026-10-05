@@ -220,6 +220,12 @@ export const boolPractice = practice('practice-bool', 'Boolean Drills', 'truth t
       ['output is 1 when an odd number of a, b, c are 1', ['a', 'b', 'c'], (v: Record<string, boolean>) => (+v.a + +v.b + +v.c) % 2 === 1, 'a ^ b ^ c'],
       ['output is 1 when a is 1 and neither b nor c is 1', ['a', 'b', 'c'], (v: Record<string, boolean>) => v.a && !v.b && !v.c, 'a & ~b & ~c'],
       ['output is 1 when the 2-bit number {a,b} is greater than the 1-bit number c', ['a', 'b', 'c'], (v: Record<string, boolean>) => 2 * +v.a + +v.b > +v.c, 'a | b&~c'],
+      ['output is 1 when exactly two of a, b, c are 1', ['a', 'b', 'c'], (v: Record<string, boolean>) => +v.a + +v.b + +v.c === 2, 'a&b&~c | a&~b&c | ~a&b&c'],
+      ['output is 1 when a is 0 and at least one of b and c is 1', ['a', 'b', 'c'], (v: Record<string, boolean>) => !v.a && (v.b || v.c), '~a & (b | c)'],
+      ['output is 1 when a, b and c are not all equal', ['a', 'b', 'c'], (v: Record<string, boolean>) => !(v.a === v.b && v.b === v.c), 'a ^ b | b ^ c'],
+      ['output is c when a and b are both 1, and 0 otherwise', ['a', 'b', 'c'], (v: Record<string, boolean>) => v.a && v.b && v.c, 'a & b & c'],
+      ['output is 1 when b is 1 only if a is 1 (b implies a)', ['a', 'b'], (v: Record<string, boolean>) => !v.b || v.a, 'a | ~b'],
+      ['output is 1 when the 2-bit number {a,b} equals the 1-bit number c', ['a', 'b', 'c'], (v: Record<string, boolean>) => 2 * +v.a + +v.b === +v.c, '~a&b&c | ~a&~b&~c'],
     ] as const;
     const [desc, vars, f, canon] = pick(r, d === 1 ? cases.slice(0, 3) : d === 2 ? cases.slice(3, 6) : cases.slice(5));
     const n = vars.length;
@@ -255,8 +261,14 @@ export const boolPractice = practice('practice-bool', 'Boolean Drills', 'truth t
       ['~(a | b | c)', '~a & ~b & ~c', ['a', 'b', 'c'], (v: Record<string, boolean>) => !v.a && !v.b && !v.c],
       ['~(a & b | c)', '(~a | ~b) & ~c', ['a', 'b', 'c'], (v: Record<string, boolean>) => !((v.a && v.b) || v.c)],
       ['~((a | b) & (c | d))', '~a & ~b | ~c & ~d', ['a', 'b', 'c', 'd'], (v: Record<string, boolean>) => !((v.a || v.b) && (v.c || v.d))],
+      ['~(a | b & c)', '~a & (~b | ~c)', ['a', 'b', 'c'], (v: Record<string, boolean>) => !(v.a || (v.b && v.c))],
+      ['~(~a & b)', 'a | ~b', ['a', 'b'], (v: Record<string, boolean>) => !(!v.a && v.b)],
+      ['~(a & (b | c))', '~a | ~b & ~c', ['a', 'b', 'c'], (v: Record<string, boolean>) => !(v.a && (v.b || v.c))],
+      ['~(a | b | c & d)', '~a & ~b & (~c | ~d)', ['a', 'b', 'c', 'd'], (v: Record<string, boolean>) => !(v.a || v.b || (v.c && v.d))],
+      ['~(a & b & (c | d))', '~a | ~b | ~c & ~d', ['a', 'b', 'c', 'd'], (v: Record<string, boolean>) => !(v.a && v.b && (v.c || v.d))],
     ] as const;
-    const fi = Math.min(forms.length - 1, d - 1 + (r() < 0.5 ? 0 : 1));
+    // Easy: the simple forms; hard: the nested ones, drawn from a wider pool so the problems keep changing.
+    const fi = d === 1 ? pick(r, [0, 1, 5]) : d === 2 ? pick(r, [1, 2, 4]) : pick(r, [2, 3, 4, 6, 7, 8]);
     const [e, canon, vars, f] = forms[fi];
     const inner = expr(canon, [...vars], f);
     const pushed = { canonical: canon, check: (s: string) => !/[~!]\s*\(|\)\s*'/.test(s) && inner.check(s) };
@@ -267,13 +279,32 @@ export const boolPractice = practice('practice-bool', 'Boolean Drills', 'truth t
         choice('Now X = a & b, so ~X = ~(a & b) =', '~a | ~b', ['~a & ~b', 'a | b'])],
       [choice('The outermost operator is the & between (a | b) and (c | d). De Morgan on it: ~(X & Y) =', '~X | ~Y', ['~X & ~Y', 'X | Y']),
         choice('Then ~(a | b) becomes:', '~a & ~b', ['~a | ~b', 'a & b'])],
+      [choice('The outermost operator inside ~( ) is the |, between a and (b & c). De Morgan on it: ~(X | Y) =', '~X & ~Y', ['~X | ~Y', 'X & Y']),
+        choice('Now Y = b & c, so ~Y = ~(b & c) =', '~b | ~c', ['~b & ~c', 'b | c'])],
+      [choice('The operator inside ~( ) is the & between ~a and b. De Morgan on it: ~(X & Y) =', '~X | ~Y', ['~X & ~Y', 'X | Y']),
+        choice('And ~~a (a double inversion) is just:', 'a', ['~a', 'b'])],
+      [choice('The outermost operator inside ~( ) is the & between a and (b | c). De Morgan on it: ~(X & Y) =', '~X | ~Y', ['~X & ~Y', 'X | Y']),
+        choice('Now Y = b | c, so ~Y = ~(b | c) =', '~b & ~c', ['~b | ~c', 'b & c'])],
+      [choice('The outermost operator inside ~( ) is the & joining a, b and (c | d). De Morgan on it: ~(X & Y & Z) =', '~X | ~Y | ~Z', ['~X & ~Y & ~Z', 'X | Y | Z']),
+        choice('Then ~(c | d) becomes:', '~c & ~d', ['~c | ~d', 'c & d'])],
+      [choice('The outermost operator inside ~( ) is the |, joining a, b and (c & d). De Morgan on it: ~(X | Y | Z) =', '~X & ~Y & ~Z', ['~X | ~Y | ~Z', 'X & Y & Z']),
+        choice('Then ~(c & d) becomes:', '~c | ~d', ['~c & ~d', 'c | d'])],
     ];
     return walk(ask(`Push the inversion all the way down to the variables with De Morgan's laws: ${e}. (Your answer may only put ~ directly on variables.)`, pushed, `One answer: ${canon}. De Morgan: ~(x & y) = ~x | ~y and ~(x | y) = ~x & ~y, applied level by level.`, 'Flip & to | (and back) as the ~ moves inward.'),
       "De Morgan's laws, outside in", 'De Morgan says: ~(x & y) = ~x | ~y, and ~(x | y) = ~x & ~y. In words: move the NOT onto each piece and flip AND ↔ OR. With nested brackets, start at the outermost operator and work inward one level at a time.',
       ...steps[fi],
       step('Write the whole result, with ~ only on single variables:', pushed));
   },
-  (_r, d) => {
+  (r, d) => {
+    if (d === 3) {
+      // Hard: some rows of the truth table are already fixed, so only the free rows can vary.
+      const k = pick(r, [3, 4, 5]), fx = pick(r, [0, 1, 2, 3]), rows = 2 ** k, free = rows - fx, ways = 2 ** free;
+      return walk(ask(fx ? `A ${k}-input boolean function already has ${fx} row${fx > 1 ? 's' : ''} of its truth table fixed. How many different functions fit?` : `How many different boolean functions of ${k} inputs are there?`, qty(ways, '', 0.001, String(ways)), `${rows} rows${fx ? `, ${fx} fixed, leaves ${free} free` : ''}: each free row is 0 or 1, so 2^${free} = ${ways} functions.`, 'Count the free rows, then 2 to that power.'),
+        'count the truth tables', 'A boolean function is completely described by its truth table. Two functions are different exactly when their output columns differ. So count the rows, take away any that are already fixed, then count the ways to fill the free ones with 0s and 1s.',
+        count(`How many rows does a ${k}-input truth table have?`, `2^${k}`, rows),
+        ...(fx ? [count(`${fx} of them are fixed. Free rows:`, `${rows} - ${fx}`, free)] : []),
+        count(`Each free row can independently be 0 or 1. Number of ways to fill the column:`, `2^${free}`, ways));
+    }
     const n = tier(d, 2, 3, 4);
     return walk(ask(`How many different boolean functions of ${n} inputs are there?`, qty(2 ** 2 ** n, '', 0.001, String(2 ** 2 ** n)), `A truth table has 2^${n} = ${2 ** n} rows, and each can be 0 or 1: 2^${2 ** n} = ${2 ** 2 ** n} functions.`, 'Count the rows, then the ways to fill the output column.'),
       'count the truth tables', 'A boolean function is completely described by its truth table. Two functions are different exactly when their output columns differ. So count the rows, then count the ways to fill a column of that many 0s and 1s.',
@@ -436,11 +467,11 @@ export const mosPractice = practice('practice-mos', 'Transistor Drills', 'NMOS/P
       count('Transistors per input:', '1 NMOS + 1 PMOS', 2),
       count(`Total for ${n} inputs:`, `${n} × 2`, 2 * n));
   },
-  (r) => {
-    const g = pick(r, ['NAND', 'NOR']);
+  (r, d) => {
+    const g = pick(r, ['NAND', 'NOR']), n = d === 1 ? 2 : pick(r, [3, 4, 5]);
     const net = pick(r, ['pull-down (NMOS)', 'pull-up (PMOS)']);
     const series = (g === 'NAND') === net.startsWith('pull-down');
-    return walk(mc(`In a CMOS ${g} gate, how are the transistors of the ${net} network connected?`, ['In series', 'In parallel'], series ? 0 : 1, `${g}: output low only when ${g === 'NAND' ? 'all inputs are 1 (series NMOS)' : 'any input is 1 (parallel NMOS)'}; the PMOS network is always the dual.`),
+    return walk(mc(`In a CMOS ${g}${n} gate, how are the transistors of the ${net} network connected?`, ['In series', 'In parallel'], series ? 0 : 1, `${g}: output low only when ${g === 'NAND' ? 'all inputs are 1 (series NMOS)' : 'any input is 1 (parallel NMOS)'}; the PMOS network is always the dual.`),
       'series = AND, parallel = OR', 'Transistors are switches. Switches in series conduct only if ALL are on (AND); in parallel if ANY is on (OR). Ask when the output is pulled low: that condition is the NMOS network. The PMOS network is always the opposite arrangement (the dual).',
       choice(`When is a ${g}'s output 0?`, g === 'NAND' ? 'Only when all inputs are 1' : 'When any input is 1', [g === 'NAND' ? 'When any input is 1' : 'Only when all inputs are 1']),
       choice('So the NMOS pull-down network (an NMOS is on when its input is 1) is:', g === 'NAND' ? 'In series' : 'In parallel', [g === 'NAND' ? 'In parallel' : 'In series'], 'Series needs all switches on; parallel needs any one.'),
@@ -466,8 +497,9 @@ export const mosPractice = practice('practice-mos', 'Transistor Drills', 'NMOS/P
     const vdd = pick(r, [0.8, 1.0, 1.2, 1.8]);
     const vt = pick(r, [0.3, 0.4]);
     const typ = pick(r, ['NMOS', 'PMOS']);
-    const vg = +(between(r, 0, 10) / 10 * vdd).toFixed(2);
     const vs = typ === 'NMOS' ? 0 : vdd;
+    // Warm-up: the gate is clearly on or off. Hard: it sits within 100 mV of the threshold.
+    const vg = d === 1 ? pick(r, [0, vdd]) : d === 3 ? +(vs + (typ === 'NMOS' ? 1 : -1) * (vt + pick(r, [-0.1, -0.05, 0.05, 0.1]))).toFixed(2) : +(between(r, 0, 10) / 10 * vdd).toFixed(2);
     const on = typ === 'NMOS' ? vg - vs > vt : vs - vg > vt;
     const ov = typ === 'NMOS' ? vg - vs : vs - vg;
     return walk(mc(`${typ}, source at ${vs} V, |Vt| = ${vt} V, gate at ${vg} V (Vdd = ${vdd}). Is the channel on?`, ['On', 'Off'], on ? 0 : 1, `${typ === 'NMOS' ? `Vgs = ${+(vg - vs).toFixed(2)} V` : `Vsg = ${+(vs - vg).toFixed(2)} V`} ${on ? '>' : '≤'} ${vt} V, so it is ${on ? 'on' : 'off (only subthreshold leakage flows)'}.${d === 3 ? ' In between, the transistor is partially on: that is where both networks conduct and short-circuit current flows.' : ''}`),
