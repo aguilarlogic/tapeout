@@ -45,10 +45,21 @@ export function load(): Progress {
     const raw = localStorage.getItem(KEY);
     cache = raw ? { ...blank(), ...JSON.parse(raw) } : blank();
     cache!.prefs = { ...blank().prefs, ...cache!.prefs };
+    if (migrateMix(cache!)) save();
   } catch {
     cache = blank();
   }
   return cache!;
+}
+
+/** Old builds wrote one `mix-YYYY-MM-DD` record per day, which farmed XP forever. Keep the best as `mix-daily`. */
+function migrateMix(p: Progress): boolean {
+  const old = Object.keys(p.levels).filter((k) => /^mix-\d{4}-\d{2}-\d{2}$/.test(k));
+  if (!old.length) return false;
+  let top = p.levels['mix-daily'];
+  for (const k of old) { const r = p.levels[k]; if (!top || r.xp > top.xp) top = r; delete p.levels[k]; }
+  p.levels['mix-daily'] = top;
+  return true;
 }
 
 function save() {
@@ -75,6 +86,32 @@ export function complete(levelId: string, baseXp: number, stars: number): number
   p.levels[levelId] = { stars: Math.max(stars, prev?.stars ?? 0), xp, at: Date.now() };
   save();
   return xp - (prev?.xp ?? 0);
+}
+
+/** Paid once each when a Daily Mix streak first reaches 7, 30 and 100 days: three bonuses in total, ever. */
+export const MIX_MILESTONES = [7, 30, 100];
+export const MIX_BONUS = 100;
+const dayNo = (iso: string) => Math.floor(Date.parse(`${iso}T00:00:00Z`) / 86400000);
+
+/** Record a passed Daily Mix. One level record (best kept), a day streak, and the milestone bonuses. */
+export function recordMix(day: string, baseXp: number, stars: number): { gained: number; streak: number; bonus: number } {
+  const p = load();
+  let gained = complete('mix-daily', baseXp, stars);
+  const n = dayNo(day), last = p.best.lastMixDay;
+  let streak = p.best.mixCur ?? 0, bonus = 0;
+  if (last !== n) {
+    streak = last !== undefined && n === last + 1 ? streak + 1 : 1;
+    p.best.lastMixDay = n;
+    p.best.mixCur = streak;
+    p.best.mixStreak = Math.max(p.best.mixStreak ?? 0, streak);
+    for (const m of MIX_MILESTONES) {
+      const id = `mix-bonus-${m}`;
+      if (streak >= m && !p.levels[id]) { p.levels[id] = { stars: 3, xp: MIX_BONUS, at: Date.now() }; bonus += MIX_BONUS; }
+    }
+    gained += bonus;
+    save();
+  }
+  return { gained, streak, bonus };
 }
 
 export function levelRecord(id: string): LevelRecord | undefined {
@@ -164,6 +201,15 @@ export function recordBest(game: string, score: number): boolean {
 export function resetAll() {
   cache = blank();
   save();
+  // Lab drafts live outside the progress blob; leaving them would bring old solutions back into the editors.
+  try {
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const k = localStorage.key(i);
+      if (k?.startsWith('tapeout.draft.')) localStorage.removeItem(k);
+    }
+  } catch {
+    /* ignore */
+  }
 }
 
 // Per-level scratch storage (editor contents, board state...)
