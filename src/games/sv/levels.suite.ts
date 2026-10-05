@@ -3,8 +3,8 @@ import { rng } from '../../sim/harness';
 import { evaluate } from './check';
 import { TB_LEVELS } from './levels';
 
-describe('testbench missions', () => {
-  for (const level of TB_LEVELS) {
+export const svSuite = (shard: number, shards: number) => describe('testbench missions', () => {
+  for (const level of TB_LEVELS.filter((_, i) => i % shards === shard)) {
     describe(level.id, () => {
       const seeds = level.tier === 'boss' ? [1, 2, 3, 4, 5] : [1, 2];
       it('has a brief, hints and a solvable reference solution', { timeout: 60000 }, () => {

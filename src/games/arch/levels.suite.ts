@@ -3,8 +3,11 @@ import { rng } from '../../sim/harness';
 import { ARCH_LEVELS } from './levels';
 import { defaults, type Control, type Values } from './types';
 
+/** Vitest runs files in parallel, so the lab suite is cut into shards (levels.s0..s3.test.ts); each takes every n-th level. */
+export const archSuite = (shard: number, shards: number) => {
+const mine = ARCH_LEVELS.filter((_, i) => i % shards === shard);
 describe('architecture missions', () => {
-  for (const level of ARCH_LEVELS) {
+  for (const level of mine) {
     describe(level.id, () => {
       const seeds = level.tier === 'boss' ? [1, 2, 3, 4, 5, 6] : [1, 2, 3];
       it('the reference solution meets every goal', { timeout: 60000 }, () => {
@@ -51,7 +54,7 @@ describe('random settings do not pass', () => {
   };
   it('fiddling with the controls passes at most 10% of guided labs and 3% of boss labs', { timeout: 120000 }, () => {
     const bad: string[] = [];
-    for (const level of ARCH_LEVELS) {
+    for (const level of mine) {
       const p = rate(level);
       if (p === undefined) continue;
       const limit = level.tier === 'boss' ? 0.03 : 0.1, over = p > limit;
@@ -60,3 +63,4 @@ describe('random settings do not pass', () => {
     expect(bad, `passable by random settings: ${bad.join(', ')}`).toEqual([]);
   });
 });
+};

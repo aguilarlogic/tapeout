@@ -1,3 +1,5 @@
+/// <reference types="vitest/config" />
+import { availableParallelism } from 'node:os';
 import { defineConfig, type Plugin } from 'vite';
 
 /**
@@ -44,4 +46,6 @@ export default defineConfig(({ mode }) => ({
     outDir: mode === 'hosted' ? 'dist-hosted' : 'dist',
   },
   plugins: mode === 'hosted' ? [] : [singleFile()],
+  // The suite is CPU-bound and cut into similar-sized files: one worker per core (the default leaves one core idle).
+  test: { maxWorkers: Math.max(2, availableParallelism()) },
 }));

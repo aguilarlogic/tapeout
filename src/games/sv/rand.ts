@@ -36,8 +36,15 @@ export class RandProblem {
   nodes = 0;
   constructor(public sim: Sim, public sc: Scope, public obj?: ClassObj) {}
 
+  /** The same value as the BigInt path below (three 32-bit draws, taken mod n), computed in Numbers while n is small enough to stay exact. */
+  rndSmall(n: number): number {
+    if (n <= 1) return 0;
+    const a = Math.floor(this.sim.rand() * 4294967296), b = Math.floor(this.sim.rand() * 4294967296), c = Math.floor(this.sim.rand() * 4294967296);
+    return (((a % n) * 4294967296 + b) % n * 4294967296 + c) % n;
+  }
   rnd(n: bigint): bigint {
     if (n <= 1n) return 0n;
+    if (n < 2097152n) return BigInt(this.rndSmall(Number(n)));
     let acc = 0n;
     let bits = 0;
     while (bits < 70) { acc = (acc << 32n) | BigInt(Math.floor(this.sim.rand() * 4294967296)); bits += 32; }
@@ -306,7 +313,7 @@ export class RandProblem {
         keyed.sort((p, q) => q.k - p.k);
         return keyed.filter((p) => (v.wts!.get(p.x) ?? 0) > 0).map((p) => p.x);
       }
-      for (let i = all.length - 1; i > 0; i--) { const j = Number(this.rnd(BigInt(i + 1))); [all[i], all[j]] = [all[j], all[i]]; }
+      for (let i = all.length - 1; i > 0; i--) { const j = i + 1 < 2097152 ? this.rndSmall(i + 1) : Number(this.rnd(BigInt(i + 1))); [all[i], all[j]] = [all[j], all[i]]; }
       return all;
     }
     const set = new Set<bigint>();
@@ -314,7 +321,7 @@ export class RandProblem {
     for (let i = 0; i < 40; i++) set.add(this.pickIv(dom));
     set.add(dom[0][0]); set.add(dom[dom.length - 1][1]);
     const list = [...set].filter((x) => dom.some(([a, b]) => x >= a && x <= b));
-    for (let i = list.length - 1; i > 0; i--) { const j = Number(this.rnd(BigInt(i + 1))); [list[i], list[j]] = [list[j], list[i]]; }
+    for (let i = list.length - 1; i > 0; i--) { const j = i + 1 < 2097152 ? this.rndSmall(i + 1) : Number(this.rnd(BigInt(i + 1))); [list[i], list[j]] = [list[j], list[i]]; }
     return list;
   }
 

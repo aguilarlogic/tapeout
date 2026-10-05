@@ -20,7 +20,7 @@ describe('RV32 core project', () => {
       it('the starting core does not pass', { timeout: 120000 }, () => {
         for (const s of seeds) {
           const inst = level.build(rng(s));
-          const rep = evaluateCore(inst.starter, inst.programs);
+          const rep = evaluateCore(inst.starter, inst.programs, { stopOnFail: true });
           expect(rep.error?.message, `seed ${s}`).toBeUndefined();
           expect(rep.passed, `seed ${s}`).toBe(false);
         }

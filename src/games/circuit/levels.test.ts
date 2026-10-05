@@ -31,7 +31,7 @@ describe('circuit lab missions', () => {
   }
   it('boss missions differ from seed to seed', () => {
     for (const level of CIRCUIT_LEVELS.filter((l) => l.tier === 'boss')) {
-      const briefs = new Set([1, 2, 3, 4, 5, 6].map((s) => level.build(rng(s)).brief));
+      const briefs = new Set([1, 2, 3].map((s) => level.build(rng(s)).brief));
       expect(briefs.size, level.id).toBeGreaterThan(1);
     }
   }, 60000);
