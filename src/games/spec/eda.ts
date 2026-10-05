@@ -156,7 +156,7 @@ const pllJitter: ArchLevel = {
       let cand: { fref: number; bw: number; tot: number } | undefined;
       const perRef = JIT_FREFS.map((fref) => { let m = Infinity; for (const bw of grid) if (bw <= fref / 10) m = Math.min(m, jitter(j, fref, bw).tot); return m; });
       for (const fref of JIT_FREFS) for (const bw of grid) if (bw <= fref / 10) { const t = jitter(j, fref, bw).tot; if (!cand || t < cand.tot) cand = { fref, bw, tot: t }; }
-      spec = Math.ceil(cand!.tot * 1.08);
+      spec = Math.ceil(cand!.tot * 1.02);
       const failing = perRef.filter((m) => m > spec).length;
       const defOk = jitter(j, 25, 1).tot <= spec;
       if (failing >= 1 && !defOk) best = cand;

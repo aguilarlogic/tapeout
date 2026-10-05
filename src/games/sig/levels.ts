@@ -120,8 +120,10 @@ const fftOk = (s: FftSpec, n: number, win: WindowKind) => {
   const spec = toneSpectrumDb([{ f: s.f1, a: 1 }, { f: s.f2, a: 10 ** (-s.db / 20) }], FS_FFT, n, win);
   return { spec, ok: resolved(spec, (f) => (f * n) / FS_FFT, s.f1, s.f2, 6) };
 };
+/** Main-lobe width, narrowest first: a wider lobe smears the spacing between two tones. */
+const LOBE: WindowKind[] = ['rect', 'hamming', 'hann', 'blackman'];
 const fftSearch = (s: FftSpec): { n: number; win: WindowKind } | undefined => {
-  for (const n of [64, 128, 256, 512, 1024]) for (const win of WINDOWS) if (fftOk(s, n, win).ok) return { n, win };
+  for (const n of [64, 128, 256, 512, 1024]) for (const win of LOBE) if (fftOk(s, n, win).ok) return { n, win };
   return undefined;
 };
 
@@ -142,7 +144,7 @@ const sigFft: ArchLevel = {
     return {
       brief: `<p>An N-point FFT of a signal sampled at fs = ${FS_FFT} Hz has bins <b>fs/N</b> apart. A tone that falls between bins leaks into its neighbours; the <b>window</b> sets how fast the skirt falls (rectangular: slowly; Blackman: very fast) and how wide the main lobe is (rectangular: narrow; Blackman: wide). Longer records narrow the bins but cost capture time.</p>
 <p>Two tones: a strong one at <b>${s.f1.toFixed(2)} Hz</b> and a weak one at <b>${s.f2} Hz</b>, <b>${s.db} dB</b> lower. The weak tone is <i>resolved</i> when it forms its own peak at least 6 dB above the valley between the two.</p>
-<p>Choose N and the window to resolve it with the shortest record (N ≤ ${nBudget}).</p>`,
+<p>Choose N and the window to resolve it with the shortest record (N ≤ ${nBudget}) and the narrowest main lobe that still works (rect is narrowest, then Hamming, Hann, Blackman).</p>`,
       hints: ['Count how many bins apart the tones are: spacing / (fs/N). The main lobe of the window must not cover both.', 'For a weak tone close to a strong one the skirt matters more than the main lobe: compare rect, Hann and Blackman at the same N.', 'Double N only if no window works: halving the bin width doubles the capture time.'],
       controls: [
         { id: 'n', kind: 'select', label: 'Record length N', options: [64, 128, 256, 512, 1024].map((n) => ({ value: String(n), label: String(n) })), value: '64' },
@@ -157,6 +159,7 @@ const sigFft: ArchLevel = {
         const goals: Goal[] = [
           { label: 'weak tone resolved (6 dB above the valley)', ok, note: ok ? undefined : 'it hides in the strong tone’s skirt or main lobe' },
           { label: `record ≤ ${nBudget} samples`, ok: n <= nBudget, note: `${n} samples = ${r1((1000 * n) / FS_FFT)} ms` },
+          { label: 'no wider a main lobe than needed', ok: LOBE.indexOf(win) <= LOBE.indexOf(best!.win), note: LOBE.indexOf(win) <= LOBE.indexOf(best!.win) ? undefined : `${win} smears the spacing more than the job needs` },
         ];
         return { goals, metrics: [['bin width', `${r2(FS_FFT / n)} Hz`], ['tone spacing', `${r1(bins)} bins`], ['record', `${r1((1000 * n) / FS_FFT)} ms`]], view: { kind: 'plot', caption: 'Spectrum 150 – 300 Hz (dB below the strong tone)', xlabel: 'Hz', ylabel: 'dB', series: [{ label: 'spectrum', xs: xs.slice(lo, hi), ys: spec.slice(lo, hi).map((y) => Math.max(-100, y)) }], marks: [{ y: -s.db, label: 'weak tone level' }] } };
       },
@@ -242,13 +245,13 @@ const sigPid: ArchLevel = {
   ticket: 'The bias-voltage regulator rings like a bell when the load steps. Tune the controller so it settles quickly with no steady-state error and little overshoot.',
   build: (r) => {
     let plant: Plant = { wn: 6, zeta: 0.3, gain: 1, delay: 0.02 }, best: ReturnType<typeof pidSearch>;
-    const osLimit = 10;
+    const osLimit = 6;
     for (let tries = 0; tries < 20 && !best; tries++) {
       plant = { wn: pick(r, [4, 5, 6, 8]), zeta: pick(r, [0.25, 0.35, 0.5]), gain: 1, delay: pick(r, [0, 0.01, 0.02]) };
       best = pidSearch(plant, osLimit);
     }
     const b = best!;
-    const ts = Math.ceil(b.settle * 1.5 * 10) / 10;
+    const ts = Math.ceil(b.settle * 1.15 * 20) / 20;
     return {
       brief: `<p>The plant is a second-order, under-damped system (natural frequency ωn = ${plant.wn} rad/s, damping ζ = ${plant.zeta}, DC gain 1${plant.delay ? `, plus ${plant.delay * 1000} ms of dead time` : ''}). You close the loop with a PID controller on the error e = r − y:</p>
 <ul><li><b>P (Kp)</b> reacts to the error now: faster, but a pure P loop leaves a steady-state error of 1/(1+Kp).</li>

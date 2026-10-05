@@ -38,8 +38,11 @@ describe('weak or wrong answers are rejected', () => {
     expect(ok(run('cache-policy', 1, { ways: '4', policy: 'lru' }))).toBe(false);
   });
   it('write policy: the wrong choice for the workload', () => {
-    const a = ok(run('cache-write', 1, { write: 'wb' })), b = ok(run('cache-write', 1, { write: 'wt' }));
-    expect(a).not.toBe(b);
+    // Within the hardware budget (the reference size and associativity), exactly one write policy meets the traffic goal.
+    const inst = findArchLevel('cache-write')!.build(rng(1)), sol = inst.solution.values;
+    const flipped = sol.write === 'wb' ? 'wt' : 'wb';
+    expect(ok(inst.run({ ...defaults(inst.controls), ...sol }))).toBe(true);
+    expect(ok(inst.run({ ...defaults(inst.controls), ...sol, write: flipped }))).toBe(false);
   });
   it('renaming: switching it on without counting does not pass', () => {
     expect(ok(run('ooo-rename', 1, { rename: true, war: 0, waw: 0 }))).toBe(false);

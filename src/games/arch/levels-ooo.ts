@@ -121,24 +121,34 @@ const oooWindow: ArchLevel = {
     lines.push(EXIT.trimEnd());
     const src = lines.join('\n');
     const steps = run(src, [{ addr: SRC, words: new Array(16 * n + 16).fill(1) }]);
-    const base: Partial<OooConfig> = { width: 2, alus: 2, rename: true, inOrder: false };
+    const base: Partial<OooConfig> = {};
     const sizes = [8, 16, 32, 64, 128];
-    const cyc = (rob: number) => simulateOoo(steps, { ...DEFAULT_OOO, ...base, rob }).cycles;
+    // The reference core is 2-wide with renaming and out-of-order issue; the budget is what that costs with the smallest ROB that hides the misses.
+    const ref: Partial<OooConfig> = { width: 2, alus: 2, rename: true, inOrder: false };
+    const cyc = (rob: number) => simulateOoo(steps, { ...DEFAULT_OOO, ...ref, rob }).cycles;
     const top = cyc(128);
-    const target = Math.round(top * 1.2);
-    const need = sizes.find((s) => cyc(s) <= target)!;
+    const need = sizes.find((s) => cyc(s) <= Math.round(top * 1.02))!;
+    const budget = oooCost({ ...DEFAULT_OOO, ...ref, rob: need });
+    let best: { cfg: OooConfig; cycles: number; cost: number } | undefined;
+    for (const rob of sizes) for (const width of [1, 2, 4]) for (const alus of [1, 2, 4]) for (const rename of [false, true]) for (const inOrder of [true, false]) {
+      const cfg = { ...DEFAULT_OOO, rob, width, alus, rename, inOrder }, cost = oooCost(cfg);
+      if (cost > budget + 1e-9) continue;
+      const cycles = simulateOoo(steps, cfg).cycles;
+      if (!best || cycles < best.cycles || (cycles === best.cycles && cost < best.cost)) best = { cfg, cycles, cost };
+    }
+    const target = Math.round(best!.cycles * 1.01);
     return {
       brief: `<p>Each of the ${n} loads below reads a different 64-byte line: every one <b>misses</b> and takes 40 cycles (a hit would take 3). The ${work} <code>addi</code>s after each load are independent of it. With a window (the <b>reorder buffer</b>, ROB) of W entries the core can have at most W instructions in flight: when the oldest one is a load waiting on memory, nothing behind it can retire, and once the ROB is full dispatch stops. A bigger ROB finds more loads to issue in parallel (<b>memory-level parallelism</b>) but costs area (${f(1 / 16, 3)} per entry).</p>
-<p>The core is 2-wide, with renaming and out-of-order issue. Pick the <b>smallest ROB</b> that finishes in <b>${target} cycles or fewer</b> (the best of all sizes needs ${top}). Watch the "full ROB" stall bar shrink.</p>`,
+<p>Hardware is limited to <b>cost ${f(budget, 1)}</b>: choose the <b>ROB size</b>, the dispatch width, the number of units, renaming and the issue policy so that it finishes in <b>${target} cycles or fewer</b> (the best core in budget needs ${best!.cycles}). Watch the "full ROB" stall bar shrink.</p>`,
       hints: ['Each iteration is 1 load + ' + (work + 1) + ' other instructions. A ROB of 8 holds less than 2 iterations: one miss at a time. Estimate how many misses overlap for each size: size / (' + (work + 2) + ' instructions per iteration).', 'Time ≈ (loads ÷ overlap) × 40. Stop growing when doubling gains less than the 20% slack.'],
-      controls: oooControls(['rob'], { rob: 8 }),
+      controls: oooControls(['rob', 'width', 'alus', 'rename', 'inOrder'], { rob: 8 }),
       listing: { label: 'The code (first lines)', text: src.split('\n').slice(0, 14).join('\n') + '\n    ...' },
       run: (v) => {
         const cfg = cfgOf(v, base);
         const res = simulateOoo(steps, cfg);
-        return { goals: [{ label: `finishes in ${target} cycles or fewer`, ok: res.cycles <= target, note: `${res.cycles} cycles` }, { label: `no larger a ROB than needed (${need} entries)`, ok: cfg.rob <= need, note: `${cfg.rob} entries chosen` }], metrics: metrics(res, cfg), view: barView(res) };
+        return { goals: [{ label: `finishes in ${target} cycles or fewer`, ok: res.cycles <= target, note: `${res.cycles} cycles` }, { label: `hardware cost ≤ ${f(budget, 1)}`, ok: oooCost(cfg) <= budget + 1e-9, note: `cost is ${f(oooCost(cfg), 1)}` }], metrics: metrics(res, cfg), view: barView(res) };
       },
-      solution: { values: { rob: String(need) } },
+      solution: { values: { rob: String(best!.cfg.rob), width: String(best!.cfg.width), alus: String(best!.cfg.alus), rename: best!.cfg.rename, inOrder: best!.cfg.inOrder } },
     };
   },
 };

@@ -31,20 +31,6 @@ describe('architecture missions', () => {
   }
 });
 
-/** Levels the audit found too easy to pass by fiddling. Fix the targets, then delete the id: the test also fails when a listed level has been fixed. */
-const FIDDLEABLE: string[] = [
-  'cache-block',
-  'cache-conflict',
-  'cache-policy',
-  'cache-tile',
-  'cache-write',
-  'ooo-window',
-  'sig-fft',
-  'sig-pid',
-  'ai-boss',
-  'pll-jitter',
-];
-
 const randomValues = (cs: Control[], r: () => number): Values => Object.fromEntries(cs.map((c) => {
   if (c.kind === 'select') return [c.id, c.options[Math.floor(r() * c.options.length)].value];
   if (c.kind === 'toggle') return [c.id, r() < 0.5];
@@ -63,16 +49,14 @@ describe('random settings do not pass', () => {
     }
     return pass / n;
   };
-  it('fiddling with the controls passes at most 10% of guided labs and 3% of boss labs (except the listed ones)', { timeout: 120000 }, () => {
-    const bad: string[] = [], fixed: string[] = [];
+  it('fiddling with the controls passes at most 10% of guided labs and 3% of boss labs', { timeout: 120000 }, () => {
+    const bad: string[] = [];
     for (const level of ARCH_LEVELS) {
       const p = rate(level);
       if (p === undefined) continue;
       const limit = level.tier === 'boss' ? 0.03 : 0.1, over = p > limit;
-      if (over && !FIDDLEABLE.includes(level.id)) bad.push(`${level.id} ${(p * 100).toFixed(0)}%`);
-      if (!over && FIDDLEABLE.includes(level.id)) fixed.push(level.id);
+      if (over) bad.push(`${level.id} ${(p * 100).toFixed(0)}%`);
     }
     expect(bad, `passable by random settings: ${bad.join(', ')}`).toEqual([]);
-    expect(fixed, `fixed, remove from FIDDLEABLE: ${fixed.join(', ')}`).toEqual([]);
   });
 });

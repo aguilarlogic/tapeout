@@ -141,13 +141,13 @@ const accEval = (inn: number, out: number, bw: number, acc: Acc) => {
   const peak = acc.p * acc.p * 2 * 1e9; // 1 GHz
   const tCompute = ops / peak, tMem = traffic / (bw * 1e9);
   const t = Math.max(tCompute, tMem);
-  return { latencyMs: t * 1e3, throughput: acc.batch / t, bound: tMem > tCompute ? 'memory' : 'compute', area: acc.p * acc.p * PREC[acc.prec].area, ai: ops / traffic, peakG: peak / 1e9 };
+  return { latencyMs: t * 1e3, throughput: acc.batch / t, bound: tMem > tCompute ? 'memory' : 'compute', area: acc.p * acc.p * PREC[acc.prec].area, ai: ops / traffic, peakG: peak / 1e9, mbPerSample: traffic / acc.batch / 1e6 };
 };
 const aiBoss: ArchLevel = {
   id: 'ai-boss', title: 'Boss: size the accelerator', concept: 'roofline, arithmetic intensity, batching, precision, area', xp: 400, lab: 'AI', tier: 'boss',
   ticket: 'Product wants an inference engine for a fully-connected recommendation layer. Find the smallest accelerator that meets the throughput and latency targets, given the memory system the board provides.',
   build: (r) => {
-    let inn = 4096, out = 4096, bw = 25, tput = 1000, latCap = 5, minPrec = 'int8', best: { acc: Acc; area: number } | undefined;
+    let inn = 4096, out = 4096, bw = 25, tput = 1000, latCap = 5, minPrec = 'int8', best: { acc: Acc; area: number; mb: number } | undefined;
     for (let tries = 0; tries < 80 && !best; tries++) {
       inn = pick(r, [2048, 4096, 8192]); out = pick(r, [1024, 4096]); bw = pick(r, [12, 25, 50]);
       tput = pick(r, [2000, 4000, 8000, 16000]); latCap = pick(r, [2, 4, 8]); minPrec = pick(r, ['int8', 'fp16']);
@@ -155,14 +155,14 @@ const aiBoss: ArchLevel = {
         const acc = { p, prec, batch };
         const e = accEval(inn, out, bw, acc);
         const okPrec = minPrec === 'int8' || prec !== 'int8';
-        if (okPrec && e.throughput >= tput && e.latencyMs <= latCap && (!best || e.area < best.area)) best = { acc, area: e.area };
+        if (okPrec && e.throughput >= tput && e.latencyMs <= latCap && (!best || e.area < best.area || (e.area === best.area && e.mbPerSample < best.mb))) best = { acc, area: e.area, mb: e.mbPerSample };
       }
     }
     const b = best!;
     return {
       brief: `<p>The layer is a ${inn}×${out} matrix applied to a batch of B input vectors: <b>ops = 2·B·in·out</b>; bytes moved from DRAM = (in·out + B·(in + out)) × bytes per element (the weights are read once per batch, so batching reuses them).</p>
 <p>The accelerator is a P×P MAC array at 1 GHz (peak = 2·P² GOPS) with <b>${bw} GB/s</b> of DRAM bandwidth. Execution time = max(ops / peak, bytes / bandwidth): the <b>roofline</b>. Area ∝ P² × (int8 1, fp16 2.5, fp32 6).</p>
-<ul><li>Throughput (samples/s) = B / time must be at least <b>${tput}</b>.</li><li>The batch's latency must be at most <b>${latCap} ms</b>.</li><li>The model needs at least <b>${minPrec === 'int8' ? 'int8' : 'fp16'}</b> precision${minPrec === 'int8' ? '' : ' (int8 loses too much accuracy)'}.</li><li>Area at most <b>${b.area}</b> units (the smallest design that does it).</li></ul>`,
+<ul><li>Throughput (samples/s) = B / time must be at least <b>${tput}</b>.</li><li>The batch's latency must be at most <b>${latCap} ms</b>.</li><li>The model needs at least <b>${minPrec === 'int8' ? 'int8' : 'fp16'}</b> precision${minPrec === 'int8' ? '' : ' (int8 loses too much accuracy)'}.</li><li>Area at most <b>${b.area}</b> units (the smallest design that does it).</li><li>DRAM traffic per sample at most <b>${r2(b.mb * 1.0001)} MB</b>: memory energy dominates, so reuse the weights across the batch.</li></ul>`,
       hints: [],
       controls: [
         { id: 'p', kind: 'select', label: 'Array size P', options: [8, 16, 32, 64, 128].map((p) => ({ value: String(p), label: `${p}×${p}` })), value: '8' },
@@ -178,6 +178,7 @@ const aiBoss: ArchLevel = {
           { label: `latency ≤ ${latCap} ms`, ok: e.latencyMs <= latCap, note: `${r2(e.latencyMs)} ms` },
           { label: 'precision is enough for the model', ok: okPrec },
           { label: `area ≤ ${b.area}`, ok: e.area <= b.area, note: String(e.area) },
+          { label: `DRAM traffic ≤ ${r2(b.mb * 1.0001)} MB per sample`, ok: e.mbPerSample <= b.mb * 1.0001, note: `${r2(e.mbPerSample)} MB per sample` },
         ];
         return { goals, metrics: [['peak', `${e.peakG} GOPS`], ['arithmetic intensity', `${r1(e.ai)} ops/B`], ['bound by', e.bound], ['throughput', `${Math.round(e.throughput)}/s`]], view: { kind: 'plot', caption: 'Roofline: attainable GOPS vs arithmetic intensity', xlabel: 'ops/byte', ylabel: 'GOPS', series: [{ label: 'roof', xs: Array.from({ length: 41 }, (_, i) => i * 8), ys: Array.from({ length: 41 }, (_, i) => Math.min(e.peakG, bw * i * 8)) }, { label: 'your layer', xs: [Math.min(e.ai, 320)], ys: [Math.min(e.peakG, bw * e.ai)], stem: true }] } };
       },

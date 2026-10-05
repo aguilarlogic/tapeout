@@ -107,21 +107,22 @@ const cacheBlock: ArchLevel = {
   build: (r) => {
     const scanLen = between(r, 24, 48), randCount = between(r, 2, 4);
     const trace = mixedTrace(r, 6000, scanLen, randCount, 4096);
-    const base: Partial<CacheConfig> = { size: 1024, ways: 2 };
-    const best = search(trace, amat, grid({ block: [8, 16, 32, 64, 128, 256] }), base);
-    const target = best.score * 1.03;
+    const base: Partial<CacheConfig> = { size: 1024 };
+    const budget = cacheCost({ ...DEFAULT_CACHE, ...base, ways: 2 });
+    const best = search(trace, amat, grid({ block: [8, 16, 32, 64, 128, 256], ways: [1, 2, 4, 8] }), base, budget);
+    const target = best.score * 1.001;
     return {
       brief: `<p><b>Average memory access time</b> = hit time + miss rate × miss penalty. Bigger blocks exploit spatial locality (fewer misses on streams) but raise the <b>miss penalty</b> (a block must be transferred: 20 cycles of latency + 1 cycle per 4 bytes) and, in a small cache, <b>pollute</b> it: fewer distinct blocks fit, so random accesses evict more useful data.</p>
-<p>The workload alternates a <b>sequential scan of ${scanLen} words</b> with <b>${randCount} scattered reads</b> from a 16 KiB region. The cache is 1 KiB, 2-way, LRU. Choose the <b>block size</b> that brings the AMAT to <b>${f(target)} cycles or less</b>. Watch the miss rate and miss penalty move in opposite directions.</p>`,
-      hints: ['Try every block size and compare the AMAT; the best is neither the smallest nor the largest.', 'With 8-byte blocks every other word of the scan misses; with 256-byte blocks there are only 4 blocks in the whole cache and the scattered reads keep evicting the stream.'],
-      controls: cacheControls(['block'], { block: 8 }),
+<p>The workload alternates a <b>sequential scan of ${scanLen} words</b> with <b>${randCount} scattered reads</b> from a 16 KiB region. The cache is 1 KiB, LRU. Choose the <b>block size</b> and the <b>associativity</b> that bring the AMAT to <b>${f(target)} cycles or less</b>, within a hardware <b>cost of ${f(budget, 1)}</b> (each extra way costs more: that is 2-way at most). Watch the miss rate and miss penalty move in opposite directions.</p>`,
+      hints: ['Try every block size and compare the AMAT; the best is neither the smallest nor the largest. Then check whether a second way is worth its cost.', 'With 8-byte blocks every other word of the scan misses; with 256-byte blocks there are only 4 blocks in the whole cache and the scattered reads keep evicting the stream.'],
+      controls: cacheControls(['block', 'ways'], { block: 8, ways: 2 }),
       run: (v) => {
         const cfg = cfgOf(v, base);
         const res = simulateCache(trace, cfg);
-        const a = amat(res, cfg);
-        return { goals: [{ label: `AMAT ≤ ${f(target)} cycles`, ok: a <= target, note: `AMAT is ${f(a)}` }], metrics: metrics(res, cfg), view: threeC(res) };
+        const a = amat(res, cfg), cost = cacheCost(cfg);
+        return { goals: [{ label: `hardware cost ≤ ${f(budget, 1)}`, ok: cost <= budget + 1e-9, note: `cost is ${f(cost, 1)}` }, { label: `AMAT ≤ ${f(target)} cycles`, ok: a <= target, note: `AMAT is ${f(a)}` }], metrics: metrics(res, cfg), view: threeC(res) };
       },
-      solution: { values: asValues(best.cfg, ['block']) },
+      solution: { values: asValues(best.cfg, ['block', 'ways']) },
     };
   },
 };
@@ -134,21 +135,22 @@ const cacheConflict: ArchLevel = {
     const n = between(r, 96, 160);
     const S = 1024;
     const mk = (pad: number): Access[] => { const out: Access[] = []; const a = 0, b = S + pad, c = 2 * S + 2 * pad; for (let i = 0; i < n; i++) out.push(rd(a + 4 * i), rd(b + 4 * i), wr(c + 4 * i)); return out; };
-    const base: Partial<CacheConfig> = { size: S, block: 32 };
+    const base: Partial<CacheConfig> = { size: S };
     const budget = cacheCost({ ...DEFAULT_CACHE, ...base, ways: 2 });
-    let best: { ways: number; pad: number; miss: number; cost: number } | undefined;
-    for (const ways of [1, 2, 4, 8]) for (const pad of [0, 32, 64, 96]) {
-      const cfg = { ...DEFAULT_CACHE, ...base, ways }; const cost = cacheCost(cfg);
+    const PADS = [0, 32, 64, 128, 192, 256], BLOCKS = [16, 32, 64, 128];
+    let best: { ways: number; pad: number; block: number; miss: number; cost: number } | undefined;
+    for (const block of BLOCKS) for (const ways of [1, 2, 4, 8]) for (const pad of PADS) {
+      const cfg = { ...DEFAULT_CACHE, ...base, block, ways }; const cost = cacheCost(cfg);
       if (cost > budget) continue;
       const m = simulateCache(mk(pad), cfg).missRate;
-      if (!best || m < best.miss - 1e-9 || (Math.abs(m - best.miss) < 1e-9 && cost < best.cost)) best = { ways, pad, miss: m, cost };
+      if (!best || m < best.miss - 1e-9 || (Math.abs(m - best.miss) < 1e-9 && cost < best.cost)) best = { ways, pad, block, miss: m, cost };
     }
     const target = best!.miss * 1.1;
     return {
       brief: `<p>Three arrays of ${n} words, <code>a</code>, <code>b</code>, <code>c</code>, sit ${S} bytes apart: exactly the cache size. So <code>a[i]</code>, <code>b[i]</code> and <code>c[i]</code> map to the <b>same set</b>. In a direct-mapped cache each access evicts the previous one: the loop <code>c[i] = a[i] + b[i]</code> misses on <i>every</i> access (<b>conflict misses</b>: a bigger cache would not help; spreading the data would).</p>
-<p>The cache is 1 KiB with 32-byte blocks. You may raise the associativity (each extra way adds cost; the budget allows <b>cost ≤ ${f(budget, 1)}</b>, which is 2-way at most) <b>and/or</b> let the linker place <code>b</code> and <code>c</code> a little further: <b>padding</b> shifts them by 1× and 2× the pad. Reach a miss rate of <b>${pct(target)} or less</b> within budget.</p>`,
+<p>The cache is 1 KiB. You may choose the <b>block size</b> (bigger blocks mean fewer compulsory misses on a stream, and padding must then be at least one block to move an array to another set), raise the associativity (each extra way adds cost; the budget allows <b>cost ≤ ${f(budget, 1)}</b>, which is 2-way at most) <b>and/or</b> let the linker place <code>b</code> and <code>c</code> a little further: <b>padding</b> shifts them by 1× and 2× the pad. Reach a miss rate of <b>${pct(target)} or less</b> within budget.</p>`,
       hints: ['Three data streams on one set need three ways. 2-way is not enough, and 4-way is over budget.', 'Padding by one block (32 B) moves <code>b</code> to the next set and <code>c</code> two sets further: no sharing, no conflicts, and no hardware.'],
-      controls: [...cacheControls(['ways'], { size: S }), { id: 'pad', kind: 'select', label: 'Padding between the arrays (software)', value: '0', options: [0, 32, 64, 96].map((x) => ({ value: String(x), label: `${x} B` })) }],
+      controls: [...cacheControls(['block', 'ways'], { size: S, block: 16, ways: 1 }), { id: 'pad', kind: 'select', label: 'Padding between the arrays (software)', value: '0', options: PADS.map((x) => ({ value: String(x), label: `${x} B` })) }],
       listing: { label: 'The loop', text: `// a, b, c are int arrays of ${n} words\nfor (i = 0; i < ${n}; i++)\n    c[i] = a[i] + b[i];\n\n// a at 0, b at ${S}+pad, c at ${2 * S}+2*pad` },
       run: (v) => {
         const cfg = cfgOf(v, base);
@@ -156,7 +158,7 @@ const cacheConflict: ArchLevel = {
         const cost = cacheCost(cfg);
         return { goals: [{ label: `hardware cost ≤ ${f(budget, 1)}`, ok: cost <= budget + 1e-9, note: `cost is ${f(cost, 1)}` }, { label: `miss rate ≤ ${pct(target)}`, ok: res.missRate <= target, note: `miss rate is ${pct(res.missRate)}` }], metrics: metrics(res, cfg), view: threeC(res) };
       },
-      solution: { values: { ways: String(best!.ways), pad: String(best!.pad) } },
+      solution: { values: { ways: String(best!.ways), pad: String(best!.pad), block: String(best!.block) } },
     };
   },
 };
@@ -174,23 +176,23 @@ const cachePolicy: ArchLevel = {
       for (let i = 0; i < k; i++) trace.push(rd(i * nsets * B)); // k blocks aliasing into set 0
       for (let s = 1; s < nsets; s++) trace.push(rd(s * B), rd(s * B + 4)); // everything else is a tiny hot set
     }
-    const base: Partial<CacheConfig> = { size: S, block: B };
-    const budget = cacheCost({ ...DEFAULT_CACHE, ...base, ways });
-    const best = search(trace, (res) => 1 - res.hitRate, grid({ ways: [1, 2, 4, 8], policy: ['lru', 'fifo', 'random'] }), base, budget);
-    const target = 1 - best.score - 0.02;
+    const base: Partial<CacheConfig> = { block: B };
+    const budget = cacheCost({ ...DEFAULT_CACHE, ...base, size: S, ways });
+    const best = search(trace, (res) => 1 - res.hitRate, grid({ size: [512, 1024, 2048, 4096], ways: [1, 2, 4, 8], policy: ['lru', 'fifo', 'random'] }), base, budget);
+    const target = 1 - best.score - 0.001;
     return {
       brief: `<p>When a set is full a miss must <b>evict</b> something. <b>LRU</b> throws out the least recently used line (good when recent use predicts reuse), <b>FIFO</b> the oldest arrival, <b>random</b> any (cheap, no state). </p>
 <p>This loop walks <b>${k} blocks that all map to one set</b> of a ${ways}-way cache, around and around (a ring buffer a little too big for its set), while a small hot set elsewhere hits. With LRU the block about to be needed is always the one just evicted: <b>every access of the ring misses</b>. Random replacement is bad at predicting, which here is an advantage.</p>
-<p>The cache is 1 KiB with 32-byte blocks. You can choose the policy and the associativity, but not exceed <b>cost ${f(budget, 1)}</b> (4-way). Reach a hit rate of <b>${pct(target)} or better</b>.</p>`,
+<p>The blocks are 32 bytes. You can choose the capacity, the associativity and the policy, but not exceed <b>cost ${f(budget, 1)}</b> (a 1 KiB 4-way cache costs exactly that). Reach a hit rate of <b>${pct(target)} or better</b>.</p>`,
       hints: ['Work one round of the ring by hand with LRU: A B C D E → E evicts A, then A (needed next) evicts B, and so on.', 'More ways would hold all five blocks, but 8-way is over budget. Which policy does not follow the access order?'],
-      controls: cacheControls(['ways', 'policy'], { size: S, ways, policy: 'lru' }),
+      controls: cacheControls(['size', 'ways', 'policy'], { size: S, ways, policy: 'lru' }),
       run: (v) => {
         const cfg = cfgOf(v, base);
         const res = simulateCache(trace, cfg);
         const cost = cacheCost(cfg);
         return { goals: [{ label: `hardware cost ≤ ${f(budget, 1)}`, ok: cost <= budget + 1e-9, note: `cost is ${f(cost, 1)}` }, { label: `hit rate ≥ ${pct(target)}`, ok: res.hitRate >= target, note: `hit rate is ${pct(res.hitRate)}` }], metrics: metrics(res, cfg), view: threeC(res) };
       },
-      solution: { values: asValues(best.cfg, ['ways', 'policy']) },
+      solution: { values: asValues(best.cfg, ['size', 'ways', 'policy']) },
     };
   },
 };
@@ -201,25 +203,25 @@ const cacheTile: ArchLevel = {
   ticket: 'Matrix multiply is three lines of code and a hundred ways to run it. The cache cares which one you pick.',
   build: (r) => {
     const n = between(r, 20, 28);
-    const base: Partial<CacheConfig> = { size: 512, block: 32, ways: 2 };
-    const orders: LoopOrder[] = ['ijk', 'ikj', 'jki'], tiles = [0, 4, 8];
+    const base: Partial<CacheConfig> = { size: 512, ways: 2 };
+    const orders: LoopOrder[] = ['ijk', 'ikj', 'jki'], tiles = [0, 4, 8], blocks = [16, 32, 64];
     const memo = new Map<string, number>();
-    const miss = (o: LoopOrder, t: number) => { const key = o + t; if (!memo.has(key)) memo.set(key, simulateCache(matmulTrace(n, o, t), { ...DEFAULT_CACHE, ...base }).missRate); return memo.get(key)!; };
-    let best = { o: 'ijk' as LoopOrder, t: 0, m: Infinity };
-    for (const o of orders) for (const t of tiles) { const m = miss(o, t); if (m < best.m) best = { o, t, m }; }
-    const target = best.m * 1.15;
+    const miss = (o: LoopOrder, t: number, b: number) => { const key = `${o}${t}/${b}`; if (!memo.has(key)) memo.set(key, simulateCache(matmulTrace(n, o, t), { ...DEFAULT_CACHE, ...base, block: b }).missRate); return memo.get(key)!; };
+    let best = { o: 'ijk' as LoopOrder, t: 0, b: 32, m: Infinity };
+    for (const o of orders) for (const t of tiles) for (const b of blocks) { const m = miss(o, t, b); if (m < best.m - 1e-12) best = { o, t, b, m }; }
+    const target = best.m * 1.001;
     return {
       brief: `<p>All matrices are ${n}×${n} words, row-major (consecutive elements of a row are adjacent in memory). The inner statement is <code>C[i][j] += A[i][k] * B[k][j]</code>. Which loop is innermost decides which array is walked along a row (cache-friendly, one miss per block) and which down a column (a stride of ${4 * n} bytes: every access a different block). <b>Blocking</b> (tiling) splits the loops so a small sub-matrix is reused while it is still in the cache.</p>
-<p>The cache is 512 B, 2-way, 32-byte blocks (it holds 128 words: far less than one matrix). Choose a <b>loop order</b> and a <b>tile size</b> so the miss rate is <b>${pct(target)} or lower</b>. Think about which array each order strides through in the innermost loop.</p>`,
+<p>The cache is 512 B and 2-way (it holds 128 words: far less than one matrix). Choose a <b>loop order</b>, a <b>tile size</b> and the cache's <b>block size</b> so the miss rate is <b>${pct(target)} or lower</b>. Think about which array each order strides through in the innermost loop.</p>`,
       hints: ['In <code>ijk</code> the innermost loop is k: A[i][k] is walked along a row, but B[k][j] goes down a column.', '<code>ikj</code> makes j innermost: both B[k][j] and C[i][j] are walked along rows, and A[i][k] is constant.', 'Tiling helps the other orders by shrinking the working set until it fits.'],
-      controls: [{ id: 'order', kind: 'select', label: 'Loop order (outer → inner)', value: 'ijk', options: orders.map((o) => ({ value: o, label: o.split('').join(' → ') })) }, { id: 'tile', kind: 'select', label: 'Tile size', value: '0', options: tiles.map((t) => ({ value: String(t), label: t === 0 ? 'no tiling' : `${t}×${t}×${t}` })) }],
+      controls: [{ id: 'order', kind: 'select', label: 'Loop order (outer → inner)', value: 'ijk', options: orders.map((o) => ({ value: o, label: o.split('').join(' → ') })) }, { id: 'tile', kind: 'select', label: 'Tile size', value: '0', options: tiles.map((t) => ({ value: String(t), label: t === 0 ? 'no tiling' : `${t}×${t}×${t}` })) }, ...cacheControls(['block'], { block: 16 })],
       listing: { label: 'The kernel', text: `for (i = 0; i < ${n}; i++)\n  for (j = 0; j < ${n}; j++)\n    for (k = 0; k < ${n}; k++)\n      C[i][j] += A[i][k] * B[k][j];\n\n// try the loops in other orders, or in blocks of T` },
       run: (v) => {
         const cfg = cfgOf(v, base);
         const res = simulateCache(matmulTrace(n, v.order as LoopOrder, Number(v.tile)), cfg);
         return { goals: [{ label: `miss rate ≤ ${pct(target)}`, ok: res.missRate <= target, note: `miss rate is ${pct(res.missRate)}` }], metrics: metrics(res, cfg), view: threeC(res) };
       },
-      solution: { values: { order: best.o, tile: String(best.t) } },
+      solution: { values: { order: best.o, tile: String(best.t), block: String(best.b) } },
     };
   },
 };
@@ -233,21 +235,23 @@ const cacheWrite: ArchLevel = {
     const trace: Access[] = [];
     if (stream) { const n = between(r, 400, 700); for (let i = 0; i < n; i++) trace.push(wr(0x8000 + 4 * i)); }
     else { const hot = between(r, 4, 8), reps = between(r, 60, 120); for (let rep = 0; rep < reps; rep++) for (let i = 0; i < hot; i++) trace.push(rd(0x100 + 4 * i), wr(0x100 + 4 * i)); }
-    const base: Partial<CacheConfig> = { size: 1024, block: 32, ways: 2 };
-    const best = search(trace, (res) => res.traffic, grid({ write: ['wb', 'wt'] }), base);
-    const target = best.score * 1.05;
+    const base: Partial<CacheConfig> = { block: 32 };
+    const budget = 1.5; // a small cache: 512 B direct-mapped or 2-way
+    const best = search(trace, (res) => res.traffic, grid({ write: ['wb', 'wt'], size: [512, 1024, 2048, 4096], ways: [1, 2, 4, 8] }), base, budget);
+    const target = best.score * 1.001;
     return {
       brief: `<p><b>Write-back</b> keeps modified data in the cache and writes a dirty block to memory only when it is evicted; a write that misses first fetches the block (<b>write-allocate</b>). <b>Write-through</b> sends every store to memory at once (one word, through a write buffer) and, with <b>no-write-allocate</b>, a write miss does not bother to bring the block in.</p>
-<p>This program ${stream ? 'fills a buffer once, front to back, writing each word exactly once and never reading it (a frame buffer clear, a <code>memset</code>)' : `updates a handful of hot counters over and over: <code>count[i]++</code> for ${trace.length / 2} accesses to the same few words`}. Pick the policy that moves the <b>fewest bytes</b> over the memory bus: at most <b>${Math.round(target)} bytes</b>.</p>`,
+<p>This program ${stream ? 'fills a buffer once, front to back, writing each word exactly once and never reading it (a frame buffer clear, a <code>memset</code>)' : `updates a handful of hot counters over and over: <code>count[i]++</code> for ${trace.length / 2} accesses to the same few words`}. Pick the policy that moves the <b>fewest bytes</b> over the memory bus: at most <b>${Math.round(target)} bytes</b>, on a cache that costs no more than <b>${f(budget, 1)}</b> (the SoC only has room for a small one: capacity and each extra way add cost).</p>`,
       hints: ['Count bytes by hand for one word written: write-through sends 4 bytes. Write-back allocates a 32-byte block, and writes 32 bytes back later: but spread over how many stores?', stream ? 'No word is written twice, so the blocks do not save anything by absorbing repeat writes.' : 'The same few words are written hundreds of times: absorbing those writes in the cache is the whole point.'],
-      controls: cacheControls(['write'], { write: stream ? 'wb' : 'wt' }),
+      controls: cacheControls(['write', 'size', 'ways'], { write: stream ? 'wb' : 'wt', size: 2048, ways: 4 }),
       listing: { label: 'The program', text: stream ? `for (i = 0; i < ${trace.length}; i++)\n    buf[i] = 0;          // write once` : `for (r = 0; r < ${trace.length / 2 / 4 | 0}; r++)\n    for (i = 0; i < n; i++)\n        count[i]++;          // read then write` },
       run: (v) => {
         const cfg = cfgOf(v, base);
         const res = simulateCache(trace, cfg);
-        return { goals: [{ label: `memory traffic ≤ ${Math.round(target)} bytes`, ok: res.traffic <= target, note: `traffic is ${res.traffic} bytes` }], metrics: metrics(res, cfg), view: threeC(res) };
+        const cost = cacheCost(cfg);
+        return { goals: [{ label: `hardware cost ≤ ${f(budget, 1)}`, ok: cost <= budget + 1e-9, note: `cost is ${f(cost, 1)}` }, { label: `memory traffic ≤ ${Math.round(target)} bytes`, ok: res.traffic <= target, note: `traffic is ${res.traffic} bytes` }], metrics: metrics(res, cfg), view: threeC(res) };
       },
-      solution: { values: asValues(best.cfg, ['write']) },
+      solution: { values: asValues(best.cfg, ['write', 'size', 'ways']) },
     };
   },
 };
