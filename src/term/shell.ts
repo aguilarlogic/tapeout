@@ -9,7 +9,7 @@ import { career, capstoneId } from '../mastery/career';
 import { findSkill, LEVEL_NAME, nextStep, roleReadiness, ROLES, SKILLS, skillCeiling, skillLevel, type RoleId } from '../mastery/skills';
 import { MINIGAMES } from '../minigames/apps';
 import { BOSSES, findBoss, findPractice, PRACTICE, problem } from '../practice';
-import { gradePractice, nextDifficulty, PRACTICE_COUNT, PRACTICE_HARD, PRACTICE_PASS, type Boss, type Difficulty, type PracticeSet } from '../practice/types';
+import { gradePractice, nextDifficulty, PRACTICE_COUNT, PRACTICE_HARD, PRACTICE_PASS, PRACTICE_START, type Boss, type Difficulty, type PracticeSet } from '../practice/types';
 import { setMood } from '../os/avatar';
 import { launchGame, randomGame } from '../os/launch';
 import { best, complete, levelRecord, load, playerName, prefs, Prefs, Profile, profile, rank, RANKS, recordBest, resetAll, setPrefs, setProfile, totalXp, updateCard } from '../state';
@@ -367,7 +367,7 @@ export class Shell {
       h('span', { class: 'dim' }, o.endless ? 'ENDLESS PRACTICE · type quit to stop' : `PRACTICE · ${PRACTICE_COUNT} problems · difficulty climbs as you get them right`),
       h('b', null, o.title), h('span', { class: 'dim' }, o.concept)), 'type', 2.5);
     if (!o.endless) t.print(`To pass: ${PRACTICE_PASS}/${PRACTICE_COUNT} right on the first try, with at least ${PRACTICE_HARD} at ◆◆◆ hard.`, 'dim');
-    let d: Difficulty = 1, run = 0, streak = 0, bestStreak = 0, lastSet = -1, lastGen = -1;
+    let d: Difficulty = o.endless ? 1 : PRACTICE_START, run = 0, streak = 0, bestStreak = 0, lastSet = -1, lastGen = -1;
     /** After a walkthrough, the next problem is "your turn": the same kind, at the same difficulty. */
     let yourTurn: { si: number; gen: number; d: Difficulty; method?: string } | undefined;
     const results: { ok: boolean; d: Difficulty }[] = [];

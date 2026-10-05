@@ -25,7 +25,9 @@ export const PRACTICE_COUNT = 10;
 /** A run passes with this many first-try answers... */
 export const PRACTICE_PASS = 8;
 /** ...of which at least this many were at difficulty 3. */
-export const PRACTICE_HARD = 4;
+export const PRACTICE_HARD = 3;
+/** Runs start at standard difficulty: starting at warm-up made hard answers too scarce for one slip to be survivable. */
+export const PRACTICE_START: Difficulty = 2;
 
 export const practice = (id: string, title: string, concept: string, gens: Gen[], xp = 60): PracticeSet => ({ id, title, concept, xp, gens });
 
@@ -38,6 +40,19 @@ export const tier = <T>(d: Difficulty, a: T, b: T, c: T): T => (d === 1 ? a : d 
 export function nextDifficulty(d: Difficulty, correct: boolean, streak: number): Difficulty {
   if (!correct) return Math.max(1, d - 1) as Difficulty;
   return streak >= 2 && d < 3 ? ((d + 1) as Difficulty) : d;
+}
+
+/** Replay a right/wrong pattern through the difficulty ladder exactly as the shell does (the streak resets on every change). */
+export function simulateRun(pattern: boolean[]): { ok: boolean; d: Difficulty }[] {
+  let d = PRACTICE_START, run = 0;
+  return pattern.map((ok) => {
+    const res = { ok, d };
+    run = ok ? run + 1 : 0;
+    const nd = nextDifficulty(d, ok, run);
+    if (nd !== d) run = 0;
+    d = nd;
+    return res;
+  });
 }
 
 /** Grade a practice run. Returns 0 (not passed yet), 2 (passed) or 3 (near-perfect). */
