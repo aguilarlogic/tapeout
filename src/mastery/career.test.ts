@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { ACTS, ALL_MODULES } from '../curriculum';
 import { questionsOf } from '../lessons';
-import { BOSSES, findBoss } from '../practice';
+import { BOSSES, findBoss, PRACTICE } from '../practice';
+import { CAPSTONE_TRACE } from '../practice/capstones';
 import { rng } from '../sim/harness';
 import { complete, RANKS, rank } from '../state';
 import { career, capstoneId, hiredRoles, STORY } from './career';
-import { ROLES } from './skills';
+import { ROLES, SKILLS } from './skills';
 
 describe('role capstones', () => {
   it('every role has a hiring panel in the campaign', () => {
@@ -24,8 +25,34 @@ describe('role capstones', () => {
       expect(a, r.id).not.toBe(c);
     }
   });
-  it('spreads the panel over several skills', () => {
-    for (const r of ROLES) expect(findBoss(capstoneId(r))!.concept, r.id).toMatch(/across ([4-9]|\d\d) skills/);
+  it('says how the panel is really made up', () => {
+    for (const r of ROLES) expect(findBoss(capstoneId(r))!.concept, r.id).toMatch(/drawn from (\d+ skill sets|\d+ practice sets? and the role's boss exams)/);
+  });
+  const panels = (roleId: string, attempts = 200) => {
+    const b = findBoss(`cap-${roleId}`)!;
+    return Array.from({ length: attempts }, (_, a) => { questionsOf(b, rng(a + 1)); return [...CAPSTONE_TRACE.get(b.id)!]; });
+  };
+  it('examines every own practice set of every role at least once over 200 attempts', () => {
+    for (const r of ROLES) {
+      const seen = new Set(panels(r.id).flat());
+      const own = SKILLS.filter((s) => s.roles !== 'all' && s.roles.includes(r.id)).flatMap((s) => s.practice).filter((id) => PRACTICE.some((p) => p.id === id));
+      for (const id of new Set(own)) expect(seen.has(`set:${id}`), `${r.id} never examines ${id}`).toBe(true);
+    }
+  });
+  it('never takes more than 2 questions from shared foundations, and always fills the panel', () => {
+    for (const r of ROLES) for (const p of panels(r.id, 60)) {
+      expect(p.length, r.id).toBe(12);
+      expect(p.filter((x) => x.startsWith('all:')).length, r.id).toBeLessThanOrEqual(2);
+    }
+  });
+  it('never asks the same fixed question twice in one panel', () => {
+    for (const r of ROLES) for (const p of panels(r.id, 60)) {
+      const fixed = p.filter((x) => x.startsWith('static:'));
+      expect(new Set(fixed).size, `${r.id}: ${fixed.join(' ')}`).toBe(fixed.length);
+    }
+  });
+  it('thin roles are examined mostly on their own material', () => {
+    for (const id of ['security', 'mems', 'neuro', 'ae']) for (const p of panels(id, 30)) expect(p.filter((x) => x.startsWith('all:')).length, id).toBeLessThanOrEqual(2);
   });
 });
 
