@@ -16,16 +16,16 @@ numbers refer to that commit.
 | A2 incident evidence rule | done | guesses score 0; the terminal warns first |
 | A3 answer-length balance | done | `mc-balance.test.ts` gates every pool on both the longest and the shortest side |
 | A4 hiring panels | done | per-attempt deal; thin roles padded from boss lessons; foundations capped at 2 |
-| A5 difficulty and variety | partial | `variety.test.ts` gates new offenders; 66 and 112 listed generators still to fix |
+| A5 difficulty and variety | partial | every generator is easier at warm-up (66 → 4 ignoring difficulty); banks have 6+ rows; 73 generators still below 6 distinct questions, listed in `variety.test.ts` |
 | A6 promotion beats | done | `mastery/promotion.ts`; `complete()` only called from there and `state.ts` |
-| A7 labs passable by fiddling | partial | boss labs hide goals until submit; guided cache/OoO targets and the random-settings test are open |
+| A7 labs passable by fiddling | partial | boss labs hide goals until submit; the random-settings gate is in with 10 levels listed as still fiddleable (cache-write/policy/conflict/block/tile, ooo-window, sig-fft, sig-pid, ai-boss, pll-jitter); their targets are not yet tightened |
 | A8 Daily Mix | done | one `mix-daily` record, capped streak bonuses, migration |
 | A9 reset leaves drafts | done | |
 | A10 orphan modules | done | `skills.test.ts` fails on orphans |
-| B1 responsiveness | partial | step 1 busy state done; async RV and the worker are open |
-| B2 startup | open | |
+| B1 responsiveness | partial | busy state on RV, SVA, ISA, Circuit; RV evaluates asynchronously with "program n of m". The Web Worker is not done (step 1 left RV Check in short slices, which the plan says is enough to skip step 2) |
+| B2 startup | done | hosted build with lazy lab chunks (`vite build --mode hosted`), Pages workflow, `scripts/profile-startup.cjs`. Measured: single file 215 ms / 1020 ms (1x / 4x CPU), hosted 186 ms / 440 ms |
 | B3 shared lab kit | partial | one `starsFor`, one PRNG; the hint/draft/finish consolidation is open |
-| B4 faster tests | partial | RV bug test split out; no wall-time gain measured on 4 cores |
+| B4 faster tests | partial | RV bug test split out and stops at the first failing program; wall time on 4 cores is unchanged at about 50 s, so the 32 s target is not met |
 | B5 CI once per push | done | |
 
 ## How to work
