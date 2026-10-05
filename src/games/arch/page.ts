@@ -12,7 +12,7 @@ import { findArchLevel } from './levels';
 import { defaults, type ArchResult, type Control, type Values, type View } from './types';
 
 export { starsFor } from '../../ui/labkit';
-import { starsFor } from '../../ui/labkit';
+import { starsFor, useHints, loadSeed, newVariantButton } from '../../ui/labkit';
 
 const PLOT_COLORS = ['#6cc8ff', '#ffb454', '#8be28b', '#ff7a90'];
 
@@ -74,30 +74,15 @@ export function archPage(id: string): HTMLElement {
   if (!level) return h('p', null, 'Unknown mission.');
   const boss = level.tier === 'boss';
   const seedKey = `arch.${level.id}.seed`;
-  let seed = loadDraft<number>(seedKey);
-  if (seed === undefined) { seed = Math.floor(Math.random() * 1e6) + 1; saveDraft(seedKey, seed); }
+  const seed = loadSeed(seedKey);
   const inst = level.build(rng(seed));
   const draftKey = `arch.${level.id}.${seed}`;
-  const usage = loadDraft<{ hints: number }>(`${draftKey}.usage`) ?? { hints: 0 };
   const values: Values = { ...defaults(inst.controls), ...(loadDraft<Values>(`${draftKey}.values`) ?? {}) };
   const saveValues = () => saveDraft(`${draftKey}.values`, values);
 
   const ed = inst.code ? editor(loadDraft<string>(draftKey) ?? inst.code.starter, (v) => saveDraft(draftKey, v), () => check(false), { highlight: highlightAsm, label: inst.code.label }) : undefined;
 
-  const hintList = h('ol', { class: 'hints' });
-  const hintBtn = h('button', { class: 'btn ghost small', onclick: () => reveal() }, '');
-  const renderHints = () => {
-    hintList.replaceChildren(...inst.hints.slice(0, usage.hints).map((t) => h('li', { html: t })));
-    hintBtn.textContent = usage.hints >= inst.hints.length ? 'No more hints' : `Reveal a hint (${inst.hints.length - usage.hints} left, caps you at 2 stars)`;
-    (hintBtn as HTMLButtonElement).disabled = usage.hints >= inst.hints.length;
-  };
-  const reveal = () => {
-    usage.hints = Math.min(inst.hints.length, usage.hints + 1);
-    saveDraft(`${draftKey}.usage`, usage);
-    renderHints();
-    mentorSay(`Hint: ${inst.hints[usage.hints - 1].replace(/<[^>]+>/g, '')}`, 'thinking');
-  };
-  renderHints();
+  const { hintBtn, hintList, usage } = useHints(inst.hints, `${draftKey}.usage`);
 
   const brief = h('aside', { class: 'brief panel' },
     h('div', { class: 'tag' }, `${level.lab} Lab · ${level.concept}`),
@@ -178,7 +163,7 @@ export function archPage(id: string): HTMLElement {
     h('button', { class: 'btn', onclick: () => check(false), title: 'Ctrl+Enter' }, '▶ Run'),
     h('button', { class: 'btn primary', onclick: () => check(true) }, '✔ Submit'),
     h('button', { class: 'btn ghost', onclick: () => { if (confirm('Reset the controls and code?')) { Object.assign(values, defaults(inst.controls)); saveValues(); if (ed && inst.code) ed.value = inst.code.starter; clearDraft(draftKey); const host = document.getElementById('lab-slot'); if (host) host.replaceWith(archPage(level.id)); } } }, 'Reset'),
-    boss ? h('button', { class: 'btn ghost', onclick: () => { if (confirm('Roll a new variant? This clears your current work.')) { saveDraft(seedKey, Math.floor(Math.random() * 1e6) + 1); const host = document.getElementById('lab-slot'); if (host) host.replaceWith(archPage(level.id)); else location.reload(); } } }, 'New variant') : '',
+    boss ? newVariantButton(seedKey, () => archPage(level.id)) : '',
   );
 
   const page = h('div', { class: 'level', id: 'lab-slot' },

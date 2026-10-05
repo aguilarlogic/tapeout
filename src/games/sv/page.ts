@@ -12,7 +12,7 @@ import type { CovGroupReport } from './cover';
 import { findTbLevel } from './levels';
 
 export { starsFor } from '../../ui/labkit';
-import { starsFor } from '../../ui/labkit';
+import { starsFor, useHints, loadSeed, newVariantButton } from '../../ui/labkit';
 
 function coverageView(cov: CovGroupReport[]): HTMLElement | string {
   if (!cov.length) return '';
@@ -33,12 +33,9 @@ export function svPage(id: string): HTMLElement {
   if (!level) return h('p', null, 'Unknown mission.');
   const boss = level.tier === 'boss';
   const seedKey = `tb.${level.id}.seed`;
-  let seed = loadDraft<number>(seedKey);
-  if (seed === undefined) { seed = Math.floor(Math.random() * 1e6) + 1; saveDraft(seedKey, seed); }
+  const seed = loadSeed(seedKey);
   const inst = level.build(rng(seed));
   const draftKey = `tb.${level.id}.${seed}`;
-  const usage = loadDraft<{ hints: number }>(`${draftKey}.usage`) ?? { hints: 0 };
-  const saveUsage = () => saveDraft(`${draftKey}.usage`, usage);
   const fix = inst.mode === 'fix';
 
   const ed = editor(loadDraft<string>(draftKey) ?? inst.starter, (v) => saveDraft(draftKey, v), () => run(false), {
@@ -46,20 +43,7 @@ export function svPage(id: string): HTMLElement {
   });
 
   // --- brief and hints
-  const hintList = h('ol', { class: 'hints' });
-  const hintBtn = h('button', { class: 'btn ghost small', onclick: () => reveal() }, '');
-  const renderHints = () => {
-    hintList.replaceChildren(...inst.hints.slice(0, usage.hints).map((t) => h('li', { html: t })));
-    hintBtn.textContent = usage.hints >= inst.hints.length ? 'No more hints' : `Reveal a hint (${inst.hints.length - usage.hints} left, caps you at 2 stars)`;
-    (hintBtn as HTMLButtonElement).disabled = usage.hints >= inst.hints.length;
-  };
-  const reveal = () => {
-    usage.hints = Math.min(inst.hints.length, usage.hints + 1);
-    saveUsage();
-    renderHints();
-    mentorSay(`Hint: ${inst.hints[usage.hints - 1].replace(/<[^>]+>/g, '')}`, 'thinking');
-  };
-  renderHints();
+  const { hintBtn, hintList, usage } = useHints(inst.hints, `${draftKey}.usage`);
 
   const brief = h('aside', { class: 'brief panel' },
     h('div', { class: 'tag' }, `${inst.uvm ? 'UVM' : 'Testbench'} · ${level.concept}`),
@@ -126,7 +110,7 @@ export function svPage(id: string): HTMLElement {
     h('button', { class: 'btn', onclick: () => run(false), title: 'Ctrl+Enter' }, '▶ Run'),
     h('button', { class: 'btn primary', onclick: () => run(true) }, '✔ Submit'),
     h('button', { class: 'btn ghost', onclick: () => { if (confirm('Reset to the starter?')) { ed.value = inst.starter; clearDraft(draftKey); } } }, 'Reset'),
-    boss ? h('button', { class: 'btn ghost', onclick: () => { if (confirm('Roll a new variant? This clears your current work.')) { saveDraft(seedKey, Math.floor(Math.random() * 1e6) + 1); const host = document.getElementById('lab-slot'); if (host) host.replaceWith(svPage(level.id)); else location.reload(); } } }, 'New variant') : '',
+    boss ? newVariantButton(seedKey, () => svPage(level.id)) : '',
   );
 
   return h('div', { class: 'level', id: 'lab-slot' },

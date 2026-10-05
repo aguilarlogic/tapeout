@@ -11,3 +11,44 @@ export function busy(status: HTMLElement, work: () => void | Promise<void>) {
   status.textContent = 'Running…';
   setTimeout(() => { void Promise.resolve().then(work).finally(() => btns.forEach((b) => { b.disabled = false; })); }, 0);
 }
+
+import { h } from './dom';
+import { mentorSay } from '../os/mentor';
+import { loadDraft, saveDraft } from '../state';
+
+/** The seed a lab instance was built from: kept across reloads until the player asks for a new variant. */
+export function loadSeed(seedKey: string): number {
+  let seed = loadDraft<number>(seedKey);
+  if (seed === undefined) { seed = Math.floor(Math.random() * 1e6) + 1; saveDraft(seedKey, seed); }
+  return seed;
+}
+
+/** Hint button, list and usage count for a lab. The usage object is shared with the page, which reads `usage.hints` when it awards stars. */
+export function useHints(hints: string[], usageKey: string) {
+  const usage = loadDraft<{ hints: number }>(usageKey) ?? { hints: 0 };
+  const hintList = h('ol', { class: 'hints' });
+  const hintBtn = h('button', { class: 'btn ghost small', onclick: () => reveal() }, '') as HTMLButtonElement;
+  const render = () => {
+    hintList.replaceChildren(...hints.slice(0, usage.hints).map((t) => h('li', { html: t })));
+    hintBtn.textContent = usage.hints >= hints.length ? 'No more hints' : `Reveal a hint (${hints.length - usage.hints} left, caps you at 2 stars)`;
+    hintBtn.disabled = usage.hints >= hints.length;
+  };
+  const reveal = () => {
+    usage.hints = Math.min(hints.length, usage.hints + 1);
+    saveDraft(usageKey, usage);
+    render();
+    mentorSay(`Hint: ${hints[usage.hints - 1].replace(/<[^>]+>/g, '')}`, 'thinking');
+  };
+  render();
+  return { hintBtn, hintList, usage };
+}
+
+/** The boss labs' "New variant" button: confirm, draw a new seed, and rebuild the page in place. */
+export function newVariantButton(seedKey: string, rebuild: () => HTMLElement): HTMLElement {
+  return h('button', { class: 'btn ghost', onclick: () => {
+    if (!confirm('Roll a new variant? This clears your current work.')) return;
+    saveDraft(seedKey, Math.floor(Math.random() * 1e6) + 1);
+    const host = document.getElementById('lab-slot');
+    if (host) host.replaceWith(rebuild()); else location.reload();
+  } }, 'New variant');
+}
