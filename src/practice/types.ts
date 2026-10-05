@@ -29,7 +29,20 @@ export const PRACTICE_HARD = 3;
 /** Runs start at standard difficulty: starting at warm-up made hard answers too scarce for one slip to be survivable. */
 export const PRACTICE_START: Difficulty = 2;
 
-export const practice = (id: string, title: string, concept: string, gens: Gen[], xp = 60): PracticeSet => ({ id, title, concept, xp, gens });
+/**
+ * Warm-up questions are easier: a four-way choice loses one distractor (never one that other options refer to).
+ * Applied to every generator, so none of them can ignore the difficulty it is asked for.
+ */
+const easier = (g: Gen): Gen => (r, d) => {
+  const q = g(r, d);
+  if (d !== 1 || q.t !== 'mc' || q.options.length < 4 || q.options.some((o) => /\b(both|above|none of|all of|neither)\b/i.test(o))) return q;
+  // Drop the longest distractor: that never makes the answer the shortest option, so length stays uninformative.
+  const gone = [...q.options.keys()].filter((i) => i !== q.a).sort((i, j) => q.options[j].length - q.options[i].length)[0];
+  const options = q.options.filter((_, i) => i !== gone);
+  return { ...q, options, a: options.indexOf(q.options[q.a]) };
+};
+
+export const practice = (id: string, title: string, concept: string, gens: Gen[], xp = 60): PracticeSet => ({ id, title, concept, xp, gens: gens.map(easier) });
 
 export const boss = (b: Omit<Boss, 'boss' | 'pass'> & { pass?: number }): Boss => ({ pass: 0.8, ...b, boss: true });
 

@@ -5,9 +5,12 @@ import { describe, expect, it } from 'vitest';
 import { rng } from '../sim/harness';
 import { PRACTICE } from '.';
 
-const text = (q: ReturnType<(typeof PRACTICE)[number]['gens'][number]>) => q.q;
+type Q = ReturnType<(typeof PRACTICE)[number]['gens'][number]>;
+const text = (q: Q) => q.q;
+// The difficulty-sensitive view of a question: its text and, for a choice, how many options it offers.
+const shape = (q: Q) => (q.t === 'mc' ? `${q.q}|${q.options.length}` : q.q);
 const ignoresDifficulty = (g: (typeof PRACTICE)[number]['gens'][number], salt: number) => {
-  for (let k = 1; k <= 20; k++) if (text(g(rng(k * 31 + salt), 1)) !== text(g(rng(k * 31 + salt), 3))) return false;
+  for (let k = 1; k <= 20; k++) if (shape(g(rng(k * 31 + salt), 1)) !== shape(g(rng(k * 31 + salt), 3))) return false;
   return true;
 };
 const distinct = (g: (typeof PRACTICE)[number]['gens'][number], salt: number) => {
@@ -21,65 +24,16 @@ const NO_DIFFICULTY: string[] = [
   'practice-mos g1',
   'practice-mos g3',
   'practice-electronics g5',
-  'practice-semi g5',
   'practice-mosphys g2',
-  'practice-signals g5',
-  'practice-dsp g5',
   'practice-em g0',
-  'practice-shell g4',
-  'practice-git g3',
   'practice-flows g0',
-  'practice-flows g4',
-  'practice-c g5',
   'practice-cpp g3',
-  'practice-cpp g4',
-  'practice-dsa g5',
-  'practice-asm g4',
-  'practice-os g4',
-  'practice-fsm g4',
-  'practice-verilog g4',
-  'practice-clk g4',
-  'practice-sta g5',
-  'practice-vlsi g5',
   'practice-power g4',
-  'practice-power g5',
   'practice-pcb g1',
-  'practice-pcb g5',
-  'practice-dv g3',
-  'practice-crv g3',
-  'practice-cov g4',
-  'practice-uvm g3',
-  'practice-sva g3',
-  'practice-formal g2',
-  'practice-dft g5',
-  'practice-pipe g3',
-  'practice-ooo g2',
-  'practice-ooo g3',
-  'practice-cache g3',
-  'practice-coherence g2',
   'practice-dram g2',
-  'practice-dram g3',
-  'practice-bus g4',
-  'practice-noc g3',
   'practice-serdes g1',
-  'practice-serdes g4',
   'practice-perf g3',
   'practice-perf g4',
-  'practice-analog g5',
-  'practice-pmic g5',
-  'practice-pnr g5',
-  'practice-sram g6',
-  'practice-fab g4',
-  'practice-pkg g5',
-  'practice-postsi g4',
-  'practice-ate g5',
-  'practice-emu g4',
-  'practice-npu g5',
-  'practice-hwsec g4',
-  'practice-fusa g4',
-  'practice-photonics g5',
-  'practice-qubit g5',
-  'practice-qctrl g5',
   'practice-io-esd g3',
   'practice-emerging g3',
   'practice-ae-tpm g3',
