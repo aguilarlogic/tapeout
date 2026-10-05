@@ -35,6 +35,8 @@ export const PRACTICE_START: Difficulty = 2;
  */
 const easier = (g: Gen): Gen => (r, d) => {
   const q = g(r, d);
+  // A typed answer gets its hint up front at warm-up, instead of on request.
+  if (d === 1 && q.t === 'ask' && q.hint) return { ...q, q: `${q.q} (Hint: ${q.hint})` };
   if (d !== 1 || q.t !== 'mc' || q.options.length < 4 || q.options.some((o) => /\b(both|above|none of|all of|neither)\b/i.test(o))) return q;
   // Drop the longest distractor: that never makes the answer the shortest option, so length stays uninformative.
   const gone = [...q.options.keys()].filter((i) => i !== q.a).sort((i, j) => q.options[j].length - q.options[i].length)[0];

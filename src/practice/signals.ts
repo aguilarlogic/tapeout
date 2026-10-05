@@ -101,6 +101,12 @@ export const signalsPractice = practice('practice-signals', 'Signals Drills', 's
     ['An ideal brick-wall low-pass filter has what impulse response?', 'A sinc, infinitely long and non-causal', ['A single impulse, at time zero, with unit area under it', 'A decaying exponential', 'A square pulse'],
       'the brick-wall filter', 'A perfect low-pass is a rectangle in frequency. The inverse Fourier transform of a rectangle is sin(x)/x, the sinc, which ripples on forever in both directions. You cannot build it: real filters approximate it with a truncated, windowed version.',
       ['The shape of a brick-wall filter in the frequency domain is:', 'A rectangle', ['A triangle', 'A single spike']]],
+      ['What is the Nyquist rate?', 'Twice the highest frequency in the signal', ['Half the highest frequency in the signal', 'The highest frequency in the signal', 'Ten times the noise bandwidth'],
+        'Nyquist', 'To keep every frequency up to f_max without folding, you must sample faster than 2 f_max. Below that, the high parts alias onto lower ones.',
+        ['To capture 20 kHz you sample above:', '40 kHz', ['10 kHz', '20 kHz']]],
+      ['What does convolution compute for an LTI system?', 'The output, as the input weighted by the impulse response', ['The spectrum of the input signal alone', 'The inverse of the system transfer function', 'The sampling rate that the system needs'],
+        'convolution', 'Every input sample triggers a scaled copy of the impulse response. Adding up all those copies is the output, so knowing the impulse response gives the output for any input.',
+        ['A delta input gives an output equal to the:', 'Impulse response', ['Step response', 'Noise floor']]],
   ], (right) => `${right}. These dualities are why engineers switch between time and frequency so freely.`),
 ]);
 
@@ -191,6 +197,12 @@ export const dspPractice = practice('practice-dsp', 'DSP Drills', 'FIR/IIR, z-do
     ['A fixed-point IIR filter with poles close to z = 1 needs…', 'More internal bits, since small errors move the poles a lot', ['Fewer bits, because the poles near one are the easy case', 'No saturation logic, since the output cannot ever overflow', 'A lower sample rate only, with the same word length as before'],
       'IIR precision', 'A pole near z = 1 means feedback of almost exactly 1: the filter remembers for a very long time and its DC gain 1/(1 - a) is huge. A tiny rounding of a changes 1 - a by a large fraction, and internal values grow big, so it needs extra bits.',
       ['If a = 0.999, the DC gain 1/(1 - a) is:', '1000', ['1', '0.999']], 'More internal bits, because small coefficient and rounding errors move the poles a lot'],
+      ['What does decimation by 4 need before it keeps every fourth sample?', 'A low-pass filter, or high frequencies alias', ['An amplifier, so the samples are larger', 'A faster clock to run the filter', 'A window to cut the spectral leakage'],
+        'decimation', 'Dropping samples lowers the sample rate, so anything above the new Nyquist limit folds in. A filter must first remove it, which is why CIC filters pair with decimators.',
+        ['Decimation lowers the:', 'Sample rate', ['Bit width', 'Gain']]],
+      ['What is the order of an FIR filter with 31 taps?', '30', ['31', '15', '32'],
+        'filter order', 'An N-tap FIR filter has order N-1, since it uses the current sample and N-1 past ones. So 31 taps is order 30, with 30 delay elements.',
+        ['The number of delay elements is taps minus:', 'One', ['Two', 'Zero']]],
   ], (right) => `${right}.`),
 ]);
 
@@ -267,6 +279,12 @@ export const controlPractice = practice('practice-control', 'Loop Drills', 'loop
       ['A loop has 10° of phase margin. Its step response will…', 'Ring heavily with large overshoot', ['Be perfectly flat', 'Be overdamped and slow, settling over many time constants', 'Have no output'],
         'phase margin and damping', 'Phase margin maps to damping: roughly ζ ≈ PM/100 below about 70°. Low margin means the loop is close to oscillating, so a step makes it overshoot and ring before settling.',
         ['10° of phase margin corresponds to a damping ratio ζ of about:', '0.1 (very lightly damped)', ['1 (critically damped)', '5 (overdamped)']]],
+      ['Which PID term reacts to the rate of change of the error?', 'Derivative', ['Proportional', 'Integral', 'Feedforward'],
+        'PID terms', 'P acts on the error now, I on its accumulated history, and D on how fast it is changing. D predicts where the error is heading, so it damps overshoot but amplifies noise.',
+        ['Integral acts on the error:', 'Accumulated over time', ['At this instant', 'Rate of change']]],
+      ['What does integral windup mean?', 'The integrator keeps growing while the actuator is saturated', ['The loop gain rises with temperature', 'The derivative term adds too much noise', 'The sampling rate drifts over time'],
+        'windup', 'If the output is stuck at its limit, the error stays and the integral keeps adding up. When the error finally reverses, it takes a long time to unwind, causing a big overshoot.',
+        ['The fix is to stop integrating while:', 'The output is saturated', ['The error is small', 'The clock is slow']]],
     ], (right) => `${right}. PM ≈ 100·ζ for ζ below ~0.7: low margin means low damping.`);
     const pm = pick(r, [30, 45, 60, 70]);
     const z = pm / 100;
