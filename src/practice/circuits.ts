@@ -3,7 +3,7 @@ import { num, qty } from '../lessons/answers';
 import { calc, choice, count, show, walk } from '../lessons/teach';
 import { art, ask, between, mc, pick, say } from '../lessons/types';
 import { boss, practice, tier } from './types';
-import { eng, mcs, sci, sig } from './util';
+import { concept, eng, mcs, sci, sig } from './util';
 
 const par = (...rs: number[]) => 1 / rs.reduce((a, x) => a + 1 / x, 0);
 const K = (x: number) => eng(x, 'Ω');
@@ -458,24 +458,23 @@ export const semiPractice = practice('practice-semi', 'Silicon Drills', 'carrier
   },
   (r) => {
     const qs = [
-      ['Phosphorus is added to silicon. The result is…', 'n-type: electrons are the majority carriers', ['p-type: holes are the majority carriers', 'Intrinsic: nothing changes', 'An insulator'],
+      ['Phosphorus is added to silicon. The result is…', 'n-type: electrons are the majority carriers', ['p-type: holes are the majority carriers in the crystal', 'Intrinsic: the added atoms change nothing about it', 'An insulator, since the added atoms fill the band gap'],
         'dopants and carriers', 'Silicon has 4 outer electrons. A dopant with 5 (group V: phosphorus, arsenic) has one spare electron to give away: a donor. One with 3 (group III: boron) is one short and creates a hole: an acceptor.',
         ['How many outer (valence) electrons does phosphorus have?', '5, one more than silicon', ['3, one fewer than silicon', '4, the same as silicon']]],
-      ['Why does a PN junction block reverse current?', 'The depletion region has almost no free carriers, and the built-in field sweeps away the few minority carriers', ['The p side has no atoms', 'The oxide is in the way', 'Holes are too slow'],
+      ['Why does a PN junction block reverse current?', 'Depletion has few carriers, and its field sweeps them away', ['The p side has no atoms of silicon in it, so nothing flows', 'The oxide in the way stops the carriers from crossing it', 'Holes are too slow to cross the junction in the other direction'],
         'the depletion region', 'At a PN junction, electrons and holes near the boundary recombine, leaving a region with no free carriers (depleted), just fixed charged atoms. Those charges create a built-in field. Reverse bias widens this carrier-free zone.',
-        ['What is in the depletion region?', 'Fixed ionized dopant atoms, but almost no free carriers', ['A thin oxide layer', 'Extra free electrons']]],
-      ['Why is silicon, not germanium, used for almost every chip?', 'Its larger band gap keeps leakage low, and it grows a superb native oxide (SiO₂)', ['It conducts better', 'It is magnetic', 'It has a smaller band gap'],
+        ['What is in the depletion region?', 'Fixed ionized dopant atoms, but almost no free carriers', ['A thin oxide layer', 'Extra free electrons']], 'The depletion region has almost no free carriers, and the built-in field sweeps away the few minority carriers'],
+      ['Why is silicon, not germanium, used for almost every chip?', 'A larger band gap keeps leakage low, and it grows an oxide', ['It conducts better than germanium does at room temperature', 'It is magnetic, which helps to hold the dopants in place', 'It has a smaller band gap, so it switches with less energy'],
         'band gap and oxide', 'Leakage comes from carriers thermally excited across the band gap: a larger gap means exponentially fewer of them. Silicon (1.12 eV) beats germanium (0.66 eV). And silicon grows SiO₂, a near-perfect insulator, just by heating it in oxygen.',
-        ['A larger band gap means thermally generated carriers are:', 'Far fewer, so leakage is lower', ['More common, so leakage is higher', 'Unchanged']]],
-      ['What carries current in the valence band?', 'Holes: the missing electrons, which move like positive charges', ['Protons', 'Photons', 'Neutrons'],
+        ['A larger band gap means thermally generated carriers are:', 'Far fewer, so leakage is lower', ['More common, so leakage is higher', 'Unchanged']], 'Its larger band gap keeps leakage low, and it grows a superb native oxide (SiO₂)'],
+      ['What carries current in the valence band?', 'Holes: missing electrons that move like positive charges', ['Protons, which are free to move through the crystal lattice', 'Photons, which are absorbed and then re-emitted by the atoms', 'Neutrons, which pass freely through the whole of the lattice'],
         'holes', 'In the valence band almost every state is full. When one electron is missing, neighbouring electrons can hop into the gap, so the gap moves the opposite way. It is easier to track the gap, the hole, as a positive charge moving.',
-        ['When a neighbouring electron fills a hole, the hole:', 'Moves the other way, like a positive charge', ['Disappears for good', 'Turns into a proton']]],
-      ['What happens to intrinsic carrier density n_i as temperature rises?', 'It rises exponentially, so leakage rises too', ['It falls', 'It stays constant', 'It becomes negative'],
+        ['When a neighbouring electron fills a hole, the hole:', 'Moves the other way, like a positive charge', ['Disappears for good', 'Turns into a proton']], 'Holes: the missing electrons, which move like positive charges'],
+      ['What happens to intrinsic carrier density n_i as temperature rises?', 'It rises exponentially, so leakage rises too', ['It falls, since the lattice scatters the carriers more often', 'It stays constant, because it is set by the band gap alone', 'It becomes negative, once the temperature passes a threshold'],
         'thermal generation', 'Heat gives electrons energy. The chance that one gets enough to jump the band gap grows exponentially with temperature (like e^(-Eg/2kT)), so n_i, and every leakage current that depends on it, climbs fast when the chip warms up.',
         ['As temperature rises, electrons get:', 'More thermal energy, so more of them jump the gap', ['Less energy', 'Heavier']]],
     ] as const;
-    const [q, right, wrong, method, idea, [sq, sr, sw]] = pick(r, qs);
-    return walk(mcs(r, q, right, wrong, `${right}.`), method, idea, choice(sq, sr, sw));
+    return concept(r, qs, (why) => `${why}.`);
   },
 ]);
 
@@ -546,21 +545,20 @@ export const mosphysPractice = practice('practice-mosphys', 'Transistor Physics 
   (r, d) => {
     if (d < 3) {
       const qs = [
-        ['What does DIBL do?', 'A high drain voltage lowers the source barrier, reducing Vt and raising leakage', ['It raises Vt', 'It only affects PMOS', 'It changes the oxide thickness'],
+        ['What does DIBL do?', 'A high drain voltage lowers the source barrier', ['It raises Vt, as the drain voltage rises in a short device', 'It only affects PMOS devices, where the holes are lighter', 'It changes the oxide thickness, as the drain voltage is raised'],
           'drain-induced barrier lowering', 'In a long transistor only the gate controls the energy barrier between source and channel. In a short one, the drain is close enough that its field reaches the source end too. A high drain voltage pulls that barrier down, as if the gate were pushing harder.',
-          ['A lower source barrier means:', 'More carriers get over it: lower effective Vt, more leakage', ['Fewer carriers flow', 'The gate oxide gets thinner']]],
-        ['Why do short-channel devices have large λ (low output resistance)?', 'The drain has more control over the channel, so I_D keeps rising with V_DS', ['The oxide is thicker', 'Mobility is higher', 'The gate is metal'],
+          ['A lower source barrier means:', 'More carriers get over it: lower effective Vt, more leakage', ['Fewer carriers flow', 'The gate oxide gets thinner']], 'A high drain voltage lowers the source barrier, reducing Vt and raising leakage'],
+        ['Why do short-channel devices have large λ (low output resistance)?', 'The drain controls the channel, so I_D keeps rising with V_DS', ['The oxide is thicker in a short device, so the gate has less say', 'Mobility is higher in a short device, so the current is larger', 'The gate is metal in a short device, so it saturates sooner'],
           'channel-length modulation', 'In saturation the current should be set by the gate alone. But raising V_DS shortens the effective channel (the pinch-off point moves), and in a short device that shortening is a big fraction of the length, so the drain keeps changing the current.',
-          ['In an ideal current source, raising V_DS changes the current:', 'Not at all', ['A lot']]],
-        ['What is velocity saturation?', 'At high fields carriers stop speeding up, so I_D grows roughly linearly with V_ov instead of quadratically', ['Electrons move faster than light', 'Holes stop moving entirely', 'Current stops at high V_DS'],
+          ['In an ideal current source, raising V_DS changes the current:', 'Not at all', ['A lot']], 'The drain has more control over the channel, so I_D keeps rising with V_DS'],
+        ['What is velocity saturation?', 'At high fields carriers stop speeding up: I_D is near-linear in V_ov', ['Electrons move faster than light, and the current stops growing', 'Holes stop moving entirely above a certain value of the field', 'Current stops growing at high V_DS, since the channel pinches off'],
           'velocity saturation', 'Carrier speed is mobility × field, until the field gets very high: then collisions cap the speed at about 1e7 cm/s. Short channels have huge fields, so carriers hit that cap and the square law flattens toward linear.',
-          ['At very high electric fields, carrier speed:', 'Levels off at a maximum', ['Keeps rising forever', 'Drops to zero']]],
-        ['Why did the industry move to FinFETs and nanosheets?', 'Wrapping the gate around the channel restores gate control and cuts leakage at short lengths', ['They are cheaper to make', 'They need no oxide', 'They remove the need for PMOS'],
+          ['At very high electric fields, carrier speed:', 'Levels off at a maximum', ['Keeps rising forever', 'Drops to zero']], 'At high fields carriers stop speeding up, so I_D grows roughly linearly with V_ov instead of quadratically'],
+        ['Why did the industry move to FinFETs and nanosheets?', 'A wrapped gate restores channel control and cuts leakage', ['They are cheaper to make than planar devices of the same size', 'They need no gate oxide, which removes one of the process steps', 'They remove the need for PMOS devices, so a chip is smaller'],
           'gate control', 'Short-channel problems (DIBL, leakage, poor swing) all come from the drain competing with the gate for control of the channel. A gate on one side of a planar channel loses; a gate wrapped around three or four sides wins back control.',
-          ['A gate that surrounds the channel on more sides gives:', 'Stronger control, so less leakage', ['Weaker control', 'No change']]],
+          ['A gate that surrounds the channel on more sides gives:', 'Stronger control, so less leakage', ['Weaker control', 'No change']], 'Wrapping the gate around the channel restores gate control and cuts leakage at short lengths'],
       ] as const;
-      const [q, right, wrong, method, idea, [sq, sr, sw]] = pick(r, qs);
-      return walk(mcs(r, q, right, wrong, `${right}.`), method, idea, choice(sq, sr, sw));
+      return concept(r, qs, (why) => `${why}.`);
     }
     const vt0 = pick(r, [0.35, 0.4]), g = pick(r, [0.3, 0.4, 0.5]), phi = 0.7, vsb = pick(r, [0.3, 0.5, 1.0]);
     const root = Math.sqrt(phi + vsb) - Math.sqrt(phi);

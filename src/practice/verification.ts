@@ -253,7 +253,7 @@ export const uvmPractice = practice('practice-uvm', 'UVM Drills', 'phases, objec
         choice('Only one of these phases consumes simulation time (the rest are instant functions). Which one?', 'run', ['build', 'connect', 'report'], 'run is where the testbench drives stimulus and time passes; everything else just sets up or reports.'),
         step(`Which phase is next after ${PHASES[i]}?`, a));
     }
-    return walk(mcs(r, 'In which order are build_phase methods called?', 'Top-down: test, then env, then agents, then drivers/monitors (a parent must build its children)', ['Bottom-up: drivers first', 'Alphabetical', 'In parallel, in random order'], 'build_phase is top-down; connect_phase and later function phases are bottom-up.'),
+    return walk(mcs(r, 'In which order are build_phase methods called?', 'Top-down: parents build their children', ['Bottom-up: drivers and monitors build first, then their agents', 'Alphabetical, by the instance names of the components', 'In parallel, in an order the simulator picks at random'], 'Test, then env, then agents, then drivers/monitors: a parent must build its children, so build_phase is top-down; connect_phase and later function phases are bottom-up.'),
       'build is top-down', idea,
       choice('A parent has to create its children in its own build_phase. So the parent\'s build must run:', 'Before its children\'s build', ['After its children\'s build', 'At the same instant']));
   },
