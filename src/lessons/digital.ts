@@ -25,7 +25,7 @@ export const comb: Lesson = {
    [FA]──c1──►  [FA]──c2──►  [FA]──c3──►  [FA]──► cout
     │            │            │            │
     s0           s1           s2           s3      ripple-carry adder`),
-    mc('A 32-bit ripple-carry adder is slow. Why?', ['XOR gates are slow', 'The carry may have to ripple through all 32 stages in sequence', 'It has too many inputs', 'Adders need a clock'], 1, 'Worst case the carry travels from bit 0 to bit 31, so delay grows linearly with width. Real designs use carry-lookahead or prefix adders (Kogge-Stone, Brent-Kung) to make it logarithmic.'),
+    mc('A 32-bit ripple-carry adder is slow. Why?', ['XOR gates are slow, and there are two of them in each stage', 'The carry may ripple through all 32 stages in sequence', 'It has too many inputs for a gate library to drive at once', 'Adders need a clock, and the ripple design runs on a slow one'], 1, 'Worst case the carry travels from bit 0 to bit 31, so delay grows linearly with width. Real designs use carry-lookahead or prefix adders (Kogge-Stone, Brent-Kung) to make it logarithmic.'),
     gen((r) => {
       const n = pick(r, [4, 8, 16]);
       const d = between(r, 2, 4) * 10;
@@ -50,7 +50,7 @@ export const seq: Lesson = {
         ┌───────┘│
    R̄ ──┤NAND├───┴── Q̄        two cross-coupled NANDs: an SR latch`),
     say('Two gates feeding each other have two stable states: Q=1 or Q=0. Pulse S̄ low to set, R̄ low to reset. Leave both high and it **holds**. That is one bit of memory.'),
-    mc('In a NAND SR latch, what happens if you hold S̄ and R̄ both **low**, then release them at the same time?', ['Q = 1', 'Q = 0', 'The final state is unpredictable', 'The latch resets'], 2, 'Both outputs are forced to 1, and when both inputs rise together the latch races to whichever side wins. This is the ancestor of metastability, which we will meet again in clock domain crossing.'),
+    mc('In a NAND SR latch, what happens if you hold S̄ and R̄ both **low**, then release them at the same time?', ['Q = 0, because the reset input wins when released together', 'The final state is unpredictable', 'Q = 1, because the set input wins when released together', 'The latch resets, since R̄ is the one that was checked first'], 2, 'Both outputs are forced to 1, and when both inputs rise together the latch races to whichever side wins. This is the ancestor of metastability, which we will meet again in clock domain crossing.'),
     say('A **D latch** adds an enable: while enable is high, Q follows D (it is transparent); when enable drops, Q holds. A **D flip-flop** is two latches back to back, so it only captures D at the instant the clock **rises**.'),
     art(`
    clk  ___┌──┐__┌──┐__┌──┐__┌──┐__
@@ -59,7 +59,7 @@ export const seq: Lesson = {
     app('fftrace', 'Let me open a timing diagram. Predict what Q does at each clock edge. This skill is 50% of reading waveforms.', 4),
     say('Every flip-flop has two rules. **Setup time**: D must be stable a little before the edge. **Hold time**: D must stay stable a little after it. Break them and the flop can go **metastable**, stuck halfway between 0 and 1.'),
     mc('Setup time is about data arriving too **___**, hold time is about data changing too **___**.', ['early, late', 'late, early', 'late, late', 'early, early'], 1, 'Setup violations: the path is too slow (data late). Hold violations: the path is too fast (new data races in and corrupts the value being captured). You will fix both in the timing lab.'),
-    mc('Why do almost all designs use **flip-flops** rather than latches?', ['Latches are illegal', 'Edge-triggered timing is much easier to analyze and reason about', 'Flip-flops are smaller', 'Latches cannot store data'], 1, 'With flops, each clock period is a clean boundary: everything launches on one edge and is captured on the next. Latches allow time borrowing but make timing analysis and verification harder, so they are used sparingly.'),
+    mc('Why do almost all designs use **flip-flops** rather than latches?', ['Latches are illegal in synthesis, and no tool will accept them', 'Edge-triggered timing is far easier to analyze', 'Flip-flops are smaller than latches, so they save area on a chip', 'Latches cannot store data'], 1, 'Each clock period is a clean boundary, so reasoning about it is simple. With flops, each clock period is a clean boundary: everything launches on one edge and is captured on the next. Latches allow time borrowing but make timing analysis and verification harder, so they are used sparingly.'),
   ],
   recap: ['Feedback creates memory: the SR latch.', 'D latch: transparent when enabled. D flip-flop: captures on the clock edge.', 'Setup = stable before the edge; hold = stable after.', 'Synchronous (flip-flop) design makes timing tractable.'],
 };
@@ -117,7 +117,7 @@ export const verilog: Lesson = {
   );
     assign y = (a & b) | c;   // continuous: a wire with gates on it
   endmodule`),
-    mc('What does `assign y = (a & b) | c;` build?', ['A flip-flop', 'An AND gate feeding an OR gate', 'A loop', 'Nothing until it is called'], 1, 'assign describes combinational logic that is always active, like soldering gates together.'),
+    mc('What does `assign y = (a & b) | c;` build?', ['A flip-flop whose input is the AND of a and b, and then c', 'An AND gate feeding an OR gate', 'A feedback loop, since y is used again on the right-hand side', 'Nothing, until a testbench calls it, as it is a function of time'], 1, 'assign describes combinational logic that is always active, like soldering gates together.'),
     say('Registers come from `always` blocks triggered by a clock edge. Inside them, use the **non-blocking** assignment `<=`.'),
     art(`
   always @(posedge clk) begin
@@ -167,7 +167,7 @@ export const alu: Lesson = {
       const n = pick(r, [8, 12, 16]), m = pick(r, [8, 16, 24]);
       return ask(`An unsigned ${n}-bit × ${m}-bit multiply produces a result of how many bits?`, num(n + m), `The product can need ${n} + ${m} = ${n + m} bits: (2^${n}-1)(2^${m}-1) < 2^${n + m}.`, 'Add the widths.');
     }),
-    mc('Why does radix-4 **Booth** encoding speed up a multiplier?', ['It removes the adder', 'It recodes the multiplier two bits at a time into digits in {-2, -1, 0, 1, 2}, halving the number of partial products', 'It uses floating point', 'It skips zeros at runtime'], 1, 'Fewer partial products means a shallower reduction tree, so less area and delay. Multiplying by -2..2 is just shifts and inversions.'),
+    mc('Why does radix-4 **Booth** encoding speed up a multiplier?', ['It removes the final adder', 'It recodes into digits -2..2, halving the partial products', 'It uses floating point internally, which is faster than integers', 'It skips the zero bits at run time'], 1, 'Two bits are recoded at a time, so there are half as many partial products. Fewer partial products means a shallower reduction tree, so less area and delay. Multiplying by -2..2 is just shifts and inversions.'),
     say('A **control unit** decodes each instruction into the control signals that steer the datapath (which ALU op, which register to write, whether to access memory). It can be **hardwired** logic (an FSM, as in RISC cores) or **microcoded** (a small ROM of micro-instructions, as in complex x86 instructions).'),
     say('Put it together and pipeline it. The classic RISC **5-stage pipeline** overlaps five instructions at once, one per stage:'),
     art(`
@@ -180,7 +180,7 @@ export const alu: Lesson = {
       const k = 5;
       return ask(`With no stalls, how many cycles does a ${k}-stage pipeline take to finish ${n} instructions?`, num(n + k - 1), `The first instruction takes ${k} cycles to fill the pipe, then one completes every cycle: ${k} + (${n} - 1) = ${n + k - 1}.`, 'Fill time plus one per remaining instruction.');
     }),
-    mc('Why can\'t you just pipeline a core into 50 stages to go 50× faster?', ['You can', 'Flop overhead (clk-to-q + setup) per stage stops shrinking, and hazards (branch mispredicts, dependencies) cost more cycles the deeper you go', 'Verilog does not allow it', 'The ALU cannot be split'], 1, 'The Pentium 4 tried ~31 stages and lost to shorter pipelines. You will quantify hazard costs in the architecture act.'),
+    mc('Why can\'t you just pipeline a core into 50 stages to go 50× faster?', ['You can: each added stage cuts the clock period in proportion to it', 'Flop overhead per stage stays fixed, and hazards cost more cycles', 'Verilog does not allow more than a handful of pipeline stages in a block', 'The ALU cannot be split into pieces, so the stages stop at about ten'], 1, 'The Pentium 4 tried ~31 stages and lost to shorter pipelines. You will quantify hazard costs in the architecture act.'),
   ],
   recap: ['ALU flags Z/N/C/V drive branches; V = signed overflow.', 'Carry-lookahead: g = a·b, p = a⊕b; prefix adders take log2(n) levels.', 'Multipliers: partial products (Booth halves them) → Wallace/Dadda tree → final adder.', 'Control: hardwired FSM vs microcode.', '5-stage pipeline: n + 4 cycles for n instructions without stalls.'],
 };
@@ -196,9 +196,9 @@ export const clk: Lesson = {
           ┌───────┴───────┐        H-tree: every leaf is the
        ┌──┴──┐         ┌──┴──┐     same distance from the root,
       ┌┴┐   ┌┴┐       ┌┴┐   ┌┴┐    so skew is small by symmetry`),
-    mc('What is the difference between clock **skew** and clock **jitter**?', ['They are the same', 'Skew: the same edge arrives at different flops at different times (spatial). Jitter: the edge-to-edge period varies over time at one flop (temporal)', 'Skew is only on PCBs', 'Jitter only affects hold'], 1, 'Both eat into the timing budget. Skew is mostly deterministic (from the tree); jitter comes from the PLL and supply noise, and is modelled as clock uncertainty in STA.'),
+    mc('What is the difference between clock **skew** and clock **jitter**?', ['They are the same effect, which has two names in two kinds of document', 'Skew: one edge at different flops. Jitter: one flop, different edges', 'Skew is only seen on boards, and jitter only inside the die itself', 'Jitter only affects hold, and skew only affects the setup of a path'], 1, 'Both eat into the timing budget. Skew is mostly deterministic (from the tree); jitter comes from the PLL and supply noise, and is modelled as clock uncertainty in STA.'),
     say('**Resets** put the chip into a known state. Synchronous resets are sampled by the clock; asynchronous resets act immediately. The industry\'s favourite: **assert asynchronously, deassert synchronously**, using a reset synchronizer.'),
-    mc('Why must the **release** of an asynchronous reset be synchronized?', ['It saves power', 'If reset releases close to a clock edge, some flops leave reset this cycle and others next cycle (a recovery/removal violation), so the design starts in an inconsistent state', 'It is required by Verilog', 'Async resets cannot be released'], 1, 'A 2-flop reset synchronizer lets reset hit instantly (even without a clock) but releases it cleanly on a clock edge.'),
+    mc('Why must the **release** of an asynchronous reset be synchronized?', ['It saves power, by holding the flops in reset for a shorter time', 'Released near a clock edge, flops leave reset in different cycles', 'It is required by the Verilog standard, for every reset in a design', 'Async resets cannot be released, unless a clock is running at the time'], 1, 'This is a recovery/removal violation, so the design starts in an inconsistent state. A 2-flop reset synchronizer lets reset hit instantly (even without a clock) but releases it cleanly on a clock edge.'),
     say('Now the big one: **clock domain crossing** (CDC). When a signal goes from a flop on clock A to a flop on unrelated clock B, it can change right inside B\'s setup/hold window. The receiving flop goes **metastable**: its output hangs between 0 and 1 for an unpredictable time.'),
     say('You can not prevent metastability. You can only make failure **astronomically unlikely**: add a second flop and give the first one a whole cycle to resolve. MTBF grows **exponentially** with the resolution time.'),
     art(`
@@ -226,7 +226,7 @@ export const clk: Lesson = {
       const depth = Math.ceil(B - (B * fr) / fw);
       return ask(`A burst of ${B} words is written at ${fw} MHz (one per cycle) and read out at ${fr} MHz (one per cycle). What minimum FIFO depth avoids overflow?`, num(depth), `The burst lasts ${B}/${fw} MHz; in that time ${B * fr / fw} words are read. Depth ≥ ${B} - ${B * fr / fw} = ${depth}. Real designs add margin for synchronizer latency.`, 'Words left over = written during the burst - read during the burst.');
     }),
-    mc('Which of these is a CDC **bug**?', ['A 2-flop synchronizer on a slow single-bit enable', 'Combinational logic (an AND of two signals from domain A) feeding a synchronizer in domain B', 'An async FIFO with Gray pointers', 'A req/ack handshake'], 1, 'Combinational logic before the synchronizer can glitch, and the synchronizer may capture the glitch. Always register the signal in the source domain first. CDC lint tools (Spyglass, Questa CDC) check for exactly this.'),
+    mc('Which of these is a CDC **bug**?', ['A 2-flop synchronizer on a slow single-bit enable signal that crosses', 'An AND of two domain-A signals feeding a domain-B synchronizer', 'An async FIFO that uses Gray-coded pointers between the two clocks', 'A req/ack handshake whose control bits each use their own synchronizer'], 1, 'Combinational logic before the synchronizer can glitch. Combinational logic before the synchronizer can glitch, and the synchronizer may capture the glitch. Always register the signal in the source domain first. CDC lint tools (Spyglass, Questa CDC) check for exactly this.'),
   ],
   recap: ['CTS builds a low-skew clock tree; skew is spatial, jitter temporal.', 'Resets: assert async, deassert sync (reset synchronizer).', 'Metastability can\'t be avoided; MTBF grows as e^(t/τ) with each synchronizer flop.', 'Multi-bit crossings: Gray codes, handshakes, async FIFOs.', 'Never put combinational logic right before a synchronizer.'],
 };

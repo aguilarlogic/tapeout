@@ -129,7 +129,7 @@ export const libcharPractice = practice('practice-libchar', 'Characterization Dr
 
 export const libcharBoss = bossOf(libcharPractice, 'boss-libchar', 'Signing Off a Library', 'interpolation, push-out criteria, power and workload', 200,
   'Boss fight, {name}. A customer\'s STA team questions your library\'s numbers. Defend each one. Exam rules.', [0, 1, 2, 3],
-  [mc('Setup checks use the slow corner and hold checks use the fast corner. Why?', ['It is only a convention that every signoff flow happens to follow, with no deeper reason', 'Setup fails on slow data and hold on fast data: each gets its worst case', 'Hold checks need a higher supply voltage, which only the fast corner provides', 'Setup only matters when the chip is cold, so it is checked at the slow corner'], 1, 'Slowest silicon is the worst case for setup; fastest silicon is the worst case for hold. Each check has a failure direction; the opposite corner would be optimistic.')]);
+  [mc('Setup checks use the slow corner and hold checks use the fast corner. Why?', ['It is only a convention that every signoff flow happens to follow, with no deeper reason', 'Setup fails when data is too slow, so the slowest silicon is the worst case; hold fails when data is too fast', 'Hold checks need a higher supply voltage, which only the fast corner provides', 'Setup only matters when the chip is cold, so it is checked at the slow corner'], 1, 'Slowest silicon is the worst case for setup; fastest silicon is the worst case for hold. Each check has a failure direction; the opposite corner would be optimistic.')]);
 
 // ------------------------------------------------------------------ I/O and ESD
 
