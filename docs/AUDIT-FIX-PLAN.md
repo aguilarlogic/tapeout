@@ -25,7 +25,7 @@ numbers refer to that commit.
 | B1 responsiveness | done | busy state on RV, SV, SVA, ISA, Circuit; RV, SV and SVA checks run in a Web Worker (`eval.worker.ts`, `evalclient.ts`) with a 20 s timeout and a main-thread fallback. Longest frame gap at 4x CPU throttle fell from 1.2 / 10.2 / 6.9 s to 62-83 ms. Cost: about +375 KB in the single file. The job logic is in `eval.job.ts` and `eval.job.test.ts` pins it: every reply survives `structuredClone` (it fails without the sanitiser), and results match the main-thread evaluation |
 | B2 startup | done | hosted build with lazy lab chunks (`vite build --mode hosted`), Pages workflow, `scripts/profile-startup.cjs`. Measured: single file 215 ms / 1020 ms (1x / 4x CPU), hosted 186 ms / 440 ms |
 | B3 shared lab kit | done | `ui/labkit.ts` holds `starsFor` (in `lib/stars.ts`), `useHints`, `briefPanel`, `labPage`, `checkToolbar`, `goalItems`, `draftEditor`, `resetButton`, `newVariantButton`, `verdict`, `setStatus`, `finish`, `busy`, `loadSeed`; one PRNG in `lib/rng.ts`. `src/games/*/page.ts` is 406 lines shorter than at v0.4.0 (2880 → 2474); the kit adds about 140, so the net is about 270. `timing`, `pcb`, `drills` and `logic` keep their own board/canvas code, and `circuit`/`logic` keep their own star rules |
-| B4 faster tests | partial | wall time on 4 cores 64 s → about 41 s with the same coverage: the lab suites are sharded across files, the arch run is memoised, SV's random solver draws without BigInt where it is exact (same stream), the RV starter check stops at the first failure, and the config uses one worker per core. The 32 s target is not met: the rest is the Verilog and SV simulators, and getting lower means fewer seeds or a faster simulator |
+| B4 faster tests | done | wall time on 4 cores 64 s → about 31 s (target 32 s) with the same 1318 tests: the lab suites are sharded across files, arch runs are memoised, the cache simulator skips shadow-cache bookkeeping for repeat accesses and builds each matmul trace once, SV's random solver draws without BigInt where that is exact (same stream, pinned by `rand.test.ts`), the RV starter check stops at the first failure, and the config uses one worker per core. The margin is small and machine-dependent |
 | B5 CI once per push | done | |
 
 ## How to work
@@ -496,3 +496,17 @@ Run these before declaring the plan done:
    - a boss lab, where goals stay hidden until Submit.
 4. Update `docs/MASTERY-PLAN.md`: add a short "Audit fixes" entry under Phase 11 that links to this file, and tick each
    item here as it lands.
+
+
+## Completion record (v0.9.0)
+
+All items in the status table are done and the final checks were run on the built `dist/index.html` from `file://`:
+
+1. `tsc`, `vitest run` (1318 tests, about 31 s on 4 cores) and both builds (single file and `--mode hosted`) are clean.
+2. Every gate in check 2 passes.
+3. Smoke test, no console errors: a practice run (starts at standard difficulty, wrong answers get hints then a worked
+   walkthrough); a boss (no hints, one attempt); an incident, where an early diagnosis asks "6 causes still fit everything
+   you have seen. Diagnose anyway?"; a hiring panel (12 hard questions, no hints, answers shown after a miss); `rv-boss`
+   Check, which shows "Running…" with the toolbar disabled; and the `cache-boss` and `ooo-boss` labs, which show "Goals are
+   hidden until you submit." until Submit.
+4. `docs/MASTERY-PLAN.md` links here and says the plan is complete.

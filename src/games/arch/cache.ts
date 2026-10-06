@@ -27,24 +27,32 @@ export function simulateCache(trace: Access[], cfg: CacheConfig, rows = 0): Cach
   // fully associative LRU shadow cache of the same capacity, to tell capacity from conflict misses
   const shadow = new Map<number, true>();
   const seen = new Set<number>();
-  let clock = 0, rng = 12345;
+  let clock = 0, rng = 12345, prevBlk = -1;
   const rand = () => { rng = (Math.imul(rng, 1103515245) + 12345) >>> 0; return rng >>> 8; };
   const res: CacheResult = { accesses: trace.length, hits: 0, misses: 0, compulsory: 0, capacity: 0, conflict: 0, missRate: 0, hitRate: 0, traffic: 0, reads: 0, writes: 0, rows: [] };
-  for (const { a, w } of trace) {
+  const blockSize = cfg.block, lru = cfg.policy === 'lru', writeBack = cfg.write === 'wb';
+  for (let n = 0; n < trace.length; n++) {
+    const { a, w } = trace[n];
     clock++;
-    const blk = Math.floor(a / cfg.block);
+    const blk = Math.floor(a / blockSize);
     const set = blk % nsets, tag = Math.floor(blk / nsets);
     const lines = sets[set];
-    const line = lines.find((l) => l.tag === tag);
-    const shadowHit = shadow.has(blk);
-    shadow.delete(blk); shadow.set(blk, true);
-    if (shadow.size > blocks) shadow.delete(shadow.keys().next().value as number);
-    const first = !seen.has(blk);
-    seen.add(blk);
+    let line: Line | undefined;
+    for (let i = 0; i < lines.length; i++) if (lines[i].tag === tag) { line = lines[i]; break; }
+    // the same block twice in a row is already the most recent in the shadow cache and already seen: nothing to update
+    let shadowHit = true, first = false;
+    if (blk !== prevBlk) {
+      prevBlk = blk;
+      shadowHit = shadow.has(blk);
+      shadow.delete(blk); shadow.set(blk, true);
+      if (shadow.size > blocks) shadow.delete(shadow.keys().next().value as number);
+      first = !seen.has(blk);
+      seen.add(blk);
+    }
     let kind: 'hit' | 'miss' = 'hit', why = 'hit';
     if (line) {
       line.used = clock;
-      if (w) { if (cfg.write === 'wb') line.dirty = true; else { res.traffic += 4; res.writes += 4; } }
+      if (w) { if (writeBack) line.dirty = true; else { res.traffic += 4; res.writes += 4; } }
       res.hits++;
     } else {
       kind = 'miss';
@@ -57,7 +65,7 @@ export function simulateCache(trace: Access[], cfg: CacheConfig, rows = 0): Cach
         if (lines.length >= ways) {
           let v = 0;
           if (cfg.policy === 'random') v = rand() % lines.length;
-          else for (let i = 1; i < lines.length; i++) if ((cfg.policy === 'lru' ? lines[i].used < lines[v].used : lines[i].ins < lines[v].ins)) v = i;
+          else for (let i = 1; i < lines.length; i++) if ((lru ? lines[i].used < lines[v].used : lines[i].ins < lines[v].ins)) v = i;
           if (lines[v].dirty) { res.traffic += cfg.block; res.writes += cfg.block; }
           lines.splice(v, 1);
         }
@@ -82,6 +90,16 @@ export const seqWords = (base: number, n: number, stride = 1): Access[] => Array
 export type LoopOrder = 'ijk' | 'ikj' | 'jki';
 /** Matrix multiply C += A*B of n×n word matrices in row-major order, optionally blocked. */
 export function matmulTrace(n: number, order: LoopOrder, tile: number): Access[] {
+  const key = `${n}/${order}/${tile}`, hit = traces.get(key);
+  if (hit) return hit;
+  const out = buildMatmul(n, order, tile);
+  if (traces.size >= 64) traces.clear();
+  traces.set(key, out);
+  return out;
+}
+/** Traces are read-only to every caller, so the same loop nest is built once. */
+const traces = new Map<string, Access[]>();
+function buildMatmul(n: number, order: LoopOrder, tile: number): Access[] {
   const A = 0, B = 4 * n * n, C = 8 * n * n;
   const out: Access[] = [];
   const body = (i: number, j: number, k: number) => { out.push(rd(A + 4 * (i * n + k)), rd(B + 4 * (k * n + j)), rd(C + 4 * (i * n + j)), wr(C + 4 * (i * n + j))); };
