@@ -397,7 +397,8 @@ const bossRing: CodeLevel = {
         if (r() < 0.55) lines.push(`h = h * 31 + ring_push(&r, ${between(r, 1, 99)});`);
         else lines.push('h = h * 31 + (ring_pop(&r, &out) == 0 ? out : -1);');
       }
-      return { pre: `struct ring r; ring_init(&r, ${cap}); int out = 0; long h = 7;\n${lines.join('\n')}`, call: 'h', fmt: '%ld', post: 'ring_free(&r);' };
+      // unsigned: this checksum wraps on purpose, and only unsigned arithmetic may (signed overflow is undefined behaviour)
+      return { pre: `struct ring r; ring_init(&r, ${cap}); int out = 0; unsigned long h = 7;\n${lines.join('\n')}`, call: 'h', fmt: '%lu', post: 'ring_free(&r);' };
     };
     return {
       brief: `<p>Write a FIFO of ints with a fixed capacity, stored on the heap:</p><pre>struct ring;                                  // you define it

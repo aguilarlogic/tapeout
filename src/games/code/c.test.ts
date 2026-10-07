@@ -14,8 +14,7 @@ describe('c subset: arithmetic and types', () => {
     expect(out(main('printf("%d %5d|%-5d|%05d %x %X %o %c %s %5.2f %e %%\\n", 42, 42, 42, 42, 255, 255, 8, 65, "hi", 3.14159, 1234.5);'))).toBe('42    42|42   |00042 ff FF 10 A hi  3.14 1.234500e+03 %\n');
     expect(out(main('printf("%ld %lu %lld %u\\n", 1L << 40, 18446744073709551615UL, -5LL, -1);'))).toBe('1099511627776 18446744073709551615 -5 4294967295\n');
   });
-  it('follows C integer rules: wraparound, promotion, truncating division', () => {
-    expect(out(main('int a = 2147483647; a = a + 1; printf("%d\\n", a);'))).toBe('-2147483648\n');
+  it('follows C integer rules: unsigned wraparound, promotion, truncating division', () => {
     expect(out(main('unsigned int u = 0; u--; printf("%u\\n", u);'))).toBe('4294967295\n');
     expect(out(main('printf("%d %d %d %d\\n", 7 / 2, -7 / 2, 7 % 3, -7 % 3);'))).toBe('3 -3 1 -1\n');
     expect(out(main('unsigned char c = 200; c += 100; printf("%d\\n", c);'))).toBe('44\n');
@@ -23,6 +22,26 @@ describe('c subset: arithmetic and types', () => {
     expect(out(main('int i = -1; unsigned u = 1; printf("%d\\n", i < u);'))).toBe('0\n');
     expect(out(main('printf("%d %d\\n", 1 << 3, -16 >> 2);'))).toBe('8 -4\n');
     expect(out(main('printf("%f %f %d\\n", 7 / 2.0, (double)7 / 2, (int)3.99);'))).toBe('3.500000 3.500000 3\n');
+  });
+  it('signed overflow is undefined behaviour', () => {
+    // the old test expected INT_MAX + 1 to print -2147483648; real C leaves it undefined and UBSan reports it
+    const ub = (body: string) => run(main(body));
+    for (const body of [
+      'int a = 2147483647; a = a + 1; printf("%d\\n", a);',
+      'int a = -2147483647 - 1; a = a - 1; printf("%d\\n", a);',
+      'int a = 46341; printf("%d\\n", a * 46341);',
+      'int a = -2147483647 - 1; printf("%d\\n", -a);',
+      'int a = 2147483647; a += 1;',
+      'int a = 2147483647; a++;',
+      'int a = -2147483647 - 1; --a;',
+      'long a = 9223372036854775807L; a = a * 2;',
+    ]) {
+      const r = ub(body);
+      expect(r.kind, body).toBe('ubsan');
+      expect(r.error).toContain('signed integer overflow');
+    }
+    expect(ub('int a = 2147483647; a = a + 1;').error).toContain("cannot be represented in type 'int'");
+    expect(out(main('int a = 2147483647; printf("%d %d\\n", a - 1, -(a - 5));'))).toBe('2147483646 -2147483642\n');
   });
   it('knows sizes', () => {
     expect(out(main('printf("%zu %zu %zu %zu %zu %zu\\n", sizeof(char), sizeof(short), sizeof(int), sizeof(long), sizeof(char *), sizeof(double));'))).toBe('1 2 4 8 8 8\n');
