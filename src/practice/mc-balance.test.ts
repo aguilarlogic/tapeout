@@ -19,15 +19,13 @@ const TODO = new Set([
   'boss-sensors', 'boss-shell', 'boss-signals', 'boss-soc-int', 'boss-sta', 'boss-sva', 'boss-tb', 'boss-test',
   'boss-uarch', 'boss-upf', 'boss-uvm', 'practice-analog g5', 'practice-asm g4', 'practice-ate g5',
   'practice-bus g2', 'practice-bus g4', 'practice-cache g3', 'practice-clk g4', 'practice-coherence g2',
-  'practice-control g4', 'practice-cov g4', 'practice-cpp g4', 'practice-crv g3', 'practice-dft g5',
-  'practice-dram g3', 'practice-dsa g5', 'practice-dsp g5', 'practice-dv g3', 'practice-emu g4', 'practice-fab g4',
-  'practice-flows g4', 'practice-formal g2', 'practice-fsm g4', 'practice-fusa g4', 'practice-git g3',
-  'practice-hwsec g4', 'practice-mos g1', 'practice-mosphys g5', 'practice-noc g3', 'practice-npu g5',
-  'practice-ooo g2', 'practice-ooo g3', 'practice-os g4', 'practice-photonics g5', 'practice-pipe g3',
-  'practice-pkg g5', 'practice-pmic g5', 'practice-pnr g5', 'practice-postsi g4', 'practice-qctrl g5',
-  'practice-qubit g5', 'practice-rf g5', 'practice-semi g5', 'practice-seq g4', 'practice-serdes g4',
-  'practice-shell g4', 'practice-signals g5', 'practice-sram g6', 'practice-sva g3', 'practice-uvm g0',
-  'practice-uvm g3',
+  'practice-control g4', 'practice-cpp g4', 'practice-dram g3', 'practice-dsa g5', 'practice-dsp g5',
+  'practice-emu g4', 'practice-fab g4', 'practice-flows g4', 'practice-fsm g4', 'practice-fusa g4',
+  'practice-git g3', 'practice-hwsec g4', 'practice-mos g1', 'practice-mosphys g5', 'practice-noc g3',
+  'practice-npu g5', 'practice-ooo g2', 'practice-ooo g3', 'practice-os g4', 'practice-photonics g5',
+  'practice-pipe g3', 'practice-pkg g5', 'practice-pmic g5', 'practice-pnr g5', 'practice-postsi g4',
+  'practice-qctrl g5', 'practice-qubit g5', 'practice-rf g5', 'practice-semi g5', 'practice-seq g4',
+  'practice-serdes g4', 'practice-shell g4', 'practice-signals g5', 'practice-sram g6',
 ]);
 
 const samples = allSamples();
