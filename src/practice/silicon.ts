@@ -430,6 +430,26 @@ export const processBoss = boss({
 
 // ------------------------------------------------------------------ packaging
 
+/** In-system junction temperature from the case-top temperature: Tj ~ T_top + Psi_JT x P (theta_JA is for comparing packages). */
+const psiJt = (r: () => number, d: number) => {
+  const ttop = pick(r, [70, 78, 85, 92]), psi = pick(r, [0.3, 0.5, 0.8]), p = pick(r, [8, 12, 20]), tj = ttop + psi * p;
+  const idea = 'Datasheet θja is measured on a standard test board, so it is for comparing packages, not for predicting your product. In a real system, measure the temperature on top of the package and add the junction-to-top characterisation parameter Ψjt times the power: Tj ≈ T_top + Ψjt × P. Ψjt is small because little heat leaves through the top, so the case-top reading is already close to the junction.';
+  if (d === 1) return walk(ask(`In a running system the package-top temperature is measured: T_top = ${ttop} °C, Ψ_JT = ${psi} °C/W, P = ${p} W. What is the junction temperature, in °C?`, qty(tj, '°C', 0.01, sig(tj)), `Tj ≈ T_top + Ψ_JT × P = ${ttop} + ${psi} × ${p} = ${sig(tj)} °C.`, 'Add Ψ_JT × P to the top temperature.'),
+    'junction temperature from the case top', idea,
+    calc('The rise above the case top = Ψ_JT × P, in °C:', `${psi} × ${p}`, psi * p, '°C', sig(psi * p, 4), 0.005),
+    calc('Tj = T_top + rise:', `${ttop} + ${sig(psi * p, 4)}`, tj, '°C', sig(tj), 0.01));
+  const tmax = pick(r, [105, 125, 150]);
+  if (d === 2) return walk(ask(`The case top reads ${ttop} °C at ${p} W and Ψ_JT is ${psi} °C/W. How many °C of headroom are left to a ${tmax} °C junction limit?`, qty(tmax - tj, '°C', 0.02, sig(tmax - tj)), `Tj ≈ ${ttop} + ${psi} × ${p} = ${sig(tj)} °C; ${tmax} - ${sig(tj)} = ${sig(tmax - tj)} °C of headroom.`, 'Estimate Tj first, then subtract it from the limit.'),
+    'headroom to the junction limit', idea,
+    calc('Tj = T_top + Ψ_JT × P, in °C:', `${ttop} + ${psi} × ${p}`, tj, '°C', sig(tj), 0.01),
+    calc('Headroom = limit - Tj, in °C:', `${tmax} - ${sig(tj, 4)}`, tmax - tj, '°C', sig(tmax - tj), 0.02));
+  const pmax = (tmax - ttop) / psi;
+  return walk(ask(`With the case top held at ${ttop} °C and Ψ_JT = ${psi} °C/W, how much power, in W, takes the junction to its ${tmax} °C limit?`, qty(pmax, 'W', 0.02, sig(pmax)), `(${tmax} - ${ttop}) / ${psi} = ${sig(pmax)} W.`, 'Rearrange Tj = T_top + Ψ_JT × P for P.'),
+    'power that reaches the limit', idea,
+    calc('Allowed rise = limit - T_top, in °C:', `${tmax} - ${ttop}`, tmax - ttop, '°C', String(tmax - ttop), 0.001),
+    calc('P = rise ÷ Ψ_JT, in W:', `${tmax - ttop} / ${psi}`, pmax, 'W', sig(pmax), 0.02));
+};
+
 export const pkgPractice = practice('practice-pkg', 'Packaging Drills', 'chiplet yield, bump density, thermal resistance, HBM bandwidth, warpage', [
   (r, d) => {
     const big = pick(r, [400, 600, 800]), n = pick(r, [2, 4]), yb = yieldOf(big, 0.1), ys = yieldOf(big / n, 0.1);
@@ -457,7 +477,7 @@ export const pkgPractice = practice('practice-pkg', 'Packaging Drills', 'chiplet
   },
   (r, d) => {
     const ta = pick(r, [25, 35, 45]), p = pick(r, [15, 50, 150]);
-    const idea = 'Heat flows from the chip to the air through a chain of thermal resistances θ (in °C per watt), like current through resistors in series. The temperature rise is power × total θ, and the junction (chip) temperature is the ambient temperature plus that rise: Tj = Ta + P × θtotal. Resistances in series add.';
+    const idea = 'Heat flows from the chip to the air through a chain of thermal resistances θ (in °C per watt), like current through resistors in series. The temperature rise is power × total θ, and the junction (chip) temperature is the ambient temperature plus that rise: Tj = Ta + P × θtotal. Resistances in series add. (Datasheet θja is measured on a standard test board, so use it to compare packages; real designs model the path θjc + θcs + θsa.)';
     if (d === 1) {
       const th = p === 15 ? pick(r, [2, 3]) : p === 50 ? pick(r, [0.5, 0.8]) : pick(r, [0.2, 0.3]), tj = ta + p * th;
       return walk(ask(`Ambient ${ta} °C, the chip burns ${p} W, θja = ${th} °C/W. Junction temperature, in °C?`, qty(tj, '°C', 0.02, sig(tj)), `${ta} + ${p} × ${th} = ${sig(tj)} °C.`, 'Tj = Ta + P·θ.'),
@@ -480,6 +500,7 @@ export const pkgPractice = practice('practice-pkg', 'Packaging Drills', 'chiplet
       calc('The total θ allowed = rise ÷ power, in °C/W:', `${tmax - ta} / ${p}`, (tmax - ta) / p, '', sig((tmax - ta) / p, 4), 0.005),
       calc('θsa = total minus θjc minus θcs:', `${sig((tmax - ta) / p, 4)} - ${jc} - ${cs}`, sa, '', sig(sa), 0.03));
   },
+  psiJt,
   (r, d) => {
     const gbps = pick(r, [3.2, 6.4, 9.6]), bw = (1024 * gbps) / 8;
     const idea = 'HBM is very wide rather than very fast: each stack has a 1024-bit interface at a modest rate per pin. Bandwidth in GB/s = (number of pins × Gb/s per pin) ÷ 8, since 8 bits make a byte. Several stacks add up.';
