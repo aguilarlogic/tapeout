@@ -4,6 +4,7 @@ import { num, qty } from '../lessons/answers';
 import { calc, choice, count, sim, step, walk } from '../lessons/teach';
 import { art, ask, mc, pick, say } from '../lessons/types';
 import { boss, practice, tier } from './types';
+import { AES_SBOX } from './aes';
 import { concept, exact, hex, sci, sig } from './util';
 
 const popcount = (x: number) => { let n = 0; for (; x; x >>= 1) n += x & 1; return n; };
@@ -164,17 +165,19 @@ export const hwsecPractice = practice('practice-hwsec', 'Security Drills', 'brut
       step(`${hex(w)} in binary (8 digits):`, exact(b8(w))),
       step('XOR the two: a bit is 1 where they differ:', exact(b8(v ^ w))),
       count('Count the 1s (the bits that toggle):', 'number of ones', popcount(v ^ w)));
-    return walk(ask(`The first AES step computes data XOR key. The data byte is ${hex(v)} and you guess the key byte is ${hex(w)}. What Hamming weight does your model predict?`, num(popcount(v ^ w)), `${hex(v)} ⊕ ${hex(w)} = ${hex(v ^ w)} → weight ${popcount(v ^ w)}. DPA repeats this for all 256 guesses over thousands of traces; the guess whose predictions correlate with the power is the key.`, 'XOR the guess with the data.'),
-      'a power-analysis prediction', `${idea} In a DPA attack, you guess a key byte, predict the intermediate value (data XOR key) and its Hamming weight, and check whether the real power traces rise and fall with your predictions. Only the right key guess will correlate.`,
+    const sb = AES_SBOX[v ^ w];
+    return walk(ask(`A power-analysis attack predicts the Hamming weight of the first S-box output, Sbox(data ⊕ key). The data byte is ${hex(v)} and your key guess is ${hex(w)}. Sbox(${hex(v ^ w)}) = ${hex(sb)}. What Hamming weight does your model predict?`, num(popcount(sb)), `${hex(v)} ⊕ ${hex(w)} = ${hex(v ^ w)}; the S-box maps that to ${hex(sb)}, which has ${popcount(sb)} ones. Attacks target the S-box output, not the XOR. XOR is linear, so a key guess and its bitwise complement produce perfectly anti-correlated predictions and cannot be told apart. The S-box's non-linearity makes only the right guess correlate.`, 'XOR, look up the S-box value given, then count its ones.'),
+      'a power-analysis prediction', `${idea} In a DPA attack, you guess a key byte, predict the Hamming weight of the first S-box output, Sbox(data ⊕ key), and check whether the real power traces rise and fall with your predictions. Attacks target the S-box output, not the XOR. XOR is linear, so a key guess and its bitwise complement produce perfectly anti-correlated predictions and cannot be told apart. The S-box's non-linearity makes only the right guess correlate.`,
       step(`${hex(v)} in binary:`, exact(b8(v))),
       step(`Your guess ${hex(w)} in binary:`, exact(b8(w))),
       step('data XOR guess:', exact(b8(v ^ w))),
-      count('The predicted Hamming weight (number of 1s):', 'number of ones', popcount(v ^ w)));
+      step(`Look up the S-box (it gives ${hex(sb)}); in binary:`, exact(b8(sb))),
+      count('The predicted Hamming weight of the S-box output (number of 1s):', 'number of ones', popcount(sb)));
   },
   (r, d) => {
     const n = pick(r, [1000, 5000, 20000]), k = tier(d, 2, pick(r, [4, 10]), pick(r, [10, 30])), need = n * k * k;
-    return walk(ask(`A DPA attack needs ${n} traces. A countermeasure cuts the leaking signal by ${k}× (noise unchanged). About how many traces does the attack need now?`, qty(need, '', 0.02, String(need)), `Traces needed scale with 1/SNR²: ${n} × ${k}² = ${need.toLocaleString('en-US')}. Masking and noise raise the bar; they rarely make an attack impossible.`, 'Signal down k× → traces up k²×.'),
-      'how countermeasures scale DPA', 'Noise can be averaged away by using more traces: averaging N traces improves the signal-to-noise ratio by √N. If a countermeasure makes the signal k times weaker, the SNR drops k times, and to make it up you need k² times as many traces (since √(k²) = k).',
+    return walk(ask(`A DPA attack needs ${n} traces. A countermeasure cuts the leaking signal by ${k}× (noise unchanged). About how many traces does the attack need now?`, qty(need, '', 0.02, String(need)), `Traces needed scale as 1/ρ² (ρ is the correlation): a k× weaker signal needs k² times the traces. ${n} × ${k}² = ${need.toLocaleString('en-US')}. Hiding (noise, shuffling, balanced logic) slows an attack quadratically; it rarely makes one impossible.`, 'Signal down k× → traces up k²×.'),
+      'how countermeasures scale DPA', 'Noise can be averaged away by using more traces. What an attacker measures is the correlation ρ between the predicted weight and the power, and ρ scales with the size of the leaking signal. The traces needed grow as 1/ρ², so a countermeasure that makes the signal k times weaker needs k² times as many traces to make up for it.',
       count(`The signal is ${k}× weaker, so the traces needed grow by ${k} × ${k}:`, `${k}²`, k * k),
       count('Traces needed now:', `${n} × ${k * k}`, need));
   },
@@ -204,6 +207,12 @@ export const hwsecPractice = practice('practice-hwsec', 'Security Drills', 'brut
       ['Why is a constant-time comparison used for a secret?', 'The time it takes must not reveal how many bytes matched', ['It is shorter than a normal comparison', 'It uses less power than a normal comparison', 'It only works with hashed values'],
         'timing side channels', 'An early-exit compare finishes sooner when the first bytes are wrong, so an attacker can guess byte by byte. Comparing everything, always, removes that signal.',
         ['An early-exit compare leaks through its:', 'Run time', ['Output value', 'Code size']]],
+      ['First-order masking splits each secret into two random shares. What does a successful attack now need?', 'A second-order attack that combines two points of each trace', ['The same first-order attack, just with about twice as many traces', 'Nothing extra: masking only hides the timing of the operation', 'A different key schedule, because the shares replace the key itself'],
+        'masking', 'Masking does not weaken the leak, it changes what leaks: each share alone is random, so a single point of the trace is independent of the secret. Only the combination of both shares depends on it, so the attacker must combine two points per trace (a second-order attack).',
+        ['With one share alone, a single trace point is:', 'Independent of the secret', ['Equal to the secret', 'Always zero']], 'A second-order attack combining two points per trace is needed, and it needs far more traces (growing roughly exponentially with the masking order in noisy devices)'],
+      ['Why do CPA attacks on AES model the S-box output rather than data ⊕ key?', 'XOR is linear, so a wrong guess such as the key\'s complement correlates just as strongly', ['The S-box output is the first value the chip computes, so it leaks the most', 'The XOR operation draws no current at all, so it never shows up in power', 'The S-box output has fewer bits than the XOR result, so it is easier to rank'],
+        'power-analysis models', 'The model must separate the right key guess from the wrong ones. XOR with a key guess and with its complement give outputs that are bit-for-bit opposite, so their Hamming weights are perfectly anti-correlated and the two guesses look equally good. The S-box is non-linear, so only the right guess lines up with the real power.',
+        ['A key guess and its bitwise complement give XOR results that are:', 'Complements of each other', ['Identical', 'Unrelated']], 'XOR is linear, so wrong guesses (such as the key\'s complement) correlate as strongly as the right one; the S-box\'s non-linearity breaks that tie'],
   ], (why) => `${why}.`),
 ]);
 
@@ -226,7 +235,7 @@ pin_check:
     { t: 'gen', make: () => ask('The 8-character PIN check exits early and its timing is measurable. Worst-case guesses if each character has 256 values?', num(8 * 256), '8 × 256 = 2048, instead of 256⁸.') },
     { t: 'gen', make: () => ask('A glitch skips the verify branch with probability 0.002, at 5 tries per second. Expected time to success, in s?', qty(100, 's', 0.02, '100'), '1/0.002 = 500 tries, / 5 per second = 100 s.') },
     mc('Best hardening for the boot branch?', ['Redundant, complementary checks and glitch detectors that fail closed', 'A faster CPU, so that the check finishes before any glitch can land there', 'A longer key, so that the signature is harder to forge in the field', 'Obfuscating the boot ROM contents so that attackers cannot read it'], 0, 'Add random delays too, and make the glitch detectors reset the chip. One branch is one point of failure. One branch is one point of failure; make the attacker win several unlikely coin flips at once.'),
-    { t: 'gen', make: () => ask('A DPA attack on the key needs 2000 traces. Masking cuts the leak 20×. Traces needed now?', qty(800000, '', 0.02, '800000'), '2000 × 20² = 800,000.') },
+    { t: 'gen', make: () => ask('A DPA attack needs 2000 traces. Noise injection cuts the leaking signal to 1/20 of its amplitude (noise unchanged). Traces needed now?', qty(800000, '', 0.02, '800000'), 'The number of traces grows with 1/ρ², where ρ is the correlation, and ρ scales with signal amplitude: 2000 × 20² = 800,000. Hiding (noise, shuffling, balanced logic) slows an attack quadratically.') },
     { t: 'gen', make: () => { const h = 2 ** 64 / 1e12 / 3600; return ask('Brute force of the 64-bit key at 10¹² keys/s, worst case, in hours?', qty(h, 'h', 0.03, sig(h)), `2⁶⁴ / 1e12 = ${sig(2 ** 64 / 1e12)} s = ${sig(h)} h. Use 128-bit keys.`); } },
   ],
   recap: ['Timing leaks.', 'Fault-injection odds.', 'DPA scaling.', 'Key lengths.'],
