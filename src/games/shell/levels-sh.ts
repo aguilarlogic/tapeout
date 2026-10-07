@@ -79,7 +79,7 @@ const findMission: ShellLevel = {
   ticket: 'The project disk is full of editor and tool scratch files. Remove them without touching real sources.',
   build: () => ({
     brief: `<p>Delete every file ending in <code>.tmp</code> anywhere under <code>~/proj</code>. Keep everything else, including the directory <code>tmp.d</code> and the file <code>notes.tmp.md</code>.</p><p>Preview first (<code>find</code> prints), then delete.</p>`,
-    hints: ['<code>find proj -name "*.tmp"</code> lists the matches. Quote the pattern so the shell does not expand it.', 'Add <code>-type f</code> to files only, then <code>-delete</code> (or <code>-exec rm {} ;</code>).'],
+    hints: ['<code>find proj -name "*.tmp"</code> lists the matches. Quote the pattern so the shell does not expand it.', 'Add <code>-type f</code> to files only, then <code>-delete</code> (or <code>-exec rm {} \\;</code>; the backslash stops the shell eating the <code>;</code>, and <code>+</code> instead of <code>\\;</code> is the faster form that batches the files).'],
     files: { 'proj/a.tmp': 'x', 'proj/src/b.tmp': 'x', 'proj/src/deep/c.tmp': 'x', 'proj/src/main.c': 'int main(){}', 'proj/notes.tmp.md': 'keep', 'proj/tmp.d/keep.txt': 'keep' },
     solution: ['find proj -name "*.tmp"', 'find proj -type f -name "*.tmp" -delete'],
     goals: [
