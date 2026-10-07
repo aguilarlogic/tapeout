@@ -4,4 +4,5 @@ import type { Rule } from './types';
 export const RULES_C_A: Rule[] = [
   { id: 'C1', why: 'C1: len inside {[64:1500]} on an 8-bit len is satisfiable (64..255)', ban: /unsatisfiable[^']*\(len is 8 bits|nothing satisfies 64\.\.1500/ },
   { id: 'C2', why: 'C2: CPA models the S-box output, not data XOR key', files: /practice\/domains/, ban: /(predict|model)[^.]*\(data XOR key\)|Hamming weight of data XOR key|computes data XOR key/i },
+  { id: 'C3', why: 'C3: masking is not "cutting the leak"; traces scale with 1/rho^2, not 1/SNR^2', files: /practice\/domains/, ban: /Masking cuts the leak|1\/SNR²/ },
 ];
