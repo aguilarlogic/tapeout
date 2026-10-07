@@ -162,6 +162,15 @@ export const asm: Lesson = {
     mc('You get `undefined reference to \'uart_init\'`. Which tool is complaining?', ['The preprocessor', 'The compiler', 'The linker', 'The loader'], 2, 'Each .c file compiled fine on its own; the linker could not find a definition for the symbol when combining object files. Usually a missing source file or library on the link line.'),
     say('The **linker** combines object files, resolves symbols, and patches addresses (relocations). The **loader** maps the program into memory, sets up the stack, and jumps to the entry point. On a bare-metal chip, **you** write the linker script that says where code, data and stack live in the chip\'s memory map.'),
     mc('Which of these is decided by the **calling convention** (the ABI)?', ['The clock frequency at which the processor core is running', 'Which registers hold arguments and which a function preserves', 'The size of the cache, in kilobytes, at each level of it', 'The instruction encoding, which is fixed by the hardware design'], 1, 'RISC-V passes arguments in a0-a7, returns in a0, and splits registers into caller-saved and callee-saved. Compilers and hand-written assembly must agree on it.'),
+    say('Assembly has **pseudo-instructions**: friendly spellings that the assembler expands into real ones. `mv a0, a1` is `addi a0, a1, 0`, and `ret` is `jalr x0, ra, 0`. The practice lab keeps `call` and `la` short for simplicity, but real toolchains expand them like this:'),
+    art(`
+   call f   →  auipc ra, hi(f)      # upper 20 bits of the PC-relative offset
+               jalr  ra, lo(f)(ra)  # reaches any address within about ±2 GiB
+               (marked relaxable: if f is within ±1 MiB the linker shrinks it to one jal)
+   tail f   →  auipc t1, hi(f)
+               jr    t1             # a jump that discards the return address
+   la a0, x →  auipc a0, hi(x)      # non-PIC: PC-relative address of x
+               addi  a0, a0, lo(x)`),
     say('Last detail that trips everyone: **endianness**. Little-endian machines (x86, most ARM and RISC-V systems) store the **least** significant byte at the lowest address.'),
     gen((r) => {
       const v = (between(r, 0x10, 0xfe) << 24) | (between(r, 0x10, 0xfe) << 16) | (between(r, 0x10, 0xfe) << 8) | between(r, 0x10, 0xfe);
