@@ -242,37 +242,51 @@ export const verilog: Lesson = {
 export const verilogSeq: Lesson = {
   id: 'verilog-seq',
   title: 'Verilog: Memory and Clocks',
-  concept: 'always @(posedge clk), <= vs =',
+  concept: 'always_ff, always_comb, <= vs =',
   xp: 80,
   steps: [
     say('So far every line was a gate. To write **memory** in Verilog we need one new kind of block. It is the code version of a flip-flop: it copies its input on each clock tick.'),
     say('**Why this matters:** registers, counters and state machines all use this block.'),
     art(`
-  always @(posedge clk) begin
+  always_ff @(posedge clk) begin
     q <= d;      // on each tick, q copies d
   end`, 'a flip-flop in code'),
-    say('`posedge clk` means "on the rising tick of the clock". Inside the block we use `<=`. Think of it as "gets the value on the tick".'),
+    say('`posedge clk` means "on the rising tick of the clock". `always_ff` tells the tool "this block is flip-flops", so it can warn you if it is not. Inside the block we use `<=`. Think of it as "gets the value on the tick".'),
     mc('What does that block build?', ['A flip-flop', 'An AND gate', 'Nothing'], 0, 'It stores d into q on every clock tick. That is a flip-flop.'),
     art(`
-  always @(posedge clk) begin
+  always_ff @(posedge clk) begin
     if (rst) count <= 0;
     else     count <= count + 1;   // a register with an adder feeding it
   end`, 'a counter'),
-    mc('Two flops: `always @(posedge clk) begin b <= a; c <= b; end`. What is c one clock later?', ['The new value of a', 'The old value of b', 'Zero'], 1, 'Every <= reads its right side before any of them change. So c gets the old b. That gives you a two-step shift register.'),
+    mc('Two flops: `always_ff @(posedge clk) begin b <= a; c <= b; end`. What is c one clock later?', ['The new value of a', 'The old value of b', 'Zero'], 1, 'Every <= reads its right side before any of them change. So c gets the old b. That gives you a two-step shift register.'),
     say('The rule: **use `<=` in clocked blocks.** Use `=` only in blocks without a clock, which come next.'),
     art(`
-  always @(*) begin
+  always_comb begin
     case (sel)
       2'd0: y = a;
       2'd1: y = b;
       default: y = 0;
     endcase
   end`, 'a block without a clock'),
-    say('`always @(*)` with no clock builds plain gates, like `assign`, but lets you use `case` and `if`. Give every output a value on **every path**, or the tool will build a latch you did not want.'),
-    mc('`always @(*) if (en) y = d;` What does this build?', ['A mux', 'A flip-flop', 'A latch'], 2, 'When en is 0, y has to hold its old value, and holding without a clock is a latch. Add an else branch, or a default value at the top.'),
+    say('`always_comb` has no clock. It builds plain gates, like `assign`, but lets you use `case` and `if`. Give every output a value on **every path**, or the tool will build a latch you did not want. `always_comb` warns you when that happens.'),
+    mc('`always_comb if (en) y = d;` What does this build?', ['A mux', 'A flip-flop', 'A latch'], 2, 'When en is 0, y has to hold its old value, and holding without a clock is a latch. Add an else branch, or a default value at the top.'),
+    say('State machines name their states. `typedef enum` gives each state a name, and `unique case` tells the tool that only one arm can match.'),
+    art(`
+  typedef enum logic [1:0] { IDLE, RUN, DONE } state_t;
+  state_t state, next;
+
+  always_comb begin
+    next = state;                 // default first: no latch
+    unique case (state)
+      IDLE: if (start) next = RUN;
+      RUN:  if (last)  next = DONE;
+      DONE: next = IDLE;
+    endcase
+  end`, 'a state machine with named states'),
+    say('You will also read older code. It says `reg` and `wire` instead of `logic`, and `always @(*)` instead of `always_comb`. It means the same thing. VHDL is the other HDL, common in FPGA, aerospace and defence work.'),
     say('That is all the Verilog you need to start building clocked designs.', 'happy'),
   ],
-  recap: ['always @(posedge clk) with <= builds registers.', 'always @(*) with = builds plain logic.', 'Give every output a value on every path, or you get a latch.'],
+  recap: ['always_ff @(posedge clk) with <= builds registers.', 'always_comb with = builds plain logic.', 'Give every output a value on every path, or you get a latch.', 'typedef enum names the states of an FSM.'],
 };
 
 export const alu: Lesson = {
