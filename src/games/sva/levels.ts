@@ -295,6 +295,44 @@ const gotoCount: SvaLevel = {
   }),
 };
 
+// ===================================================================== 8c. within
+const TXW = `module txw(input clk, input rst, input go, output reg act, output reg beat);
+  reg [3:0] t;
+  always @(posedge clk) begin
+    if (rst) begin act <= 1'b0; beat <= 1'b0; t <= 4'd0; end
+    else begin
+      beat <= 1'b0;
+      if (!act && go) begin act <= 1'b1; t <= 4'd1; end
+      else if (act) begin
+        t <= t + 4'd1;
+        if (t >= 4'd2 && t <= 4'd4) beat <= 1'b1;
+        if (t == 4'd6) act <= 1'b0;
+      end
+    end
+  end
+endmodule
+`;
+const withinWindow: SvaLevel = {
+  id: 'sva-within', title: 'A burst inside its window', concept: 'within, sequence containment, window length', xp: 120, tier: 'guided',
+  ticket: 'The memory port may only be hit by a three-beat burst while its transaction window is open. A burst that spills past the close corrupts the next transaction.',
+  build: () => ({
+    mode: 'write', depth: 10, minAsserts: 2, bias: { go: 0.4 }, env: ENV, design: TXW,
+    brief: `<p><code>txw</code> opens a transaction window after an accepted <code>go</code> (<code>go &amp;&amp; !act</code>; a <code>go</code> during a window is ignored): <code>act</code> is high for <b>6 cycles</b> starting the cycle after <code>go</code>. Inside it the block sends one burst of <b>3 consecutive</b> <code>beat</code> cycles.</p>
+<p>Spec: <b>(1)</b> the burst lies <b>inside</b> the window; <b>(2)</b> the window is exactly 6 cycles long, then <code>act</code> drops.</p>
+<p><code>s1 within s2</code> holds when a match of <code>s1</code> starts no earlier, and ends no later, than a match of <code>s2</code> that starts at the same cycle as the check. With <code>go &amp;&amp; !act |=&gt; ...</code> both start the cycle after the accepted <code>go</code>. <code>beat[*3]</code> is the burst, <code>act[*6]</code> is the window.</p>`,
+    hints: ['<code>go &amp;&amp; !act |=&gt; beat[*3] within act[*6]</code>. With a bounded window like <code>act[*6]</code> a missing burst is a real failure.', 'Rule 2 needs its own assertion: <code>$rose(act) |-&gt; act[*6] ##1 !act</code>. The first one would still pass if the window ran on for a seventh cycle.', 'The hidden bugs include a burst that ends one cycle after the window, a burst with a gap in it, a two-beat burst, and a window one cycle too short or too long.'],
+    starter: '// w1: the burst is within the window;  w2: the window is exactly 6 cycles\n',
+    solution: `w1: assert property (${C} go && !act |=> beat[*3] within act[*6]);\nw2: assert property (${C} $rose(act) |-> act[*6] ##1 !act);\n`,
+    mutants: [
+      mut('the burst runs one cycle past the window', TXW, 't >= 4\'d2 && t <= 4\'d4', 't >= 4\'d4 && t <= 4\'d6'),
+      mut('the burst has a gap in it', TXW, 't >= 4\'d2 && t <= 4\'d4', 't == 4\'d2 || t == 4\'d3 || t == 4\'d5'),
+      mut('the burst is only two beats', TXW, 't >= 4\'d2 && t <= 4\'d4', 't >= 4\'d2 && t <= 4\'d3'),
+      mut('the window closes one cycle early', TXW, "t == 4'd6", "t == 4'd5"),
+      mut('the window stays open one cycle too long', TXW, "t == 4'd6", "t == 4'd7"),
+    ],
+  }),
+};
+
 // ===================================================================== assume mode
 const CNT_RAW = `module cnt4(input clk, input rst, input push, input pop, output full, output empty, output reg [2:0] count);
   assign full = (count == 3'd4);
@@ -435,5 +473,5 @@ const bossWrap: SvaLevel = {
   },
 };
 
-export const SVA_LEVELS: SvaLevel[] = [latency, reg, arbiter, fifoCount, handshakeProto, fsm, pulse, cover, gotoCount, assume, formalDepth, fixArb, bossBurst, bossWrap];
+export const SVA_LEVELS: SvaLevel[] = [latency, reg, arbiter, fifoCount, handshakeProto, fsm, pulse, cover, gotoCount, withinWindow, assume, formalDepth, fixArb, bossBurst, bossWrap];
 export const findSvaLevel = (id: string) => SVA_LEVELS.find((l) => l.id === id);
