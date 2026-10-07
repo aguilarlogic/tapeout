@@ -159,8 +159,9 @@ export const power: Lesson = {
        -clamp_value 0 -isolation_signal iso_en -isolation_sense high
    set_retention ret_dsp -domain PD_DSP \\
        -save_signal {save high} -restore_signal {restore high}
-   add_power_state PD_DSP -state RUN {-supply_expr {power == FULL_ON}} \\
-                          -state OFF {-supply_expr {power == OFF}}`),
+   add_power_state -domain PD_DSP \\
+       -state {RUN -supply_expr {power == FULL_ON}} \\
+       -state {OFF -supply_expr {power == OFF}}`),
     mc('Signals crossing from a 0.6 V domain to a 0.9 V domain need what?', ['Nothing', 'Level shifters', 'Synchronizers', 'Decoupling capacitors'], 1, 'A 0.6 V "high" may not fully turn off the 0.9 V domain\'s PMOS, causing leakage or wrong values. Level shifters translate the swing. (Different clocks would need synchronizers; different voltages need level shifters. Often you need both.)'),
     say('**DVFS**: when the workload is light, lower the frequency. A lower frequency needs less voltage to meet timing, and since power goes as V²f, the savings compound.'),
     gen((r) => {
