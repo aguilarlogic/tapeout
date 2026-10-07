@@ -754,8 +754,12 @@ export class CInterp {
       case '+': return sw(x + y);
       case '-': return sw(x - y);
       case '*': return sw(x * y);
-      case '/': if (y === 0n) throw new CError('Floating point exception: integer division by zero', line, 'fpe'); return wrap(x / y);
-      case '%': if (y === 0n) throw new CError('Floating point exception: integer modulo by zero', line, 'fpe'); return wrap(x % y);
+      case '/': case '%': {
+        if (y === 0n) throw new CError(`Floating point exception: integer ${op === '/' ? 'division' : 'modulo'} by zero`, line, 'fpe');
+        // x86 idiv raises SIGFPE on INT_MIN / -1 (the quotient does not fit), and the C standard makes it undefined for % too
+        if (it.signed && y === -1n && x === -(1n << BigInt(it.bits - 1))) throw new CError(`Floating point exception: INT_MIN / -1 overflows (${x} ${op} -1)`, line, 'fpe');
+        return wrap(op === '/' ? x / y : x % y);
+      }
       case '&': return wrap(x & y);
       case '|': return wrap(x | y);
       case '^': return wrap(x ^ y);
@@ -763,7 +767,15 @@ export class CInterp {
         // the result has the promoted type of the left operand only
         const lt = this.promote(a.ty) as Extract<CType, { k: 'int' }>;
         const lx = this.conv(a, lt).v as bigint;
-        const cnt = BigInt(Number(BigInt.asUintN(64, b.v as bigint)) & (lt.bits - 1));
+        // C does not mask the count the way RISC-V and Verilog do: a negative count or one >= the width is undefined behaviour
+        const cnt = b.v as bigint;
+        if (cnt < 0n) throw new CError(`runtime error: shift exponent ${cnt} is negative`, line, 'ubsan');
+        if (cnt >= BigInt(lt.bits)) throw new CError(`runtime error: shift exponent ${cnt} is too large for ${lt.bits}-bit type '${typeStr(lt)}'`, line, 'ubsan');
+        if (op === '<<' && lt.signed) {
+          if (lx < 0n) throw new CError(`runtime error: left shift of negative value ${lx}`, line, 'ubsan');
+          if ((lx << cnt) >> BigInt(lt.bits - 1) !== 0n) throw new CError(`runtime error: left shift of ${lx} by ${cnt} places cannot be represented in type '${typeStr(lt)}'`, line, 'ubsan');
+        }
+        // >> of a negative signed value is implementation-defined; GCC and Clang shift arithmetically, and so does this lab
         const r = op === '<<' ? lx << cnt : lx >> cnt;
         return { ty: lt, v: lt.signed ? BigInt.asIntN(lt.bits, r) : BigInt.asUintN(lt.bits, r) };
       }

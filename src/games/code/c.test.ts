@@ -43,6 +43,20 @@ describe('c subset: arithmetic and types', () => {
     expect(ub('int a = 2147483647; a = a + 1;').error).toContain("cannot be represented in type 'int'");
     expect(out(main('int a = 2147483647; printf("%d %d\\n", a - 1, -(a - 5));'))).toBe('2147483646 -2147483642\n');
   });
+  it('division and shifts: INT_MIN / -1 traps, bad shift counts are undefined behaviour', () => {
+    const r = (body: string) => run(main(body));
+    expect(r('int a = -2147483647 - 1; int b = -1; printf("%d\\n", a / b);')).toMatchObject({ kind: 'fpe', error: expect.stringContaining('INT_MIN / -1') });
+    expect(r('int a = -2147483647 - 1; int b = -1; printf("%d\\n", a % b);').kind).toBe('fpe');
+    expect(out(main('int b = -1; printf("%d %d\\n", 7 / b, 7 % b);'))).toBe('-7 0\n');
+    const n = 32;
+    expect(r(`int n = ${n}; printf("%d\\n", 1 << n);`)).toMatchObject({ kind: 'ubsan', error: expect.stringContaining('shift exponent 32 is too large for 32-bit type') });
+    expect(r('int n = 40; unsigned u = 1; printf("%u\\n", u >> n);').kind).toBe('ubsan');
+    expect(r('int n = -1; printf("%d\\n", 1 >> n);')).toMatchObject({ kind: 'ubsan', error: expect.stringContaining('shift exponent -1 is negative') });
+    expect(r('int n = 31; printf("%d\\n", 1 << n);')).toMatchObject({ kind: 'ubsan', error: expect.stringContaining('cannot be represented') });
+    expect(r('int a = -1; printf("%d\\n", a << 1);')).toMatchObject({ kind: 'ubsan', error: expect.stringContaining('left shift of negative value') });
+    expect(out(main('unsigned u = 1; int a = -8; printf("%u %d %d\\n", u << 31, a >> 1, 1 << 30);'))).toBe('2147483648 -4 1073741824\n');
+    expect(out(main('long x = 1; printf("%ld\\n", x << 40);'))).toBe('1099511627776\n');
+  });
   it('knows sizes', () => {
     expect(out(main('printf("%zu %zu %zu %zu %zu %zu\\n", sizeof(char), sizeof(short), sizeof(int), sizeof(long), sizeof(char *), sizeof(double));'))).toBe('1 2 4 8 8 8\n');
     expect(out(main('int a[10]; printf("%zu %zu\\n", sizeof a, sizeof(a) / sizeof(a[0]));'))).toBe('40 10\n');

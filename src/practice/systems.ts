@@ -421,6 +421,22 @@ export const asmPractice = practice('practice-asm', 'RISC-V Drills', 'execute RV
       calc('Total cycles = instructions × CPI:', `${ic} × ${cpi}`, ic * cpi, '', sig(ic * cpi, 4), 0.005),
       calc('Seconds = cycles ÷ frequency, then ×1000 for ms:', `${sig(ic * cpi, 4)} / ${f} × 1000`, t * 1000, 'ms', sig(t * 1000), 0.02));
   },
+  (r, d) => {
+    // RISC-V and Verilog mask the shift amount to the low 5 bits (32-bit values); C does not, so a count of 32 or more is undefined there.
+    const k = between(r, 1, 7), cnt = d === 3 ? 32 * between(r, 1, 3) + k : 32 + k;
+    const x = d === 2 ? between(r, 0x100, 0xfff) : between(r, 0x10000001, 0x7fffffff);
+    if (d === 1) {
+      return walk(mcs(r, `On RV32, \`sll x1, x2, x3\` runs with x3 = ${cnt}. By how many places is x2 shifted?`, `${k}: the shifter keeps only the low 5 bits of x3`, [`${cnt}: every bit shifts out, x1 = 0`, 'Undefined, just as a shift that big is in C, so x1 can be anything', `0: x1 is a copy of x2`], `The shift unit reads only the low 5 bits of x3, so ${cnt} acts as ${cnt} mod 32 = ${k}. In C the same count is undefined behaviour.`),
+        'shift amounts in hardware', 'A 32-bit shifter only needs 5 bits to say how far to move (0 to 31), so RISC-V sll, srl and sra (and Verilog shifts built on them) ignore every higher bit of the count. C makes no such promise: shifting by the width or more is undefined.',
+        count(`The low 5 bits of ${cnt} are ${cnt} mod 32:`, `${cnt} mod 32`, k));
+    }
+    const left = d === 3 || r() < 0.5;
+    const res = left ? (x << k) >>> 0 : x >>> k;
+    return walk(ask(`On RV32: x2 = ${hex(x, 1)}, x3 = ${cnt}. After \`${left ? 'sll' : 'srl'} x1, x2, x3\`, what is x1? (${d === 3 ? 'hex' : 'decimal'})`, d === 3 ? hexa(res, 8) : num(res), `The shift amount is ${cnt} mod 32 = ${k}, so x1 = ${hex(x, 1)} ${left ? '<<' : '>>'} ${k} = ${hex(res, 1)}. (In C this would be undefined behaviour.)`, 'Only the low 5 bits of x3 are used.'),
+      'shift amounts in hardware', 'A 32-bit shifter only needs 5 bits to say how far to move (0 to 31), so RISC-V sll, srl and sra ignore every higher bit of the count. Reduce the count modulo 32 first, then shift.',
+      count(`Shift amount (${cnt} mod 32):`, `${cnt} mod 32`, k),
+      d === 3 ? step(`Shift x2 = ${hex(x, 1)} ${left ? 'left' : 'right'} by ${k}; x1 in hex (8 digits):`, hexa(res, 8)) : count(`x2 ${left ? '<<' : '>>'} ${k}, as a decimal number:`, `${x} ${left ? '<<' : '>>'} ${k}`, res));
+  },
 ]);
 
 // ------------------------------------------------------------------ operating systems
