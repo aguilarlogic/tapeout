@@ -1,6 +1,7 @@
 # Curriculum standards plan: make every topic correct, current and complete
 
-This is a work order for a coding agent. It turns the curriculum standards audit
+This is a work order for a coding agent (numbers verified 2026-10-07; see the verification log near the end). It turns
+the curriculum standards audit
 (`reports/Chip curriculum standards audit.md`, research notes in `research_notes/Chip curriculum standards audit/`) into
 code and content changes. When it is done, every fact TAPEOUT teaches should match the current industry standard for
 that topic (as of October 2026). It should also cover the material that standards, accredited curricula and hiring
@@ -45,10 +46,13 @@ can look up the source and the researcher's reasoning.
   - Multiple-choice items follow the audit plan's A3 rules: explanations go in `why`, distractors are parallel and
     plausible, and the correct option is not the longest. Once A3's `mc-balance` test exists, every new item must pass
     it.
-- **Unverified numbers stay out.** The report marks some facts **[UNVERIFIED]** or **[PLAUSIBLE]**. This plan marks
-  numbers it has not confirmed against a primary source with **(verify)**. Do not ship such a number until you have
-  confirmed it from the primary source (JEDEC, PCI-SIG, the RISC-V manuals, vendor datasheets). If you cannot confirm
-  it, teach the idea without the number.
+- **Numbers are verified.** Every number in this plan was checked against primary or authoritative sources on
+  2026-10-07. The evidence, with URLs and quotes, is in `research_notes/Standards plan number checks/`, and the
+  "Verification log" at the end of this plan summarises the verdicts.
+  - A few values could only be confirmed from vendor or secondary sources. They are marked **(vendor figure)** or
+    **(secondary)**: teach them as approximate ("about", "up to").
+  - The handful still open are listed under "Still open". Teach those without the number.
+  - Do not add new numbers that are not in this plan without the same check.
 - **No release** unless the owner asks for one.
 
 ### Ordering against `docs/AUDIT-FIX-PLAN.md`
@@ -98,6 +102,15 @@ Status (October 2026) · Next review trigger.
 - **Rows:** take every row of the seven "standards" tables in the report (the sections "Foundations (Act 1)" through
   "Analog, RF, photonics, …"). Map each one to the topic ids that teach it, using `src/curriculum.ts` and
   `src/mastery/skills.ts` to find them.
+- **Use the corrected versions from the number checks** (where they differ from the report's tables):
+  - AXI is at Issue L (Aug 2025) and CHI at Issue H (Sep 2025);
+  - the UVM library is 2020-3.2 (Aug 2026);
+  - CDM is JS-002-2025 and HBM is JS-001-2024;
+  - AEC-Q100 is Rev J1;
+  - GDDR7 is JESD239F (Aug 2026) and DDR5 is JESD79-5D (Nov 2025);
+  - 802.3dj is not yet approved (earliest IEEE SA Board date 9 Dec 2026);
+  - FIPS 206 is still not final;
+  - ISO 26262 third edition: Part 6 is at DIS, the other parts are working drafts.
 - **Review triggers:** add a "Review triggers" section listing:
   - the new NCEES FE Electrical and Computer specification (July 2027);
   - the ISO 26262 third edition (DIS around Q4 2026, publication about 2027–2028);
@@ -108,7 +121,8 @@ Status (October 2026) · Next review trigger.
   - a new IRDS edition;
   - FIPS 206 being finalised;
   - 802.3dj final approval.
-- **Unverified items:** copy the report's "What the researchers could not verify" list into a "To confirm" section.
+- **Open items:** copy this plan's "Still open" list (end of the verification log) into a "To confirm" section, with the
+  date checked.
 
 **Acceptance:** the file exists, every topic id that appears in the report's tables is covered, and the file is linked
 from `README.md` under a "Maintaining the curriculum" heading.
@@ -324,23 +338,22 @@ contrast distractor "undefined, as in C".
 
 ### E5 · ISA assembler: `;`, pseudo-instruction expansion, `ecall` versus CSR opcodes (Sev 3/2, S3.3, S2.4, sev-1 list)
 
-1. **`;` (verify first):** `asm.ts:57` treats `;` as a comment, while `check.ts:52` assumes otherwise. GNU `as` treats
-   `;` as a statement separator on most targets. Confirm what the RISC-V target does: install
-   `riscv64-unknown-elf-as` if the network allows, or find a primary source (the GNU as "RISC-V-Dependent" page,
-   "line comment character" and "line separator").
-   - If `;` is a separator, split lines on `;` before parsing and keep `#` as the only comment character. A `//`
+1. **`;` is a statement separator.** `asm.ts:57` treats `;` as a comment, while `check.ts:52` assumes otherwise. GNU
+   `as` for RISC-V treats `;` as a statement separator and `#` as the comment character. This was confirmed by
+   assembling `li a0,1 ; addi a0,a0,1` with binutils 2.42, which gave two instructions.
+   - Split lines on `;` before parsing (outside string literals) and keep `#` as the comment character. A `//`
      comment may stay as a convenience, with a code comment saying it is non-standard.
-   - **Test:** `li a0, 1 ; addi a0, a0, 1` → a0 = 2.
-   - If you cannot confirm, leave the behaviour alone but make `check.ts` and `asm.ts` agree, and add the question to
-     the baseline's "To confirm" list.
+   - Make `check.ts` agree with `asm.ts`.
+   - **Test:** `li a0, 1 ; addi a0, a0, 1` → a0 = 2. Also check that `# ; not code` stays a comment.
 2. **Pseudo-instructions:** where the lab expands `call`, `tail` and `la` to a single `jal`/`addi`, keep the
    simplification. In the ISA lesson (`lessons/systems.ts`, near "call"), add the real expansions:
-   - `call f` is `auipc ra, %hi(f)` + `jalr ra, %lo(f)(ra)`, with a ±2 GiB reach. The linker relaxes it to `jal` when
-     the target is within ±1 MiB.
-   - `tail f` uses `auipc t1` + `jalr x0`.
-   - `la` is PC-relative `auipc` + `addi`.
+   - `call f` is `auipc ra, …` + `jalr ra, …(ra)`, which reaches any 32-bit PC-relative address (about ±2 GiB). It is
+     marked relaxable, so the linker shortens it to a single `jal` when the target is within ±1 MiB.
+   - `tail f` is `auipc t1, …` + `jr t1` (the jump discards the return address). It uses `t2` when the Zicfilp
+     landing-pad extension is in use; that detail is optional for the lesson.
+   - `la` (non-PIC) is PC-relative `auipc` + `addi`.
 
-   Mark these (verify) against the RISC-V assembly manual's pseudo-instruction table before shipping.
+   These are confirmed against the RISC-V assembly manual and binutils output.
 3. **ecall decoding:** `sim.ts` treats every `0x73` (SYSTEM) word other than `ebreak` as `ecall`. Decode `funct3`:
    - `0` → `ecall`/`ebreak` (by imm);
    - `1`–`3` and `5`–`7` → CSR instructions. Until G2.2 implements them, raise
@@ -356,21 +369,32 @@ contrast distractor "undefined, as in C".
 - Accept `\;`, `';'` and `+` as terminators.
 - Fix the hint to `-exec rm {} \;` (inside the JS string: `{} \\;`) and mention `+` as the faster form.
 
-**grep.**
-- The lab's `grep` and `grep -E` must reject `\d`, `\w` and `\s`. GNU grep 3.8+ warns ("stray \ before d") and does
-  not treat them as classes. Either emit the same warning and treat them as literal `d`/`w`/`s` (the real behaviour,
-  best for teaching), or throw a clear error.
-- Support `grep -P` with JavaScript regex semantics, so the Perl-style task still has a correct form.
-- POSIX classes `[[:digit:]]`, `[[:alnum:]]` and `[[:space:]]` must work in `grep` and `grep -E`. Add them if missing.
+**grep.** The checks for this plan corrected the audit report here. GNU grep accepts these escapes in basic and
+extended regexes, as GNU extensions:
+- `\w`, `\W`, `\s`, `\S`
+- `\b`, `\B`, `\<`, `\>`
+
+Only `\d` (and other unknown escapes such as `\-` or `\/`) is a "stray" escape. GNU grep 3.8+ warns
+`stray \ before d` and then matches a literal `d`; some distributions silence the warning. Confirmed with GNU grep 3.11
+and the grep NEWS file.
+- **Lab `grep` and `grep -E`:**
+  - Make `\d` match a literal `d` and print the warning `grep: warning: stray \ before d`.
+  - Keep `\w`, `\s` and `\b` working.
+- **Lab `grep -P`:** support it with JavaScript regex semantics, so `\d` has a correct form.
+- **POSIX classes:** `[[:digit:]]`, `[[:alnum:]]` and `[[:space:]]` must work in `grep` and `grep -E`. Add them if
+  missing.
 
 **Content:**
-- `lessons/tooling.ts:28-33`: split the regex table into "grep / sed / awk (POSIX)" and "Python, JavaScript, `grep -P`"
-  rows. Teach `[0-9]`, `[[:digit:]]`, `[[:alnum:]_]` and `[[:space:]]` for grep.
+- `lessons/tooling.ts:28-33`: split the regex table into three rows:
+  - "portable (POSIX): `[0-9]`, `[[:digit:]]`, `[[:alnum:]_]`, `[[:space:]]`";
+  - "GNU grep/sed extras: `\w`, `\s`, `\b`, `\<`, `\>`";
+  - "Perl-style only (Python `re`, JavaScript, `grep -P`): `\d`, lookahead `(?=…)` / `(?!…)`".
 - Reframe the item at `practice/tooling.ts:24` as a Python `re` task, or change its answer to the POSIX form.
 - Re-check the uses at `practice/tooling.ts:51` and in the shell lab levels that use `grep -E '\d'`.
 
 **Tests:**
 - `grep -E '\d'` on `0xAB` matches nothing and warns.
+- `grep -E '\w+'` on `0xAB` matches.
 - `grep -E '[[:digit:]]'` matches.
 - `grep -P '\d'` matches.
 - The bare-`;` `find` fails; `\;` works.
@@ -378,7 +402,7 @@ contrast distractor "undefined, as in C".
 **Lint:**
 
 ```ts
-{ id: 'E6-grep', ban: /grep( -[a-zA-Z]*E[a-zA-Z]*)? ['"][^'"]*\\\\[dws]/, unless: /grep -P|Python|re\./ }
+{ id: 'E6-grep', ban: /grep( -[a-zA-Z]*E[a-zA-Z]*)? ['"][^'"]*\\\\d/, unless: /grep -P|Python|re\./ }
 ```
 
 ### E7 · SVA engine: `[->n]` and `[=n]` never fail (Sev 3, V3.2)
@@ -689,13 +713,15 @@ capacitance pulled it" (around `:120,132`).
 
 **Target:** load capacitance pulls a crystal by tens to a few hundred ppm, not by percent. Rewrite the root cause so the
 numbers are physical.
-- **Recommended:** "The board's load capacitors are 18 pF on a crystal specified for 8 pF. It runs at 23.9952 MHz
-  (−200 ppm, verify by the pulling formula below), outside the ±100 ppm the link's clock-recovery budget allows, so the
-  link drops packets at temperature extremes."
+- **Recommended:** "The board's load capacitors give 18 pF on a crystal specified for 8 pF. It runs about 216 ppm
+  low (23.9948 MHz), outside the ±100 ppm the link's clock-recovery budget allows, so the link drops packets at
+  temperature extremes."
 - Then update every reading that quotes 26.1 MHz to the new frequency. Readings that measure ppm should quote ppm.
 - **Pulling formula, for checking:** Δf/f ≈ (C1/2)·(1/(C0+CL1) − 1/(C0+CL2)).
-  - With motional C1 ≈ 5–20 fF and C0 ≈ 2–5 pF, a 10 pF change gives roughly 100–500 ppm.
-  - Choose values that give a round number and state them in a code comment.
+  - With C1 = 10 fF and C0 = 3 pF, going from CL = 8 pF to 18 pF gives (0.005 pF)·(1/21 − 1/11) = −216 ppm (checked
+    with the formula in a crystal vendor's application note).
+  - Put these assumed values in a code comment. C0 of 1–5 pF is typical. C1 for 24 MHz parts is rarely published, so
+    say "typical" rather than quoting a datasheet.
 - **Alternative,** if the incident's story needs a gross error: "the oscillator fails to start (load capacitors far too
   large, gain margin too low)", or "a 26 MHz part was fitted instead of 24 MHz (wrong BOM line)". Pick one and keep the
   incident's evidence chain consistent.
@@ -725,9 +751,10 @@ plan has landed.
 
 **Find:** `incidents/signals.ts`, "±20 ppm the protocol allows" (around `:144,158`).
 
-**Target:** the Bluetooth Low Energy radio tolerates about ±150 kHz of carrier error including drift (≈ ±60 ppm at
-2.4 GHz). Choose one:
-- **(a)** Make the fault +80 ppm and say "outside the roughly ±60 ppm the radio tolerates".
+**Target:** the Bluetooth Low Energy transmitter may be off its centre frequency by up to ±150 kHz (≈ ±61 ppm at
+2.44 GHz). The controller's active clock must be within ±50 ppm, and the sleep clock within ±500 ppm. Choose one:
+- **(a)** Make the fault +80 ppm and say "outside the ±50 ppm the radio's clock must hold (and past the roughly ±60 ppm
+  carrier tolerance)".
 - **(b)** Keep +41 ppm and say "outside the ±20 ppm crystal budget the design assumed (the rest was reserved for
   temperature and ageing)".
 
@@ -802,7 +829,7 @@ The fix is usually to state the generation. "1024 bits per stack" was true until
 
 **Target:**
 - **Say:** "**HBM** stacks DRAM dies and sits beside the processor on a silicon interposer. Up to HBM3E each stack has a
-  **1024-bit** interface at up to about 9.6 Gb/s per pin (over 1.2 TB/s). **HBM4** doubles the interface to **2048
+  **1024-bit** interface; HBM3E parts run about 9.2–9.8 Gb/s per pin, about 1.2 TB/s per stack. **HBM4** doubles the interface to **2048
   bits** at up to about 8 Gb/s per pin, about 2 TB/s per stack."
 - **Generator:** pick a (generation, width, rate) triple from:
   - `['HBM2E', 1024, 3.2]`
@@ -830,10 +857,10 @@ The fix is usually to state the generation. "1024 bits per stack" was true until
 |---|---|
 | `roles.ts:250` "refreshed every 64 ms (32 ms when hot)" | "…refreshed: every 64 ms in DDR4 (32 ms when hot); DDR5 halves that to 32 ms (16 ms above 85 °C)." |
 | `roles.ts:264` recap "refresh every 64 ms" | "refresh every 32–64 ms (by generation)" |
-| `practice/silicon.ts` refresh-overhead gen: `trefi = d === 3 ? 3.9 : 7.8` and "(above 85 °C, where refresh rate doubles)" | Make the generation explicit: d1 "DDR4, tREFI 7.8 µs"; d2 "DDR5, tREFI 3.9 µs"; d3 "DDR5 above 85 °C, tREFI 1.95 µs". Keep tRFC picks {260, 350, 550} for DDR4 and use {295, 410} (verify) for DDR5 16/32 Gb, or keep the original set and call it "tRFC". |
+| `practice/silicon.ts` refresh-overhead gen: `trefi = d === 3 ? 3.9 : 7.8` and "(above 85 °C, where refresh rate doubles)" | Make the generation explicit: d1 "DDR4, tREFI 7.8 µs"; d2 "DDR5, tREFI 3.9 µs"; d3 "DDR5 above 85 °C, tREFI 1.95 µs". Keep tRFC picks {260, 350, 550} for DDR4 and use {295, 410} ns for DDR5 16 Gb and 32 Gb dies (tRFC1, confirmed from vendor datasheets that reproduce the JEDEC tables), or keep the original set and call it "tRFC". |
 | `practice/arch.ts:386` mixes a DDR5-like tRFC with the DDR4 tREFI | Use the matched DDR5 pair. |
 | `practice/arch.ts:380-381` "64 data bits per channel" | "N DDR5 DIMMs (each 64 data bits, split into two independent 32-bit subchannels)". The arithmetic (8 B × MT/s per DIMM) is unchanged. |
-| `practice/arch.ts:388` all-bank refresh blocks "the bank" | "An all-bank refresh blocks the whole rank; DDR5's same-bank refresh blocks one bank per bank group." |
+| `practice/arch.ts:388` all-bank refresh blocks "the bank" | "An all-bank refresh blocks the whole rank; DDR5's same-bank refresh (in fine-granularity refresh mode) refreshes the same bank number in every bank group, leaving the other banks free." |
 
 **Rowhammer** (`practice/silicon.ts`, the concept entry "What is row hammer?", which ends "Mitigations: refresh the
 neighbours sooner, and ECC."): replace the last sentence with:
@@ -936,7 +963,7 @@ The engine side is in E12. Content:
 | Find | Fix |
 |---|---|
 | `lessons/frontier.ts:81` "a few kilovolts from a human finger or a charged machine" | "…from a human finger (the **human-body model, HBM**) or from the chip itself charging up in handling and discharging into a grounded tool (the **charged-device model, CDM**). CDM pulses are far faster (under a nanosecond) and peak at several amperes, so they stress gate oxides inside the chip rather than the pad diodes." |
-| Same lesson: no CDM step | Add a `say` and a `gen`. Target levels: "Today's factory ESD controls handle parts rated about 1 kV HBM and 250 V CDM; designs aim at or above those." Add the gen "Which model catches a thin-oxide input that fails only in automated test handling?" → CDM, and a d2 item contrasting HBM's ~150 ns with CDM's ~1 ns. |
+| Same lesson: no CDM step | Add a `say` and a `gen`. Target levels: "Designs usually aim for 1 kV HBM and 250 V CDM. Very high-speed I/O may accept less (about 125 V CDM), because factories with basic ESD control can safely handle parts down to about 500 V HBM." Add the gen "Which model catches a thin-oxide input that fails only in automated test handling?" → CDM, and a d2 item contrasting HBM's ~150 ns with CDM's ~1 ns. |
 | `incidents/frontier.ts:22` fix "add CDM screening at final test" | "Restore ionizers and grounding in the handling line (the factory ESD control programme), screen the affected lots with input leakage / IDDQ, and quarantine." CDM is a destructive qualification test, not a production screen. Update the debrief accordingly. |
 | `lessons/frontier.ts:17` (io-esd intro) | Footnote the HBM level: "1 kV HBM is the usual qualification target." |
 
@@ -954,7 +981,7 @@ overdrives the supplies to 1.5× their maximum at the highest operating temperat
 
 | Find | Fix |
 |---|---|
-| `roles.ts:394` "Automotive customers want single digits" | "Automotive customers expect well under 1 DPPM (zero-defect programmes, tracked in parts per billion)." |
+| `roles.ts:394` "Automotive customers want single digits" | "Automotive customers run zero-defect programmes: far below 1 DPPM, with leading suppliers tracking escapes in parts per billion." |
 | `practice/silicon.ts:643` same | Same. |
 | `practice/silicon.ts:690-691` boss "under 10" DPPM, solving for 10 | Set the target to 1 DPPM. At 85% yield, the required fault coverage is FC = 1 − (1 − DL)^… Use the game's existing Williams–Brown form DL = 1 − Y^(1−FC) → FC = 1 − ln(1−DL)/ln(Y). With DL = 1e-6 and Y = 0.85, FC = 1 − (−1e-6)/(−0.1625) ≈ 99.99938%. Recompute the stored answer, and add to the `why`: "Coverage alone cannot reach this; escapes are attacked with outlier screening (part-average testing), multi-temperature test, cell-aware patterns, burn-in and system-level test." |
 | Consistency with `practice/verification.ts:425` and `lessons/verification.ts:180` ("near 1 DPPM") | Already consistent. Keep. |
@@ -1005,7 +1032,7 @@ Fold into G1.8 (it is new content).
 | Find | Fix |
 |---|---|
 | `lessons/roles.ts:155` SI/PI tools | "Synopsys (which acquired Ansys: HFSS, SIwave, RedHawk-SC), Cadence (Sigrity, Clarity, Voltus), Keysight ADS". |
-| `lessons/digital.ts:229` CDC tools | "Synopsys VC SpyGlass, Siemens Questa CDC, Cadence Conformal and Jasper CDC, Real Intent Meridian" (verify current product names before shipping). |
+| `lessons/digital.ts:229` CDC tools | "Synopsys VC SpyGlass CDC, Siemens Questa CDC (and Questa Signoff CDC), Cadence Jasper CDC/RDC App (with Conformal Litmus on the implementation side), Real Intent Meridian CDC". Names checked October 2026. |
 
 ### U14 · Emulation versus FPGA-prototype speeds (Sev 2, A2.6)
 
@@ -1110,7 +1137,7 @@ distinctive.
 | **X2.4** | `glossary.ts:67`: "Jitter: deviation of clock edges from their ideal times. Measured as period, cycle-to-cycle or time-interval-error (TIE) jitter; serial links quote total jitter at a bit-error rate: TJ = DJ + 2·Q·RJ (Q ≈ 7.03 at 1e-12)." |
 | **X2.6** | `lessons/roles.ts:531-533`, `practice/domains.ts:328-330`: keep Eg = 0.66 eV, but add "(indirect gap; useful absorption fades beyond about 1.55–1.6 µm, set by germanium's 0.8 eV direct gap)". Or ask about 0.8 eV → 1.55 µm. |
 | **X2.8** | Covered by the S0.3 note. |
-| sev-1 batch | Surface-code threshold "physical error rates below about 1%"; T2* (Ramsey) versus T2 (echo); S11 = −4 dB is about 2.2 dB mismatch loss (use −1 dB, ≈ 6.9 dB, if the story needs a large loss); ring-resonator shift "about 0.08 nm/K" (verify); "a basic DLL cannot multiply frequency (edge-combining DLLs can)". |
+| sev-1 batch | Surface-code threshold "physical error rates below about 1%"; T2* (Ramsey) versus T2 (echo); S11 = −4 dB is about 2.2 dB mismatch loss (use −1 dB, ≈ 6.9 dB, if the story needs a large loss); ring-resonator shift "about 0.08 nm/K" (measured value; textbooks round to ~0.1 nm/K); "a basic DLL cannot multiply frequency (edge-combining DLLs can)". |
 
 ---
 
@@ -1243,6 +1270,9 @@ Each item gives:
   - Bosses `boss-dft` and `boss-test`.
 - **Teach:**
   - **Fault coverage** = detected / all faults.
+    Tools differ in which faults leave the test-coverage denominator. By default, structurally untestable (redundant)
+    faults do, while ATPG-untestable (aborted or constrained) faults stay in. The lab uses structurally untestable
+    faults.
   - **Test coverage** = detected / (all − untestable). The lab already reports untestables; name the second metric.
   - **Transition (at-speed) faults:**
     - launch-on-capture (broadside): two functional clocks;
@@ -1277,21 +1307,24 @@ Each item gives:
   - Lesson `sram` (`lessons/roles.ts`) for the memory-role view.
   - Practice `practice-dram`.
   - Boss `boss-mem`: +2 questions.
-- **Teach** (verify each number marked (verify) from the JEDEC press releases or the datasheets before shipping):
+- **Teach** (all values checked; "(vendor figure)" means shipped parts exceed the public standard text, so teach it as
+  "up to about"):
 
   | Memory | Interface | Per-pin rate | Notes |
   |---|---|---|---|
-  | DDR5 | 2 × 32-bit subchannels per DIMM | 4800–8800 MT/s (verify the top bin) | on-die ECC; same-bank refresh |
-  | LPDDR5X | 16-bit channels | up to ~8.5–10.7 Gb/s (verify) | phones and laptops |
-  | LPDDR6 | narrower subchannels (verify the width) | 10.7–14.4 Gb/s (verify) | new 2025 generation |
-  | GDDR7 | 32-bit device | PAM3 signalling, ~32–48 Gb/s (verify) | graphics and AI inference |
-  | HBM3E | 1024-bit stack | ~9.6 Gb/s | ~1.2 TB/s per stack |
-  | HBM4 | 2048-bit stack | ~8 Gb/s | ~2 TB/s per stack |
+  | DDR5 | 2 × 32-bit subchannels per DIMM (40-bit with ECC) | 4800–8800 MT/s standard speed bins | on-die ECC; same-bank refresh; per-row activation counting in the newest revision |
+  | LPDDR5X | 16-bit channels | 8533 Mb/s in the standard; up to about 9.6–10.7 Gb/s (vendor figure) | phones and laptops |
+  | LPDDR6 | 24-bit channel = two 12-bit sub-channels | about 10.7–14.4 Gb/s (vendor figure) | new 2025 generation; adds per-row activation counting |
+  | GDDR7 | 4 × 8-bit channels per device | PAM3 (3 bits per 2 symbols); 32 Gb/s first parts, 48 Gb/s maximum (192 GB/s per device) | graphics and AI inference |
+  | HBM3 | 1024-bit stack | 6.4 Gb/s | 819 GB/s per stack |
+  | HBM3E | 1024-bit stack | about 9.2–9.8 Gb/s (vendor figure) | about 1.2 TB/s per stack |
+  | HBM4 | 2048-bit stack | up to 8 Gb/s | 2 TB/s per stack; up to 16-high, 64 GB |
 
 - **Rowhammer and RowPress:**
   - In-DRAM target-row refresh can be bypassed by many-sided patterns.
   - Controller refresh management (RFM): the controller counts activations and issues extra refreshes.
-  - Per-row activation counting in the DRAM with an alert/back-off to the controller (PRAC).
+  - Per-row activation counting in the DRAM: the DRAM alerts the controller to pause traffic and refresh the victims
+    (PRAC; papers call the alert protocol "alert back-off").
   - DDR5 on-die ECC corrects single-bit errors inside the chip but is invisible to the system. Explain why system ECC
     is still needed.
 - **Items:**
@@ -1346,8 +1379,9 @@ Each item gives:
   - Practice `practice-sta` and `practice-libchar`.
   - Boss `boss-sta`.
 - **Teach:**
-  - **Interconnect corners:** Cworst/Cbest and RCworst/RCbest. Cworst usually limits hold-sensitive short paths;
-    RCworst limits long wires.
+  - **Interconnect corners:** Cworst/Cbest and RCworst/RCbest. Setup is checked at the worst corners: Cworst for
+    short, gate-dominated paths and RCworst for long, resistive wires. Hold is checked at the best corners: Cbest for
+    short paths and RCbest for long-wire paths. (Practitioner consensus, confirmed across several STA references.)
   - **Multi-mode multi-corner (MMMC):** each scenario = mode × corner, and signoff runs dozens.
   - **The variation-modelling progression:**
     - flat OCV derates;
@@ -1359,8 +1393,9 @@ Each item gives:
 - **Items:**
   1. ask: path σ from N arcs each with σ = s (√N·s); d2: the 3σ derated arrival; d3: compare with a flat 8% derate on
      the same path and say which is more pessimistic.
-  2. mc: "Which corner usually limits hold on short paths?" → fast process, Cbest (verify the phrasing with the
-     temperature-inversion note in I2.2).
+  2. mc: "Which interconnect corner is usually most pessimistic for hold on a short, gate-dominated path?" → Cbest.
+     Combine it with the fast device corner. Per I2.2, at advanced nodes that corner is checked at both temperature
+     extremes.
   3. ask: number of scenarios. 3 modes × 4 PVT × 5 RC corners = 60.
 - **New lab mission `sta-pocv`:** a path report with per-arc mean and σ; the player computes slack at 3σ and picks the
   arcs to upsize. Add it to `curriculum.ts` under Static timing and to the pd skill.
@@ -1374,7 +1409,9 @@ Each item gives:
   - Boss `boss-pd`.
 - **Teach:**
   - **Backside power delivery:** power rails move under the transistors after wafer thinning. That frees front-side
-    routing tracks, cuts IR drop (vendors report up to about 30%; verify) and allows smaller cells.
+    routing tracks, sharply cuts supply droop and allows smaller cells. One vendor reports, for its first production
+    node, about 10× lower worst-case dynamic droop, up to about 11% less routing area and up to about 6% higher
+    frequency. Teach these as "about"; they are vendor claims.
   - **Two approaches:** nano-TSVs to buried rails, or direct backside contact to source/drain.
   - **Costs:** heat now leaves through a thinned, bonded stack; backside debug and probing get harder; extra process
     steps.
@@ -1386,7 +1423,7 @@ Each item gives:
 - **Items:**
   1. mc: "What is the main routing benefit of backside power?" → front-side tracks freed from power straps.
   2. mc: "Two wires on the same colour are too close. Fix?" → recolour, or spread them to legal spacing.
-  3. ask: IR-drop reduction. Strap resistance 30% lower at the same current: by what percentage does drop fall? → 30%.
+  3. ask (a model calculation, not a vendor claim): IR-drop reduction. Strap resistance 30% lower at the same current: by what percentage does drop fall? → 30%.
      d3: compound with a 10% current increase.
 - **Glossary:** `backside power|bspdn|powervia|super power rail` (generic definition, no vendor naming beyond the
   aliases), `multi-patterning|double patterning`, `lef|def|spef`.
@@ -1410,7 +1447,8 @@ Each item gives:
   - **Dependent-failure analysis** (common-cause failures defeat redundancy).
   - **Safety element out of context:** a chip is designed against assumed requirements and ships with a safety manual.
   - **Metric targets:**
-    - SPFM ≥ 90/97/99%, LFM ≥ 60/80/90%, PMHF < 100/100/10 FIT, for ASIL B/C/D.
+    - SPFM ≥ 90/97/99%, LFM ≥ 60/80/90%, PMHF < 100/100/10 FIT, for ASIL B/C/D. For ASIL B these targets are
+      recommended rather than required. ASIL decomposition does not relax them.
     - The metric targets are per item and safety goal.
   - **Related fields**, one sentence each, with no standard numbers: industrial (SIL levels), avionics hardware (DAL
     levels), and AI components in vehicles.
@@ -1436,18 +1474,23 @@ Each item gives:
   - **Threat analysis and risk assessment** for vehicle electronics: assets → threat scenarios → impact → attack paths
     → feasibility → risk → treatment.
   - **Post-quantum cryptography:**
-    - Shor's algorithm breaks RSA and elliptic-curve crypto; Grover's halves symmetric key strength (prefer AES-256).
+    - Shor's algorithm breaks RSA and elliptic-curve crypto. Grover's gives a quadratic speed-up on key search: in
+      theory AES-128 drops to about 2⁶⁴ steps, though those steps must run in series, which limits it in practice.
+      Long-term guidance therefore requires AES-256.
     - The standardised replacements are ML-KEM (key exchange), ML-DSA and SLH-DSA (signatures).
     - "Harvest now, decrypt later" makes migration urgent for long-lived data.
     - **Hardware impact:** larger keys and signatures, and lattice math accelerators.
-  - **Leakage assessment:** a fixed-versus-random Welch t-test; |t| > 4.5 flags leakage.
+  - **Leakage assessment:** a fixed-versus-random Welch t-test. |t| > 4.5 flags leakage, conventionally only when it
+    is exceeded at the same point and in the same direction in two independent trace sets.
   - **Fault injection** (voltage or clock glitches, EM, laser) and its countermeasures: sensors, redundancy,
     instruction duplication.
   - **Secure debug and lifecycle states:** test → production → RMA, with debug locked.
   - **Common hardware weakness classes:** debug left open, insecure lifecycle transitions, unprotected key registers.
 - **Items:**
   1. mc: "Which post-quantum algorithm replaces ECDH key exchange?" → ML-KEM.
-  2. ask: "AES-128 against Grover: effective security bits?" → 64.
+  2. ask: "Grover's search is quadratically faster. In theory, about how many steps to recover an AES-128 key, as a
+     power of 2?" → 64. The `why` says that serial depth makes it impractical, but that guidance prefers AES-256
+     anyway.
   3. ask: TVLA. Given two trace-set means, variances and counts, compute t; d2 decides whether |t| > 4.5.
   4. mc: "An attacker glitches the clock during the signature check. Best countermeasure?" → verify twice, with
      redundant comparison and glitch detectors.
@@ -1467,7 +1510,8 @@ Each item gives:
     kelvin and k = 8.617 × 10⁻⁵ eV/K; Ea is typically ~0.7 eV.
     - Worked example: 55 °C use, 125 °C stress → AF ≈ 78.
   - **The usual qualification stress list:**
-    - high-temperature operating life (typically 1000 h at Tj ≥ 125 °C, three lots, zero failures allowed);
+    - high-temperature operating life: 1000 h at the grade's maximum temperature (125 °C for grade 1, 150 °C for
+      grade 0, 105 °C for grade 2, 85 °C for grade 3), three lots of 77 parts, zero failures allowed;
     - temperature cycling;
     - humidity (HAST);
     - high-temperature storage;
@@ -1505,7 +1549,8 @@ Each item gives:
     - CMRR and PSRR in dB.
   - **RF linearity:**
     - the 1 dB compression point;
-    - the third-order intercept, roughly P1dB + 9.6 dB at the input;
+    - the third-order intercept: about P1dB + 9.6 dB at the input for a pure third-order nonlinearity (real
+      amplifiers often show 10–12 dB);
     - IM3 products rise 3 dB per 1 dB of input;
     - IIP3 = P_in + ΔP/2 from a two-tone test (ΔP = fundamental − IM3 in dB);
     - cascaded IIP3: 1/IIP3_total = 1/IIP3₁ + G₁/IIP3₂ + …, in linear power.
@@ -1613,7 +1658,7 @@ Each item gives:
 #### G2.6 · Sensors: image sensors and inertial MEMS
 
 - **Image sensors** (lesson `sensors`):
-  - correlated double sampling removes reset (kT/C) noise and offset;
+  - correlated double sampling (in 4-transistor pinned-photodiode pixels) removes reset (kT/C) noise and offset;
   - fixed-pattern noise as offset non-uniformity (dark-signal non-uniformity) and gain non-uniformity
     (photo-response non-uniformity, in %);
   - saturation capacity versus full well;
@@ -1622,7 +1667,7 @@ Each item gives:
   - rolling versus global shutter.
 - **MEMS** (lesson `mems`):
   - noise density (µg/√Hz for accelerometers; °/s/√Hz for gyros → angle random walk in °/√h = density × 60);
-  - Brownian noise floor a_n = √(4·k·T·ω₀ / (m·Q));
+  - Brownian noise floor, as an acceleration noise density in m/s²/√Hz: a_n = √(4·k·T·ω₀ / (m·Q));
   - **Allan deviation:** slope −½ = white noise (random walk), the flat bottom = bias instability, slope +½ = rate
     random walk.
 - **Items:** 3 per lesson, including "read bias instability off this Allan plot (art)".
@@ -1729,8 +1774,106 @@ screenshots to the scratchpad. Do not commit them.
 ### V4 · Update the docs
 
 - Mark items done in this file, as the audit plan does.
-- Update `docs/STANDARDS-BASELINE.md`: move confirmed (verify) items out of "To confirm".
+- Update `docs/STANDARDS-BASELINE.md`: if any "Still open" item from the verification log gets resolved, record it.
 - Update `docs/CURRICULUM-AUDIT.md` with a short note pointing at this plan and the report.
+
+---
+
+## Verification log (numbers checked 2026-10-07)
+
+The checks ran in four tracks. Their evidence is in `research_notes/Standards plan number checks/`:
+- `memory_interconnect.md`
+- `ai_quantum_photonics_analog.md`
+- `safety_reliability_test.md`
+- `toolchain_pd.md`
+
+Where the RISC-V assembler, GNU grep and GNU find were involved, the claim was tested directly (binutils 2.42, grep
+3.11).
+
+### Corrections applied to this plan
+
+| Topic | Was in the plan or report | Now | Where |
+|---|---|---|---|
+| GNU grep escapes | grep rejects `\d`, `\w`, `\s` | Only `\d` is a stray escape (warns, matches `d`); `\w \s \b \< \>` are accepted GNU extensions | E6 |
+| RISC-V `;` | uncertain | Confirmed statement separator; `#` is the comment | E5 |
+| `tail` scratch register | t1 | t1, or t2 when Zicfilp is in use | E5 |
+| Hold corner | "Cworst limits hold on short paths" | Setup: Cworst (short) / RCworst (long); hold: Cbest (short) / RCbest (long) | G1.8 |
+| Backside power numbers | "up to about 30% IR-drop cut" | That was a 2023 test chip. First production node: ~10× lower worst-case droop, up to ~11% less routing area, up to ~6% Fmax (vendor claims) | G1.9 |
+| CDC tool names | "Cadence Conformal CDC" | Jasper CDC/RDC App + Conformal Litmus; Siemens Questa CDC / Questa Signoff CDC; VC SpyGlass CDC; Meridian CDC | U13 |
+| HBM3E rate | "up to about 9.6 Gb/s, over 1.2 TB/s" | ~9.2–9.8 Gb/s (vendor parts; no standalone standard), ~1.2 TB/s | U1, G1.6 |
+| GDDR7 organisation | 32-bit device | 4 × 8-bit channels; PAM3; 32 Gb/s first, 48 Gb/s max | G1.6 |
+| LPDDR6 | "narrower subchannels" | 24-bit channel = 2 × 12-bit sub-channels; ~10.7–14.4 Gb/s (vendor figure) | G1.6 |
+| LPDDR5X | up to ~10.7 Gb/s | 8533 Mb/s in the public standard text; higher rates are vendor figures | G1.6 |
+| Same-bank refresh | "blocks one bank per bank group" | Refreshes the same bank number in every bank group (fine-granularity mode) | U2 |
+| Automotive DPPM | "well under 1 DPPM" | Zero-defect programmes far below 1 DPPM, tracked in ppb | U9 |
+| ESD targets | "factories handle 1 kV HBM / 250 V CDM" | Targets 1 kV HBM and 250 V CDM (125 V CDM only for very high-speed I/O); basic controls handle ~500 V HBM | U8 |
+| HTOL temperature | "Tj ≥ 125 °C" | Grade-dependent: 150/125/105/85 °C for grades 0/1/2/3; 3 lots × 77, 0 fails | G1.12 |
+| Grover on AES-128 | "64 effective bits" | ~2⁶⁴ serial steps in theory; impractical in depth; guidance requires AES-256 anyway | G1.11 |
+| TVLA | "\|t\| > 4.5" | \|t\| > 4.5 in two independent trace sets, same point and sign | G1.11 |
+| ASIL B targets | stated as requirements | Recommended for ASIL B, required for C and D | G1.10 |
+| BLE tolerance | "±150 kHz including drift" | ±150 kHz centre-frequency tolerance (≈ ±61 ppm); active clock ±50 ppm; sleep clock ±500 ppm | C10 |
+| Crystal pulling | "−200 ppm (verify)" | −216 ppm (23.9948 MHz) with C1 = 10 fF, C0 = 3 pF | C8 |
+| IIP3 rule | "P1dB + 9.6 dB" | 9.6 dB for a pure cubic; real amplifiers often 10–12 dB | G1.13 |
+| CDS | removes reset noise | In 4T pinned-photodiode pixels (not 3T hard-reset pixels) | G2.6 |
+| Standard versions (baseline only) | AXI Issue K, CHI Issue G, UVM 2020-3.1, JS-002-2018/2022, AEC-Q100 Rev J, 802.3dj approved | AXI Issue L, CHI Issue H, UVM 2020-3.2, JS-002-2025, AEC-Q100 Rev J1, 802.3dj pending (earliest 9 Dec 2026) | S0.1 |
+
+### Confirmed as written
+
+- **Memory:**
+  - DDR5: 8800 MT/s top bin, 2 × 32-bit subchannels; tREFI 3.9/1.95 µs; 32/16 ms refresh window; tRFC1 295 ns
+    (16 Gb) and 410 ns (32 Gb); same-bank refresh; PRAC; RFM.
+  - DDR4: 7.8 µs, 64 ms.
+  - HBM3: 819 GB/s. HBM4: 2048-bit, 8 Gb/s, 2 TB/s, 16-high.
+- **Interconnect:**
+  - PCIe 6.0/7.0: 64/128 GT/s, PAM4, 256-byte flit = 236 TLP + 6 DLP + 8 CRC + 6 FEC bytes; 7.0 released June 2025;
+    8.0 at 256 GT/s targeting 2028 (Draft 0.5, May 2026).
+  - CXL: 32/64/128 GT/s and device Types 1/2/3. UCIe 3.0: 48/64 GT/s.
+  - AMBA manager/subordinate (since AXI H.b, 2021), WRAP 2/4/8/16 with an aligned start, the 4 KB rule.
+- **Number formats:** OCP FP8 (E4M3 max 448, no Inf; E5M2 max 57,344, with Inf); MX (32-element blocks, E8M0 scale,
+  MXFP4 = 4.25 bits); NVFP4 (16-element blocks, E4M3 scale = 4.5 bits, plus a separate per-tensor scale); FP16 max
+  65,504; BF16 1/8/7.
+- **Quantum:** Willow Λ = 2.14 and 0.143% per cycle at d = 7; ~1% surface-code threshold; T2 ≤ 2·T1 and T2* ≤ T2;
+  randomized-benchmarking formula.
+- **Photonics:** dense grid at 193.1 THz with 12.5–100 GHz spacing (100 GHz ≈ 0.8 nm); coarse grid at 20 nm spacing,
+  1271–1611 nm, 18 channels (secondary); germanium 0.80/0.66 eV; ring shift ≈ 0.08 nm/K.
+- **Clocks and power:** Q(1e-12) = 7.034; USB PD 100 W standard and 240 W extended power range.
+- **Sensors:** image-sensor uniformity terms (DSNU, PRNU, saturation capacity); MEMS angle random walk = density × 60;
+  Allan slopes.
+- **Functional safety:**
+  - The ASIL sum rule matches all 36 table cells (S0/E0/C0 → QM from secondary sources).
+  - Decomposition options C(D)+A(D), B(D)+B(D), D(D)+QM(D).
+  - Metric targets; safe faults belong in the denominators.
+- **Reliability:** AEC-Q100 grades; χ²(0.6, 2) = 1.833; Arrhenius with Ea ≈ 0.7 eV (a convention).
+- **ESD and latch-up:** machine model obsolete; latch-up at ≥ 100 mA and 1.5 × Vmax at Tjmax.
+- **Test and security:**
+  - Part-average-testing limits at the robust mean ± 6 robust σ.
+  - Post-quantum standards ML-KEM, ML-DSA and SLH-DSA (Aug 2024); HQC chosen as a backup (Mar 2025).
+  - θJA is for package comparison; ΨJT estimates Tj in the system.
+  - March C− = 10N; the defect-level formula DL = 1 − Y^(1−FC).
+- **Toolchain and process:**
+  - RISC-V: 16-byte stack alignment; unsigned `char`; ILP32 `long` = 4; the `call`/`la` expansions; `jal` ±1 MiB.
+  - `find -exec … \;` and `+`.
+  - UVM phase directions and the 12 run-time phases.
+  - POCV root-sum-square, with LVF carrying per-arc σ.
+  - `init.defaultBranch` (Git 3.0 unreleased); cocotb 2.0 (Sept 2025).
+  - Process: one foundry's backside power is in volume production (the 18A-class part launched Jan 2026); the other
+    foundry's backside-power node is guided for H2 2026 and not yet confirmed in volume; its 2 nm-class GAA node has
+    been in volume since late 2025. The roadmap puts CFET from 2031.
+
+### Still open (teach without the number, or as "about")
+
+- A standard DRAM speed bin above DDR5-8800, if one exists, and the newest LPDDR5X bins. The full JEDEC tables are
+  paywalled.
+- Whether the HBM4 revision of December 2025 raises the per-pin rate.
+- Final approval of 802.3dj: teach "200 Gb/s per lane, giving 800G and 1.6T Ethernet" without a date.
+- FIPS 206 (FN-DSA) status: teach the three finalised post-quantum algorithms only.
+- Whether the JEDEC clock-jitter document defines time-interval error. The glossary entry does not cite it, so nothing
+  changes.
+- Exact current-revision text of the USB PD specification (3.2 confirmed; a mid-2026 point release is unconfirmed). The
+  plan uses only the 100 W and 240 W levels.
+- C1 for a typical 24 MHz crystal. The incident states its assumed values in a code comment.
+- Tool-specific test-coverage definitions beyond one EDA vendor. G1.5 teaches the general definition and notes that
+  tools differ.
 
 ---
 
