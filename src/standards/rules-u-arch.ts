@@ -8,4 +8,6 @@ export const RULES_U_ARCH: Rule[] = [
   { id: 'U2b', why: 'U2: tREFI 7.8 us is DDR4; DDR5 is 3.9 us', ban: /7\.8 ?µs/, unless: /DDR4/ },
   { id: 'U2c', why: 'U2: a DDR5 DIMM has two 32-bit subchannels, not one 64-bit channel', ban: /64 data bits per channel/ },
   { id: 'U2d', why: 'U2: Rowhammer mitigations include RFM and PRAC, not just refreshing neighbours', ban: /Mitigations: refresh the neighbours sooner, and ECC/ },
+  { id: 'U3-req', why: 'U3: the PCIe lesson must reach PCIe 7.0', require: { file: /lessons\/arch\.ts$/, re: /PCIe 7\.0|Gen ?7/ } },
+  { id: 'U3', why: 'U3: PAM4 PCIe is not just FEC; flit mode changes the framing', files: /lessons\/arch/, ban: /PCIe 6 moves to \*\*PAM4/ },
 ];

@@ -115,7 +115,7 @@ export const GLOSSARY: Entry[] = [
   E('axi|amba|valid ready|handshake', 'AMBA AXI: five channels with VALID/READY handshakes; a transfer happens when both are high.', 'bus'),
   E('credit|flow control|backpressure', 'Flow control: VALID/READY backpressure or credits (one per free receiver buffer).', 'bus'),
   E('noc|network on chip|mesh|flit|wormhole', 'On-chip networks of routers and links carrying packets split into flits; wormhole switching pipelines them.', 'noc'),
-  E('serdes|pcie|cxl|pam4|8b/10b|128b/130b', 'High-speed serial links: SerDes with embedded clocks; PCIe and CXL protocols; encodings like 128b/130b and PAM4.', 'serdes'),
+  E('serdes|pcie|cxl|pam4|8b/10b|128b/130b', 'High-speed serial links: SerDes with embedded clocks; PCIe (each generation doubles the rate: Gen 5 = 32 GT/s, 6.0 = 64 GT/s PAM4 with flits, 7.0 = 128 GT/s) and CXL protocols; encodings like 128b/130b and PAM4.', 'serdes'),
   E('gem5|discrete event simulation|performance model', 'Architecture simulators; gem5 offers Atomic/Timing/Minor/O3 CPU models and SE/FS modes.', 'perf'),
   E("amdahl|amdahl's law|roofline|little's law|littles law", 'Speedup limits (Amdahl), in-flight requests = throughput × latency (Little), and compute vs bandwidth bounds (roofline).', 'perf'),
   E('tapeout|tape out|gds|gdsii', 'Sending the final layout (GDSII/OASIS) to the fab. Named after the magnetic tapes it used to go out on.'),
