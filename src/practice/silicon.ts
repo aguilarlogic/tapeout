@@ -68,7 +68,7 @@ export const pnrPractice = practice('practice-pnr', 'Physical Design Drills', 'f
     const idea = 'A clock tree is a tree of buffers that delivers the clock to every flop at nearly the same time. Each buffer drives a fixed number of loads (its fan-out f). With L levels of buffers a balanced tree can reach f^L flops: each level multiplies by f.';
     if (d === 1) {
       const lv = pick(r, [3, 4, 5]), s = f ** lv;
-      return walk(ask(`A clock tree drives ${s} flops and each buffer drives ${f} loads. How many buffer levels deep is a balanced tree?`, num(lv), `${f}^${lv} = ${s}, so ${lv} levels.`, 'Fan-out per level, to the power of the depth.'),
+      return walk(ask(`A clock tree drives ${s} flops and each buffer drives ${f} loads (an illustrative fan-out). How many buffer levels deep is a balanced tree?`, num(lv), `${f}^${lv} = ${s}, so ${lv} levels.`, 'Fan-out per level, to the power of the depth.'),
         'clock tree depth', idea,
         ...sim(Array.from({ length: lv }, (_, i) => ({ beats: [count(`After level ${i + 1}, how many loads can the tree drive? Multiply the previous ${i === 0 ? '1' : f ** i} by ${f}:`, `${i === 0 ? 1 : f ** i} × ${f}`, f ** (i + 1))], row: `after level ${i + 1}: ${f ** (i + 1)} loads` })), 3, `each level multiplies by ${f}`),
         count(`How many levels does it take to reach ${s} flops?`, `${f}^levels = ${s}`, lv));

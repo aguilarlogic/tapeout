@@ -13,4 +13,7 @@ export const RULES_W_RTL_IMPL: Rule[] = [
   { id: 'W3-missing-init-latch', why: 'W3 sev-1: a missing accumulator init is a combinational loop, not a latch', files: /games\/rtl\/levels/, ban: /before the loop, or you infer a latch/ },
   { id: 'W3-gray-linear', why: 'W3 sev-1: Gray codes change one bit only along a linear sequence', files: /lessons\/digital/, ban: /\*\*Gray\*\* codes change one bit per transition/ },
   { id: 'W3-cdc-pulse-width', why: 'V2.5: a pulse needs about 1.5 destination periods', files: /games\/cdc\/levels/, ban: /for at least about <b>one destination clock period/ },
+  { id: 'W4-i2.1-crpr', why: 'I2.1: CRPR is also called CPPR', require: { file: /practice\/vlsi/, re: /CPPR/ } },
+  { id: 'W4-i2.7-lbist', why: 'I2.7: LBIST is one common mechanism, not required per se', require: { file: /practice\/verification/, re: /often combined with in-system scan/ } },
+  { id: 'W4-i2.6-upf', why: 'I2.6: the low-power lesson shows real UPF', require: { file: /lessons\/vlsi/, re: /create_power_domain/ } },
 ];

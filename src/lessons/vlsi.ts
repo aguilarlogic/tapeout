@@ -17,7 +17,7 @@ export const sta: Lesson = {
      clk (+ launch latency)   clk (+ capture latency)
 
    SETUP:  t_launch + t_cq + t_logic,max + t_setup  ≤  T + t_capture - uncertainty
-   HOLD:   t_launch + t_cq + t_logic,min            ≥  t_capture + t_hold
+   HOLD:   t_launch + t_cq + t_logic,min            ≥  t_capture + t_hold + uncertainty_hold + uncertainty_hold
 
    slack = required - arrival   (negative = violation)`),
     gen((r) => {
@@ -58,7 +58,7 @@ export const sta: Lesson = {
     }),
     mc('WNS is -50 ps and TNS is -900 ns. What does that tell you?', ['One path misses by 50 ps; fix that one path', 'Many paths are failing: a systemic problem', 'The design is close to passing; it is a small fix', 'The worst path misses by 900 ns'], 1, 'The worst path misses by 50 ps, but thousands of paths are failing, which points to something systemic like a bad constraint or a missing pipeline stage. WNS is the single worst slack; TNS sums every negative slack. Small WNS with huge TNS means many paths are all slightly failing.'),
   ],
-  recap: ['Setup: cq + logic_max + setup ≤ T + skew - uncertainty.', 'Hold: cq + logic_min ≥ skew + hold (no clock period!).', 'Positive skew helps setup, hurts hold.', 'Corners (PVT) and OCV; setup at slow, hold at fast.', 'SDC: clocks, IO delays, false paths, multicycle paths (with the -hold fix).'],
+  recap: ['Setup: cq + logic_max + setup ≤ T + skew - uncertainty.', 'Hold: cq + logic_min ≥ skew + hold + hold uncertainty (no clock period!).', 'Positive skew helps setup, hurts hold.', 'Corners (PVT) and OCV; setup at slow, hold at fast.', 'SDC: clocks, IO delays, false paths, multicycle paths (with the -hold fix).'],
 };
 
 export const vlsi: Lesson = {
@@ -105,7 +105,7 @@ export const vlsi: Lesson = {
    inverter  1
    NAND2     4/3
    NOR2      5/3        (series PMOS is the slow part)
-   best stage effort ≈ 4  (why "FO4" is the unit of gate delay)`),
+   best stage effort ≈ 3.6 in theory; designers use 4  (why "FO4" is the unit of gate delay)`),
     gen((r) => {
       const [name, g] = pick(r, [['inverter', 1], ['NAND2', 4 / 3], ['NOR2', 5 / 3]] as const);
       const hh = pick(r, [2, 3, 4, 6]);
@@ -130,7 +130,8 @@ export const power: Lesson = {
    P_total = P_dynamic + P_short-circuit + P_leakage
 
    P_dynamic = α · C · V² · f
-      α  activity factor (fraction of the capacitance switching per cycle)
+      α  activity factor: probability a node charges (0→1) in a cycle
+         (a clock has α = 1; a node toggling every cycle has α = ½)
       C  switched capacitance
       V  supply voltage          ◄── squared!
       f  clock frequency`),
@@ -151,6 +152,15 @@ export const power: Lesson = {
    DVFS             lower V and f together when idle-ish     cuts dynamic ~cubically`),
     mc('Clock gating uses an **integrated clock gating cell** (a latch plus an AND gate) instead of a plain AND of clock and enable. Why?', ['It is smaller than a separate AND gate', 'It keeps the gated clock free of glitches', 'A plain AND gate cannot drive the clock tree', 'It is needed only for scan testing'], 1, 'The latch holds the enable stable while the clock is high, so a changing enable cannot chop the clock into a glitch. A glitch on a clock is a disaster: flops capture at random times. The latch makes the enable change only while the clock is low.'),
     mc('A block is **power gated** off. What else do you need?', ['Nothing, since an off block draws no power', 'Isolation, retention and rush-current control', 'Level shifters and synchronizers on all its outputs', 'Extra decaps so its outputs hold their value'], 1, 'You need isolation cells to clamp its floating outputs, retention flops (or save/restore) for state, and careful control of rush current at power-up. An off block\'s outputs float to garbage that could cause crowbar current or wrong logic downstream, so they must be isolated. State is lost unless retained. The power intent is described in UPF.'),
+    say('The power intent lives in **UPF**, a Tcl-style file beside the RTL. Here is a small power-gated DSP block, one command per idea:'),
+    art(`
+   create_power_domain PD_DSP -elements {u_dsp}
+   set_isolation iso_dsp -domain PD_DSP -applies_to outputs \\
+       -clamp_value 0 -isolation_signal iso_en -isolation_sense high
+   set_retention ret_dsp -domain PD_DSP \\
+       -save_signal {save high} -restore_signal {restore high}
+   add_power_state PD_DSP -state RUN {-supply_expr {power == FULL_ON}} \\
+                          -state OFF {-supply_expr {power == OFF}}`),
     mc('Signals crossing from a 0.6 V domain to a 0.9 V domain need what?', ['Nothing', 'Level shifters', 'Synchronizers', 'Decoupling capacitors'], 1, 'A 0.6 V "high" may not fully turn off the 0.9 V domain\'s PMOS, causing leakage or wrong values. Level shifters translate the swing. (Different clocks would need synchronizers; different voltages need level shifters. Often you need both.)'),
     say('**DVFS**: when the workload is light, lower the frequency. A lower frequency needs less voltage to meet timing, and since power goes as V²f, the savings compound.'),
     gen((r) => {
@@ -177,7 +187,7 @@ export const pcb: Lesson = {
    L2  GND plane           ████████████
    L3  power plane         ████████████
    L4  signal (bottom)     ▁▁▁▁▁`),
-    say('A trace over a solid plane has a **characteristic impedance** set by its width, the dielectric thickness and the material. Common targets are 50 Ω single-ended, 90 Ω differential for USB, and 85 or 100 Ω for PCIe and Ethernet. Impedance changes cause **reflections**.'),
+    say('A trace over a solid plane has a **characteristic impedance** set by its width, the dielectric thickness and the material. Common targets are 50 Ω single-ended, 90 Ω differential for USB, 85 Ω for PCIe and 100 Ω for Ethernet. Impedance changes cause **reflections**.'),
     gen((r) => {
       const cm = pick(r, [5, 10, 15, 30]);
       const v = 15; // cm/ns on FR-4, roughly half the speed of light

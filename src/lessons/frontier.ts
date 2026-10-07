@@ -53,7 +53,7 @@ export const libchar: Lesson = {
       const d0 = pick(r, [30, 40, 50]), d1 = d0 + pick(r, [20, 30, 40]);
       const frac = pick(r, [0.25, 0.5, 0.75]);
       const load = l0 + frac * (l1 - l0), d = d0 + frac * (d1 - d0);
-      return ask(`At one input slew the table says: load ${l0} fF → ${d0} ps and load ${l1} fF → ${d1} ps. What delay does STA use for a load of ${sig(load)} fF (linear interpolation, in ps)?`, qty(d, 'ps', 0.02, sig(d)), `Fraction along = (${sig(load)} − ${l0}) / (${l1} − ${l0}) = ${frac}. Delay = ${d0} + ${frac} × (${d1} − ${d0}) = ${sig(d)} ps. Real tables are 7×7, and STA interpolates in both directions (bilinear).`, 'Linear interpolation between the two entries.');
+      return ask(`At one input slew the table says: load ${l0} fF → ${d0} ps and load ${l1} fF → ${d1} ps. What delay does STA use for a load of ${sig(load)} fF (linear interpolation, in ps)?`, qty(d, 'ps', 0.02, sig(d)), `Fraction along = (${sig(load)} − ${l0}) / (${l1} − ${l0}) = ${frac}. Delay = ${d0} + ${frac} × (${d1} − ${d0}) = ${sig(d)} ps. Real tables are typically 7×7, and STA interpolates in both directions (bilinear).`, 'Linear interpolation between the two entries.');
     }),
     say('Sequential cells have **constraints**. The **setup time** is how long before the clock edge the data must be stable. It is found by moving the data edge toward the clock until the clock-to-Q delay **degrades** by a set amount (commonly 10%): earlier than that is safe, later is metastable or wrong. **Hold time** is the same search on the other side of the edge.'),
     gen((r) => {

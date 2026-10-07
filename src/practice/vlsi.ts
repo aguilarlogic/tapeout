@@ -56,8 +56,8 @@ export const staPractice = practice('practice-sta', 'Timing Drills', 'setup/hold
     }
     const common = pick(r, [150, 200, 250]);
     const crpr = common * (late - early);
-    return walk(ask(`Launch and capture clock paths share ${common} ps of buffers before they split. Late derate ${late}, early ${early}. How much pessimism does CRPR (common path pessimism removal) give back, in ps?`, qty(crpr, 'ps', 0.01, sig(crpr)), `The shared segment cannot be both slow and fast at once: ${common} × (${late} - ${early}) = ${sig(crpr)} ps is credited back. The ${clk} ps clock tree is otherwise derated both ways.`, 'Common length × (late - early derate).'),
-      'CRPR (common path pessimism removal)', `${idea} But the part of the clock path that BOTH the launch and the capture clock share is physically the same wire and buffers: it cannot be slow for the launch and fast for the capture at the same time. The extra pessimism on that shared part is (late derate - early derate) × its delay, and CRPR gives it back.`,
+    return walk(ask(`Launch and capture clock paths share ${common} ps of buffers before they split. Late derate ${late}, early ${early}. How much pessimism does CRPR (clock reconvergence pessimism removal; some tools call it CPPR, common path pessimism removal) give back, in ps?`, qty(crpr, 'ps', 0.01, sig(crpr)), `The shared segment cannot be both slow and fast at once: ${common} × (${late} - ${early}) = ${sig(crpr)} ps is credited back. The ${clk} ps clock tree is otherwise derated both ways.`, 'Common length × (late - early derate).'),
+      'CRPR (clock reconvergence pessimism removal)', `${idea} Some tools call this CPPR, common path pessimism removal. But the part of the clock path that BOTH the launch and the capture clock share is physically the same wire and buffers: it cannot be slow for the launch and fast for the capture at the same time. The extra pessimism on that shared part is (late derate - early derate) × its delay, and CRPR gives it back.`,
       calc('The difference between the two derates:', `${late} - ${early}`, late - early, '', sig(late - early), 0.005),
       calc('The pessimism on the shared segment, to credit back:', `${common} × ${sig(late - early)}`, crpr, 'ps', sig(crpr), 0.01));
   },
@@ -138,7 +138,7 @@ export const vlsiPractice = practice('practice-vlsi', 'Circuit Drills', 'Elmore 
     if (d < 3) {
       const N = Math.log(F) / Math.log(4);
       return walk(ask(`A chain of inverters drives a load ${F}× its input capacitance. Using a stage effort of about 4, how many stages?`, qty(N, '', 0.02, sig(N)), `N = log4(${F}) = ${sig(N)}. Round to a whole number (and keep polarity in mind).`, 'Each stage multiplies drive by ~4.'),
-        'sizing an inverter chain', 'To drive a big load from a small gate, use a chain of inverters each about 4× bigger than the one before (the best stage effort is close to 4). Each stage multiplies the drive by 4, so the number of stages N must satisfy 4^N = the total ratio F. That is N = log4(F) = ln F / ln 4.',
+        'sizing an inverter chain', 'To drive a big load from a small gate, use a chain of inverters each about 4× bigger than the one before (the theoretical best stage effort is about 3.6, and designers use 4). Each stage multiplies the drive by 4, so the number of stages N must satisfy 4^N = the total ratio F. That is N = log4(F) = ln F / ln 4.',
         calc(`N = log base 4 of ${F}, ln(F) / ln(4):`, `ln(${F}) / ln(4)`, Math.log(F) / Math.log(4), '', sig(Math.log(F) / Math.log(4)), 0.02));
     }
     const G = pick(r, [4 / 3 * 5 / 3, 16 / 9]), B = pick(r, [1, 2]), H = pick(r, [8, 16, 32]), N = 3;
@@ -179,7 +179,7 @@ export const powerPractice = practice('practice-power', 'Power Drills', 'dynamic
   (r, d) => {
     const a = pick(r, [0.1, 0.15, 0.2]), C = pick(r, [1, 2, 5]) * 1e-9, V = pick(r, [0.7, 0.8, 0.9, 1.0]), f = pick(r, [1, 2, 3]) * 1e9;
     const P = a * C * V * V * f;
-    const idea = 'Dynamic power is the energy spent charging and discharging capacitance: P = α × C × V² × f. α (activity) is the fraction of the capacitance that actually switches each cycle, C the total switched capacitance, V the supply voltage, and f the clock frequency. Voltage counts twice (squared), so lowering it is the most powerful lever.';
+    const idea = 'Dynamic power is the energy spent charging and discharging capacitance: P = α × C × V² × f. α (activity) is the probability that a node charges (0→1) in a cycle: a clock has α = 1 and a node toggling every cycle has α = ½, C the total switched capacitance, V the supply voltage, and f the clock frequency. Voltage counts twice (squared), so lowering it is the most powerful lever.';
     if (d < 3) return walk(ask(`Activity α = ${a}, switched capacitance ${eng(C, 'F')}, V = ${V} V, f = ${f / 1e9} GHz. Dynamic power, in W?`, qty(P, 'W', 0.02), `P = αCV²f = ${a} × ${eng(C, 'F')} × ${V}² × ${f / 1e9} GHz = ${sig(P)} W.`, 'P = α C V² f.'),
       'dynamic power', idea,
       calc('α × C (in farads):', `${a} × ${C}`, a * C, '', sig(a * C), 0.005),
@@ -258,12 +258,12 @@ export const powerPractice = practice('practice-power', 'Power Drills', 'dynamic
 
 export const pcbPractice = practice('practice-pcb', 'Board Drills', 'microstrip impedance, target impedance, decap resonance, skew, di/dt', [
   (r, d) => {
-    const er = pick(r, [4.2, 3.8, 3.5]), h = pick(r, [4, 5, 6]), w = pick(r, [7, 8, 10]), t = 1.4; // mils
+    const er = pick(r, [4.2, 3.8, 3.5]), h = pick(r, [4, 5, 6]), w = pick(r, [5, 6, 7]), t = 1.4; // mils; keeps w/h <= 2 (the closed form is valid for about 0.1 < w/h < 2)
     const Z = (87 / Math.sqrt(er + 1.41)) * Math.log((5.98 * h) / (0.8 * w + t));
     if (d < 3) return walk(mcs(r, `A microstrip trace gets wider (same dielectric height). Its impedance…`, 'It drops', ['It rises', 'It stays the same', 'It doubles'], 'Z₀ = √(L/C): wider trace, more C, less L → lower Z₀. Thinner dielectric does the same.'),
       'trace width and impedance', 'A trace\'s characteristic impedance is Z₀ = √(L/C), where L and C are its inductance and capacitance per unit length. A wider trace couples more strongly to the plane below it, so its capacitance rises and its inductance falls, and Z₀ drops. A thinner dielectric or a higher εr also lowers it.',
       choice('A wider trace has, per unit length:', 'More capacitance to the plane', ['Less capacitance to the plane', 'The same capacitance']));
-    return walk(ask(`Microstrip (the common closed-form approximation): Z₀ = 87/√(εr + 1.41) · ln(5.98h/(0.8w + t)). εr = ${er}, h = ${h} mil, w = ${w} mil, t = 1.4 mil. Z₀, in Ω?`, qty(Z, 'Ω', 0.02), `87/√${sig(er + 1.41)} × ln(${sig(5.98 * h)}/${sig(0.8 * w + t)}) = ${sig(Z)} Ω. Real stackups are checked with a field solver, but this estimate gets you close.`, 'Plug in carefully; ln is the natural log.'),
+    return walk(ask(`Microstrip (the common closed-form approximation): Z₀ = 87/√(εr + 1.41) · ln(5.98h/(0.8w + t)). εr = ${er}, h = ${h} mil, w = ${w} mil, t = 1.4 mil. Z₀, in Ω?`, qty(Z, 'Ω', 0.02), `87/√${sig(er + 1.41)} × ln(${sig(5.98 * h)}/${sig(0.8 * w + t)}) = ${sig(Z)} Ω. The formula is valid for roughly 0.1 < w/h < 2.0. Real stackups are checked with a field solver, but this estimate gets you close.`, 'Plug in carefully; ln is the natural log.'),
       'the microstrip impedance formula', 'Microstrip is a trace on the outer layer of a board with a ground plane underneath. A common closed-form approximation gives its impedance from the dielectric constant εr, the dielectric height h, the trace width w and the copper thickness t (all in mils). Work the formula in pieces: the prefactor, the logarithm\'s argument, the natural log, then multiply.',
       calc('The prefactor 87 / √(εr + 1.41):', `87 / √(${er} + 1.41)`, 87 / Math.sqrt(er + 1.41), '', sig(87 / Math.sqrt(er + 1.41), 4), 0.005),
       calc('The log argument 5.98h / (0.8w + t):', `5.98 × ${h} / (0.8 × ${w} + 1.4)`, (5.98 * h) / (0.8 * w + t), '', sig((5.98 * h) / (0.8 * w + t), 4), 0.005),
@@ -337,7 +337,8 @@ export const staBoss = boss({
   xp: 200,
   steps: [
     say('Boss fight, {name}. Tapeout is Friday. The block has violations in two corners and the PD engineer is out sick. You own the timing report. Exam rules.', 'concerned'),
-    art(`Corner SS 0.72V 125C (setup)          Corner FF 0.88V -40C (hold)
+    art(`Corner SS 0.72V at -40C and 125C (setup)   Corner FF 0.88V at -40C and 125C (hold)
+  (at advanced nodes the slow corner can be cold: temperature inversion)
   path A: arrival 1180, required 1150   path C: arrival 62, required 75
   path B: arrival 1090, required 1150   path D: arrival 90, required 75
   clock period 1250 ps`),
