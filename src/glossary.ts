@@ -153,7 +153,7 @@ export const GLOSSARY: Entry[] = [
   E('electromigration|em', 'Metal atoms pushed by current density until a wire opens; limits wire current. A signoff check.', 'pnr'),
   E('antenna effect|antenna', 'Charge collected on long metal during fabrication can damage gate oxide; fixed with diodes or layer jumps.', 'pnr'),
   E('eco|engineering change order|metal fix|spare cells', 'Small late changes to a netlist or layout; after tapeout, metal-only ECOs use spare cells.', 'pnr'),
-  E('sram|6t|bitcell|sense amplifier|sense amp', 'Static RAM: a 6T cross-coupled cell read by sense amplifiers that detect ~100 mV swings.', 'sram'),
+  E('sram|6t|bitcell|sense amplifier|sense amp', 'Static RAM: a 6T cross-coupled cell read by sense amplifiers that detect small swings, tens of mV to about 100 mV.', 'sram'),
   E('nand flash|flash|slc|mlc|tlc|qlc', 'Non-volatile memory storing charge in floating gates or charge traps; 2^bits levels per cell.', 'sram'),
   E('redundancy|repair|efuse|fuse', 'Spare rows/columns programmed by fuses after test to replace failing memory cells.', 'sram'),
   E('lithography|euv|duv|rayleigh', 'Printing patterns with light. Resolution R = k1·λ/NA; EUV uses 13.5 nm light.', 'fab'),
