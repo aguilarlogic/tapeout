@@ -65,13 +65,16 @@ export const mcs = (r: () => number, q: string, right: string, wrong: readonly s
   return mc(q, opts, a, why);
 };
 
-/** A concept question with its walkthrough: [question, right, wrong, method, idea, [step question, step right, step wrong]]. */
-export type ConceptQ = readonly [string, string, readonly string[], string, string, readonly [string, string, readonly string[]]];
+/**
+ * A concept question with its walkthrough: [question, right, wrong, method, idea, [step question, step right, step
+ * wrong], because?]. Keep the options short and parallel; the reasoning goes in `because`, shown after answering.
+ */
+export type ConceptQ = readonly [string, string, readonly string[], string, string, readonly [string, string, readonly string[]], string?];
 
 /** Pick one concept question and attach its walkthrough: the method, the idea, and one reasoning step to work. */
 export const concept = (r: () => number, qs: readonly ConceptQ[], why: (right: string) => string) => {
-  const [q, right, wrong, method, idea, [sq, sr, sw]] = pick(r, qs);
-  return walk(mcs(r, q, right, wrong, why(right)), method, idea, choice(sq, sr, sw));
+  const [q, right, wrong, method, idea, [sq, sr, sw], because] = pick(r, qs);
+  return walk(mcs(r, q, right, wrong, because ? `${why(right)} ${because}` : why(right)), method, idea, choice(sq, sr, sw));
 };
 
 /** Exact text answer, ignoring whitespace and quote style: exact("[1, 2]") accepts "[1,2]". */
