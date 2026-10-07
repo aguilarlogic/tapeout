@@ -30,6 +30,8 @@ export interface RunResult {
   ok: boolean;
   error?: { line: number; message: string; phase: 'compile' | 'ports' | 'runtime' };
   lints: Lint[];
+  /** Compile warnings that cost nothing (x/z literals in the 2-state simulator). */
+  warnings: Lint[];
   signals: TraceSignal[];
   /** Values checked each step. For clocked designs: inputs applied, logic settled, just before the rising edge. */
   samples: Record<string, bigint>[];
@@ -60,7 +62,7 @@ export function checkPorts(user: Design, golden: Design): string | null {
 }
 
 export function run(userSrc: string, goldenSrc: string, stim: Stimulus): RunResult {
-  const res: RunResult = { ok: false, lints: [], signals: [], samples: [], post: [], expected: [], expectedPost: [], ignored: [], mismatches: [] };
+  const res: RunResult = { ok: false, lints: [], warnings: [], signals: [], samples: [], post: [], expected: [], expectedPost: [], ignored: [], mismatches: [] };
   let user: Design;
   try {
     user = new Design(userSrc);
@@ -69,6 +71,7 @@ export function run(userSrc: string, goldenSrc: string, stim: Stimulus): RunResu
     return res;
   }
   res.lints = user.lints;
+  res.warnings = user.warnings;
   const golden = new Design(goldenSrc);
   const portErr = checkPorts(user, golden);
   if (portErr) {

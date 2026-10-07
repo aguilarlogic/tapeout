@@ -40,6 +40,7 @@ export class Sim {
   rand: () => number;
   log: string[] = [];
   errors = 0; warnings = 0; fatals = 0;
+  xzWarned = false; // the x/z-literal warning is printed once per run
   finished = false;
   reason: 'finish' | 'quiesced' | 'timeout' | 'ops' | 'fatal' | 'error' = 'quiesced';
   now = 0;
@@ -963,6 +964,10 @@ export class Sim {
     const l = this.ev(e.l, sc, h);
     const r = this.ev(e.r, sc, op === '<<' || op === '>>' || op === '<<<' || op === '>>>' || op === '**' ? undefined : h);
     this.curLine = e.line;
+    // 2-state values: an x/z literal read as 0, so equality against it means something else than in a 4-state simulator
+    if (!this.xzWarned && ['==', '!=', '===', '!=='].includes(op) && ((e.l.k === 'num' && e.l.xz) || (e.r.k === 'num' && e.r.xz))) {
+      this.xzWarned = true; this.report('WARNING', 'x/z bits are treated as 0 in this 2-state simulator'); this.warnings++;
+    }
     if (relational) return this.one(this.compare(op, l, r));
     return this.arith(op, l, r, h);
   }
