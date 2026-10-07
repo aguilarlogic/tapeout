@@ -1,10 +1,11 @@
 // Logic Lab: a drag-and-wire schematic editor with live simulation, for gate-level and transistor-level levels.
 import { mentorSay } from '../../os/mentor';
-import { clearDraft, complete, levelRecord, loadDraft, saveDraft } from '../../state';
+import { clearDraft, levelRecord, loadDraft, saveDraft } from '../../state';
 import { h, svg, toast } from '../../ui/dom';
-import { celebrate, levelHeader, nextHref } from '../../ui/layout';
+import { levelHeader } from '../../ui/layout';
 import { Circuit, counts, Kind, Part, PINS, Sim, SIZE, starsFor, V, verify } from './circuit';
 import { CANVAS, findLogicLevel, starter } from './levels';
+import { finish, HINT_NOTE } from '../../ui/labkit';
 
 const GRID = 10;
 const snap = (v: number) => Math.round(v / GRID) * GRID;
@@ -274,12 +275,10 @@ export function logicPage(id: string): HTMLElement {
     }
     let st = starsFor(v, level.par);
     st = Math.max(1, st - usage.hints);
-    const gained = complete(level.id, level.xp, st);
-    const notes = [
+    finish(level.id, level.xp, st, [
       v.count > level.par ? `You used ${v.count}; par is ${level.par}. Fewer parts earn more stars.` : '',
-      usage.hints ? 'Solve it without hints for another star.' : '',
-    ].filter(Boolean);
-    celebrate(st, gained, notes, nextHref(level.id));
+      usage.hints ? HINT_NOTE : '',
+    ]);
   };
 
   const hintList = h('ol', { class: 'hints' });

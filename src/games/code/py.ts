@@ -2,6 +2,7 @@
 // Values: int = bigint, float = number, bool = boolean, str = string, None = null, list = array,
 // tuple = PyTuple, dict = PyDict, set = PySet, range = PyRange.
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { mulberry32 } from '../../lib/rng';
 import { Node, parse, parseExpr, PySyntaxError } from './pyparse';
 
 export { PySyntaxError };
@@ -116,14 +117,14 @@ export class Interp {
   line = 0;
   globals = new Scope(null);
   stdin: string[];
-  private rngState: number;
+  private rand: () => number;
   private classes = new Map<string, PyClass>();
   private maxOutput: number;
 
   constructor(opts: PyOptions = {}) {
     this.maxSteps = opts.maxSteps ?? 3_000_000;
     this.stdin = [...(opts.stdin ?? [])];
-    this.rngState = (opts.seed ?? 12345) >>> 0;
+    this.rand = mulberry32(opts.seed ?? 12345);
     this.maxOutput = opts.maxOutput ?? 100_000;
     for (const [n, b] of EXC_TREE) {
       const c = new PyClass(n, b ? [this.classes.get(b)!] : []);
@@ -1084,12 +1085,7 @@ export class Interp {
   }
 
   nextRandom(): number {
-    // mulberry32
-    this.rngState = (this.rngState + 0x6d2b79f5) >>> 0;
-    let t = this.rngState;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    return this.rand();
   }
 
   private mods?: Record<string, PyModule>;
@@ -1122,7 +1118,7 @@ export class Interp {
       copysign: fn('copysign', (a) => Math.sign(num(a[1])) * Math.abs(num(a[0]))),
     });
     const random = new PyModule('random', {
-      seed: fn('seed', (a) => { this.rngState = Number(a.length ? BigInt.asUintN(32, intOf(a[0])) : 0n) >>> 0; return null; }),
+      seed: fn('seed', (a) => { this.rand = mulberry32(Number(a.length ? BigInt.asUintN(32, intOf(a[0])) : 0n)); return null; }),
       random: fn('random', () => this.nextRandom()),
       randint: fn('randint', (a) => { const lo = intOf(a[0]), hi = intOf(a[1]); return lo + BigInt(Math.floor(this.nextRandom() * Number(hi - lo + 1n))); }),
       randrange: fn('randrange', (a) => { const lo = a.length > 1 ? intOf(a[0]) : 0n, hi = a.length > 1 ? intOf(a[1]) : intOf(a[0]); return lo + BigInt(Math.floor(this.nextRandom() * Number(hi - lo))); }),

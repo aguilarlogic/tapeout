@@ -391,7 +391,12 @@ compile at 1× and 4×.
 - Hosted build: target ≤ 1.0 s load at 4×.
 - Single-file option: compile time down by at least 25%.
 
-### B3 · One shared lab kit instead of 16 copies (Pri 3)
+### B3 · One shared lab kit instead of 16 copies (Pri 3) ✅ done
+
+> **Done note.** Landed as `src/ui/labkit.ts` and `src/lib/rng.ts`. One `starsFor = ` and one mulberry32 remain. The
+> pages shrank by 301 lines (2880 → 2579), short of the 400 estimate: what is left in them is page-specific UI
+> (debuggers, plots, consoles), and folding more in would change behaviour. `finish()` calls `complete()` until A6 adds
+> `award()`.
 
 Do this before A6 and A7 if you can: they then touch one file instead of 16.
 

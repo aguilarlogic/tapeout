@@ -1,10 +1,10 @@
 // Circuit Lab page: a netlist editor, a simulator, goal checks and plots.
 import { mentorSay } from '../../os/mentor';
 import { rng } from '../../sim/harness';
-import { clearDraft, complete, levelRecord, loadDraft, saveDraft } from '../../state';
+import { clearDraft, loadDraft, saveDraft } from '../../state';
 import { h } from '../../ui/dom';
 import { editor, highlightSpice } from '../../ui/editor';
-import { celebrate, levelHeader, nextHref } from '../../ui/layout';
+import { finish, HINT_NOTE, hintBox, labFrame, useSeed, variantButton } from '../../ui/labkit';
 import { bode } from './measure';
 import { checkGoals, findCircuitLevel, Instance, starsFor } from './levels';
 import { plot, Trace } from './plot';
@@ -34,36 +34,20 @@ export function circuitPage(id: string): HTMLElement {
   if (!level) return h('p', null, 'Unknown mission.');
   const boss = level.tier === 'boss';
   const seedKey = `clab.${level.id}.seed`;
-  let seed = loadDraft<number>(seedKey);
-  if (seed === undefined) { seed = Math.floor(Math.random() * 1e6) + 1; saveDraft(seedKey, seed); }
+  const seed = useSeed(seedKey);
   const inst: Instance = level.build(rng(seed));
   const draftKey = `clab.${level.id}.${seed}`;
-  const usage = loadDraft<{ hints: number }>(`${draftKey}.usage`) ?? { hints: 0 };
-  const saveUsage = () => saveDraft(`${draftKey}.usage`, usage);
 
   const ed = editor(loadDraft<string>(draftKey) ?? inst.starter, (v) => saveDraft(draftKey, v), () => run(false), { highlight: highlightSpice, label: 'SPICE netlist' });
 
   // --- brief and hints
-  const hintList = h('ol', { class: 'hints' });
-  const hintBtn = h('button', { class: 'btn ghost small', onclick: () => reveal() }, '');
-  const renderHints = () => {
-    hintList.replaceChildren(...inst.hints.slice(0, usage.hints).map((t) => h('li', null, t)));
-    hintBtn.textContent = usage.hints >= inst.hints.length ? 'No more hints' : `Reveal a hint (${inst.hints.length - usage.hints} left, caps you at 2 stars)`;
-    (hintBtn as HTMLButtonElement).disabled = usage.hints >= inst.hints.length;
-  };
-  const reveal = () => {
-    usage.hints = Math.min(inst.hints.length, usage.hints + 1);
-    saveUsage();
-    renderHints();
-    mentorSay(`Hint: ${inst.hints[usage.hints - 1]}`, 'thinking');
-  };
-  renderHints();
+  const { usage, box: hintEl } = hintBox(inst.hints, `${draftKey}.usage`, false);
 
   const brief = h('aside', { class: 'brief panel' },
     h('div', { class: 'tag' }, level.concept),
     h('p', { class: 'dim small' }, level.ticket),
     h('div', { class: 'brief-body', html: inst.brief }),
-    inst.hints.length ? h('div', { class: 'hint-box' }, hintBtn, hintList) : h('p', { class: 'dim small' }, 'Boss mission: no hints. Standard parts only.'),
+    hintEl || h('p', { class: 'dim small' }, 'Boss mission: no hints. Standard parts only.'),
     h('details', { class: 'cheat' }, h('summary', null, 'Netlist cheat-sheet'), h('pre', null, CHEATS)),
   );
 
@@ -167,12 +151,10 @@ export function circuitPage(id: string): HTMLElement {
     const stars = starsFor(inst, res.parts, usage.hints);
     status.className = 'status ok';
     status.textContent = `PASS — all ${inst.goals.length} goals met with ${res.parts} parts.`;
-    const gained = complete(level.id, level.xp, stars);
-    const notes = [
-      usage.hints ? 'Solve it without hints for another star.' : '',
+    finish(level.id, level.xp, stars, [
+      usage.hints ? HINT_NOTE : '',
       inst.par !== undefined && res.parts > inst.par ? `Use ${inst.par} parts or fewer for the third star (you used ${res.parts}).` : '',
-    ].filter(Boolean);
-    celebrate(stars, gained, notes, nextHref(level.id));
+    ]);
   };
 
   // --- parts palette
@@ -188,25 +170,12 @@ export function circuitPage(id: string): HTMLElement {
   const palette = h('div', { class: 'parts' }, h('span', { class: 'dim small' }, 'Add:'),
     ...PARTS.map(([name, tpl]) => h('button', { class: 'btn ghost small', title: tpl.replace('{n}', '1'), onclick: () => insert(tpl) }, name)));
 
-  const rebuild = (reroll: boolean) => {
-    if (reroll) { saveDraft(seedKey, Math.floor(Math.random() * 1e6) + 1); }
-    const host = document.getElementById('lab-slot');
-    if (host) host.replaceWith(circuitPage(level.id)); else location.reload();
-  };
-
   const toolbar = h('div', { class: 'toolbar' },
     h('button', { class: 'btn', onclick: () => run(false), title: 'Ctrl+Enter' }, '▶ Run'),
     h('button', { class: 'btn primary', onclick: () => run(true) }, '✔ Check design'),
     h('button', { class: 'btn ghost', onclick: () => { if (confirm('Reset to the starter netlist?')) { ed.value = inst.starter; clearDraft(draftKey); } } }, 'Reset'),
-    boss ? h('button', { class: 'btn ghost', onclick: () => { if (confirm('Roll a new set of specs? This clears your current netlist.')) rebuild(true); } }, 'New variant') : '',
+    boss ? variantButton('Roll a new set of specs? This clears your current netlist.', seedKey, () => circuitPage(level.id)) : '',
   );
 
-  return h('div', { class: 'level', id: 'lab-slot' },
-    levelHeader(level.title, level.id, levelRecord(level.id)?.stars ?? 0, level.xp),
-    h('div', { class: 'level-grid clab-grid' },
-      brief,
-      h('section', { class: 'work panel' }, toolbar, palette, ed.el),
-    ),
-    h('section', { class: 'results panel' }, status, goalList, messages, opHost, plotHost),
-  );
+  return labFrame(level, brief, [toolbar, palette, ed.el], [status, goalList, messages, opHost, plotHost]);
 }

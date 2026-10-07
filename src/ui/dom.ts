@@ -1,6 +1,6 @@
 // Tiny DOM helpers - no framework needed for a game this size.
 
-type Child = Node | string | number | null | undefined | false | Child[];
+export type Child = Node | string | number | null | undefined | false | Child[];
 type Attrs = Record<string, unknown> & { class?: string; style?: string; html?: string };
 
 export function h<K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Attrs | null = null, ...children: Child[]): HTMLElementTagNameMap[K] {

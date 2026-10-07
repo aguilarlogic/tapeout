@@ -1,16 +1,13 @@
 // Testbench Lab page: write or repair a SystemVerilog testbench (plain classes or UVM), run it on the correct design and on
 // hidden buggy variants, and see the simulation log and functional coverage.
-import { mentorSay } from '../../os/mentor';
-import { clearDraft, complete, levelRecord, loadDraft, saveDraft } from '../../state';
+import { clearDraft, loadDraft, saveDraft } from '../../state';
 import { h } from '../../ui/dom';
 import { editor, highlight } from '../../ui/editor';
-import { celebrate, levelHeader, nextHref } from '../../ui/layout';
+import { finishLab, goalItems, hintBox, labFrame, report, useSeed, variantButton } from '../../ui/labkit';
 import { rng } from '../../sim/harness';
 import { evaluate, type Evaluation } from './check';
 import type { CovGroupReport } from './cover';
 import { findTbLevel } from './levels';
-
-export const starsFor = (hintsUsed: number) => (hintsUsed > 0 ? 2 : 3);
 
 function coverageView(cov: CovGroupReport[]): HTMLElement | string {
   if (!cov.length) return '';
@@ -31,12 +28,9 @@ export function svPage(id: string): HTMLElement {
   if (!level) return h('p', null, 'Unknown mission.');
   const boss = level.tier === 'boss';
   const seedKey = `tb.${level.id}.seed`;
-  let seed = loadDraft<number>(seedKey);
-  if (seed === undefined) { seed = Math.floor(Math.random() * 1e6) + 1; saveDraft(seedKey, seed); }
+  const seed = useSeed(seedKey);
   const inst = level.build(rng(seed));
   const draftKey = `tb.${level.id}.${seed}`;
-  const usage = loadDraft<{ hints: number }>(`${draftKey}.usage`) ?? { hints: 0 };
-  const saveUsage = () => saveDraft(`${draftKey}.usage`, usage);
   const fix = inst.mode === 'fix';
 
   const ed = editor(loadDraft<string>(draftKey) ?? inst.starter, (v) => saveDraft(draftKey, v), () => run(false), {
@@ -44,27 +38,14 @@ export function svPage(id: string): HTMLElement {
   });
 
   // --- brief and hints
-  const hintList = h('ol', { class: 'hints' });
-  const hintBtn = h('button', { class: 'btn ghost small', onclick: () => reveal() }, '');
-  const renderHints = () => {
-    hintList.replaceChildren(...inst.hints.slice(0, usage.hints).map((t) => h('li', { html: t })));
-    hintBtn.textContent = usage.hints >= inst.hints.length ? 'No more hints' : `Reveal a hint (${inst.hints.length - usage.hints} left, caps you at 2 stars)`;
-    (hintBtn as HTMLButtonElement).disabled = usage.hints >= inst.hints.length;
-  };
-  const reveal = () => {
-    usage.hints = Math.min(inst.hints.length, usage.hints + 1);
-    saveUsage();
-    renderHints();
-    mentorSay(`Hint: ${inst.hints[usage.hints - 1].replace(/<[^>]+>/g, '')}`, 'thinking');
-  };
-  renderHints();
+  const { usage, box: hintEl } = hintBox(inst.hints, `${draftKey}.usage`);
 
   const brief = h('aside', { class: 'brief panel' },
     h('div', { class: 'tag' }, `${inst.uvm ? 'UVM' : 'Testbench'} · ${level.concept}`),
     h('p', { class: 'dim small' }, level.ticket),
     h('div', { class: 'brief-body', html: inst.brief }),
     boss ? h('p', { class: 'dim small' }, 'Boss mission: no hints. Hidden bugs are checked on every run.') : '',
-    inst.hints.length ? h('div', { class: 'hint-box' }, hintBtn, hintList) : '',
+    hintEl,
   );
 
   // --- code provided around the learner's (read only)
@@ -81,7 +62,7 @@ export function svPage(id: string): HTMLElement {
   const logBox = h('pre', { class: 'sim-log' });
 
   const show = (ev: Evaluation) => {
-    goalList.replaceChildren(...ev.goals.map((g) => h('li', { class: g.ok ? 'ok' : 'bad' }, h('span', { class: 'mark' }, g.ok ? '✓' : '✗'), h('span', null, g.label, g.note ? h('span', { class: 'dim small' }, ` — ${g.note}`) : ''))));
+    goalList.replaceChildren(...goalItems(ev.goals));
     mutList.replaceChildren(...(ev.mutants.length ? [h('h4', null, boss ? 'Hidden bugs' : 'Buggy designs'), ...ev.mutants.map((m, i) => h('div', { class: m.caught ? 'mut ok' : 'mut bad' }, m.caught ? '✓ caught: ' : '✗ MISSED: ', boss ? `bug ${i + 1}` : m.name, m.note ? h('span', { class: 'dim small' }, ` (${m.note})`) : ''))] : []));
     const run0 = ev.run;
     covBox.replaceChildren(...(run0 && !run0.parseError && run0.coverage.length ? [coverageView(run0.coverage)] : []));
@@ -98,25 +79,7 @@ export function svPage(id: string): HTMLElement {
     setTimeout(() => {
       const ev = evaluate(inst, ed.value);
       show(ev);
-      if (ev.error) {
-        status.className = 'status err';
-        status.textContent = ev.error.message + (ev.error.line ? ` (line ${ev.error.line})` : '');
-        mentorSay(status.textContent, 'concerned');
-        return;
-      }
-      if (!ev.passed) {
-        const bad = ev.goals.filter((g) => !g.ok);
-        status.className = 'status err';
-        status.textContent = `${bad.length} of ${ev.goals.length} goals not met.`;
-        mentorSay(`Not yet: ${bad[0].label}${bad[0].note ? ` (${bad[0].note})` : ''}.`, 'concerned');
-        return;
-      }
-      status.className = 'status ok';
-      if (!submit) { status.textContent = `All ${ev.goals.length} goals met. Submit to bank the result.`; return; }
-      status.textContent = `PASS: all ${ev.goals.length} goals met.`;
-      const stars = starsFor(usage.hints);
-      const gained = complete(level.id, level.xp, stars);
-      celebrate(stars, gained, usage.hints ? ['Solve it without hints for another star.'] : [], nextHref(level.id));
+      if (report(status, ev, submit)) finishLab(level, usage.hints);
     }, 20);
   };
 
@@ -124,12 +87,8 @@ export function svPage(id: string): HTMLElement {
     h('button', { class: 'btn', onclick: () => run(false), title: 'Ctrl+Enter' }, '▶ Run'),
     h('button', { class: 'btn primary', onclick: () => run(true) }, '✔ Submit'),
     h('button', { class: 'btn ghost', onclick: () => { if (confirm('Reset to the starter?')) { ed.value = inst.starter; clearDraft(draftKey); } } }, 'Reset'),
-    boss ? h('button', { class: 'btn ghost', onclick: () => { if (confirm('Roll a new variant? This clears your current work.')) { saveDraft(seedKey, Math.floor(Math.random() * 1e6) + 1); const host = document.getElementById('lab-slot'); if (host) host.replaceWith(svPage(level.id)); else location.reload(); } } }, 'New variant') : '',
+    boss ? variantButton('Roll a new variant? This clears your current work.', seedKey, () => svPage(level.id)) : '',
   );
 
-  return h('div', { class: 'level', id: 'lab-slot' },
-    levelHeader(level.title, level.id, levelRecord(level.id)?.stars ?? 0, level.xp),
-    h('div', { class: 'level-grid clab-grid' }, brief, h('section', { class: 'work panel' }, toolbar, shown, ed.el)),
-    h('section', { class: 'results panel' }, status, goalList, mutList, covBox, logBox),
-  );
+  return labFrame(level, brief, [toolbar, shown, ed.el], [status, goalList, mutList, covBox, logBox]);
 }

@@ -1,50 +1,31 @@
 // CDC Lab page: write or fix a multi-clock design; see the crossings the analysis found and how the stress simulation went.
-import { mentorSay } from '../../os/mentor';
-import { clearDraft, complete, levelRecord, loadDraft, saveDraft } from '../../state';
+import { clearDraft, loadDraft, saveDraft } from '../../state';
 import { h } from '../../ui/dom';
 import { editor, highlight } from '../../ui/editor';
-import { celebrate, levelHeader, nextHref } from '../../ui/layout';
+import { finishLab, goalItems, hintBox, labFrame, report, useSeed, variantButton } from '../../ui/labkit';
 import { rng } from '../../sim/harness';
 import { evaluate, type Evaluation } from './check';
 import { findCdcLevel } from './levels';
-
-export const starsFor = (hintsUsed: number) => (hintsUsed > 0 ? 2 : 3);
 
 export function cdcPage(id: string): HTMLElement {
   const level = findCdcLevel(id);
   if (!level) return h('p', null, 'Unknown mission.');
   const boss = level.tier === 'boss';
   const seedKey = `cdc.${level.id}.seed`;
-  let seed = loadDraft<number>(seedKey);
-  if (seed === undefined) { seed = Math.floor(Math.random() * 1e6) + 1; saveDraft(seedKey, seed); }
+  const seed = useSeed(seedKey);
   const inst = level.build(rng(seed));
   const draftKey = `cdc.${level.id}.${seed}`;
-  const usage = loadDraft<{ hints: number }>(`${draftKey}.usage`) ?? { hints: 0 };
-  const saveUsage = () => saveDraft(`${draftKey}.usage`, usage);
 
   const ed = editor(loadDraft<string>(draftKey) ?? inst.starter, (v) => saveDraft(draftKey, v), () => run(false), { highlight, label: 'Verilog source' });
 
-  const hintList = h('ol', { class: 'hints' });
-  const hintBtn = h('button', { class: 'btn ghost small', onclick: () => reveal() }, '');
-  const renderHints = () => {
-    hintList.replaceChildren(...inst.hints.slice(0, usage.hints).map((t) => h('li', { html: t })));
-    hintBtn.textContent = usage.hints >= inst.hints.length ? 'No more hints' : `Reveal a hint (${inst.hints.length - usage.hints} left, caps you at 2 stars)`;
-    (hintBtn as HTMLButtonElement).disabled = usage.hints >= inst.hints.length;
-  };
-  const reveal = () => {
-    usage.hints = Math.min(inst.hints.length, usage.hints + 1);
-    saveUsage();
-    renderHints();
-    mentorSay(`Hint: ${inst.hints[usage.hints - 1].replace(/<[^>]+>/g, '')}`, 'thinking');
-  };
-  renderHints();
+  const { usage, box: hintEl } = hintBox(inst.hints, `${draftKey}.usage`);
 
   const brief = h('aside', { class: 'brief panel' },
     h('div', { class: 'tag' }, `CDC · ${level.concept}`),
     h('p', { class: 'dim small' }, level.ticket),
     h('div', { class: 'brief-body', html: inst.brief }),
     boss ? h('p', { class: 'dim small' }, 'Boss mission: no hints. A new variant changes the clock ratios.') : '',
-    inst.hints.length ? h('div', { class: 'hint-box' }, hintBtn, hintList) : '',
+    hintEl,
   );
 
   const status = h('div', { class: 'status idle' }, 'Check analyses the crossings and runs the stress simulation. Submit also banks the result.');
@@ -53,7 +34,7 @@ export function cdcPage(id: string): HTMLElement {
   const simBox = h('div', { class: 'cdc-sim' });
 
   const show = (ev: Evaluation) => {
-    goalList.replaceChildren(...ev.goals.map((g) => h('li', { class: g.ok ? 'ok' : 'bad' }, h('span', { class: 'mark' }, g.ok ? '✓' : '✗'), h('span', null, g.label, g.note ? h('span', { class: 'dim small' }, ` — ${g.note}`) : ''))));
+    goalList.replaceChildren(...goalItems(ev.goals));
     const cs = ev.report?.crossings ?? [];
     xBox.replaceChildren(...(cs.length ? [
       h('h4', null, 'Clock-domain crossings found'),
@@ -78,25 +59,7 @@ export function cdcPage(id: string): HTMLElement {
     setTimeout(() => {
       const ev = evaluate(inst, ed.value);
       show(ev);
-      if (ev.error) {
-        status.className = 'status err';
-        status.textContent = ev.error.message + (ev.error.line ? ` (line ${ev.error.line})` : '');
-        mentorSay(status.textContent, 'concerned');
-        return;
-      }
-      if (!ev.passed) {
-        const bad = ev.goals.filter((g) => !g.ok);
-        status.className = 'status err';
-        status.textContent = `${bad.length} of ${ev.goals.length} goals not met.`;
-        mentorSay(`Not yet: ${bad[0].label}${bad[0].note ? ` (${bad[0].note})` : ''}.`, 'concerned');
-        return;
-      }
-      status.className = 'status ok';
-      if (!submit) { status.textContent = `All ${ev.goals.length} goals met. Submit to bank the result.`; return; }
-      status.textContent = `PASS: all ${ev.goals.length} goals met.`;
-      const stars = starsFor(usage.hints);
-      const gained = complete(level.id, level.xp, stars);
-      celebrate(stars, gained, usage.hints ? ['Solve it without hints for another star.'] : [], nextHref(level.id));
+      if (report(status, ev, submit)) finishLab(level, usage.hints);
     }, 20);
   };
 
@@ -104,12 +67,8 @@ export function cdcPage(id: string): HTMLElement {
     h('button', { class: 'btn', onclick: () => run(false), title: 'Ctrl+Enter' }, '▶ Check'),
     h('button', { class: 'btn primary', onclick: () => run(true) }, '✔ Submit'),
     h('button', { class: 'btn ghost', onclick: () => { if (confirm('Reset to the starter?')) { ed.value = inst.starter; clearDraft(draftKey); } } }, 'Reset'),
-    boss ? h('button', { class: 'btn ghost', onclick: () => { if (confirm('Roll a new variant? This clears your current work.')) { saveDraft(seedKey, Math.floor(Math.random() * 1e6) + 1); const host = document.getElementById('lab-slot'); if (host) host.replaceWith(cdcPage(level.id)); else location.reload(); } } }, 'New variant') : '',
+    boss ? variantButton('Roll a new variant? This clears your current work.', seedKey, () => cdcPage(level.id)) : '',
   );
 
-  return h('div', { class: 'level', id: 'lab-slot' },
-    levelHeader(level.title, level.id, levelRecord(level.id)?.stars ?? 0, level.xp),
-    h('div', { class: 'level-grid clab-grid' }, brief, h('section', { class: 'work panel' }, toolbar, ed.el)),
-    h('section', { class: 'results panel' }, status, goalList, xBox, simBox),
-  );
+  return labFrame(level, brief, [toolbar, ed.el], [status, goalList, xBox, simBox]);
 }

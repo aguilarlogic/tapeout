@@ -12,6 +12,3 @@ export const findCodeLevel = (id: string) => CODE_LEVELS.find((l) => l.id === id
 
 /** A stable seed per learner and mission, so a boss keeps its variant until the learner asks for a new one. */
 export const instanceFor = (level: CodeLevel, seed: number) => level.build(rng(seed));
-
-/** Hints cap the result at 2 stars. */
-export const starsFor = (hintsUsed: number) => (hintsUsed > 0 ? 2 : 3);

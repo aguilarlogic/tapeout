@@ -1,15 +1,14 @@
 // RV32 core project page: write the Verilog core, run it against the ISA simulator on whole programs, and read where
 // the first store or the first pc diverges.
 import { mentorSay } from '../../os/mentor';
-import { clearDraft, complete, levelRecord, loadDraft, saveDraft } from '../../state';
+import { clearDraft, loadDraft, saveDraft } from '../../state';
 import { rng } from '../../sim/harness';
 import { h } from '../../ui/dom';
 import { editor } from '../../ui/editor';
-import { celebrate, levelHeader, nextHref } from '../../ui/layout';
+import { finishLab, hintBox, labFrame, useSeed, variantButton } from '../../ui/labkit';
 import { evaluateCore, type CoreReport, type ProgramResult } from './harness';
 import { findRvLevel } from './levels';
 
-export const starsFor = (hintsUsed: number) => (hintsUsed > 0 ? 2 : 3);
 const hx = (n: number) => '0x' + (n >>> 0).toString(16);
 
 export function rvPage(id: string): HTMLElement {
@@ -17,28 +16,13 @@ export function rvPage(id: string): HTMLElement {
   if (!level) return h('p', null, 'Unknown mission.');
   const boss = level.tier === 'boss';
   const seedKey = `rv.${level.id}.seed`;
-  let seed = loadDraft<number>(seedKey);
-  if (seed === undefined) { seed = Math.floor(Math.random() * 1e6) + 1; saveDraft(seedKey, seed); }
+  const seed = useSeed(seedKey);
   const inst = level.build(rng(seed));
   const draftKey = `rv.${level.id}.${seed}`;
-  const usage = loadDraft<{ hints: number }>(`${draftKey}.usage`) ?? { hints: 0 };
 
   const ed = editor(loadDraft<string>(draftKey) ?? inst.starter, (v) => saveDraft(draftKey, v), () => check(false), { label: 'Verilog: module rv32_core' });
 
-  const hintList = h('ol', { class: 'hints' });
-  const hintBtn = h('button', { class: 'btn ghost small', onclick: () => reveal() }, '');
-  const renderHints = () => {
-    hintList.replaceChildren(...inst.hints.slice(0, usage.hints).map((t) => h('li', { html: t })));
-    hintBtn.textContent = usage.hints >= inst.hints.length ? 'No more hints' : `Reveal a hint (${inst.hints.length - usage.hints} left, caps you at 2 stars)`;
-    (hintBtn as HTMLButtonElement).disabled = usage.hints >= inst.hints.length;
-  };
-  const reveal = () => {
-    usage.hints = Math.min(inst.hints.length, usage.hints + 1);
-    saveDraft(`${draftKey}.usage`, usage);
-    renderHints();
-    mentorSay(`Hint: ${inst.hints[usage.hints - 1].replace(/<[^>]+>/g, '')}`, 'thinking');
-  };
-  renderHints();
+  const { usage, box: hintEl } = hintBox(inst.hints, `${draftKey}.usage`);
 
   // ---- program listing
   const progSel = h('select', { class: 'isa-case', 'aria-label': 'Program' }, ...inst.programs.filter((p) => !p.hidden).map((p, i) => h('option', { value: String(i) }, p.name))) as HTMLSelectElement;
@@ -53,7 +37,7 @@ export function rvPage(id: string): HTMLElement {
     h('div', { class: 'brief-body', html: inst.brief }),
     h('details', { class: 'src-view' }, h('summary', null, 'Test programs (assembly)'), h('div', { class: 'toolbar' }, progSel), progBox),
     boss ? h('p', { class: 'dim small' }, 'Boss mission: no hints. A new variant changes the bugs and the programs.') : '',
-    inst.hints.length ? h('div', { class: 'hint-box' }, hintBtn, hintList) : '',
+    hintEl,
   );
 
   // ---- results
@@ -88,21 +72,15 @@ export function rvPage(id: string): HTMLElement {
     status.className = 'status ok';
     if (!submit) { status.textContent = `All ${rep.results.length} visible programs pass. Submit runs the hidden ones too.`; return; }
     status.textContent = `PASS: all ${rep.results.length} programs match the reference.`;
-    const stars = starsFor(usage.hints);
-    const gained = complete(level.id, level.xp, stars);
-    celebrate(stars, gained, usage.hints ? ['Solve it without hints for another star.'] : [], nextHref(level.id));
+    finishLab(level, usage.hints);
   };
 
   const toolbar = h('div', { class: 'toolbar' },
     h('button', { class: 'btn', onclick: () => check(false), title: 'Ctrl+Enter' }, '▶ Check'),
     h('button', { class: 'btn primary', onclick: () => check(true) }, '✔ Submit'),
     h('button', { class: 'btn ghost', onclick: () => { if (confirm('Reset to the starter?')) { ed.value = inst.starter; clearDraft(draftKey); } } }, 'Reset'),
-    boss ? h('button', { class: 'btn ghost', onclick: () => { if (confirm('Roll a new variant? This clears your current work.')) { saveDraft(seedKey, Math.floor(Math.random() * 1e6) + 1); const host = document.getElementById('lab-slot'); if (host) host.replaceWith(rvPage(level.id)); else location.reload(); } } }, 'New variant') : '',
+    boss ? variantButton('Roll a new variant? This clears your current work.', seedKey, () => rvPage(level.id)) : '',
   );
 
-  return h('div', { class: 'level', id: 'lab-slot' },
-    levelHeader(level.title, level.id, levelRecord(level.id)?.stars ?? 0, level.xp),
-    h('div', { class: 'level-grid clab-grid' }, brief, h('section', { class: 'work panel' }, toolbar, ed.el)),
-    h('section', { class: 'results panel' }, status, lintBox, resultBox),
-  );
+  return labFrame(level, brief, [toolbar, ed.el], [status, lintBox, resultBox]);
 }
