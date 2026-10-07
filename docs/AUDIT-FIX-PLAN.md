@@ -73,7 +73,7 @@ it. The test asserts:
 - no pattern with 7 or fewer right passes;
 - `gradePractice` never returns 1.
 
-### A2 · Incidents can be solved by blind guessing (Sev 4, Pri 5)
+### A2 · Incidents can be solved by blind guessing (Sev 4, Pri 5) ✅ done
 
 **Problem.** Running `diagnose` on each cause in list order, without a single instrument reading, solves the incident
 within budget in 64–100% of runs. A lucky first guess earns 3★, because `stars()` only counts slips. Simulation shows

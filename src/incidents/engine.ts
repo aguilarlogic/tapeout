@@ -38,6 +38,10 @@ export class Investigation {
   readonly ruledOut = new Set<string>();
   diagnosed = false;
   solved = false;
+  /** The right cause was named while the readings still fitted more than one. A review board sends that back. */
+  guessed = false;
+  /** For a guess: a reading that would have settled it. */
+  missed?: { ins: Instrument; arg: string };
 
   constructor(readonly inc: Incident, seed: number, cause?: string) {
     const v = inc.setup?.(seeded(hash(seed, 'setup'))) ?? {};
@@ -71,20 +75,25 @@ export class Investigation {
     return { text, cost: ins.cost, repeat: false };
   }
 
-  /** Causes still consistent with every reading taken (and not already ruled out by a failed fix). */
-  consistent(): string[] {
-    return this.inc.causes.map((c) => c.id).filter((id) => !this.ruledOut.has(id) && [...this.notes].every(([k, text]) => {
+  /** Causes that fit every reading taken. Causes crossed off by a wrong call still count: that was a guess, not evidence. */
+  evidence(): string[] {
+    return this.inc.causes.map((c) => c.id).filter((id) => [...this.notes].every(([k, text]) => {
       const [cmd, ...a] = k.split(' ');
       return this.readAs(id, this.find(cmd)!, a.join(' ')) === text;
     }));
   }
 
+  /** Causes still in play: they fit every reading and no wrong call has crossed them off. */
+  consistent(): string[] {
+    return this.evidence().filter((id) => !this.ruledOut.has(id));
+  }
+
   /**
    * The most useful next reading: the one whose worst case leaves the fewest candidates, cheapest first on ties.
-   * This is what the senior engineer suggests, and what the solvability tests play.
+   * This is what the senior engineer suggests, and what the solvability tests play. It works from the readings alone,
+   * so it keeps going until the evidence (not a lucky wrong call) has singled out one cause.
    */
-  bestNext(): { ins: Instrument; arg: string } | undefined {
-    const cands = this.consistent();
+  bestNext(cands = this.evidence()): { ins: Instrument; arg: string } | undefined {
     if (cands.length <= 1) return undefined;
     let best: { ins: Instrument; arg: string; worst: number } | undefined;
     for (const p of probes(this.inc)) {
@@ -105,9 +114,15 @@ export class Investigation {
     return this.bestNext();
   }
 
-  /** Commit to a root cause. A wrong one costs time and is crossed off. */
+  /** Commit to a root cause. A wrong one costs time and is crossed off; a right one the readings had not singled out is a guess. */
   diagnose(id: string): boolean {
-    if (id === this.world.cause) { this.diagnosed = true; return true; }
+    if (id === this.world.cause) {
+      const fits = this.evidence();
+      this.guessed = fits.length > 1;
+      if (this.guessed) this.missed = this.bestNext(fits);
+      this.diagnosed = true;
+      return true;
+    }
     this.mistakes++;
     this.spent += WRONG_COST;
     this.ruledOut.add(id);
@@ -134,9 +149,9 @@ export class Investigation {
     return false;
   }
 
-  /** 3: clean and quick. 2: one slip or hint. 1: solved anyway. 0: not solved within budget. */
+  /** 3: clean and quick. 2: one slip or hint. 1: solved anyway. 0: a guess, or not solved within budget. */
   stars(): number {
-    if (!this.solved || this.left < 0) return 0;
+    if (!this.solved || this.guessed || this.left < 0) return 0;
     const slips = this.mistakes + this.hints;
     if (slips === 0 && this.left >= this.inc.budget * 0.25) return 3;
     return slips <= 1 ? 2 : 1;

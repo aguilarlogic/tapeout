@@ -66,6 +66,10 @@ describe('incident definitions', () => {
       }
       expect(inv.consistent(), `${inc.id} seed ${seed} cause ${c.id}`).toEqual([c.id]);
       expect(inv.spent, `${inc.id} seed ${seed} cause ${c.id}: ${[...inv.notes.keys()].join(', ')}`).toBeLessThanOrEqual(inc.budget * 0.7);
+      expect(inv.diagnose(c.id)).toBe(true);
+      expect(inv.guessed, `${inc.id} seed ${seed} cause ${c.id}`).toBe(false);
+      inv.applyFix({ text: '', right: true, why: '' });
+      expect(inv.stars(), `${inc.id} seed ${seed} cause ${c.id}`).toBe(3);
     }
   });
 
@@ -133,6 +137,8 @@ describe('investigation rules', () => {
     const messy = new Investigation(inc, 1, 'firmware');
     messy.diagnose('droop');
     messy.hint();
+    messy.measure(messy.find('logs')!);
+    messy.measure(messy.find('idle')!);
     messy.diagnose('firmware');
     messy.applyFix({ text: '', right: true, why: '' });
     expect(messy.stars()).toBe(1);
@@ -141,5 +147,56 @@ describe('investigation rules', () => {
     late.spent = inc.budget + 1;
     late.applyFix({ text: '', right: true, why: '' });
     expect(late.stars()).toBe(0);
+  });
+});
+
+describe('guessing does not pay', () => {
+  const right = { text: '', right: true, why: '' };
+  const solve = (inv: Investigation) => {
+    for (let guard = 0; guard < 50; guard++) { const nx = inv.bestNext(); if (!nx) break; inv.measure(nx.ins, nx.arg); }
+  };
+
+  it('blind guessing in list order never completes an incident', () => {
+    for (const inc of INCIDENTS) for (let seed = 1; seed <= 200; seed++) {
+      const inv = new Investigation(inc, seed);
+      for (const c of inc.causes) if (inv.diagnose(c.id)) break;
+      inv.applyFix(right);
+      expect(inv.guessed, `${inc.id} seed ${seed}`).toBe(true);
+      expect(inv.stars(), `${inc.id} seed ${seed}`).toBe(0);
+    }
+  });
+
+  it('a guess is told which reading would have settled it', () => {
+    for (const inc of INCIDENTS) {
+      const inv = new Investigation(inc, 7);
+      inv.diagnose(inv.world.cause);
+      expect(inv.guessed).toBe(true);
+      expect(inv.missed, inc.id).toBeDefined();
+    }
+  });
+
+  it('a call the readings have already excluded is a wrong call, not a guess', () => {
+    for (const inc of INCIDENTS) for (let seed = 1; seed <= 20; seed++) {
+      const inv = new Investigation(inc, seed);
+      solve(inv);
+      const other = inc.causes.find((c) => c.id !== inv.world.cause)!;
+      expect(inv.diagnose(other.id)).toBe(false);
+      expect(inv.diagnose(inv.world.cause)).toBe(true);
+      inv.applyFix(right);
+      expect(inv.guessed).toBe(false);
+      if (inv.left >= 0) expect([1, 2], `${inc.id} seed ${seed}`).toContain(inv.stars());
+    }
+  });
+
+  it('crossing causes off with wrong calls is not evidence', () => {
+    const inc = findIncident('inc-hang')!;
+    const inv = new Investigation(inc, 1, 'firmware');
+    inv.measure(inv.find('logs')!);
+    expect(inv.evidence().sort()).toEqual(['coherence', 'firmware']);
+    inv.diagnose('coherence');
+    expect(inv.consistent()).toEqual(['firmware']);
+    expect(inv.evidence().sort()).toEqual(['coherence', 'firmware']);
+    inv.diagnose('firmware');
+    expect(inv.guessed).toBe(true);
   });
 });

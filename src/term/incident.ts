@@ -70,7 +70,7 @@ export async function runIncident(t: Terminal, inc: Incident, hooks: IncidentHoo
     if (ins) {
       const a = await pickArg(t, ins, arg);
       if (a === undefined) continue;
-      const before = inv.consistent();
+      const before = inv.evidence();
       const m = inv.measure(ins, a);
       void t.art(m.text, m.repeat ? `${key(ins.cmd, a)} · from your notebook, no time spent` : `${key(ins.cmd, a)} · ${ins.cost} min · ${hm(inv.left)} left`);
       if (coach && !m.repeat) await coachReading(t, inv, before, struck, causeName);
@@ -153,7 +153,7 @@ async function pickArg(t: Terminal, ins: Instrument, arg: string): Promise<strin
 
 /** Training wheels for the first incident: say what the reading ruled out. */
 async function coachReading(t: Terminal, inv: Investigation, before: string[], struck: Set<string>, name: (id: string) => string) {
-  const now = inv.consistent();
+  const now = inv.evidence();
   const gone = before.filter((c) => !now.includes(c));
   gone.forEach((c) => struck.add(c));
   if (!gone.length) await t.say('That reading fits every cause still on the list, so it told us nothing new. Look for a reading where the causes would disagree.', 'thinking');
@@ -169,11 +169,19 @@ async function diagnose(t: Terminal, inv: Investigation, arg: string, struck: Se
     const i = await t.choose(open.map((c) => (struck.has(c.id) ? `${c.name} (crossed off)` : c.name)), 'root cause>');
     pick = open[i];
   }
+  const fits = inv.evidence();
+  if (fits.length > 1 && fits.includes(pick.id)) {
+    const names = fits.map((id) => `**${inc.causes.find((c) => c.id === id)!.name}**`);
+    await t.say(fits.length > 3 ? `${fits.length} causes still fit every reading you have taken. Diagnose anyway?`
+      : `${fits.length === 2 ? 'Two' : 'Three'} causes still fit every reading you have taken: ${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}. Diagnose anyway?`, 'concerned');
+    if ((await t.choose(['Take another reading', 'Diagnose anyway'], 'diagnose?>')) === 0) return undefined;
+  }
   if (!inv.diagnose(pick.id)) {
     void t.print(`✗ −${WRONG_COST} min · ${hm(inv.left)} left`, 'err');
     await t.say(`You roll out a fix for **${pick.name.charAt(0).toLowerCase() + pick.name.slice(1)}**. Two days later the failure is back, exactly as before. That cause is off the list, and the clock kept running.`, 'concerned');
     return undefined;
   }
+  if (inv.guessed) return sentBack(t, inv);
   void t.print('✓ root cause confirmed', 'ok');
   await t.say(`Yes: **${pick.name}**. Now the part that matters to the customer: which fix goes in?`, 'excited');
   const opts = inv.fixOptions(Math.random);
@@ -215,6 +223,21 @@ async function finish(t: Terminal, inv: Investigation): Promise<IncidentResult> 
       : st === 1 ? 'Solved, the hard way. Every wrong call cost real time; next time, let one more reading settle it before you commit.'
         : 'Fixed, but past the deadline: the escalation already happened. Replay it; the cause will be different.', st >= 2 ? 'proud' : 'thinking');
   return { solved: true, stars: st };
+}
+
+/** A right answer the evidence had not singled out: no completion, no XP, and the reading that would have settled it. */
+async function sentBack(t: Terminal, inv: Investigation): Promise<IncidentResult> {
+  const m = inv.missed;
+  void t.print('✓ right cause · ✗ not proven', 'err');
+  void t.block(h('div', { class: 'term-done' },
+    h('div', null, h('b', null, 'SENT BACK BY THE REVIEW BOARD')),
+    h('div', { class: 'dim' }, `${hm(inv.spent)} used · ${n(inv.notes.size, 'reading')} · ${n(inv.mistakes, 'wrong call')} · no XP`),
+    h('ul', { class: 'recap' },
+      h('li', null, ...rich(`**It was:** ${inv.cause.name}`)),
+      m ? h('li', null, ...rich(`**What would have proved it:** \`${key(m.ins.cmd, m.arg)}\`, ${m.ins.what}. It splits the causes your readings still allowed.`)) : null,
+      h('li', null, ...rich(`**Your path:** ${[...inv.notes.keys()].map((k) => `\`${k}\``).join(' → ') || 'straight to a diagnosis'}`)))), 'type', 1.6);
+  await t.say('Right answer, but the evidence did not single it out yet. A review board would send this back. Replay it: the root cause will be different, and this time let a reading settle it before you commit.', 'thinking');
+  return { solved: false, stars: 0 };
 }
 
 async function escalate(t: Terminal, inv: Investigation): Promise<IncidentResult> {
