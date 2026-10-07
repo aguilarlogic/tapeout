@@ -3,7 +3,7 @@
 import { clearDraft, loadDraft, saveDraft } from '../../state';
 import { h } from '../../ui/dom';
 import { editor, highlight } from '../../ui/editor';
-import { busyWhile, finishLab, goalItems, hintBox, labFrame, report, useSeed, variantButton } from '../../ui/labkit';
+import { busyWhile, finishLab, goalItems, hintBox, labFrame, modelNote, report, useSeed, variantButton } from '../../ui/labkit';
 import { rng } from '../../sim/harness';
 import { evaluate, type Evaluation } from './check';
 import { bmc, type BmcResult, type Cex } from './formal';
@@ -17,6 +17,8 @@ function cexTable(cex: Cex, clock: string): HTMLElement {
   const rows = sigs.map((s) => h('tr', null, h('th', null, s), ...(cex.trace.vals.get(s) ?? []).map((v, i) => h('td', { class: i >= cex.start && i <= cex.at ? 'hot' : '' }, (cex.trace.widths.get(s) ?? 1) > 1 ? v.toString(16) : String(v)))));
   return h('div', { class: 'cex-wrap' }, h('table', { class: 'cex' }, h('thead', null, head), h('tbody', null, ...rows)));
 }
+
+export const MODEL_NOTE = 'This simulator is 2-state: X and Z are not modelled, and registers power up at 0. Real simulators start registers at X, so a missing reset shows up as X there.';
 
 export function svaPage(id: string): HTMLElement {
   const level = findSvaLevel(id);
@@ -39,6 +41,7 @@ export function svaPage(id: string): HTMLElement {
   const brief = h('aside', { class: 'brief panel' },
     h('div', { class: 'tag' }, `SVA · ${level.concept}`),
     h('p', { class: 'dim small' }, level.ticket),
+    modelNote(MODEL_NOTE),
     h('div', { class: 'brief-body', html: inst.brief }),
     boss ? h('p', { class: 'dim small' }, 'Boss mission: no hints. Hidden bugs are checked on Submit.') : '',
     hintEl,

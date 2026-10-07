@@ -141,7 +141,7 @@ export const spfmLfm = (bs: FBlock[]) => {
 export const asilOf = (spfm: number, lfm: number) => (spfm >= 99 && lfm >= 90 ? 'D' : spfm >= 97 && lfm >= 80 ? 'C' : spfm >= 90 && lfm >= 60 ? 'B' : 'none');
 
 const fusaFmeda: ArchLevel = {
-  id: 'fusa-fmeda', title: 'FMEDA: SPFM, LFM and ASIL', concept: 'failure rates (FIT), residual and latent faults, single-point and latent fault metrics', xp: 170, lab: 'Safety', tier: 'guided',
+  id: 'fusa-fmeda', title: 'FMEDA: SPFM, LFM and ASIL', concept: 'failure rates (FIT), residual and latent faults, single-point and latent fault metrics', xp: 170, lab: 'Safety', tier: 'guided', model: 'Simplified FMEDA: each block has a single failure-mode split.',
   ticket: 'The assessor wants the hardware metrics for the brake controller. Fill the FMEDA table’s totals and say which ASIL it supports.',
   build: (r) => {
     const bs: FBlock[] = [];
@@ -182,7 +182,7 @@ const MECHS: Record<string, Mech[]> = {
 const FUSA_ORDER: [string, string][] = [['cpu', 'CPU core'], ['sram', 'SRAM'], ['bus', 'Bus fabric'], ['adc', 'ADC'], ['clk', 'Clock tree']];
 
 const fusaAsil: ArchLevel = {
-  id: 'fusa-asil', title: 'Choose safety mechanisms for an ASIL', concept: 'diagnostic coverage per block, cost of mechanisms, SPFM and LFM targets', xp: 200, lab: 'Safety', tier: 'guided',
+  id: 'fusa-asil', title: 'Choose safety mechanisms for an ASIL', concept: 'diagnostic coverage per block, cost of mechanisms, SPFM and LFM targets', xp: 200, lab: 'Safety', tier: 'guided', model: 'Simplified FMEDA: each block has a single failure-mode split.',
   ticket: 'The chip must reach an ASIL target. Every block can take a different mechanism, and silicon is not free: find the cheapest set that meets both metrics.',
   build: (r) => {
     let blocks: { key: string; label: string; fit: number; safe: number }[] = [], T = { spfm: 97, lfm: 80, name: 'C' }, best: { pick: string[]; cost: number } | undefined;

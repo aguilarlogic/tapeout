@@ -3,9 +3,11 @@ import { mentorSay } from '../../os/mentor';
 import { clearDraft, loadDraft, saveDraft } from '../../state';
 import { h } from '../../ui/dom';
 import { editor, highlightC, highlightPy } from '../../ui/editor';
-import { finishLab, hintBox, labFrame, useSeed, variantButton } from '../../ui/labkit';
+import { finishLab, hintBox, labFrame, modelNote, useSeed, variantButton } from '../../ui/labkit';
 import { findCodeLevel, instanceFor } from './levels';
 import { runCode, type CodeReport } from './run';
+
+export const MODEL_NOTE = 'C here behaves like 64-bit Linux with GCC: int is 32 bits, long is 64, char is signed. Undefined behaviour stops the program with a sanitizer-style error instead of doing something unpredictable.';
 
 export function codePage(id: string): HTMLElement {
   const level = findCodeLevel(id);
@@ -28,6 +30,7 @@ export function codePage(id: string): HTMLElement {
   const brief = h('aside', { class: 'brief panel' },
     h('div', { class: 'tag' }, `${langName} · ${level.concept}`),
     h('p', { class: 'dim small' }, level.ticket),
+    modelNote(MODEL_NOTE),
     h('div', { class: 'brief-body', html: inst.brief }),
     tierNote ? h('p', { class: 'dim small' }, tierNote) : '',
     hintEl,

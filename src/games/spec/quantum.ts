@@ -86,7 +86,7 @@ const qGates: ArchLevel = {
 
 // ============================================================ coherence budget
 const qCoherence: ArchLevel = {
-  id: 'q-coherence', title: 'Coherence and gate budget', concept: 'T1, T2, pure dephasing, gate error from decoherence, circuit depth', xp: 150, lab: 'Quantum', tier: 'guided',
+  id: 'q-coherence', title: 'Coherence and gate budget', concept: 'T1, T2, pure dephasing, gate error from decoherence, circuit depth', xp: 150, lab: 'Quantum', tier: 'guided', model: 'Leakage and DRAG scalings in this lab are illustrative, not physical laws.',
   ticket: 'The qubit forgets. The algorithm team wants to know how many gates fit before decoherence has eaten 1% of the fidelity.',
   build: (r) => {
     const T1 = pick(r, [20, 50, 100, 150]);
@@ -116,7 +116,7 @@ const qCoherence: ArchLevel = {
 
 // ============================================================ pulse calibration
 const qPulse: ArchLevel = {
-  id: 'qc-pulse', title: 'Calibrate a π pulse', concept: 'Rabi frequency, pulse area, leakage to |2⟩, DRAG, decoherence during the gate', xp: 190, lab: 'Quantum', tier: 'guided',
+  id: 'qc-pulse', title: 'Calibrate a π pulse', concept: 'Rabi frequency, pulse area, leakage to |2⟩, DRAG, decoherence during the gate', xp: 190, lab: 'Quantum', tier: 'guided', model: 'Leakage and DRAG scalings in this lab are illustrative, not physical laws.',
   ticket: 'The control electronics can drive the qubit as hard as you like. Fast pulses beat decoherence but leak to the second level; slow ones leak nothing and decay. Find the sweet spot, and calibrate the area.',
   build: (r) => {
     const T1 = pick(r, [30, 50, 100]), T2 = Math.round(T1 * pick(r, [0.8, 1.2]));

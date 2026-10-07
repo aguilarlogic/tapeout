@@ -150,6 +150,7 @@ export const jitter = (j: Jit, fref: number, bw: number) => {
 const JIT_FREFS = [25, 50, 100];
 const pllJitter: ArchLevel = {
   id: 'pll-jitter', title: 'Minimize PLL jitter', concept: 'reference noise vs VCO noise, optimum bandwidth, reference frequency choice', xp: 190, lab: 'Signals', tier: 'guided',
+  model: 'Noise models are idealised (white reference noise, 1/f² VCO noise).',
   ticket: 'The serial link needs a clock with less than a given RMS jitter. Pick the reference frequency and the loop bandwidth: too narrow and the VCO\'s own noise wanders through, too wide and the reference and charge-pump noise pass.',
   build: (r) => {
     let j: Jit = { fout: 2400, a: 0.05, b: 7000 }, best: { fref: number; bw: number; tot: number } | undefined, spec = 0;
