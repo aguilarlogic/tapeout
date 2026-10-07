@@ -249,7 +249,9 @@ export const git: Utility = (ctx, args) => {
     const dir = ctx.sh.abs(rest.find((a) => !a.startsWith('-')) ?? '.');
     ctx.fs.mkdir(dir, true);
     ctx.fs.mkdir(`${dir}/.git`, true);
+    // Newer Git setups name the first branch `main` (init.defaultBranch); older ones said `master`. The lab uses `main`.
     repos(ctx).set(dir, { root: dir, commits: new Map(), branches: new Map(), head: { branch: 'main' }, index: {}, tags: new Map(), stash: [], counter: 0, user: { name: 'User', email: 'user@fab' } });
+    ctx.err("hint: Newer Git setups name the first branch 'main' (init.defaultBranch).\n");
     ctx.out(`Initialized empty Git repository in ${dir}/.git/\n`);
     return 0;
   }

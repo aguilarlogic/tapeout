@@ -8,7 +8,7 @@ export const dv: Lesson = {
   concept: 'testbenches, self-checking, debug',
   xp: 70,
   steps: [
-    say('Here is a number that surprises people: on a modern chip, **verification is more than half the work**. There are often two verification engineers for every designer. Why? A bug in software is a patch. A bug in silicon is a new mask set that costs millions and takes months.'),
+    say('Here is a number that surprises people: on a modern chip, **verification is more than half the work**. On average there is about one verification engineer per designer, and on processor projects up to several per designer. Why? A bug in software is a patch. A bug in silicon is a new mask set that costs millions and takes months.'),
     say('A testbench is code that drives the design (the **DUT**, device under test) and checks what comes out. A good testbench checks itself; you should never have to eyeball waveforms to know if a test passed.'),
     art(`
   ┌───────────── testbench ──────────────┐
