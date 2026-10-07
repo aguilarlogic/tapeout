@@ -30,6 +30,7 @@ export const clang: Lesson = {
   reg ^=  (1u << n);        // toggle bit n
   bit = (reg >> n) & 1u;    // test bit n
   field = (reg >> 4) & 0xF; // extract bits [7:4]`),
+    say('Shifts need care. RISC-V and Verilog mask the shift amount to the low 5 bits on 32-bit values, so a shift by 33 is a shift by 1. **C does not mask**: shifting by a negative amount, or by the width of the type or more, is undefined behaviour, and so is shifting a negative value left. Hardware is forgiving here; C is not.'),
     gen((r) => {
       const v = between(r, 0x10, 0xef);
       const s = between(r, 0, 7);
