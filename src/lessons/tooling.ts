@@ -30,7 +30,13 @@ export const shell: Lesson = {
    .        any character          ^ / $    start / end of line
    [0-9]    one digit              [a-fA-F] one of these letters
    *        0 or more of previous  +        1 or more        ?  0 or 1
-   \\d \\w \\s  digit, word char, space  (a|b)    a or b          {2,4}  2 to 4 times`),
+   (a|b)    a or b                 {2,4}    2 to 4 times       (grep -E, or \\( \\| \\{ in plain grep)
+
+   Three dialects, so know which tool you are talking to:
+   portable (POSIX)         [0-9]   [[:digit:]]   [[:alnum:]_]   [[:space:]]
+   GNU grep/sed extras      \\w  \\s  \\b  \\<  \\>
+   Perl-style only          \\d   lookahead (?=...) (?!...)
+                            (Python re, JavaScript, grep -P; plain grep sees \\d as a literal d)`),
     ask('Write a regular expression that matches hex numbers written like `0x1F`, `0xdeadBEEF` or `0x0` (the 0x prefix plus at least one hex digit).', rx('0x[0-9a-fA-F]+', ['0x1F', '0xdeadBEEF', '0x0', 'addr=0x40'], ['0x', '1F', '0xZZ']), 'One answer: `0x[0-9a-fA-F]+`. The + requires at least one digit; the character class lists every legal hex digit. I test your pattern against real examples, so any correct regex passes.', 'Literal 0x, then a character class of hex digits, then +.'),
     ask('Write a regex that matches lines that **start** with `UVM_ERROR` or `UVM_FATAL`.', rx('^UVM_(ERROR|FATAL)', ['UVM_ERROR @ 100ns: mismatch', 'UVM_FATAL @ 5ns: timeout'], ['UVM_INFO @ 1ns', 'note: UVM_ERROR was expected', 'UVM_WARNING x']), 'One answer: `^UVM_(ERROR|FATAL)`. The ^ anchors it to the start of the line, and (a|b) is alternation.', 'Anchor with ^, then UVM_ and a group with |.'),
     mc('You run a job on the compute farm and log out. How do you keep long jobs alive and find their output later?', ['Run them with a trailing `&` in your shell', 'Submit them through the farm scheduler', 'Leave the SSH session open all night', 'Email the logs to yourself at the end'], 1, 'Use LSF `bsub` or Slurm `sbatch` (or `nohup`/`tmux` on a single machine), with output redirected to a log file. A plain `&` job usually dies when you log out. Big companies run thousands of simulations at once through job schedulers. `bjobs`/`squeue` show what is running.'),

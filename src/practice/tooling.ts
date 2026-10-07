@@ -66,7 +66,7 @@ export const shellPractice = practice('practice-shell', 'Shell Drills', 'regex, 
   (r, d) => {
     const [, task, canon, pos, neg, method, [pq, pr, pw]] = pick(r, REGEX_TASKS.filter((x) => x[0] === d));
     const a = rx(canon, [...pos], [...neg]);
-    return walk(ask(`Write a regular expression that matches ${task}.\nMust match: ${pos.map((x) => `\`${x}\``).join(', ')}\nMust not match: ${neg.map((x) => `\`${x}\``).join(', ')}`, a, `One answer: \`${canon}\`. I test yours against every example, so any correct pattern passes.`, 'Anchors: ^ start, $ end. Classes: [0-9], \\w, \\d. Repeats: + one or more, * zero or more.'),
+    return walk(ask(`Write a regular expression${/\\d|\(\?[=!]/.test(canon) ? " (Python `re` syntax; grep -P is the same)" : ""} that matches ${task}.\nMust match: ${pos.map((x) => `\`${x}\``).join(', ')}\nMust not match: ${neg.map((x) => `\`${x}\``).join(', ')}`, a, `One answer: \`${canon}\`. I test yours against every example, so any correct pattern passes.`, 'Anchors: ^ start, $ end. Classes: [0-9] works in every tool; \\w and \\d are Perl-style shorthands (Python re, grep -P). Repeats: + one or more, * zero or more.'),
       `regex: ${method}`, REGEX_IDEA,
       'Look at what the "must match" lines share, and what the "must not match" lines lack: that difference is exactly what your pattern has to demand.',
       choice(pq, pr, pw),
