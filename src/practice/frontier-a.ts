@@ -4,7 +4,7 @@ import { hexa, qty } from '../lessons/answers';
 import { calc, choice, count, show, walk } from '../lessons/teach';
 import { ask, gen, mc, pick, say, between } from '../lessons/types';
 import { boss, practice, tier, type PracticeSet } from './types';
-import { sig } from './util';
+import { concept, sig, type ConceptQ } from './util';
 
 const hard = (set: PracticeSet, i: number) => gen((r) => ({ ...set.gens[i](r, 3), teach: undefined }));
 const bossOf = (set: PracticeSet, id: string, title: string, concept: string, xp: number, intro: string, picks: number[], extra: ReturnType<typeof mc>[]) =>
@@ -133,7 +133,25 @@ export const libcharBoss = bossOf(libcharPractice, 'boss-libchar', 'Signing Off 
 
 // ------------------------------------------------------------------ I/O and ESD
 
-export const ioesdPractice = practice('practice-io-esd', 'I/O & ESD Drills', 'HBM currents, clamp sizing, supply bounce, termination', [
+// ESD models: HBM against CDM. Right answers are kept short so their length gives nothing away.
+const ESD_EASY: ConceptQ[] = [
+  ['Which ESD model is a person touching a pin?', 'The human-body model (HBM)', ['The charged-device model (CDM)', 'The latch-up injection test', 'The system-level contact gun'], 'telling the ESD models apart', 'HBM stands in for a finger: a 100 pF capacitor through 1.5 kΩ. CDM is the chip itself charging up and discharging to a grounded tool.', ['What charges up in the charged-device model?', 'The chip and its package', ['A person standing near the tool', 'The test board only', 'The supply rail']]],
+  ['Which model is the chip charging itself in handling and discharging into a grounded tool?', 'The charged-device model (CDM)', ['The human-body model (HBM)', 'The latch-up injection test', 'The system-level contact gun'], 'telling the ESD models apart', 'In CDM the charge sits on the chip, not on a person, and leaves through a single pin in about a nanosecond.', ['Where does the CDM charge come from?', 'The device itself', ['A finger', 'The supply', 'The clock']]],
+  ['A thin-oxide input fails only in the automated handler. Which model fits?', 'CDM', ['HBM', 'Latch-up injection', 'System-level gun'], 'matching a failure to a model', 'Handlers charge packages; the fast, high-current CDM pulse breaks gate oxides inside the chip, away from the pad diodes.', ['What does a CDM pulse stress most?', 'Gate oxides inside the chip', ['Only the pad diodes', 'The package leads only', 'The board']]],
+  ['Which test is a 100 pF capacitor through 1.5 kΩ?', 'HBM', ['CDM', 'Latch-up injection', 'System-level gun'], 'recognising the HBM circuit', 'The model is just an RC discharge. Its time constant is 150 ns and a 2 kV zap peaks at about 1.3 A.', ['What is the HBM time constant?', '150 ns', ['1 ns', '15 µs', '1.5 ms']]],
+  ['Which pair of targets is a typical design aim?', '1 kV HBM and 250 V CDM', ['4 kV HBM and 2 kV CDM', '250 V HBM and 1 kV CDM', '100 V HBM and 100 V CDM'], 'knowing the usual levels', 'CDM targets are lower in volts than HBM because the pulse is so much faster and more concentrated.', ['Is the CDM voltage target higher or lower than HBM?', 'Lower', ['Higher', 'The same', 'There is no CDM target']]],
+  ['Which of these is a destructive qualification test rather than a production screen?', 'CDM', ['A leakage measurement', 'An IDDQ measurement', 'A continuity test'], 'qualification against screening', 'Qualification zaps sample parts until they fail or pass. Production uses non-destructive screens such as leakage and IDDQ.', ['Can you zap every shipped part to qualify it?', 'No: it damages the part', ['Yes, it is harmless', 'Only at 25 °C', 'Only at CDM']]],
+];
+const ESD_HARD: ConceptQ[] = [
+  ['The HBM pulse lasts about 150 ns and the CDM pulse about 1 ns. Which is a worse threat to a gate oxide, and why?', 'CDM: faster and several amps', ['HBM: it lasts much longer', 'Neither: oxides cannot be damaged', 'HBM: it has the higher voltage'], 'comparing the pulses', 'The oxide breaks when the voltage across it climbs faster than the clamp responds. A sub-nanosecond pulse of several amps beats the clamp\'s turn-on time.', ['How many times shorter is a 1 ns pulse than a 150 ns one?', '150 times', ['15 times', '1500 times', '1.5 times']]],
+  ['A 2 kV HBM zap peaks near 1.3 A in 150 ns. Which statement about CDM is right?', 'Peak is several amps, in about 1 ns', ['Peak is about 1.3 A, in about 150 ns', 'Peak is milliamps, in about 150 ns', 'Peak is about 1.3 A, in about 1 ns'], 'sizing the CDM pulse', 'CDM charge is small but dumps in a nanosecond, so the current is large and brief.', ['Which quantity differs most between the models?', 'Pulse duration', ['Nothing', 'The resistor in series', 'The temperature']]],
+  ['Why does CDM stress oxides inside the chip more than the pad diodes?', 'The charge crosses internal gates fast', ['The pad diodes cannot conduct', 'The pulse is much slower than HBM', 'CDM only occurs with the supply on'], 'where the CDM current goes', 'The charge stored across the whole die finds a path through whatever the pin connects to, and a thin gate oxide in an input stage sees it first.', ['What is at the end of a CDM discharge path?', 'An input gate oxide', ['The battery', 'The crystal', 'The heat sink']]],
+  ['Why can a very high-speed I/O accept a lower CDM level, about 125 V?', 'Protection capacitance would slow the link', ['It needs no ESD protection', 'CDM no longer happens', 'The gate oxide is thicker'], 'balancing ESD against speed', 'Big clamps add pad capacitance, which closes the eye. With good factory ESD control, a lower level is handled safely.', ['What does more clamp width add at the pad?', 'Capacitance', ['Resistance', 'Inductance only', 'Nothing']]],
+  ['What does latch-up qualification do?', 'Injects about 100 mA per pin and checks no latch', ['Zaps every pin at 8 kV', 'Heats the chip until it fails', 'Measures the supply ripple'], 'what latch-up testing does', 'It injects roughly ±100 mA into each pin and overdrives the supplies to 1.5 times their maximum, hot. The chip must not latch.', ['At what supply level is it run?', '1.5 times the maximum', ['Half the nominal', 'Exactly nominal', 'Zero']]],
+  ['Factories with basic ESD control can handle parts down to about 500 V HBM. What follows?', 'Designs need not chase 2 kV for every pin', ['No ESD protection is needed', 'CDM is irrelevant', 'Pins need 8 kV'], 'target levels', 'Handling control sets the minimum robustness required, so the design target can be moderate (1 kV HBM) and high-speed pins can accept less.', ['Which sets the minimum robustness: handling control or the zap voltage?', 'Handling control', ['The zap voltage alone', 'Neither', 'The package colour']]],
+];
+
+export const ioesdPractice = practice('practice-io-esd', 'I/O & ESD Drills', 'HBM and CDM, clamp sizing, supply bounce, termination', [
   (r, d) => {
     const v = pick(r, [250, 500, 750, 1000, 1500, 2000, 3000, 4000, 6000, 8000]);
     if (d === 1) {
@@ -181,6 +199,7 @@ export const ioesdPractice = practice('practice-io-esd', 'I/O & ESD Drills', 'HB
       'source termination', 'A reflection from the far end is absorbed if the source impedance matches the line. The driver already has some output resistance, so the series resistor only makes up the difference to the line impedance.',
       calc('Rs = Z0 − Rout:', `${z0} − ${ro}`, rs, 'Ω', String(rs), 0.02));
   },
+  (r, d) => concept(r, d === 1 ? ESD_EASY : ESD_HARD, (right) => `${right}. HBM is a person touching a pin: slow (about 150 ns) and aimed at the pad diodes. CDM is the chip discharging itself: under a nanosecond, several amps, aimed at gate oxides.`),
 ]);
 
 export const ioesdBoss = bossOf(ioesdPractice, 'boss-io-esd', 'The Pad Ring Review', 'ESD current, clamp size, supply bounce and termination', 200,

@@ -430,6 +430,26 @@ export const processBoss = boss({
 
 // ------------------------------------------------------------------ packaging
 
+/** In-system junction temperature from the case-top temperature: Tj ~ T_top + Psi_JT x P (theta_JA is for comparing packages). */
+const psiJt = (r: () => number, d: number) => {
+  const ttop = pick(r, [70, 78, 85, 92]), psi = pick(r, [0.3, 0.5, 0.8]), p = pick(r, [8, 12, 20]), tj = ttop + psi * p;
+  const idea = 'Datasheet θja is measured on a standard test board, so it is for comparing packages, not for predicting your product. In a real system, measure the temperature on top of the package and add the junction-to-top characterisation parameter Ψjt times the power: Tj ≈ T_top + Ψjt × P. Ψjt is small because little heat leaves through the top, so the case-top reading is already close to the junction.';
+  if (d === 1) return walk(ask(`In a running system the package-top temperature is measured: T_top = ${ttop} °C, Ψ_JT = ${psi} °C/W, P = ${p} W. What is the junction temperature, in °C?`, qty(tj, '°C', 0.01, sig(tj)), `Tj ≈ T_top + Ψ_JT × P = ${ttop} + ${psi} × ${p} = ${sig(tj)} °C.`, 'Add Ψ_JT × P to the top temperature.'),
+    'junction temperature from the case top', idea,
+    calc('The rise above the case top = Ψ_JT × P, in °C:', `${psi} × ${p}`, psi * p, '°C', sig(psi * p, 4), 0.005),
+    calc('Tj = T_top + rise:', `${ttop} + ${sig(psi * p, 4)}`, tj, '°C', sig(tj), 0.01));
+  const tmax = pick(r, [105, 125, 150]);
+  if (d === 2) return walk(ask(`The case top reads ${ttop} °C at ${p} W and Ψ_JT is ${psi} °C/W. How many °C of headroom are left to a ${tmax} °C junction limit?`, qty(tmax - tj, '°C', 0.02, sig(tmax - tj)), `Tj ≈ ${ttop} + ${psi} × ${p} = ${sig(tj)} °C; ${tmax} - ${sig(tj)} = ${sig(tmax - tj)} °C of headroom.`, 'Estimate Tj first, then subtract it from the limit.'),
+    'headroom to the junction limit', idea,
+    calc('Tj = T_top + Ψ_JT × P, in °C:', `${ttop} + ${psi} × ${p}`, tj, '°C', sig(tj), 0.01),
+    calc('Headroom = limit - Tj, in °C:', `${tmax} - ${sig(tj, 4)}`, tmax - tj, '°C', sig(tmax - tj), 0.02));
+  const pmax = (tmax - ttop) / psi;
+  return walk(ask(`With the case top held at ${ttop} °C and Ψ_JT = ${psi} °C/W, how much power, in W, takes the junction to its ${tmax} °C limit?`, qty(pmax, 'W', 0.02, sig(pmax)), `(${tmax} - ${ttop}) / ${psi} = ${sig(pmax)} W.`, 'Rearrange Tj = T_top + Ψ_JT × P for P.'),
+    'power that reaches the limit', idea,
+    calc('Allowed rise = limit - T_top, in °C:', `${tmax} - ${ttop}`, tmax - ttop, '°C', String(tmax - ttop), 0.001),
+    calc('P = rise ÷ Ψ_JT, in W:', `${tmax - ttop} / ${psi}`, pmax, 'W', sig(pmax), 0.02));
+};
+
 export const pkgPractice = practice('practice-pkg', 'Packaging Drills', 'chiplet yield, bump density, thermal resistance, HBM bandwidth, warpage', [
   (r, d) => {
     const big = pick(r, [400, 600, 800]), n = pick(r, [2, 4]), yb = yieldOf(big, 0.1), ys = yieldOf(big / n, 0.1);
@@ -457,7 +477,7 @@ export const pkgPractice = practice('practice-pkg', 'Packaging Drills', 'chiplet
   },
   (r, d) => {
     const ta = pick(r, [25, 35, 45]), p = pick(r, [15, 50, 150]);
-    const idea = 'Heat flows from the chip to the air through a chain of thermal resistances θ (in °C per watt), like current through resistors in series. The temperature rise is power × total θ, and the junction (chip) temperature is the ambient temperature plus that rise: Tj = Ta + P × θtotal. Resistances in series add.';
+    const idea = 'Heat flows from the chip to the air through a chain of thermal resistances θ (in °C per watt), like current through resistors in series. The temperature rise is power × total θ, and the junction (chip) temperature is the ambient temperature plus that rise: Tj = Ta + P × θtotal. Resistances in series add. (Datasheet θja is measured on a standard test board, so use it to compare packages; real designs model the path θjc + θcs + θsa.)';
     if (d === 1) {
       const th = p === 15 ? pick(r, [2, 3]) : p === 50 ? pick(r, [0.5, 0.8]) : pick(r, [0.2, 0.3]), tj = ta + p * th;
       return walk(ask(`Ambient ${ta} °C, the chip burns ${p} W, θja = ${th} °C/W. Junction temperature, in °C?`, qty(tj, '°C', 0.02, sig(tj)), `${ta} + ${p} × ${th} = ${sig(tj)} °C.`, 'Tj = Ta + P·θ.'),
@@ -480,6 +500,7 @@ export const pkgPractice = practice('practice-pkg', 'Packaging Drills', 'chiplet
       calc('The total θ allowed = rise ÷ power, in °C/W:', `${tmax - ta} / ${p}`, (tmax - ta) / p, '', sig((tmax - ta) / p, 4), 0.005),
       calc('θsa = total minus θjc minus θcs:', `${sig((tmax - ta) / p, 4)} - ${jc} - ${cs}`, sa, '', sig(sa), 0.03));
   },
+  psiJt,
   (r, d) => {
     const gbps = pick(r, [3.2, 6.4, 9.6]), bw = (1024 * gbps) / 8;
     const idea = 'HBM is very wide rather than very fast: each stack has a 1024-bit interface at a modest rate per pin. Bandwidth in GB/s = (number of pins × Gb/s per pin) ÷ 8, since 8 bits make a byte. Several stacks add up.';
@@ -661,7 +682,7 @@ export const atePractice = practice('practice-ate', 'Production Test Drills', 't
   (r, d) => {
     const y = pick(r, [0.7, 0.8, 0.9]), fc = tier(d, 0.95, pick(r, [0.98, 0.99]), pick(r, [0.995, 0.999])), dl = (1 - y ** (1 - fc)) * 1e6;
     const pw = y ** (1 - fc);
-    return walk(ask(`Yield is ${y * 100}% and fault coverage is ${fc * 100}%. Estimated DPPM (Williams-Brown: DL = 1 - Y^(1 - FC))?`, qty(dl, '', 0.03, String(Math.round(dl))), `1 - ${y}^${sig(1 - fc)} = ${sig(dl / 1e6)} → ${Math.round(dl)} DPPM. Cars want single digits, so coverage has to be very close to 100%.`, 'Plug into the formula and scale to parts per million.'),
+    return walk(ask(`Yield is ${y * 100}% and fault coverage is ${fc * 100}%. Estimated DPPM (Williams-Brown: DL = 1 - Y^(1 - FC))?`, qty(dl, '', 0.03, String(Math.round(dl))), `1 - ${y}^${sig(1 - fc)} = ${sig(dl / 1e6)} → ${Math.round(dl)} DPPM. Automotive customers run zero-defect programmes, far below 1 DPPM, so coverage has to be very close to 100%.`, 'Plug into the formula and scale to parts per million.'),
       'defect level (Williams-Brown)', 'Some defective parts pass the test because the test does not catch every fault. The Williams-Brown model estimates the fraction that escape: DL = 1 - Y^(1 - FC), with yield Y and fault coverage FC both as fractions. Multiply by a million for defective parts per million (DPPM). Because the answer is tiny, keep several decimals in the middle step.',
       calc('The exponent 1 - FC:', `1 - ${fc}`, 1 - fc, '', sig(1 - fc, 4), 0.005),
       calc('Y to that power (give 6 decimals):', `${y}^${sig(1 - fc, 4)}`, pw, '', pw.toFixed(6), 0.00001),
@@ -717,8 +738,8 @@ export const testBoss = boss({
   xp: 220,
   steps: [
     say('Boss fight, {name}. A car maker returned a failed part and wants a quality plan. Finance also wants test cost down 30%. Exam rules.', 'concerned'),
-    { t: 'gen', make: () => { const dl = (1 - 0.85 ** (1 - 0.98)) * 1e6; return ask('Yield 85%, fault coverage 98%. DPPM?', qty(dl, '', 0.03, String(Math.round(dl))), `1 - 0.85^0.02 = ${Math.round(dl)} DPPM. Automotive wants under 10.`); } },
-    { t: 'gen', make: () => { const fc = 1 - Math.log(1 - 10e-6) / Math.log(0.85); return ask('What fault coverage gives 10 DPPM at 85% yield, in %?', qty(fc * 100, '%', 0.00003, sig(fc * 100, 6)), `1 - FC = ln(1 - 1e-5) / ln(0.85) = ${sig(1 - fc)}, so FC = ${sig(fc * 100, 6)}%. Nearly perfect: add cell-aware and transition-fault patterns.`); } },
+    { t: 'gen', make: () => { const dl = (1 - 0.85 ** (1 - 0.98)) * 1e6; return ask('Yield 85%, fault coverage 98%. DPPM?', qty(dl, '', 0.03, String(Math.round(dl))), `1 - 0.85^0.02 = ${Math.round(dl)} DPPM. Automotive wants far below 1.`); } },
+    { t: 'gen', make: () => { const fc = 1 - Math.log(1 - 1e-6) / Math.log(0.85); return ask('What fault coverage gives 1 DPPM at 85% yield, in %?', qty(fc * 100, '%', 5e-7, sig(fc * 100, 7)), `Invert Williams-Brown, DL = 1 - Y^(1 - FC): 1 - FC = ln(1 - DL) / ln(Y) = ln(1 - 1e-6) / ln(0.85) = (-1.0e-6) / (-0.1625) = ${sig(1 - fc)}, so FC = ${sig(fc * 100, 7)}%. Coverage alone cannot reach this; escapes are attacked with outlier screening (part-average testing), multi-temperature test, cell-aware patterns, burn-in and system-level test.`, 'FC = 1 - ln(1 - DL) / ln(Y), with DL = 1e-6.'); } },
     mc('The returned part passed every test at 25 °C but failed in a hot engine bay. What test change catches this?', ['Test hot (and cold) with at-speed patterns', 'Longer tests at room temperature, to catch any slow defect that shows up late', 'A lower test voltage only, to stress the part harder', 'A visual inspection of every part before it is shipped'], 0, 'Automotive parts are tested at multiple temperatures because defects often show up only at the extremes.'),
     { t: 'gen', make: () => ask('Test takes 2 s, tester time costs $0.04/s, 4 sites. Cost per die, in cents?', qty(2, '', 0.02, '2'), '2 × 0.04 / 4 = $0.02 = 2¢.') },
     { t: 'gen', make: () => ask('Moving to 8 sites (same 2 s), cost per die in cents?', qty(1, '', 0.02, '1'), '2 × 0.04 / 8 = 1¢: a 50% cut without touching quality.') },

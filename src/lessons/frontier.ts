@@ -78,7 +78,21 @@ export const ioesd: Lesson = {
   xp: 110,
   steps: [
     say('**The role.** Every signal that leaves a chip passes through an **I/O cell**: a driver, a receiver, level shifting, termination and, above all, **ESD protection**. I/O engineers work at foundries and IP companies (Synopsys, Cadence, Alphawave) and on every product that touches a pin. They sit between the analog, digital and package teams.'),
-    say('**Electrostatic discharge** is a few kilovolts from a human finger or a charged machine. The **human-body model (HBM)** is a 100 pF capacitor discharged through a 1.5 kΩ resistor. A 2 kV zap peaks at a little over an amp, for about 150 ns: more than enough to blow through a thin gate oxide.'),
+    say('**Electrostatic discharge** is a few kilovolts from a human finger (the **human-body model, HBM**) or from the chip itself charging up in handling and discharging into a grounded tool (the **charged-device model, CDM**). The HBM is a 100 pF capacitor discharged through a 1.5 kΩ resistor. A 2 kV zap peaks at a little over an amp, for about 150 ns: more than enough to blow through a thin gate oxide. CDM pulses are far faster (under a nanosecond) and peak at several amperes, so they stress gate oxides inside the chip rather than the pad diodes.'),
+    say('Designs usually aim for 1 kV HBM and 250 V CDM. Very high-speed I/O may accept less (about 125 V CDM), because factories with basic ESD control can safely handle parts down to about 500 V HBM. Both are destructive qualification tests on sample parts, not something every chip goes through in production.'),
+    gen((r) => {
+      // Option order is fixed and the scenario picks the answer, so the right label is never the longest by design.
+      const opts = ['Human-body model (HBM)', 'Charged-device model (CDM)', 'Latch-up current injection', 'System-level contact gun'];
+      const [q, a, why] = pick(r, [
+        ['Which model catches a thin-oxide input that fails only in automated test handling?', 1, 'The chip charged itself in the handler and discharged through one input: that is CDM, and it hits oxides, not pad diodes.'],
+        ['A person touching a pin in assembly is best modelled by which test?', 0, 'A finger is the human-body model: 100 pF through 1.5 kΩ, a slow pulse of about 150 ns.'],
+        ['Which pulse lasts under a nanosecond and peaks at several amperes?', 1, 'CDM: the whole package discharges at once, so it is far faster than HBM (about 150 ns) and punishes thin oxides.'],
+        ['Which pulse is a 100 pF capacitor discharged through 1.5 kΩ?', 0, 'That is the HBM circuit. Its time constant is 150 ns.'],
+        ['Which test checks that a parasitic thyristor in the chip does not turn on and hold the supply high?', 2, 'Latch-up qualification: inject current into each pin and overdrive the supplies, and the chip must not latch.'],
+        ['Which test is run on the finished product, through its connector, and not on the bare chip?', 3, 'The system-level gun strikes the product as the user would. Chip-level HBM and CDM do not replace it.'],
+      ] as const);
+      return mc(q, opts, a, why);
+    }),
     gen((r) => {
       const v = pick(r, [1000, 2000, 4000]);
       const i = v / 1500;
@@ -95,6 +109,7 @@ export const ioesd: Lesson = {
       const w = (i * 1000) / j;
       return ask(`A clamp device carries ${j} mA per µm of width during an HBM pulse. To pass ${i} A, how wide must it be, in µm?`, qty(w, 'µm', 0.03, sig(w)), `${i * 1000} mA ÷ ${j} mA/µm = ${sig(w)} µm. This is why ESD devices are huge: often hundreds of microns, folded into fingers around the pad ring.`, 'Current divided by current per micron.');
     }),
+    say('**Latch-up** is the other way a pin kills a chip: a zap or an undershoot fires the parasitic thyristor between the wells and the supply sticks high until power is cycled. Latch-up qualification injects about ±100 mA into each pin and overdrives the supplies to 1.5× their maximum at the highest operating temperature; the chip must not latch.'),
     say('Fast drivers cause **simultaneous switching noise (SSN)**. When many outputs switch at once, the current in the package\'s supply inductance changes quickly, and the supply bounces by **V = L · di/dt**. Slew-rate control and more power/ground pins are the cures.'),
     gen((r) => {
       const n = pick(r, [8, 16, 32]), l = pick(r, [1, 2, 4]), di = pick(r, [10, 20]), tr = pick(r, [1, 2]);
@@ -104,7 +119,7 @@ export const ioesd: Lesson = {
     mc('Why does a **level shifter** sit in the I/O cell?', ['To make the pin slower, so that the edge rate stays within spec', 'The core runs at a low voltage, while the pins run at 1.8-3.3 V', 'To add ESD protection, which is done by the level shifter itself', 'To reduce the package pins, by sharing one shifter between pads'], 1, 'A level shifter translates signals between domains without leaving the thick-oxide devices. A core signal cannot drive a 3.3 V gate, and a 3.3 V signal would destroy a core transistor. Shifters have the right oxide thickness on each side.'),
     mc('What is the main danger of a **floating** or bad power sequence through the I/O ring?', ['None: the I/O ring tolerates any order of the supplies at all', 'Current through ESD diodes into an unpowered domain', 'The clock stops, since the PLL loses its reference at power-up', 'The pin becomes an input, whatever it was configured to be before'], 1, 'It is a latch-up risk or backpowering: ESD structures conduct when a pin is driven above its rail. A pin driven while its supply is off forward-biases its protection diode. Real chips specify power-up order and often include power-on-control cells.'),
   ],
-  recap: ['HBM: 100 pF through 1.5 kΩ; 2 kV peaks near 1.3 A.', 'Protection = diodes + a rail clamp; width from current per µm.', 'SSN: V = L · di/dt; slow the edges, add supply pins.', 'Level shifters join voltage domains.', 'Never drive a pin above its rail while the chip is off.'],
+  recap: ['HBM: 100 pF through 1.5 kΩ; 2 kV peaks near 1.3 A in about 150 ns. CDM is under a nanosecond and several amps, and stresses oxides.', 'Usual targets: 1 kV HBM, 250 V CDM. Latch-up: ±100 mA per pin, supplies at 1.5× max, hot.', 'Protection = diodes + a rail clamp; width from current per µm.', 'SSN: V = L · di/dt; slow the edges, add supply pins.', 'Level shifters join voltage domains.', 'Never drive a pin above its rail while the chip is off.'],
 };
 
 export const socint: Lesson = {
@@ -282,7 +297,7 @@ export const emerging: Lesson = {
   concept: 'subthreshold swing, nanosheets and CFETs, 2D materials, spintronics',
   xp: 100,
   steps: [
-    say('**The role.** Silicon scaling is slowing and the industry is lining up what comes next: gate-all-around nanosheets, stacked complementary FETs (CFETs), 2D semiconductors, new memories (MRAM, RRAM, ferroelectric), and backside power. Device engineers and researchers at imec, TSMC, Intel, Samsung, universities and national labs work on these; process-integration and TCAD roles are the entry points.'),
+    say('**The role.** Silicon scaling now leans on new device and wiring structures. Gate-all-around nanosheet transistors and backside power delivery are in volume production at the 2 nm class (one foundry pairs them in the same node, another adds backside power a node later). Next on the roadmap are stacked complementary FETs (CFETs, expected in the 2030s), 2D-material channels, and new memories (MRAM, RRAM, ferroelectric). Node names such as "2 nm", "18A" or "A16" are marketing labels: no feature on the chip is 2 nm long. Device engineers and researchers at imec, TSMC, Intel, Samsung, universities and national labs work on these; process-integration and TCAD roles are the entry points.'),
     say('A transistor turns off as the gate voltage drops below threshold, and the current falls exponentially: the **subthreshold swing (SS)** is how many millivolts it takes to cut the current by 10×. Thermionic physics limits it to **60 mV per decade at room temperature**.'),
     gen((r) => {
       const vt = pick(r, [300, 400, 500]), ss = pick(r, [60, 70, 80]);
