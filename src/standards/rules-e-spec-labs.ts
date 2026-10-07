@@ -14,4 +14,15 @@ export const RULES_E_SPEC_LABS: Rule[] = [
     files: /src\/games\/spec\/eda\.ts$/,
     ban: /\/BW²/,
   },
+  {
+    id: 'E12-lc',
+    why: 'E12: an LC filter has twice the dB slope of an RC (100x per decade, not 4x the attenuation)',
+    ban: /four times the attenuation/,
+  },
+  {
+    id: 'E12-fpga-dsp',
+    why: 'E12: a modern FPGA DSP block is 27 x 18, not 18 x 18',
+    files: /src\/games\/spec\/digital\.ts$/,
+    ban: /one 18×18 multiplier/,
+  },
 ];
