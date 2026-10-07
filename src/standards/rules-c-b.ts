@@ -4,4 +4,5 @@ import type { Rule } from './types';
 export const RULES_C_B: Rule[] = [
   { id: 'C7', why: 'C7: the stored ESD energy mostly burns in the 1.5 kΩ body resistance, not the clamp', ban: /all goes into the (protection|clamp)/ },
   { id: 'C9', why: 'C9: a vertical smear is a CCD artifact; CMOS blooming is a halo', files: /incidents/, ban: /vertical (streak|smear)[^.]*bloom|bloom[^.]*vertical (streak|smear)/i },
+  { id: 'C10', why: 'C10: the radio allows about ±50 ppm; ±20 ppm is the design budget for the crystal alone', ban: /±20 ppm the protocol allows|protocol allows ±20 ppm/ },
 ];
