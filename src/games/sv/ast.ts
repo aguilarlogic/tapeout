@@ -25,7 +25,7 @@ export type CI =
   | { k: 'foreach'; arr: E; vars: string[]; body: CI[] };
 
 export type E =
-  | { k: 'num'; v: bigint; w?: number; fill?: string; signed?: boolean }
+  | { k: 'num'; v: bigint; w?: number; fill?: string; signed?: boolean; xz?: boolean }
   | { k: 'real'; v: number }
   | { k: 'str'; v: string }
   | { k: 'null' } | { k: 'this' } | { k: 'super' }

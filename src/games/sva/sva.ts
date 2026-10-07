@@ -154,7 +154,8 @@ class P {
       case '$onehot': return (tr, t) => { const x = arg(tr, t).v; return { v: BigInt(x !== 0n && (x & (x - 1n)) === 0n), w: 1 }; };
       case '$onehot0': return (tr, t) => { const x = arg(tr, t).v; return { v: BigInt((x & (x - 1n)) === 0n), w: 1 }; };
       case '$countones': return (tr, t) => { let x = arg(tr, t).v, c = 0; while (x) { c += Number(x & 1n); x >>= 1n; } return { v: BigInt(c), w: 32 }; };
-      case '$isunknown': return () => ({ v: 0n, w: 1 });
+      // it would always return 0, so `assert (!$isunknown(x))` would pass vacuously: refuse it instead
+      case '$isunknown': return this.fail('$isunknown is meaningless in a 2-state engine: X and Z are not modelled.');
       default: return this.fail(`system function ${name} is not supported`);
     }
   }

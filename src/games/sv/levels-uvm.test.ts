@@ -18,6 +18,7 @@ describe('testbench missions', () => {
           expect(ev.error?.message, `seed ${s}`).toBeUndefined();
           expect(bad, `seed ${s}`).toEqual([]);
           expect(ev.passed).toBe(true);
+          expect(ev.run?.log.filter((l) => l.includes('2-state simulator')), `seed ${s}: x/z literal warning`).toEqual([]);
         }
       });
       it('does not pass with the starter as given', () => {
