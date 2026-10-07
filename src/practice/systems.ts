@@ -126,6 +126,49 @@ export const cPractice = practice('practice-c', 'C Drills', 'pointers, struct la
       step(`On this ${little ? 'little' : 'big'}-endian machine, the byte at address +${k} is (hex):`, hexa(byte, 2)));
   },
   (r, d) => {
+    // data models: RV32 is ILP32 (int, long and pointers are 32 bits); x86-64 Linux and RV64 are LP64 (long and pointers are 64)
+    const lp64 = r() < 0.5;
+    const abi = lp64 ? 'x86-64 Linux (LP64)' : 'RV32 (ILP32)';
+    const L = lp64 ? 8 : 4;
+    if (d === 1) {
+      return walk(ask(`On ${abi}, what is \`sizeof(long)\`?`, num(L), `${lp64 ? 'LP64: long and pointers are 64 bits' : 'ILP32: int, long and pointers are all 32 bits'}, so a long is ${L} bytes. Code that assumes long is 32 bits breaks when it moves between the two; uint32_t says what you mean.`, 'The data model names which of int, long and pointer are 32 or 64 bits.'),
+        'data models (ILP32 and LP64)', 'The size of int, long and pointers is a choice made by the platform, called the data model. ILP32 (int, long and pointers 32 bits) is what RV32 and 32-bit Arm use. LP64 (int 32 bits; long and pointers 64 bits) is what x86-64 Linux and 64-bit RISC-V use. char, short and int do not change.',
+        choice('In ILP32, which types are 32 bits wide?', 'int, long and pointers', ['Only int', 'int and pointers, but not long']),
+        count(`In ${lp64 ? 'LP64' : 'ILP32'}, long is ${L * 8} bits. In bytes:`, `${L * 8} / 8`, L));
+    }
+    const mix = pick(r, [['char', 1], ['short', 2], ['int', 4], ['long', L], ['char *', L]] as const);
+    const fields = d === 2 ? [mix, pick(r, [['int', 4], ['long', L]] as const)] : [pick(r, [['char', 1], ['short', 2]] as const), mix, pick(r, [['int', 4], ['long', L], ['char', 1]] as const)];
+    let off = 0, align = 1;
+    const starts = fields.map(([, s2]) => { off = Math.ceil(off / s2) * s2; const at = off; off += s2; align = Math.max(align, s2); return at; });
+    const size = Math.ceil(off / align) * align;
+    return walk(ask(`On ${abi}:${code(`struct s {\n${fields.map(([t], i) => `    ${t} f${i};`).join('\n')}\n};`)}What is sizeof(struct s)?`, num(size), `Here long and pointers are ${L} bytes, each field starts at a multiple of its size, and the struct is padded to a multiple of ${align}: ${size} bytes.`, 'long and char * change size with the data model; place the fields one by one.'),
+      'struct layout across data models', 'Alignment and padding work as always, but long and pointers are 4 bytes in ILP32 and 8 bytes in LP64, so the same struct can have a different layout on each platform.',
+      ...fields.map(([t, s2], i) => count(`f${i} is a ${t} (${s2} byte${s2 > 1 ? 's' : ''} here). Its offset:`, `offset of f${i}`, starts[i])),
+      count(`The fields end at offset ${off}. Round up to a multiple of ${align}:`, `round up ${off} to a multiple of ${align}`, size));
+  },
+  (r, d) => {
+    // plain char has implementation-defined signedness: signed on x86-64 Linux, unsigned on RISC-V and Arm Linux
+    if (d === 1) {
+      return walk(mcs(r, 'Is plain `char` signed in C?', 'It depends on the ABI: signed on x86-64 Linux, unsigned on RISC-V and Arm Linux', ['Always signed, because every integer type in C is signed unless it is declared unsigned', 'Always unsigned, since bytes have no sign', 'Signed in C but unsigned in C++, because the two languages define char differently'], 'The C standard leaves it to the implementation. Each platform ABI picks one, and the choice differs between the common ones, so portable code uses signed char or unsigned char (or uint8_t) whenever the sign matters.'),
+        'plain char is implementation-defined', 'char, signed char and unsigned char are three distinct types. Whether plain char behaves like signed char or unsigned char is decided by the compiler and ABI, not by the language.',
+        choice('For code that must behave the same everywhere, which is safest?', 'uint8_t or unsigned char, spelling out the sign', ['Plain char, since it is the same everywhere', 'int8_t, since plain char is always signed']));
+    }
+    const signed = r() < 0.5, plat = signed ? 'x86-64 Linux, where plain char is signed' : 'RISC-V Linux, where plain char is unsigned';
+    const v = between(r, 128, 255), k = between(r, 1, 4);
+    const asVal = signed ? v - 256 : v;
+    if (d === 2) {
+      return walk(ask(`On ${plat}:${code(`char c = ${v};\nprintf("%d", c);`)}Output?`, num(asVal), `${v} does not fit a signed char, so it becomes ${v} - 256 = ${v - 256}; an unsigned one keeps ${v}. On this platform the answer is ${asVal}.`, 'Is the top bit of the byte a sign bit here?'),
+        'sign of plain char', 'When a char is promoted to int, an unsigned char becomes 0 to 255, while a signed char with its top bit set becomes negative (the sign bit is copied upwards).',
+        choice(`On this platform, is plain char signed?`, signed ? 'Yes' : 'No', [signed ? 'No' : 'Yes']),
+        count('The value that printf sees:', signed ? `${v} - 256` : `${v}`, asVal));
+    }
+    const res = asVal >> k;
+    return walk(ask(`On ${plat}:${code(`char c = ${v};\nprintf("%d", c >> ${k});`)}Output?`, num(res), `c promotes to ${asVal}, and >> ${k} on it gives ${res} (GCC and Clang shift negative values arithmetically).`, 'Promote to int first, then shift.'),
+      'sign of plain char and shifts', 'c is promoted to int before the shift. A signed char with its top bit set promotes to a negative number, and the right shift keeps the sign; an unsigned one stays positive.',
+      count('The promoted value of c:', signed ? `${v} - 256` : `${v}`, asVal),
+      count(`${asVal} >> ${k} (round toward minus infinity):`, `floor(${asVal} / ${2 ** k})`, res));
+  },
+  (r, d) => {
     // Easy bugs (the first three) at d1, the rest at d3; every bug at d2.
     const pool = d === 1 ? C_BUGS.slice(0, 3) : d === 3 ? C_BUGS.slice(3) : C_BUGS;
     const chosen = pool[between(r, 0, pool.length - 1)];
