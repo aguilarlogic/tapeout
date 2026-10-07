@@ -318,14 +318,14 @@ export const ohmPractice = practice('practice-ohm', 'Circuit Arithmetic', "Ohm's
     const R = pick(r, tier(d, [100, 1000, 10000], [220, 470, 4700, 33000], [330, 680, 2200, 15000]));
     const I = pick(r, tier(d, [0.001, 0.01], [0.002, 0.005, 0.02], [0.0015, 0.0025, 0.012]));
     const which = d === 1 ? 0 : between(r, 0, 2);
-    const idea = "Ohm's law, V = I × R, links the three: voltage (V, volts) pushes current (I, amps) through resistance (R, ohms). Rearranged: I = V / R. Power is P = V × I, which with Ohm's law is also V²/R or I²R. Always convert to base units (A, Ω, V) first: 1 mA = 0.001 A, 1 kΩ = 1000 Ω.";
+    const idea = "Ohm's law, V = I × R, links the three: voltage (V, volts) pushes current (I, amperes) through resistance (R, ohms). Rearranged: I = V / R. Power is P = V × I, which with Ohm's law is also V²/R or I²R. Always convert to base units (A, Ω, V) first: 1 mA = 0.001 A, 1 kΩ = 1000 Ω.";
     if (which === 0) return walk(ask(`${eng(I, 'A')} flows through ${eng(R, 'Ω')}. What is the voltage across it, in V?`, qty(I * R, 'V'), `V = I × R = ${eng(I * R, 'V')}.`, 'V = I × R.'),
       "Ohm's law", idea,
-      calc(`Convert ${eng(I, 'A')} to amps:`, `${eng(I, 'A')} in A`, I, 'A', String(I)),
+      calc(`Convert ${eng(I, 'A')} to amperes:`, `${eng(I, 'A')} in A`, I, 'A', String(I)),
       calc('Multiply by the resistance:', `V = ${I} A × ${R} Ω`, I * R, 'V'));
     if (which === 1) return walk(ask(`${eng(I * R, 'V')} is across ${eng(R, 'Ω')}. What current flows, in mA?`, qty(I * 1000, 'mA'), `I = V / R = ${eng(I, 'A')}.`, 'I = V / R.'),
       "Ohm's law, solved for current", idea,
-      calc('Divide voltage by resistance to get amps:', `I = ${sig(I * R)} V / ${R} Ω`, I, 'A', sig(I)),
+      calc('Divide voltage by resistance to get amperes:', `I = ${sig(I * R)} V / ${R} Ω`, I, 'A', sig(I)),
       calc('Convert to mA (× 1000):', `${sig(I)} A × 1000`, I * 1000, 'mA'));
     return walk(ask(`${eng(I * R, 'V')} across ${eng(R, 'Ω')}. How much power does the resistor dissipate, in mW?`, qty(I * I * R * 1000, 'mW'), `P = V² / R = ${eng(I * I * R, 'W')}.`, 'P = V²/R = I²R.'),
       'power from voltage and resistance', idea,
@@ -387,7 +387,7 @@ export const ohmPractice = practice('practice-ohm', 'Circuit Arithmetic', "Ohm's
     return walk(ask(`An LED drops ${vf} V at ${i * 1000} mA. It is driven from a ${vs} V pin. What series resistor do you need, in Ω?`, qty(R, 'Ω', 0.02), `R = (${vs} - ${vf}) / ${i} = ${R.toFixed(0)} Ω. It dissipates ${eng((vs - vf) * i, 'W')}.`, 'The resistor takes whatever voltage the LED does not.'),
       "Kirchhoff's voltage law plus Ohm's law", 'In a series loop, the voltages add up to the supply (KVL). An LED holds roughly a fixed voltage across itself, so the resistor gets the rest. The resistor also sets the current, so R = (its voltage) / (the current you want).',
       calc('Voltage left for the resistor:', `${vs} - ${vf}`, vs - vf, 'V'),
-      calc('Convert the current to amps:', `${i * 1000} mA`, i, 'A', String(i)),
+      calc('Convert the current to amperes:', `${i * 1000} mA`, i, 'A', String(i)),
       calc('R = V / I:', `${sig(vs - vf)} V / ${i} A`, R, 'Ω', undefined, 0.02));
   },
 ]);

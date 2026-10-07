@@ -375,7 +375,7 @@ const mirror: CircuitLevel = {
       <p>A <b>current mirror</b> forces the same V<sub>GS</sub> on two transistors, so their currents are in the ratio of their
       W/L. M1 is "diode-connected" (gate tied to drain), which makes it set V<sub>GS</sub> for any current you push in.</p>
       <p>But a real transistor's current rises a little with its drain voltage (<b>channel-length modulation</b>), so the
-      copy drifts as the output node moves. A <b>longer channel</b> flattens it (λ shrinks as 1/L), but a longer
+      copy drifts as the output node moves. A <b>longer channel</b> flattens it (this simulator scales λ as 1/L; simple SPICE models keep λ fixed per model card), but a longer
       device must be wider to keep the same W/L, and silicon area is money.</p>
       <h4>Goals</h4><ul><li>Output current within ±2% of 2 × 100 µA for every output voltage from 0.8 V to 2.0 V.</li>
       <li>Total gate area (W × L, both devices) at most 150 µm².</li></ul>`,

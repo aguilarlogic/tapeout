@@ -29,8 +29,8 @@ export const calcPractice = practice('practice-calc', 'Sensitivity Drills', 'par
     }
     const dv = between(r, 1, 5), df = between(r, 1, 8), dc = pick(r, [0, 2, -3]);
     const tot = 2 * dv + df + dc;
-    return walk(ask(`Dynamic power P = C·V²·f. A new design point has V up ${dv}%, f up ${df}%${dc ? ` and switched capacitance ${dc > 0 ? 'up' : 'down'} ${Math.abs(dc)}%` : ''}. To first order, by what % does power rise?`, qty(tot, '%', 0.02, `${tot}%`), `Relative sensitivities add, weighted by exponents: dP/P = dC/C + 2·dV/V + df/f = ${dc} + 2×${dv} + ${df} = ${tot}%. Log-differentiation turns products of powers into weighted sums.`, 'Take ln of both sides and differentiate: exponents become weights.'),
-      'relative sensitivity', 'For a product of powers like P = C·V²·f, small PERCENT changes simply add, each multiplied by its exponent: %P ≈ 1×%C + 2×%V + 1×%f. (Take ln of both sides: ln P = ln C + 2 ln V + ln f, and d(ln x) = dx/x is the relative change.)',
+    return walk(ask(`Dynamic power P = α·C·V²·f (activity α held fixed). A new design point has V up ${dv}%, f up ${df}%${dc ? ` and switched capacitance ${dc > 0 ? 'up' : 'down'} ${Math.abs(dc)}%` : ''}. To first order, by what % does power rise?`, qty(tot, '%', 0.02, `${tot}%`), `Relative sensitivities add, weighted by exponents: dP/P = dC/C + 2·dV/V + df/f = ${dc} + 2×${dv} + ${df} = ${tot}%. Log-differentiation turns products of powers into weighted sums.`, 'Take ln of both sides and differentiate: exponents become weights.'),
+      'relative sensitivity', 'For a product of powers like P = α·C·V²·f (α fixed), small PERCENT changes simply add, each multiplied by its exponent: %P ≈ 1×%C + 2×%V + 1×%f (a fixed α drops out). (Take ln of both sides: ln P = ln C + 2 ln V + ln f, and d(ln x) = dx/x is the relative change.)',
       count(`V has exponent 2, so its ${dv}% counts twice:`, `2 × ${dv}`, 2 * dv),
       count('Add all the weighted changes (C, V, f):', `${dc} + ${2 * dv} + ${df}`, tot));
   },
@@ -313,7 +313,7 @@ export const odePractice = practice('practice-ode', 'Transient Drills', 'RC/RLC 
       calc('R = 2 × that, in mΩ:', `2 × ${sig(Math.sqrt(L / C))} × 1000`, Rc * 1000, 'mΩ', undefined, 0.02));
   },
   (r, d) => {
-    const idea = 'A second-order system\'s step response depends on its damping ratio ζ: below 1 it overshoots and rings (percent overshoot = e^(-πζ/√(1-ζ²))), exactly 1 is the fastest response without overshoot, above 1 it creeps up slowly. Its characteristic equation s² + a·s + b = 0 has roots that are the decay rates of its modes.';
+    const idea = 'A second-order system\'s step response depends on its damping ratio ζ: below 1 it overshoots and rings (percent overshoot = e^(-πζ/√(1-ζ²))), exactly 1 is the fastest response without overshoot, above 1 it creeps up slowly. Its characteristic equation s² + a·s + b = 0 has roots that are s-plane values, not decay rates: the real part of each root sets how fast its mode decays, the imaginary part how fast it rings.';
     if (d === 1) {
       const z = pick(r, [0.1, 0.3, 0.7, 1, 1.5, 4]);
       const right = z < 1 ? 'Overshoots and rings' : z === 1 ? 'Fastest rise with no overshoot' : 'Slow rise, no overshoot';
@@ -422,7 +422,7 @@ export const probPractice = practice('practice-prob', 'Probability Drills', 'yie
     const srcs = Array.from({ length: tier(d, 2, 3, 3) }, () => pick(r, [2, 3, 4, 5, 6, 8, 12]));
     const sq = srcs.reduce((a, x) => a + x * x, 0);
     const rss = Math.sqrt(sq);
-    const idea = 'Independent random effects do not add directly: their VARIANCES (σ²) add. So the total rms is the root-sum-square, √(σ₁² + σ₂² + ...). Deterministic (bounded, non-random) effects add linearly. For a bit error rate target, random jitter counts as Q × σ, with Q ≈ 14 at 1e-12.';
+    const idea = 'Independent random effects do not add directly: their VARIANCES (σ²) add. So the total rms is the root-sum-square, √(σ₁² + σ₂² + ...). Deterministic (bounded, non-random) effects add linearly. For a bit error rate target, random jitter counts as 2·Q·σ, with Q ≈ 7.03 at a bit-error rate of 1e-12 (so ≈ 14σ in total).';
     const rssSteps = [
       count('Square each source and add:', srcs.map((x) => `${x}²`).join(' + '), sq),
       calc('Square root:', `√${sq}`, rss, 'ps', sig(rss), 0.02),
@@ -431,7 +431,7 @@ export const probPractice = practice('practice-prob', 'Probability Drills', 'yie
       'root-sum-square', idea, ...rssSteps);
     const dj = pick(r, [5, 10, 20]), ber = pick(r, [[14.07, '1e-12'], [12.72, '1e-10']] as const);
     const tj = dj + ber[0] * rss;
-    return walk(ask(`A SerDes link has ${dj} ps of deterministic jitter and random sources of ${srcs.join(', ')} ps rms. At a BER of ${ber[1]} the random part counts as ${ber[0]}σ. Total jitter, in ps?`, qty(tj, 'ps', 0.02), `RJ = √(${srcs.map((x) => `${x}²`).join(' + ')}) = ${sig(rss)} ps. TJ = DJ + ${ber[0]}·RJ = ${dj} + ${sig(ber[0] * rss)} = ${sig(tj)} ps. Deterministic jitter adds linearly; random adds in quadrature.`, 'TJ = DJ + Q·RJ, where RJ is the root-sum-square.'),
+    return walk(ask(`A SerDes link has ${dj} ps of deterministic jitter and random sources of ${srcs.join(', ')} ps rms. At a BER of ${ber[1]} the random part counts as ${ber[0]}σ (that is 2·Q·σ, with Q ≈ ${(ber[0] / 2).toFixed(2)}). Total jitter, in ps?`, qty(tj, 'ps', 0.02), `RJ = √(${srcs.map((x) => `${x}²`).join(' + ')}) = ${sig(rss)} ps. TJ = DJ + ${ber[0]}·RJ = ${dj} + ${sig(ber[0] * rss)} = ${sig(tj)} ps. Deterministic jitter adds linearly; random adds in quadrature.`, 'TJ = DJ + Q·RJ, where RJ is the root-sum-square.'),
       'total jitter', idea, ...rssSteps,
       calc(`The random part at this BER, ${ber[0]} × RJ:`, `${ber[0]} × ${sig(rss)}`, ber[0] * rss, 'ps'),
       calc('Add the deterministic part:', `${dj} + ${sig(ber[0] * rss)}`, tj, 'ps', undefined, 0.02));
@@ -523,7 +523,7 @@ export const numericsPractice = practice('practice-numerics', 'Numerics Drills',
   },
   (r, d) => {
     const f = pick(r, [7, 11, 15]);
-    const idea = 'Fixed point Qm.n stores a number as an integer scaled by 2^-n: n fraction bits, so one LSB is 2^-n. To encode x, multiply by 2^n and round; negatives use two\'s complement. Multiplying two fixed-point numbers multiplies their scales, so the fraction bits add.';
+    const idea = 'Fixed point Qm.n (m counts the sign bit, as in Arm-style notation; DSP texts that write Q15 or Q0.15 for the same 16-bit format leave the sign bit out of the count) stores a number as an integer scaled by 2^-n: n fraction bits, so one LSB is 2^-n. To encode x, multiply by 2^n and round; negatives use two\'s complement. Multiplying two fixed-point numbers multiplies their scales, so the fraction bits add.';
     if (d === 1) return walk(ask(`Q1.${f} fixed point: value of one LSB? Decimal answer.`, qty(2 ** -f, '', 0.01, (2 ** -f).toExponential(3)), `2^-${f} = ${(2 ** -f).toExponential(3)}.`, 'LSB = 2^-(fraction bits).'),
       'fixed-point resolution', idea,
       calc(`One LSB is 2^-${f}:`, `2^-${f}`, 2 ** -f, '', (2 ** -f).toExponential(3), 0.01));
@@ -538,7 +538,7 @@ export const numericsPractice = practice('practice-numerics', 'Numerics Drills',
         step('As 4 hex digits:', hexa(enc, 4)));
     }
     const [a, b, c, e] = [pick(r, [1, 2, 4]), pick(r, [7, 11, 15]), pick(r, [1, 2]), pick(r, [7, 15])];
-    return walk(ask(`Multiplying a Q${a}.${b} value by a Q${c}.${e} value gives an exact product with how many fraction bits?`, num(b + e), `Fraction bits add: ${b} + ${e} = ${b + e} (integer bits add too: Q${a + c}.${b + e}, ${a + b + c + e} bits total). The datapath then rounds and saturates back down.`, 'Multiplying scales by 2^-b × 2^-e.'),
+    return walk(ask(`Multiplying a Q${a}.${b} value by a Q${c}.${e} value gives an exact product with how many fraction bits?`, num(b + e), `Fraction bits add: ${b} + ${e} = ${b + e} (integer bits add too: Q${a + c}.${b + e}, ${a + b + c + e} bits total, because this game counts the sign bit in m; under the Q15 convention the sign bit is left out of the count, so the integer count differs by one). The datapath then rounds and saturates back down.`, 'Multiplying scales by 2^-b × 2^-e.'),
       'fixed-point multiplication', idea,
       choice(`The scales are 2^-${b} and 2^-${e}. Their product is:`, `2^-${b + e}`, [`2^-${Math.max(b, e)}`, `2^-${b * e}`]),
       count('So the fraction bits of the product:', `${b} + ${e}`, b + e));
@@ -572,7 +572,7 @@ export const numericsPractice = practice('practice-numerics', 'Numerics Drills',
     const v1 = v0 - f / fp;
     return walk(ask(`SPICE solves a diode Is(e^(v/Vt) - 1) = ${eng(I, 'A')} (Is = 1e-14 A, Vt = 25.85 mV) with Newton. From v₀ = ${v0} V, what is v₁, in V? (4 decimals)`, qty(v1, 'V', 0.002, v1.toFixed(4)), `f(v₀) = ${eng(f, 'A')}, f'(v₀) = ${eng(fp, 'S')}; v₁ = v₀ - f/f' = ${v1.toFixed(4)} V. (Exact: ${(Vt * Math.log(I / Is + 1)).toFixed(4)} V.) From a bad start the exponential makes Newton leap wildly, so SPICE limits each voltage step.`, 'f(v) = Is(e^(v/Vt) - 1) - I; f\'(v) = (Is/Vt)e^(v/Vt).'),
       "Newton's method in SPICE", `${idea} Here f(v) = Is·(e^(v/Vt) - 1) - I and f'(v) = (Is/Vt)·e^(v/Vt).`,
-      calc('f(v₀), in amps:', `1e-14 × (e^(${v0}/0.02585) - 1) - ${I}`, f, 'A', sig(f, 4), 0.005),
+      calc('f(v₀), in amperes:', `1e-14 × (e^(${v0}/0.02585) - 1) - ${I}`, f, 'A', sig(f, 4), 0.005),
       calc("f'(v₀), in A/V:", `(1e-14 / 0.02585) × e^(${v0}/0.02585)`, fp, '', sig(fp, 4), 0.005),
       calc("v₁ = v₀ - f/f':", `${v0} - ${sig(f, 4)} / ${sig(fp, 4)}`, v1, 'V', v1.toFixed(4), 0.002));
   },

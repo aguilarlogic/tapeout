@@ -285,7 +285,7 @@ export const electronicsPractice = practice('practice-electronics', 'Amplifier D
       'current gain β', idea, icStep,
       calc('Convert to mA (÷ 1000):', `${beta * IB} / 1000`, IC * 1000, 'mA', sig(IC * 1000), 0.01));
     const gm = (IC / VT) * 1000;
-    if (d === 2) return walk(ask(`A BJT is biased at I_C = ${sig(IC * 1000)} mA. Its transconductance g_m, in mS?`, qty(gm, 'mS', 0.02), `g_m = I_C/V_T = ${sig(IC * 1000)} mA / 25.85 mV = ${sig(gm)} mS. BJTs give the most g_m per ampere of any transistor.`, 'g_m = I_C / V_T.'),
+    if (d === 2) return walk(ask(`A BJT is biased at I_C = ${sig(IC * 1000)} mA. Its transconductance g_m, in mS?`, qty(gm, 'mS', 0.02), `g_m = I_C/V_T = ${sig(IC * 1000)} mA / 25.85 mV = ${sig(gm)} mS. The BJT has the highest g_m per unit current of the common devices; a MOSFET in weak inversion approaches it (g_m/I_D ≈ 1/(n·V_T)).`, 'g_m = I_C / V_T.'),
       'transconductance', idea,
       calc('g_m = I_C / V_T. With I_C in mA and V_T in V, the result is in mS:', `${sig(IC * 1000)} / 0.02585`, gm, 'mS', undefined, 0.02));
     return walk(ask(`β = ${beta}, I_C = ${sig(IC * 1000)} mA. Small-signal input resistance r_π, in kΩ?`, qty((beta * VT) / IC / 1000, 'kΩ', 0.02), `r_π = β/g_m = β·V_T/I_C = ${K((beta * VT) / IC)}.`, 'r_π = β / g_m.'),
@@ -402,7 +402,7 @@ export const semiPractice = practice('practice-semi', 'Silicon Drills', 'carrier
     }
     const NA = N / pick(r, [2, 4, 10]);
     const n = N - NA;
-    return walk(ask(`Silicon has N_D = ${sci(N, 0)} and N_A = ${sci(NA, 1)} cm⁻³ (compensated). Electron concentration, in cm⁻³?`, qty(n, '', 0.02, sci(n, 2)), `Donors and acceptors cancel: n ≈ N_D - N_A = ${sci(n, 2)} cm⁻³. This is how a p-well is made inside an n-substrate.`, 'Net doping is the difference.'),
+    return walk(ask(`Silicon has N_D = ${sci(N, 0)} and N_A = ${sci(NA, 1)} cm⁻³ (compensated). Electron concentration, in cm⁻³?`, qty(n, '', 0.02, sci(n, 2)), `Donors and acceptors cancel: n ≈ N_D - N_A = ${sci(n, 2)} cm⁻³. This is how an n-well is made inside a p-substrate: the well needs N_D > N_A.`, 'Net doping is the difference.'),
       'compensation', 'When both donors and acceptors are present, each acceptor captures the electron from one donor. They cancel one for one, so only the difference counts: n ≈ N_D - N_A when there are more donors.',
       calc('Net doping, N_D - N_A:', `${sci(N, 0)} - ${sci(NA, 1)}`, n, '', sci(n, 2), 0.02));
   },
@@ -411,7 +411,7 @@ export const semiPractice = practice('practice-semi', 'Silicon Drills', 'carrier
     const vt = 8.617e-5 * T * 1000;
     const shown = d === 3 ? `${T - 273} °C` : `${T} K`;
     return walk(ask(`Thermal voltage kT/q at ${shown}, in mV?`, qty(vt, 'mV', 0.02), `kT/q = 0.08617 mV/K × ${T} K = ${sig(vt)} mV.${T < 10 ? ' At 4 K, thermal energy is tiny: that is why qubits and cryo-CMOS behave so differently.' : ''}`, 'k/q = 86.17 µV per kelvin.'),
-      'thermal voltage kT/q', 'kT/q is thermal energy expressed as a voltage. It is simply proportional to absolute temperature: k/q = 86.17 µV per kelvin, so 25.85 mV at 300 K. Temperatures must be in kelvin: K = °C + 273.',
+      'thermal voltage kT/q', 'kT/q is thermal energy expressed as a voltage. It is simply proportional to absolute temperature: k/q = 86.17 µV per kelvin, so 25.85 mV at 300 K. Temperatures must be in kelvin: K = °C + 273.15 (273 is fine for mental math).',
       d === 3 && count(`Convert to kelvin: °C + 273:`, `${T - 273} + 273`, T),
       calc('Multiply by 0.08617 mV/K:', `0.08617 × ${T}`, vt, 'mV', undefined, 0.02));
   },
@@ -454,7 +454,7 @@ export const semiPractice = practice('practice-semi', 'Silicon Drills', 'carrier
       calc('Natural log of that:', `ln(${sci((NA * ND) / 1e20, 0)})`, Math.log((NA * ND) / 1e20), '', sig(Math.log((NA * ND) / 1e20))),
       calc('Times V_T = 0.02585 V:', `0.02585 × ${sig(Math.log((NA * ND) / 1e20))}`, vbi, 'V', undefined, 0.02));
     const k = pick(r, [4, 9, 16, 25, 36, 49, 64, 100]);
-    return walk(ask(`A one-sided junction's depletion width ∝ √(V_bi + V_R). Reverse bias is raised so that V_bi + V_R becomes ${k}× larger. How does the junction capacitance change? (factor, e.g. 0.5)`, qty(1 / Math.sqrt(k), '', 0.02, sig(1 / Math.sqrt(k))), `W grows by √${k} = ${Math.sqrt(k)}, and C = εA/W shrinks by the same factor: ${sig(1 / Math.sqrt(k))}×. This voltage-dependent capacitance is a varactor, the tuning element in every LC oscillator.`, 'C ∝ 1/W ∝ 1/√(V).'),
+    return walk(ask(`A one-sided junction's depletion width ∝ √(V_bi + V_R). Reverse bias is raised so that V_bi + V_R becomes ${k}× larger. How does the junction capacitance change? (factor, e.g. 0.5)`, qty(1 / Math.sqrt(k), '', 0.02, sig(1 / Math.sqrt(k))), `W grows by √${k} = ${Math.sqrt(k)}, and C = εA/W shrinks by the same factor: ${sig(1 / Math.sqrt(k))}×. This voltage-dependent capacitance is a varactor, a common tuning element in LC VCOs (CMOS often uses MOS varactors).`, 'C ∝ 1/W ∝ 1/√(V).'),
       'junction capacitance scaling', 'The depletion region acts like the gap in a parallel-plate capacitor: C = εA/W. More reverse bias widens the gap as √(V_bi + V_R), so the capacitance falls as 1/√(V_bi + V_R).',
       calc('The width grows by √(factor):', `√${k}`, Math.sqrt(k), '', String(Math.sqrt(k)), 0.001),
       calc('C ∝ 1/W, so the capacitance changes by:', `1 / ${Math.sqrt(k)}`, 1 / Math.sqrt(k), '', sig(1 / Math.sqrt(k)), 0.02));
@@ -599,7 +599,7 @@ export const kclBoss = boss({
     { t: 'gen', make: (r) => { const eps = pick(r, [500, 1000, 2000]) * 1e-6; const Rg = 350 * (1 + 2 * eps); const vb = (3.3 * Rg) / (350 + Rg); const out = (1.65 - vb) * 1000; return ask(`Gauge factor GF = 2, strain ε = ${eps * 1e6} µε. Rg = ${sig(Rg, 6)} Ω. What is V_out = V_A - V_B, in mV?`, qty(out, 'mV', 0.03, sig(out)), `V_A = 1.65 V. V_B = 3.3·${sig(Rg, 6)}/(350 + ${sig(Rg, 6)}) = ${sig(vb, 6)} V. V_out = ${sig(out)} mV: tiny. It needs an instrumentation amplifier.`); } },
     { t: 'gen', make: () => ask('What is the Thevenin resistance seen looking into node A (R1 = R2 = 350 Ω, supply shorted), in Ω?', qty(175, 'Ω', 0.01), 'R1 ∥ R2 = 175 Ω.') },
     { t: 'gen', make: (r) => { const Rin = pick(r, [1e3, 2e3, 5e3]); const va = (1.65 * Rin) / (175 + Rin); return ask(`Someone connects node A to a cheap amplifier whose input resistance is ${K(Rin)} to ground. What voltage does node A actually sit at, in V?`, qty(va, 'V', 0.01, sig(va, 4)), `Thevenin: 1.65 V behind 175 Ω, into ${K(Rin)}: 1.65·${Rin}/(175 + ${Rin}) = ${sig(va, 4)} V. That ${sig((1.65 - va) * 1000)} mV error dwarfs the strain signal. Loading, not drift.`); } },
-    { t: 'gen', make: (r) => { const dT = pick(r, [10, 20, 40]); const tc = 50e-6; const dR = 350 * tc * dT; const vb = (3.3 * (350 + dR)) / (700 + dR); return ask(`The gauge wires add a temperature coefficient: Rg rises by 50 ppm/°C. After a ${dT} °C warm-up, what false V_out appears (no strain), in mV?`, qty((1.65 - vb) * 1000, 'mV', 0.03, sig((1.65 - vb) * 1000)), `ΔR = 350 × 50e-6 × ${dT} = ${sig(dR)} Ω; V_B = ${sig(vb, 6)} V; V_out = ${sig((1.65 - vb) * 1000)} mV. That is the drift!`); } },
+    { t: 'gen', make: (r) => { const dT = pick(r, [10, 20, 40]); const tc = 50e-6; const dR = 350 * tc * dT; const vb = (3.3 * (350 + dR)) / (700 + dR); return ask(`The gauge wires add a temperature coefficient: Rg rises by 50 × 10⁻⁶ per kelvin. After a ${dT} °C warm-up, what false V_out appears (no strain), in mV?`, qty((1.65 - vb) * 1000, 'mV', 0.03, sig((1.65 - vb) * 1000)), `ΔR = 350 × 50e-6 × ${dT} = ${sig(dR)} Ω; V_B = ${sig(vb, 6)} V; V_out = ${sig((1.65 - vb) * 1000)} mV. That is the drift!`); } },
     mc('Which bridge change cancels the temperature drift best?', ['An identical unstrained dummy gauge in place of R3', 'A higher supply voltage', 'Smaller resistors everywhere, so that the self-heating is reduced a lot', 'A capacitor across R1'], 0, 'A dummy gauge sees the same temperature, so both halves move together and the difference cancels. A dummy gauge sees the same temperature, so both halves of the bridge move together and the difference cancels. That is superposition working for you.'),
     { t: 'gen', make: (r) => { const Vs = pick(r, [3.3, 5]); return ask(`How much power does the whole bridge (four 350 Ω arms, two parallel legs of 700 Ω) draw from ${Vs} V, in mW?`, qty(((Vs * Vs) / 350) * 1000, 'mW', 0.01), `Two 700 Ω legs in parallel = 350 Ω. P = ${Vs}²/350 = ${sig(((Vs * Vs) / 350) * 1000)} mW. On a battery sensor you would pulse the bridge supply.`); } },
   ],
