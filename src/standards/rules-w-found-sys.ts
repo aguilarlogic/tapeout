@@ -28,6 +28,6 @@ export const RULES_W_FOUND_SYS: Rule[] = [
   { id: 'W2-bash-only', why: 'W2: &> is bash-only', ban: /`&>` both, and/ },
   { id: 'W2-move', why: 'W2: a moved-from object is valid but unspecified (usually empty)', ban: /leaving v empty\./ },
   { id: 'W2-putc', why: 'W2: putc is a reserved stdlib identifier; the driver calls it uart_putc', ban: /void putc\(/ },
-  { id: 'W2-rars', why: 'W2: the ISA lab says its ecall numbers are RARS-style', require: { file: /games\/isa\/page/, re: /RARS-style/ } },
+  { id: 'W2-rars', why: 'W2: the ISA lab says its ecall numbers are RARS-style', require: { file: /games\/isa\/page/, re: /a7 = service, and exit is 93/ } },
   { id: 'W2-imperative', why: 'W2: commit messages are in the imperative mood', ban: /say what and why, in the present tense/ },
 ];
