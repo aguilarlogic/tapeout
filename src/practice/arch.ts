@@ -600,13 +600,13 @@ export const serdesPractice = practice('practice-serdes', 'SerDes Drills', 'line
       calc('Add the deterministic part:', `${dj} + ${sig(2 * q * rj, 4)}`, tj, 'ps', sig(tj), 0.01));
   },
   (r, d) => {
-    const gens: [number, number, number][] = d === 1 ? [[2, 5, 0.8]] : [[3, 8, 128 / 130], [4, 16, 128 / 130], [5, 32, 128 / 130]];
+    const gens: [number, number, number][] = d === 1 ? [[2, 5, 0.8]] : d === 2 ? [[3, 8, 128 / 130], [4, 16, 128 / 130], [5, 32, 128 / 130]] : [[6, 64, 236 / 256], [7, 128, 236 / 256]];
     const [g, gt, eff] = pick(r, gens);
     const lanes = pick(r, [1, 4, 8, 16]);
     const bw = (gt * eff * lanes) / 8;
-    return walk(ask(`PCIe Gen${g} x${lanes} (${gt} GT/s, ${g === 2 ? '8b/10b' : '128b/130b'}). Usable bandwidth per direction, in GB/s?`, qty(bw, 'GB/s', 0.02), `${gt} × ${g === 2 ? '0.8' : '128/130'} × ${lanes} / 8 = ${sig(bw)} GB/s.`, 'Rate × efficiency × lanes / 8.'),
-      'PCIe bandwidth', `PCIe moves data on several lanes in parallel. Each lane runs at the raw rate in GT/s (billions of transfers per second, 1 bit each). The line code adds extra bits: ${g === 2 ? '8b/10b sends 10 bits for each 8 of data: 80% efficient' : '128b/130b sends 130 bits for each 128 of data: about 98.5% efficient'}. So usable Gb/s per lane = rate × efficiency, then multiply by the lanes, and divide by 8 to get bytes.`,
-      calc('Efficiency of the line code:', g === 2 ? '8 / 10' : '128 / 130', eff, '', sig(eff, 4), 0.005),
+    return walk(ask(`PCIe Gen${g} x${lanes} (${gt} GT/s, ${g === 2 ? '8b/10b' : g >= 6 ? 'flit mode: about 236 of every 256 bytes carry TLP data' : '128b/130b'}). Usable bandwidth per direction, in GB/s?`, qty(bw, 'GB/s', 0.02), `${gt} × ${g === 2 ? '0.8' : g >= 6 ? '236/256' : '128/130'} × ${lanes} / 8 = ${sig(bw)} GB/s.`, 'Rate × efficiency × lanes / 8.'),
+      'PCIe bandwidth', `PCIe moves data on several lanes in parallel. Each lane runs at the raw rate in GT/s (billions of transfers per second, 1 bit each). The line code adds extra bits: ${g === 2 ? '8b/10b sends 10 bits for each 8 of data: 80% efficient' : g >= 6 ? 'PAM4 flit mode packs TLP data into 256-byte flits, of which about 236 bytes carry TLP data (the rest is CRC, FEC and framing): about 92% efficient' : '128b/130b sends 130 bits for each 128 of data: about 98.5% efficient'}. So usable Gb/s per lane = rate × efficiency, then multiply by the lanes, and divide by 8 to get bytes.`,
+      calc('Efficiency of the line code:', g === 2 ? '8 / 10' : g >= 6 ? '236 / 256' : '128 / 130', eff, '', sig(eff, 4), 0.005),
       calc(`Usable Gb/s on all ${lanes} lane${lanes > 1 ? 's' : ''}:`, `${gt} × ${sig(eff, 4)} × ${lanes}`, gt * eff * lanes, '', sig(gt * eff * lanes, 4), 0.01),
       calc('Divide by 8 to get GB/s:', `${sig(gt * eff * lanes, 4)} / 8`, bw, 'GB/s', sig(bw), 0.02));
   },
