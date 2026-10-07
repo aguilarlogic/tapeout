@@ -188,7 +188,7 @@ const cdcPulse: CdcLevel = {
       mode: 'write', spec: PULSE_SPEC, ports: ['clka', 'clkb', 'rst_n', 'pulse_a', 'pulse_b'], scenarios: sc,
       bench: (s) => new PulseBench(s.periods.A, s.periods.B, 20),
       checks: 'every pulse sent from A appears exactly once, one cycle wide, in B',
-      brief: `<p>A synchronizer only works on signals that stay put for at least about <b>one destination clock period</b>. A one-cycle pulse from a fast clock is narrower than a slow clock period, so the slow clock may never see it, whatever you do after the capture.</p>
+      brief: `<p>A synchronizer only works on signals that stay put for at least about <b>1.5 destination clock periods</b> (three destination edges). A one-cycle pulse from a fast clock is narrower than a slow clock period, so the slow clock may never see it, whatever you do after the capture.</p>
 <p>The standard fix is a <b>toggle synchronizer</b>: in the source domain, turn each pulse into a <b>level change</b> (a flop that flips on every pulse). A level change is long-lived, so the two-flop synchronizer in the destination domain catches it. A third flop plus an XOR then turns each level change back into a one-cycle pulse.</p>
 <p>The bench sends 20 pulses, each at least four slow cycles apart, with clock ratios that change per run. The starter synchronizes the pulse as if it were a level: see how many it loses. (A structural lint passes it, because a two-flop synchronizer really is there. Only simulation shows the loss.)</p>`,
       hints: ['Source domain: <code>if (pulse_a) tog &lt;= ~tog;</code>. Destination: <code>s1 &lt;= tog; s2 &lt;= s1; s3 &lt;= s2;</code>', 'The output pulse is <code>assign pulse_b = s2 ^ s3;</code>: high for one cycle after the toggle arrives.'],

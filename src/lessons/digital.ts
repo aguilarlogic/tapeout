@@ -79,8 +79,8 @@ export const fsm: Lesson = {
                ▲                        │
                └────────────────────────┘`),
     say('Two flavours. In a **Moore** machine the outputs depend only on the state. In a **Mealy** machine they depend on the state and the current inputs, so they react one cycle sooner.'),
-    mc('A traffic light controller shows green, yellow, red. Outputs depend only on which light is on. Moore or Mealy?', ['Moore', 'Mealy'], 0, 'The lights are a pure function of the state, so it is Moore. Moore outputs are glitch-free and easy to register.'),
-    say('You also choose how to **encode** the states. Binary uses the fewest flops. **One-hot** uses one flop per state, which makes the next-state logic tiny and fast. **Gray** codes change one bit per transition.'),
+    mc('A traffic light controller shows green, yellow, red. Outputs depend only on which light is on. Moore or Mealy?', ['Moore', 'Mealy'], 0, 'The lights are a pure function of the state, so it is Moore. Moore outputs change only after a clock edge, and registered (or one-hot) outputs are glitch-free.'),
+    say('You also choose how to **encode** the states. Binary uses the fewest flops. **One-hot** uses one flop per state, which makes the next-state logic tiny and fast. **Gray** codes change only one bit per step along a counting sequence (a jump between arbitrary codes can change several).'),
     gen((r) => {
       const n = pick(r, [5, 6, 9, 12, 17]);
       const b = Math.ceil(Math.log2(n));
