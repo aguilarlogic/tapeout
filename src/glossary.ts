@@ -107,7 +107,7 @@ export const GLOSSARY: Entry[] = [
   E('memory consistency|consistency model|tso|fence', 'The rules for ordering memory operations to different addresses. SC, TSO (x86), weak (ARM/RISC-V) + fences.', 'coherence'),
   E('false sharing', 'Different cores writing different data in the same cache line, causing the line to ping-pong.', 'coherence'),
   E('dram|ddr5|row buffer|refresh', 'Dynamic RAM: 1T1C cells in banks of rows; row buffer hits are fast; needs periodic refresh.', 'dram'),
-  E('hbm', 'High bandwidth memory: stacked DRAM on an interposer with a 1024-bit interface per stack.', 'dram'),
+  E('hbm', 'High bandwidth memory: stacked DRAM on an interposer next to the processor; 1024-bit interface per stack through HBM3E, 2048-bit from HBM4.', 'dram'),
   E('axi|amba|valid ready|handshake', 'AMBA AXI: five channels with VALID/READY handshakes; a transfer happens when both are high.', 'bus'),
   E('credit|flow control|backpressure', 'Flow control: VALID/READY backpressure or credits (one per free receiver buffer).', 'bus'),
   E('noc|network on chip|mesh|flit|wormhole', 'On-chip networks of routers and links carrying packets split into flits; wormhole switching pipelines them.', 'noc'),

@@ -14,6 +14,9 @@ const yieldOf = (mm2: number, d0: number) => Math.exp(-(mm2 / 100) * d0);
 const dpw = (mm2: number, dmm = 300) => (Math.PI * (dmm / 2) ** 2) / mm2 - (Math.PI * dmm) / Math.sqrt(2 * mm2);
 const poisson = (lam: number, k: number) => { let p = Math.exp(-lam), s = p; for (let i = 1; i <= k; i++) { p *= lam / i; s += p; } return s; };
 
+/** HBM generations as [name, interface width in bits, Gb/s per pin]: the width doubles at HBM4. */
+const HBM_GENS: [string, number, number][] = [['HBM2E', 1024, 3.2], ['HBM3', 1024, 6.4], ['HBM3E', 1024, 9.6], ['HBM4', 2048, 8]];
+
 // ------------------------------------------------------------------ physical design
 
 export const pnrPractice = practice('practice-pnr', 'Physical Design Drills', 'floorplans, wire delay and repeaters, clock trees, routing capacity, IR and EM', [
@@ -481,21 +484,21 @@ export const pkgPractice = practice('practice-pkg', 'Packaging Drills', 'chiplet
       calc('θsa = total minus θjc minus θcs:', `${sig((tmax - ta) / p, 4)} - ${jc} - ${cs}`, sa, '', sig(sa), 0.03));
   },
   (r, d) => {
-    const gbps = pick(r, [3.2, 6.4, 9.6]), bw = (1024 * gbps) / 8;
-    const idea = 'HBM is very wide rather than very fast: each stack has a 1024-bit interface at a modest rate per pin. Bandwidth in GB/s = (number of pins × Gb/s per pin) ÷ 8, since 8 bits make a byte. Several stacks add up.';
-    if (d === 1) return walk(ask(`One HBM stack has a 1024-bit interface at ${gbps} Gb/s per pin. Bandwidth, in GB/s?`, qty(bw, 'GB/s', 0.02, sig(bw)), `1024 × ${gbps} / 8 = ${sig(bw)} GB/s. That width only works on a silicon interposer with thousands of fine wires.`, 'Bits × rate / 8.'),
+    const [gen, w, gbps] = pick(r, HBM_GENS), bw = (w * gbps) / 8;
+    const idea = 'HBM is very wide rather than very fast: each stack has a 1024-bit interface (2048-bit from HBM4) at a modest rate per pin. Bandwidth in GB/s = (number of pins × Gb/s per pin) ÷ 8, since 8 bits make a byte. Several stacks add up.';
+    if (d === 1) return walk(ask(`One ${gen} stack has a ${w}-bit interface at ${gbps} Gb/s per pin. Bandwidth, in GB/s?`, qty(bw, 'GB/s', 0.02, sig(bw)), `${w} × ${gbps} / 8 = ${sig(bw)} GB/s. That width only works on a silicon interposer with thousands of fine wires.`, 'Bits × rate / 8.'),
       'HBM bandwidth per stack', idea,
-      calc('Total Gb/s = pins × rate per pin:', `1024 × ${gbps}`, 1024 * gbps, '', sig(1024 * gbps, 4), 0.005),
-      calc('Convert bits to bytes (÷ 8), in GB/s:', `${sig(1024 * gbps, 4)} / 8`, bw, 'GB/s', sig(bw), 0.02));
+      calc('Total Gb/s = pins × rate per pin:', `${w} × ${gbps}`, w * gbps, '', sig(w * gbps, 4), 0.005),
+      calc('Convert bits to bytes (÷ 8), in GB/s:', `${sig(w * gbps, 4)} / 8`, bw, 'GB/s', sig(bw), 0.02));
     const st = pick(r, [4, 6, 8]);
-    if (d === 2) return walk(ask(`A GPU has ${st} HBM stacks at ${gbps} Gb/s per pin (1024 bits each). Total bandwidth, in TB/s?`, qty((bw * st) / 1000, 'TB/s', 0.02, sig((bw * st) / 1000)), `${st} × ${sig(bw)} GB/s = ${sig((bw * st) / 1000)} TB/s.`, 'Stacks × per-stack bandwidth.'),
+    if (d === 2) return walk(ask(`A GPU has ${st} ${gen} stacks at ${gbps} Gb/s per pin (${w} bits each). Total bandwidth, in TB/s?`, qty((bw * st) / 1000, 'TB/s', 0.02, sig((bw * st) / 1000)), `${st} × ${sig(bw)} GB/s = ${sig((bw * st) / 1000)} TB/s.`, 'Stacks × per-stack bandwidth.'),
       'HBM bandwidth of a GPU', idea,
-      calc('One stack, in GB/s:', `1024 × ${gbps} / 8`, bw, 'GB/s', sig(bw, 4), 0.005),
+      calc('One stack, in GB/s:', `${w} × ${gbps} / 8`, bw, 'GB/s', sig(bw, 4), 0.005),
       calc(`${st} stacks, in TB/s (÷ 1000):`, `${st} × ${sig(bw, 4)} / 1000`, (bw * st) / 1000, 'TB/s', sig((bw * st) / 1000), 0.02));
     const need = pick(r, [4, 6, 8]), n = Math.ceil((need * 1000) / bw);
-    return walk(ask(`An accelerator needs ${need} TB/s from HBM at ${gbps} Gb/s per pin (1024 bits per stack). How many stacks?`, num(n), `${need * 1000} / ${sig(bw)} = ${sig((need * 1000) / bw)}, rounded up: ${n} stacks. Each one takes shoreline on the die edge, which caps how many fit.`, 'Divide and round up.'),
+    return walk(ask(`An accelerator needs ${need} TB/s from ${gen} stacks at ${gbps} Gb/s per pin (${w} bits per stack). How many stacks?`, num(n), `${need * 1000} / ${sig(bw)} = ${sig((need * 1000) / bw)}, rounded up: ${n} stacks. Each one takes shoreline on the die edge, which caps how many fit.`, 'Divide and round up.'),
       'how many HBM stacks', `${idea} To find how many stacks you need, divide the required bandwidth by one stack's bandwidth, and round UP: you cannot fit a fraction of a stack.`,
-      calc('One stack, in GB/s:', `1024 × ${gbps} / 8`, bw, 'GB/s', sig(bw, 4), 0.005),
+      calc('One stack, in GB/s:', `${w} × ${gbps} / 8`, bw, 'GB/s', sig(bw, 4), 0.005),
       calc(`The need in GB/s (${need} TB/s × 1000) ÷ one stack:`, `${need * 1000} / ${sig(bw, 4)}`, (need * 1000) / bw, '', sig((need * 1000) / bw, 4), 0.005),
       count('Round up to a whole number of stacks:', `ceil(${sig((need * 1000) / bw, 4)})`, n));
   },
@@ -507,7 +510,7 @@ export const pkgPractice = practice('practice-pkg', 'Packaging Drills', 'chiplet
       calc('Extra growth = Δα × 1e-6 × ΔT × length, length in µm (mm × 1000):', `${sig(17 - ca, 4)}e-6 × ${dt} × ${l} × 1000`, dl, 'um', sig(dl), 0.03));
   },
   (r) => concept(r, [
-    ['Why does HBM sit on an interposer next to the GPU instead of on the board?', 'Its wide interface needs thousands of short, fine wires', ['It is cheaper to mount than DRAM on the board, at each size', 'Boards are too slow for DRAM, which needs a silicon carrier', 'It needs no power, so it can be placed far from the cooling'], 'why HBM needs an interposer', 'HBM gets its bandwidth from being very wide, with over a thousand data wires per stack. A circuit board can route only hundreds of wires along a package edge, and they are long. A silicon interposer has much finer, shorter wires, thousands of them.', ['Many fine, short wires between chips need:', 'A silicon interposer', ['A circuit board', 'A longer cable']], 'Its 1024-bit interface needs thousands of short, fine wires that only silicon interposers or bridges provide'],
+    ['Why does HBM sit on an interposer next to the GPU instead of on the board?', 'Its wide interface needs thousands of short, fine wires', ['It is cheaper to mount than DRAM on the board, at each size', 'Boards are too slow for DRAM, which needs a silicon carrier', 'It needs no power, so it can be placed far from the cooling'], 'why HBM needs an interposer', 'HBM gets its bandwidth from being very wide, with over a thousand data wires per stack. A circuit board can route only hundreds of wires along a package edge, and they are long. A silicon interposer has much finer, shorter wires, thousands of them.', ['Many fine, short wires between chips need:', 'A silicon interposer', ['A circuit board', 'A longer cable']], 'Its 1024- or 2048-bit interface needs thousands of short, fine wires that only silicon interposers or bridges provide'],
     ['What does UCIe standardize?', 'A die-to-die interface for chiplets from different vendors', ['A DRAM protocol for the stacks that sit next to the logic', 'A PCB material for high-speed boards with a low loss tangent', 'A cooling standard for the lids that sit on top of a package'], 'chiplet interfaces', 'To mix chiplets from different makers in one package they must all speak the same language over the short wires between them. UCIe is a standard die-to-die interface, like PCIe is for boards.', ['A standard interface lets chiplets from different vendors:', 'Work together in one package', ['Share a wafer', 'Use one supply']], 'A die-to-die interface so chiplets from different vendors can connect in one package'],
     ['A 3D stack puts logic under memory. What becomes the hardest problem?', 'Getting heat out through the stacked layers', ['Routing power to the top die', 'Testing the bottom die', 'Distributing the clock between the layers of the stack'], '3D stacking and heat', 'In a stack, the heat from the hot logic layer must pass through the layers above it to reach the heatsink on top. Each layer adds thermal resistance, so the logic can get much hotter than it would alone.', ['Each extra layer between the heat source and the heatsink adds:', 'Thermal resistance', ['Cooling', 'Bandwidth only']]],
     ['What is a known-good die (KGD)?', 'A bare die fully tested before it is assembled', ['A die that was taken from a wafer with a good overall yield', 'A die that has passed a visual inspection under a microscope', 'A spare die that is placed inside the package, in case of faults'], 'known-good die', 'Once dies are assembled in one package, a single bad die wastes all the good ones (and the packaging cost). Testing each die before assembly means only good dies go in.', ['Testing before assembly prevents:', 'One bad die scrapping a whole package', ['All defects', 'Wafer cost']], 'A bare die fully tested before assembly, so a bad one never ruins an expensive package'],
@@ -530,7 +533,7 @@ export const pkgBoss = boss({
     { t: 'gen', make: () => ask('Yield of the 800 mm² monolithic die at D₀ = 0.1/cm², in %?', qty(yieldOf(800, 0.1) * 100, '%', 0.02, sig(yieldOf(800, 0.1) * 100)), `e^(-0.8) = ${sig(yieldOf(800, 0.1) * 100)}%.`) },
     { t: 'gen', make: () => ask('Split into four 200 mm² chiplets, tested first. Yield of each, in %?', qty(yieldOf(200, 0.1) * 100, '%', 0.02, sig(yieldOf(200, 0.1) * 100)), `e^(-0.2) = ${sig(yieldOf(200, 0.1) * 100)}%.`) },
     { t: 'gen', make: () => ask('The chiplets talk over micro-bumps on a 40 µm grid. How many connections fit under a 2 mm × 5 mm edge region?', qty(2000 / 40 * (5000 / 40), '', 0.02, String((2000 / 40) * (5000 / 40))), `(2000/40) × (5000/40) = ${(2000 / 40) * (5000 / 40)}.`) },
-    { t: 'gen', make: () => ask('Six HBM stacks at 6.4 Gb/s per pin, 1024 bits each. Total bandwidth, in TB/s?', qty((6 * 1024 * 6.4) / 8 / 1000, 'TB/s', 0.02, sig((6 * 1024 * 6.4) / 8 / 1000)), `6 × 819.2 GB/s = ${sig((6 * 1024 * 6.4) / 8 / 1000)} TB/s.`) },
+    { t: 'gen', make: () => ask('Six HBM3 stacks at 6.4 Gb/s per pin, 1024 bits each. Total bandwidth, in TB/s?', qty((6 * 1024 * 6.4) / 8 / 1000, 'TB/s', 0.02, sig((6 * 1024 * 6.4) / 8 / 1000)), `6 × 819.2 GB/s = ${sig((6 * 1024 * 6.4) / 8 / 1000)} TB/s.`) },
     { t: 'gen', make: () => ask('500 W. θjc = 0.04, θcs = 0.03 °C/W, coolant at 35 °C, Tj max 105 °C. Largest θ allowed for the cold plate, in °C/W?', qty(70 / 500 - 0.07, '', 0.03, sig(70 / 500 - 0.07)), `70 / 500 = 0.14 °C/W in total, minus 0.07 = ${sig(70 / 500 - 0.07)} °C/W. That calls for liquid cooling.`) },
     mc('After thermal cycling, the corner bumps crack first. Why?', ['CTE mismatch: shear is largest at the corners, far from centre', 'Electromigration, since the corner bumps pass the most current', 'The corners carry the most current in this package at all times', 'Bad solder at the corners only, from the paste printing step'], 0, 'The substrate grows more than the silicon. Shear scales with distance from the neutral point; underfill and stiffeners spread it.'),
   ],

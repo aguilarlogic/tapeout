@@ -183,15 +183,15 @@ export const dram: Lesson = {
       const bw = (mt * 8) / 1000;
       return ask(`A DDR5-${mt} DIMM transfers ${mt} MT/s on a 64-bit data path (two 32-bit subchannels). Peak bandwidth in **GB/s**?`, qty(bw, 'GB/s', 0.01), `${mt}e6 transfers/s × 8 bytes = ${bw.toFixed(1)} GB/s.`, 'Transfers per second × bytes per transfer.');
     }),
-    say('GPUs and AI accelerators need far more. **HBM** stacks DRAM dies on top of each other and sits next to the processor on a silicon interposer, with a **1024-bit** interface per stack. Very wide, moderately fast, and lower energy per bit.'),
+    say('GPUs and AI accelerators need far more. **HBM** stacks DRAM dies on top of each other and sits next to the processor on a silicon interposer, Up to HBM3E each stack has a **1024-bit** interface (HBM3E parts run about 9.2 to 9.8 Gb/s per pin, about 1.2 TB/s per stack); **HBM4** doubles it to **2048 bits** at up to about 8 Gb/s per pin, about 2 TB/s per stack. Very wide, moderately fast, and lower energy per bit.'),
     gen((r) => {
-      const gbps = pick(r, [3.2, 6.4, 8]);
-      const bw = (1024 * gbps) / 8;
-      return ask(`An HBM stack has a 1024-bit interface at ${gbps} Gb/s per pin. Peak bandwidth in **GB/s**?`, qty(bw, 'GB/s', 0.01), `1024 × ${gbps} Gb/s / 8 = ${bw.toFixed(1)} GB/s per stack. An accelerator with 6 to 8 stacks passes several TB/s.`, 'Pins × rate per pin ÷ 8 bits per byte.');
+      const [gen, w, gbps] = pick(r, [['HBM2E', 1024, 3.2], ['HBM3', 1024, 6.4], ['HBM3E', 1024, 9.6], ['HBM4', 2048, 8]] as [string, number, number][]);
+      const bw = (w * gbps) / 8;
+      return ask(`An ${gen} stack has a ${w}-bit interface at ${gbps} Gb/s per pin. Peak bandwidth in **GB/s**?`, qty(bw, 'GB/s', 0.01), `${w} × ${gbps} Gb/s / 8 = ${bw.toFixed(1)} GB/s per stack. An accelerator with 6 to 8 stacks passes several TB/s.`, 'Pins × rate per pin ÷ 8 bits per byte.');
     }),
-    mc('Why is HBM placed on an **interposer** right next to the die instead of on DIMMs?', ['It is cheaper than the DIMM slots, which need a lot of board area', 'A wide bus needs short, dense wires that only interposers give', 'HBM cannot be refreshed unless it is mounted next to the die itself', 'For cooling, since the interposer carries the heat away from the die'], 1, 'Microscopic interposer wires make it short, dense and low energy; the bus is impossible on a PCB. Thousands of short wires on silicon beat a few long ones on a board: this is the core idea of 2.5D/3D packaging and chiplets.'),
+    mc('Why is HBM placed on an **interposer** right next to the die instead of on DIMMs?', ['It is cheaper than the DIMM slots, which need a lot of board area', 'A wide bus needs short, dense wires that only interposers give', 'HBM cannot be refreshed unless it is mounted next to the die itself', 'For cooling, since the interposer carries the heat away from the die'], 1, 'Microscopic interposer wires make it short, dense and low energy; a 1024- or 2048-bit bus is impossible on a PCB. Thousands of short wires on silicon beat a few long ones on a board: this is the core idea of 2.5D/3D packaging and chiplets.'),
   ],
-  recap: ['DRAM: 1T1C, refresh, destructive reads, row buffers.', 'Hit: CL. Closed: tRCD + CL. Conflict: tRP + tRCD + CL.', 'Controllers schedule for row hits (FR-FCFS) and bank parallelism.', 'DDR5 BW = MT/s × 8 B; HBM = 1024 bits × Gb/s ÷ 8 per stack.', 'Wide, short interposer wires make HBM possible.'],
+  recap: ['DRAM: 1T1C, refresh, destructive reads, row buffers.', 'Hit: CL. Closed: tRCD + CL. Conflict: tRP + tRCD + CL.', 'Controllers schedule for row hits (FR-FCFS) and bank parallelism.', 'DDR5 BW = MT/s × 8 B; HBM BW = interface bits × Gb/s ÷ 8 per stack (1024 bits through HBM3E, 2048 from HBM4).', 'Wide, short interposer wires make HBM possible.'],
 };
 
 export const bus: Lesson = {
