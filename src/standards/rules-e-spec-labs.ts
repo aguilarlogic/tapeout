@@ -8,4 +8,10 @@ export const RULES_E_SPEC_LABS: Rule[] = [
     files: /src\/games\/spec\/secsafe\.ts$/,
     ban: /safety-related (failure rate|FIT)/i,
   },
+  {
+    id: 'E11-pll-vco-bw',
+    why: 'E11: VCO noise variance scales as 1/BW, not 1/BW²',
+    files: /src\/games\/spec\/eda\.ts$/,
+    ban: /\/BW²/,
+  },
 ];
