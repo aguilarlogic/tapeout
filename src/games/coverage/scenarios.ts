@@ -157,7 +157,7 @@ const fifo: Scenario = {
     <p>Some bugs hide behind <b>state</b>, not values. A FIFO only misbehaves when it's full or empty, and a 50/50
     push/pop random walk hovers near empty almost forever.</p>
     <p>To reach deep states you need <b>sequences</b>: a phase that fills, a phase that hammers the full FIFO,
-    a phase that drains. That's exactly what UVM virtual sequences are for.</p>
+    a phase that drains. That's what layered (nested) sequences are for; virtual sequences do the same across several sequencers.</p>
     <p>And remember: a bug that corrupts data is only <b>found</b> when the corrupted data comes out and the
     scoreboard compares it. Triggering isn't enough &mdash; you need <b>observability</b>.</p>
     <h4>Goal</h4><ul><li>100% coverage of the 32-deep FIFO and the scoreboard catching the bug.</li>

@@ -156,7 +156,7 @@ export const PCB_LEVELS: PcbLevel[] = [
     brief: `
       <p>USB, PCIe, Ethernet and DDR clocks use <b>differential pairs</b>: two traces carrying opposite signals. The receiver
       looks only at the difference, so noise that hits both equally cancels out &mdash; but only if the traces are
-      <b>routed side by side</b> (tightly coupled) and <b>length-matched</b>, so both edges arrive together.</p>
+      <b>routed symmetrically</b> (usually side by side, tightly coupled) and <b>length-matched</b>, so both edges arrive together.</p>
       <p>When a pair turns a corner the outer trace gets longer. Fix the skew with a small <b>serpentine</b> (a bump) on the
       inner trace.</p>
       <h4>Goal</h4><ul><li>Route USB_DP and USB_DN from J1 to U1 on the top layer.</li>
