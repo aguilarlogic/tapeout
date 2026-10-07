@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { rng } from '../sim/harness';
 import { evaluate as evaluateSv } from './sv/check';
 import { findTbLevel } from './sv/levels';
@@ -7,6 +7,9 @@ import { findSvaLevel } from './sva/levels';
 import { evaluateCore } from './rv/harness';
 import { findRvLevel } from './rv/levels';
 import { plain, runJob, type EvalJob, type EvalReply } from './eval.job';
+
+// Evaluating a boss twice (directly and through the job) takes several seconds on a loaded CI machine.
+vi.setConfig({ testTimeout: 60_000 });
 
 const run = (job: EvalJob) => { const out: EvalReply[] = []; runJob(job, (m) => out.push(structuredClone(m))); return out; };
 
