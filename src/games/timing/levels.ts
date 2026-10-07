@@ -71,7 +71,7 @@ slack    = required - arrival   (must be &ge; 0)</pre>
       value the capture flop is still latching?"</p>
       <pre>hold slack = min arrival - (capture latency + hold)</pre>
       <p>Notice the clock period doesn't appear: <b>you can't fix hold by slowing the clock</b>, which is why hold
-      violations found after tapeout are fatal. Here the clock tree reaches <code>reg_b</code> 0.25 ns late, so the short
+      violations found after tapeout are very expensive (a respin). Here the clock tree reaches <code>reg_b</code> 0.25 ns late, so the short
       path from <code>reg_a</code> races through. Hold is checked at the fast corner (delays &times; 0.7).</p>
       <p>Click a wire to insert <b>delay buffers</b>. Careful: they also slow down setup on that wire.</p>
       <h4>Goal</h4><ul><li>Fix every hold violation without breaking setup.</li></ul>`,
