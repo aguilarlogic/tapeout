@@ -1,7 +1,7 @@
 // Elaborates a parsed module and simulates it cycle by cycle.
 //
-// Semantics are a faithful subset of IEEE 1364 for synthesizable RTL, with two
-// simplifications that are called out in the game's help text:
+// Semantics are a faithful subset of IEEE 1800 (SystemVerilog, which absorbed 1364) for synthesizable RTL, with two
+// simplifications that the labs' model note states to the player (plan S0.3):
 //   * 2-state values (no X/Z); registers start at 0.
 //   * All arithmetic is unsigned.
 // Expression widths follow Verilog's context-determined sizing rules, so classic

@@ -98,7 +98,7 @@ export const GLOSSARY: Entry[] = [
   E('dft|scan|scan chain|atpg', 'Design for test: scan chains make flops controllable/observable; ATPG generates patterns to detect faults.', 'dft'),
   E('stuck-at|stuck at|fault coverage', 'A fault model where a node acts as tied to 0 or 1. Coverage = fraction of modelled faults detected.', 'dft'),
   E('bist|mbist|lbist', 'Built-in self-test: MBIST runs March tests on memories; LBIST uses LFSR patterns and a MISR signature.', 'dft'),
-  E('jtag|tap|boundary scan', 'IEEE 1149.1: TCK/TMS/TDI/TDO and a 16-state TAP controller; boundary scan tests board connections.', 'dft'),
+  E('jtag|tap|boundary scan', 'The test port: TCK/TMS/TDI/TDO and a 16-state TAP controller; boundary scan tests board connections.', 'dft'),
   E('cpi|ipc|iron law', 'Time = instructions × CPI × clock period. IPC = 1/CPI.', 'pipe'),
   E('hazard|forwarding|bypassing|stall', 'Hazards stall pipelines: structural, data (fixed mostly by forwarding) and control.', 'pipe'),
   E('out-of-order|out of order|ooo|superscalar|rob|reorder buffer', 'Executing instructions when their operands are ready, retiring in order through a reorder buffer.', 'ooo'),
