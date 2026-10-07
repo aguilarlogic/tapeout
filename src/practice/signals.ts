@@ -229,8 +229,8 @@ export const controlPractice = practice('practice-control', 'Loop Drills', 'loop
   },
   (r, d) => {
     const gbw = pick(r, [1e6, 10e6, 100e6]), G = pick(r, tier(d, [1, 10], [10, 100], [5, 20, 50]));
-    const idea = 'An op-amp\'s gain-bandwidth product (GBW) is fixed: set a closed-loop gain G and the bandwidth becomes GBW/G. The closed loop then behaves like a single pole with τ = 1/(2π·BW), and settling to a fraction ε of the step takes τ·ln(1/ε).';
-    if (d < 3) return walk(ask(`An op-amp with GBW = ${eng(gbw, 'Hz')} is set to a closed-loop gain of ${G}. Bandwidth, in Hz?`, qty(gbw / G, 'Hz', 0.01), `${eng(gbw, 'Hz')}/${G} = ${eng(gbw / G, 'Hz')}.`, 'BW = GBW / G.'),
+    const idea = 'An op-amp\'s gain-bandwidth product (GBW) is fixed: the closed-loop bandwidth becomes GBW / noise gain, which for a non-inverting stage of gain G is GBW/G. The closed loop then behaves like a single pole with τ = 1/(2π·BW), and settling to a fraction ε of the step takes τ·ln(1/ε).';
+    if (d < 3) return walk(ask(`An op-amp with GBW = ${eng(gbw, 'Hz')} is set up as a non-inverting amplifier with a closed-loop gain of ${G}. Bandwidth, in Hz?`, qty(gbw / G, 'Hz', 0.01), `${eng(gbw, 'Hz')}/${G} = ${eng(gbw / G, 'Hz')}.`, 'BW = GBW / noise gain; non-inverting, so that is G.'),
       'gain-bandwidth product', idea,
       calc('BW = GBW / G:', `${gbw} / ${G}`, gbw / G, 'Hz', sig(gbw / G), 0.01));
     const tau = 1 / (2 * Math.PI * (gbw / G));

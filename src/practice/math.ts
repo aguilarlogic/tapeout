@@ -307,7 +307,7 @@ export const odePractice = practice('practice-ode', 'Transient Drills', 'RC/RLC 
       calc('√(C/L):', `√(${C} / ${L})`, Math.sqrt(C / L), '', sig(Math.sqrt(C / L))),
       calc(`ζ = (R/2) × that, with R = ${R} Ω:`, `${R / 2} × ${sig(Math.sqrt(C / L))}`, z, '', sig(z), 0.02));
     const Rc = 2 * Math.sqrt(L / C);
-    return walk(ask(`L = ${eng(L, 'H')}, C = ${eng(C, 'F')}. What series R makes the network critically damped (ζ = 1), in mΩ?`, qty(Rc * 1000, 'mΩ', 0.02), `ζ = 1 → R = 2√(L/C) = ${eng(Rc, 'Ω')}. This is the "target impedance" idea: damp the PDN to √(L/C).`, 'Solve ζ = (R/2)√(C/L) = 1 for R.'),
+    return walk(ask(`L = ${eng(L, 'H')}, C = ${eng(C, 'F')}. What series R makes the network critically damped (ζ = 1), in mΩ?`, qty(Rc * 1000, 'mΩ', 0.02), `ζ = 1 → R = 2√(L/C) = ${eng(Rc, 'Ω')}. PDN designers often damp to R ≈ √(L/C) (Q ≈ 1) and size the network against Z_target = ΔV/ΔI.`, 'Solve ζ = (R/2)√(C/L) = 1 for R.'),
       'critical damping', idea,
       calc('Set ζ = 1 and solve: R = 2√(L/C). First √(L/C), in ohms:', `√(${L} / ${C})`, Math.sqrt(L / C), 'Ω', sig(Math.sqrt(L / C))),
       calc('R = 2 × that, in mΩ:', `2 × ${sig(Math.sqrt(L / C))} × 1000`, Rc * 1000, 'mΩ', undefined, 0.02));
