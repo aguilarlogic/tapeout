@@ -136,7 +136,7 @@ const qPulse: ArchLevel = {
     const tmax = Math.round((1000 / (2 * bestOm)) * 1.5);
     return {
       brief: `<p>A transmon (anharmonicity α = ${alpha} MHz, T₁ = ${T1} µs, T₂ = ${T2} µs) is rotated by a resonant pulse of Rabi frequency Ω. A <b>π pulse</b> has area π: with a rectangular envelope its duration is <b>t = 1/(2Ω)</b> (Ω in MHz gives t in µs). You can also scale the amplitude by a factor <b>s</b> to calibrate the area: rotation = π·s.</p>
-<p>Error sources (all added, in units of infidelity):</p>
+<p>Error sources in this lab's model (all added, in units of infidelity):</p>
 <ul><li><b>Decoherence</b>: t·(1/3T₁ + 1/3T<sub>φ</sub>), with 1/T<sub>φ</sub> = 1/T₂ − 1/(2T₁). Longer pulses are worse.</li><li><b>Leakage</b> to |2⟩: 0.1·(Ω/α)². Stronger pulses are worse. The <b>DRAG</b> correction adds a quadrature component that cancels most of it: 0.1·(Ω/α)⁴ instead.</li><li><b>Over/under-rotation</b>: (π·(s − 1))² / 6.</li></ul>
 <p>Choose Ω, s and DRAG so that the total error is at most <b>${(target * 1e4).toFixed(2)} × 10⁻⁴</b> and the pulse is no longer than <b>${tmax} ns</b>.</p>`,
       hints: ['The area must be exactly π: set s to 1.000 unless the model tells you otherwise.', 'Total error vs Ω has a minimum: decoherence falls as 1/Ω, leakage rises as Ω² (or Ω⁴ with DRAG). The plot shows both curves.', 'DRAG moves the minimum to a higher Ω and lowers it, so it is worth switching on.'],
