@@ -311,8 +311,9 @@ function grep(ctx: Ctx, args: string[]): number {
     if (recursive && ctx.fs.isDir(abs)) for (const p of ctx.fs.walk(abs)) expanded.push({ shown: f === '.' ? p.slice(abs.length + 1) : `${f.replace(/\/$/, '')}${p.slice(abs.length)}`, path: p });
     else expanded.push({ shown: f, path: abs });
   }
-  let re: RegExp;
-  try { re = makeRegex(patterns.map((p) => (flags.has('F') ? p : p)).join('\n').split('\n').length > 1 ? patterns[0] : patterns[0], { extended: flags.has('E') || flags.has('P'), ignoreCase: flags.has('i'), word: flags.has('w'), fixed: flags.has('F') }); } catch (e) { ctx.err(`grep: ${(e as Error).message}\n`); return 2; }
+  let re: RegExp, warned = false;
+  const stray = (c: string) => { if (!warned) ctx.err(`grep: warning: stray \\ before ${c}\n`); warned = true; };
+  try { re = makeRegex(patterns[0], { extended: flags.has('E'), perl: flags.has('P'), ignoreCase: flags.has('i'), word: flags.has('w'), fixed: flags.has('F'), onStray: stray }); } catch (e) { ctx.err(`grep: ${(e as Error).message}\n`); return 2; }
   const invert = flags.has('v'), count = flags.has('c'), listOnly = flags.has('l'), withNo = flags.has('n'), only = flags.has('o'), quiet = flags.has('q'), noName = flags.has('h');
   const max = vals.m ? parseInt(vals.m, 10) : Infinity;
   const ctxA = parseInt(vals.A ?? vals.C ?? '0', 10), ctxB = parseInt(vals.B ?? vals.C ?? '0', 10);
@@ -356,7 +357,7 @@ function find(ctx: Ctx, args: string[]): number {
   type Pred = (abs: string, shown: string) => boolean;
   const preds: Pred[] = [];
   let maxdepth = Infinity, mindepth = 0, action: 'print' | 'delete' | 'exec' | 'print0' = 'print';
-  let execCmd: string[] = [];
+  let execCmd: string[] = [], batch = false; // batch: -exec … {} + runs once with every match
   let neg = false;
   const push = (p: Pred) => { const n = neg; neg = false; preds.push(n ? (a, s) => !p(a, s) : p); };
   for (; i < args.length; i++) {
@@ -382,7 +383,14 @@ function find(ctx: Ctx, args: string[]): number {
       case '-print': action = 'print'; break;
       case '-print0': action = 'print0'; break;
       case '-delete': action = 'delete'; break;
-      case '-exec': { action = 'exec'; execCmd = []; i++; while (i < args.length && args[i] !== ';' && args[i] !== '+') execCmd.push(args[i++]); break; }
+      case '-exec': {
+        action = 'exec'; execCmd = []; i++;
+        while (i < args.length && args[i] !== ';' && args[i] !== '+') execCmd.push(args[i++]);
+        // an unquoted ; was already eaten by the shell as a command separator, so the terminator never arrives
+        if (i >= args.length || !execCmd.length) { ctx.err("find: missing argument to '-exec'\n"); return 1; }
+        batch = args[i] === '+';
+        break;
+      }
       default: ctx.err(`find: unknown predicate \`${a}'\n`); return 1;
     }
   }
@@ -398,6 +406,13 @@ function find(ctx: Ctx, args: string[]): number {
       const shown = p === base ? s : `${s.replace(/\/$/, '')}${p.slice(base.length)}`;
       if (preds.every((f) => f(p, shown))) hits.push([p, shown]);
     }
+  }
+  if (action === 'exec' && batch) {
+    if (hits.length) {
+      const argv = execCmd.flatMap((x) => (x === '{}' ? hits.map((h) => h[1]) : [x]));
+      ctx.sh.invoke(argv[0], argv.slice(1), new StdIn(''), ctx.out, ctx.err);
+    }
+    return status;
   }
   for (const [abs, shown] of action === 'delete' ? [...hits].reverse() : hits) {
     if (action === 'print') ctx.out(shown + '\n');

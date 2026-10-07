@@ -154,7 +154,8 @@ class P {
       case '$onehot': return (tr, t) => { const x = arg(tr, t).v; return { v: BigInt(x !== 0n && (x & (x - 1n)) === 0n), w: 1 }; };
       case '$onehot0': return (tr, t) => { const x = arg(tr, t).v; return { v: BigInt((x & (x - 1n)) === 0n), w: 1 }; };
       case '$countones': return (tr, t) => { let x = arg(tr, t).v, c = 0; while (x) { c += Number(x & 1n); x >>= 1n; } return { v: BigInt(c), w: 32 }; };
-      case '$isunknown': return () => ({ v: 0n, w: 1 });
+      // it would always return 0, so `assert (!$isunknown(x))` would pass vacuously: refuse it instead
+      case '$isunknown': return this.fail('$isunknown is meaningless in a 2-state engine: X and Z are not modelled.');
       default: return this.fail(`system function ${name} is not supported`);
     }
   }
@@ -389,12 +390,18 @@ function ends(s: Seq, ctx: Ctx, t: number): Set<number> {
         if (s.hi === INF) ctx.trunc = true;
       } else {
         // goto [->n]: the n-th occurrence (match ends there); nonconsecutive [=n]: may be followed by idle cycles
-        let count = 0;
+        let count = 0, closed = false;
+        const hi = s.hi === INF ? Infinity : s.hi;
         for (let u = t; u < ctx.tr.n; u++) {
-          if (ends(s.s, ctx, u).size) { count++; if (count >= s.lo && count <= (s.hi === INF ? count : s.hi)) { out.add(u); } if (s.hi !== INF && count >= s.hi) break; }
-          if (s.mode === '=' && count >= s.lo && count <= (s.hi === INF ? count : s.hi)) out.add(u);
+          if (ends(s.s, ctx, u).size) {
+            if (count === hi) { closed = true; break; } // one occurrence too many: no match extends past here
+            count++;
+            if (count >= s.lo) out.add(u); // [->n] and [=n] both end on the n-th occurrence…
+            if (s.mode === '->' && count === hi) { closed = true; break; } // …and [->n] has no later end point
+          } else if (s.mode === '=' && count >= s.lo) out.add(u); // …[=n] may also end on idle cycles after it
         }
-        ctx.trunc = true;
+        // only undecided if the trace ran out while a (longer) match could still form
+        if (!closed && (count < hi || s.mode === '=')) ctx.trunc = true;
       }
       break;
     }

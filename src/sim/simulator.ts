@@ -61,6 +61,8 @@ export class Design {
   readonly signals = new Map<string, Signal>();
   readonly params = new Map<string, { value: bigint; width: number; signed: boolean }>();
   readonly lints: Lint[] = [];
+  /** Compile warnings that do not cost a star: the 2-state model has no x/z, so such literals read as 0. */
+  readonly warnings: Lint[] = [];
   readonly ports: Signal[] = [];
 
   private values = new Map<string, bigint>();
@@ -75,6 +77,7 @@ export class Design {
   constructor(src: string | ModuleAst) {
     const ast = typeof src === 'string' ? parseModule(src) : src;
     this.name = ast.name;
+    for (const line of new Set(ast.xlits ?? [])) this.warnings.push({ line, message: 'x/z bits are treated as 0 in this 2-state simulator' });
     this.elaborate(ast);
     this.settle();
   }

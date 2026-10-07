@@ -23,6 +23,7 @@ export function parseModule(src: string): ModuleAst {
 
 class Parser {
   private p = 0;
+  private xlits = new Map<Expr, number>(); // literals with x/z/? bits; casez/casex labels are removed again
   constructor(private toks: Token[]) {}
 
   private get t(): Token { return this.toks[this.p]; }
@@ -51,6 +52,7 @@ class Parser {
       if (this.is('module')) throw new VerilogError('only one module per file is supported for now', this.t.line);
       throw new VerilogError(`unexpected '${this.t.text}' after endmodule`, this.t.line);
     }
+    if (this.xlits.size) mod.xlits = [...this.xlits.values()];
     return mod;
   }
 
@@ -303,6 +305,7 @@ class Parser {
         }
         const labels: Expr[] = [];
         do labels.push(this.expr()); while (this.accept(','));
+        if (kind !== 'case') for (const l of labels) this.xlits.delete(l); // z, x and ? are don't-cares here
         this.expect(':', 'after case item');
         items.push({ labels, body: this.stmt() });
       }
@@ -409,7 +412,12 @@ class Parser {
 
   private primary(): Expr {
     const t = this.t;
-    if (t.kind === 'num') { this.next(); return { k: 'num', lit: t.num!, line: t.line }; }
+    if (t.kind === 'num') {
+      this.next();
+      const n: Expr = { k: 'num', lit: t.num!, line: t.line };
+      if (t.num!.dcMask) this.xlits.set(n, t.line);
+      return n;
+    }
     if (this.accept('(')) {
       const e = this.expr();
       this.expect(')');

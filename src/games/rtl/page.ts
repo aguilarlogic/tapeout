@@ -45,6 +45,7 @@ export function rtlPage(id: string): HTMLElement {
       if (res.error.line) errLines.push(res.error.line);
     }
     for (const l of res.lints) messages.append(h('li', { class: 'msg warn' }, h('b', null, 'Lint'), ` line ${l.line}: ${l.message}`));
+    for (const w of res.warnings) messages.append(h('li', { class: 'msg warn' }, h('b', null, 'Warning'), ` line ${w.line}: ${w.message}`));
     ed.markLines(errLines, res.lints.map((l) => l.line));
 
     if (res.error) {
