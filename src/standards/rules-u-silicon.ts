@@ -7,4 +7,5 @@ export const RULES_U_SILICON: Rule[] = [
   { id: 'U8-req', why: 'U8: the I/O lesson must teach the charged-device model', require: { file: /lessons\/frontier\.ts$/, re: /charged-device model|CDM/ } },
   { id: 'U8-cdm', why: 'U8: CDM is a destructive qualification test, not a production screen', ban: /CDM screening at final test/ },
   { id: 'U8-latch', why: 'U8: the I/O lesson must teach latch-up qualification', require: { file: /lessons\/frontier\.ts$/, re: /[Ll]atch-up qualification/ } },
+  { id: 'U9', why: 'U9: automotive zero-defect programmes run far below 1 DPPM, not single digits', ban: /single.digit(s)? DPPM|DPPM[^.]*single digits|under 10 DPPM|[Aa]utomotive (wants|customers want) (under 10|single digits)|[Cc]ars want single digits/ },
 ];
