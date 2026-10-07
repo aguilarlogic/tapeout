@@ -47,5 +47,5 @@ export default defineConfig(({ mode }) => ({
   },
   plugins: mode === 'hosted' ? [] : [singleFile()],
   // The suite is CPU-bound and cut into similar-sized files: one worker per core (the default leaves one core idle).
-  test: { maxWorkers: Math.max(2, availableParallelism()) },
+  test: { maxWorkers: Math.max(2, availableParallelism()), exclude: ['**/node_modules/**', '**/dist*/**', '.claude/**'] },
 }));
