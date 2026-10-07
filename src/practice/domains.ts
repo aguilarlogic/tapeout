@@ -56,10 +56,18 @@ export const npuPractice = practice('practice-npu', 'AI Hardware Drills', 'MAC c
       'model weight memory', 'A model is a long list of numbers (parameters). Each one is stored in some number of bytes depending on its format: FP16 uses 2 bytes, INT8 uses 1, INT4 uses half a byte. Memory = number of parameters × bytes per parameter. With parameters in billions (B), the result comes out directly in gigabytes.',
       choice(`${fmt[0]} stores each parameter in how many bytes?`, String(fmt[1]), ['2', '1', '0.5', '4'].filter((x) => x !== String(fmt[1])).slice(0, 2)),
       calc('Memory in GB = billions of parameters × bytes per parameter:', `${b} × ${fmt[1]}`, gb, 'GB', sig(gb), 0.02));
-    const layers = pick(r, [32, 40, 80]), dm = pick(r, [4096, 5120, 8192]), tok = pick(r, [4096, 32768]), kv = (2 * layers * dm * tok * 2) / 1e9;
-    return walk(ask(`KV cache: ${layers} layers, model width ${dm}, ${tok} tokens of context, FP16. Size, in GB? (2 × layers × width × tokens × 2 bytes)`, qty(kv, 'GB', 0.02, sig(kv)), `2 (K and V) × ${layers} × ${dm} × ${tok} × 2 bytes = ${sig(kv)} GB per sequence. Long contexts can need more memory than the weights.`, 'Keys and values, per layer, per token.'),
-      'the KV cache', 'While generating text, a transformer keeps the "key" and "value" vectors of every earlier token in every layer, so it does not have to recompute them: the KV cache. Per token and per layer it stores 2 vectors (K and V) of the model width, each number in 2 bytes (FP16). So its size = 2 × layers × width × tokens × 2 bytes.',
-      calc('Values stored per token = 2 (K and V) × layers × width:', `2 × ${layers} × ${dm}`, 2 * layers * dm, '', String(2 * layers * dm), 0.001),
+    // KV width = KV heads x head dimension: equal to the model width only for multi-head attention.
+    const layers = pick(r, [32, 40, 80]), dm = pick(r, [1024, 4096, 5120, 8192]), tok = pick(r, [4096, 32768]), kv = (2 * layers * dm * tok * 2) / 1e9;
+    const gqaIdea = 'With multi-head attention the KV width equals the model width. Grouped-query attention shares each K/V head across several query heads, so the KV width is much smaller: a 70B-class model with 8 KV heads of 128 dims stores 1024 numbers per token per layer for K, and again for V.';
+    if (d === 3 && pick(r, [0, 1]) === 1) {
+      const mha = pick(r, [4096, 5120, 8192]), ratio = mha / 1024;
+      return walk(ask(`A model uses grouped-query attention with KV width 1024. The same model without it (multi-head attention, KV width ${mha}) needs how many times more KV-cache memory?`, num(ratio), `The cache is proportional to the KV width: ${mha} / 1024 = ${ratio}.`, 'Cache size scales with KV width; everything else is the same.'),
+        'KV width and grouped-query attention', gqaIdea,
+        calc('Everything else is equal, so the ratio is the ratio of KV widths:', `${mha} / 1024`, ratio, '', String(ratio), 0.001));
+    }
+    return walk(ask(`KV cache: ${layers} layers, KV width ${dm} (KV heads × head dimension), ${tok} tokens of context, FP16. Size, in GB? (2 × layers × KV width × tokens × 2 bytes)`, qty(kv, 'GB', 0.02, sig(kv)), `2 (K and V) × ${layers} × ${dm} × ${tok} × 2 bytes = ${sig(kv)} GB per sequence. Long contexts can need more memory than the weights.`, 'Keys and values, per layer, per token.'),
+      'the KV cache', `While generating text, a transformer keeps the "key" and "value" vectors of every earlier token in every layer, so it does not have to recompute them: the KV cache. Per token and per layer it stores 2 vectors (K and V) of the KV width, each number in 2 bytes (FP16). So its size = 2 × layers × KV width × tokens × 2 bytes. ${gqaIdea}`,
+      calc('Values stored per token = 2 (K and V) × layers × KV width:', `2 × ${layers} × ${dm}`, 2 * layers * dm, '', String(2 * layers * dm), 0.001),
       calc('Bytes = values per token × tokens × 2 bytes each:', `${2 * layers * dm} × ${tok} × 2`, 2 * layers * dm * tok * 2, '', sci(2 * layers * dm * tok * 2, 3), 0.01),
       calc('In GB (÷ 1e9):', `${sci(2 * layers * dm * tok * 2, 3)} / 1e9`, kv, 'GB', sig(kv), 0.02));
   },
@@ -120,9 +128,9 @@ export const aiBoss = boss({
     { t: 'gen', make: () => ask('Weights in FP16, in GB?', qty(140, 'GB', 0.02, '140'), '70e9 × 2 = 140 GB: it does not fit in 80 GB.') },
     { t: 'gen', make: () => ask('Quantized to INT8, in GB?', qty(70, 'GB', 0.02, '70'), '70 GB fits, with 10 GB left for the KV cache.') },
     { t: 'gen', make: () => ask('Batch 1, INT8. Maximum tokens per second (every weight read once per token)?', qty(3350 / 70, '', 0.03, sig(3350 / 70)), `3350 / 70 = ${sig(3350 / 70)} tokens/s. It meets 30 tokens/s for one user.`) },
-    { t: 'gen', make: () => { const kv = (2 * 80 * 8192 * 4096 * 1) / 1e9; return ask('KV cache: 80 layers, width 8192, 4096 tokens, INT8 (1 byte). Size per user, in GB?', qty(kv, 'GB', 0.02, sig(kv)), `2 × 80 × 8192 × 4096 × 1 = ${sig(kv)} GB. Only ${Math.floor(10 / kv)} user${Math.floor(10 / kv) === 1 ? '' : 's'} fit in the remaining 10 GB.`); } },
+    { t: 'gen', make: () => { const kv = (2 * 80 * 1024 * 4096 * 1) / 1e9; return ask('KV cache: 80 layers, KV width 1024 (grouped-query attention), 4096 tokens, INT8 (1 byte). Size per user, in GB?', qty(kv, 'GB', 0.02, sig(kv)), `2 × 80 × 1024 × 4096 × 1 = ${sig(kv)} GB. Only ${Math.floor(10 / kv)} user${Math.floor(10 / kv) === 1 ? '' : 's'} fit in the remaining 10 GB.`); } },
     { t: 'gen', make: () => ask('Decode intensity at batch 1 is about 2 FLOP per byte of weights. Ridge point of this chip, in FLOP/byte?', qty(1000 / 3.35, '', 0.02, sig(1000 / 3.35)), `1000 / 3.35 = ${sig(1000 / 3.35)}. At 2 FLOP/byte, decode uses under 1% of peak compute.`) },
-    mc('To serve many users at 30 tokens/s each, what matters most?', ['More memory capacity and bandwidth, and a smaller KV cache', 'More TFLOP/s, since decode is limited by how fast the matrix units run', 'A higher clock', 'Bigger on-chip caches only, with no change to the memory system itself'], 0, 'Add more HBM or split the model across cards, and shrink the cache with grouped-query attention or a quantized KV cache. LLM decode is memory-bound in both bandwidth and capacity. LLM decode is memory-bound in both bandwidth and capacity. Compute is not the bottleneck.'),
+    mc('To serve many users at 30 tokens/s each, what matters most?', ['More memory capacity and bandwidth, and a smaller KV cache', 'More TFLOP/s, since decode is limited by how fast the matrix units run', 'A higher clock', 'Bigger on-chip caches only, with no change to the memory system itself'], 0, 'Add more HBM or split the model across cards. Grouped-query attention is already applied here, so the next levers on the cache are KV quantization, paging and a shorter context. LLM decode is memory-bound in both bandwidth and capacity. Compute is not the bottleneck.'),
   ],
   recap: ['Weight and KV-cache footprints.', 'Decode is memory-bound.', 'Roofline ridge point.', 'Quantization.'],
 });
