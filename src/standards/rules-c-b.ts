@@ -6,4 +6,5 @@ export const RULES_C_B: Rule[] = [
   { id: 'C9', why: 'C9: a vertical smear is a CCD artifact; CMOS blooming is a halo', files: /incidents/, ban: /vertical (streak|smear)[^.]*bloom|bloom[^.]*vertical (streak|smear)/i },
   { id: 'C10', why: 'C10: the radio allows about ±50 ppm; ±20 ppm is the design budget for the crystal alone', ban: /±20 ppm the protocol allows|protocol allows ±20 ppm/ },
   { id: 'C8', why: 'C8: load capacitance pulls a crystal by ppm, never by 8.75 percent', ban: /26\.1 MHz/ },
+  { id: 'C12', why: 'C12: the Born rule is |b|², the squared magnitude, not b²', files: /practice\/domains|lessons\/quantum/, ban: /probability (is|=) [ab]²|the SQUARE of its amplitude/ },
 ];

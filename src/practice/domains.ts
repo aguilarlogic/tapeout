@@ -463,7 +463,7 @@ export const qubitPractice = practice('practice-qubit', 'Qubit Drills', 'state s
       count('Round down to a whole number of qubits:', `floor(${sig(Math.log2((tb * 1e12) / 16), 4)})`, n));
   },
   (r, d) => {
-    const idea = 'Measuring a qubit gives 0 or 1 at random. If the qubit is in the state a|0⟩ + b|1⟩, the probability of reading 1 is b², the SQUARE of its amplitude (the Born rule); reading 0 has probability a², and the two add up to 1.';
+    const idea = 'Measuring a qubit gives 0 or 1 at random. If the qubit is in the state a|0⟩ + b|1⟩, the probability of reading 1 is |b|², the squared magnitude of its amplitude (the Born rule); reading 0 has probability |a|², and the two add up to 1. The amplitudes can be complex numbers, and |b|² = (real part)² + (imaginary part)².';
     if (d === 1) return walk(ask('A qubit in |0⟩ goes through a Hadamard gate and is measured. Probability of reading 1, in %?', qty(50, '%', 0.01, '50'), 'H makes (|0⟩ + |1⟩)/√2, and each outcome has probability (1/√2)² = 50%.', 'Square the amplitude.'),
       'the Born rule after a Hadamard', `${idea} The Hadamard gate turns |0⟩ into (|0⟩ + |1⟩) ÷ √2: both amplitudes are 1 ÷ √2.`,
       calc('Probability of 1 = (1 ÷ √2) squared, as a %:', '(1 / sqrt(2))^2 × 100', 50, '%', '50', 0.01));
@@ -471,8 +471,16 @@ export const qubitPractice = practice('practice-qubit', 'Qubit Drills', 'state s
       const [a, b] = pick(r, [[0.6, 0.8], [0.8, 0.6], [0.28, 0.96]] as const);
       return walk(ask(`A qubit is in ${a}|0⟩ + ${b}|1⟩. Probability of measuring 1, in %?`, qty(b * b * 100, '%', 0.01, sig(b * b * 100)), `|${b}|² = ${sig(b * b)} → ${sig(b * b * 100)}%. Probabilities are squared amplitudes, and they add to 1.`, 'Born rule.'),
         'the Born rule', idea,
-        choice('The amplitude of |1⟩ is ' + b + '. The probability of reading 1 is the amplitude:', 'Squared', ['Itself', 'Doubled']),
+        choice('The amplitude of |1⟩ is ' + b + '. The probability of reading 1 is the amplitude:', 'Squared in magnitude', ['Itself', 'Doubled']),
         calc('Probability = amplitude squared, as a % (× 100):', `${b}^2 × 100`, b * b * 100, '%', sig(b * b * 100), 0.01));
+    }
+    if (pick(r, [0, 1]) === 1) {
+      const [re, im] = pick(r, [[0.5, 0.5], [0.6, 0.8], [0, 1], [0.3, 0.4]] as const), pc = (re * re + im * im), amp = `(${re} + ${im}i)`;
+      return walk(ask(`A qubit's amplitude for |1⟩ is b = ${amp}. Probability of measuring 1 is |b|² (the squared magnitude, not b²). Give |b|², as a number?`, qty(pc, '', 0.01, sig(pc)), `|b|² = ${re}² + ${im}² = ${sig(pc)}. Squaring a complex amplitude directly (b²) would give a complex number, not a probability.`, '|b|² = real² + imaginary².'),
+        'the Born rule with complex amplitudes', idea,
+        calc('Real part squared:', `${re}^2`, re * re, '', sig(re * re), 0.001),
+        calc('Imaginary part squared:', `${im}^2`, im * im, '', sig(im * im), 0.001),
+        calc('|b|² = sum of the two:', `${sig(re * re)} + ${sig(im * im)}`, pc, '', sig(pc), 0.01));
     }
     const th = pick(r, [20, 30, 40, 50, 60, 75, 90, 105, 120, 150]), p = Math.sin(((th / 2) * Math.PI) / 180) ** 2 * 100;
     return walk(ask(`A qubit in |0⟩ is rotated by θ = ${th}° about the X axis, giving cos(θ/2)|0⟩ - i·sin(θ/2)|1⟩. Probability of measuring 1, in %?`, qty(p, '%', 0.02, sig(p)), `sin²(${th / 2}°) = ${sig(p)}%. A π rotation (180°) flips the qubit completely.`, 'sin²(θ/2).'),
