@@ -130,11 +130,11 @@ export const control: Lesson = {
       const pm = pick(r, [10, 30, 45, 60, 75]);
       return mc(`A regulator loop has a phase margin of ${pm}°. How does it respond to a load step?`, ['Rings a lot, close to oscillating', 'Some overshoot, acceptable', 'Clean and well damped'], pm < 35 ? 0 : pm < 55 ? 1 : 2, `${pm}° is ${pm < 35 ? 'too little: expect heavy ringing, and a slow corner could make it oscillate' : pm < 55 ? 'acceptable: a little overshoot' : 'comfortable: well damped'}. Designers add compensation (a capacitor that moves a pole) to fix low margins.`);
     }),
-    say('For a single-pole amplifier, gain × bandwidth is constant: the **gain-bandwidth product** (GBW). Close the loop for a gain G and the bandwidth becomes GBW / G.'),
+    say('For a single-pole amplifier, gain × bandwidth is constant: the **gain-bandwidth product** (GBW). Close the loop and the bandwidth becomes GBW / noise gain: GBW / G for a non-inverting amplifier, GBW / (1 + |G|) for an inverting one.'),
     gen((r) => {
       const gbw = pick(r, [1, 10, 100]);
       const g = pick(r, [1, 10, 20, 100]);
-      return ask(`An op-amp has GBW = ${gbw} MHz. Used as an amplifier with gain ${g}, what is its bandwidth, in kHz?`, qty((gbw * 1000) / g, 'kHz', 0.01), `BW = GBW/G = ${gbw} MHz / ${g} = ${r3((gbw * 1000) / g)} kHz.`, 'BW = GBW / gain.');
+      return ask(`An op-amp has GBW = ${gbw} MHz. Used as a non-inverting amplifier with gain ${g}, what is its bandwidth, in kHz?`, qty((gbw * 1000) / g, 'kHz', 0.01), `BW = GBW / noise gain = GBW/G (non-inverting) = ${gbw} MHz / ${g} = ${r3((gbw * 1000) / g)} kHz.`, 'BW = GBW / noise gain; for a non-inverting stage that is the gain.');
     }),
     gen((r) => {
       const f = pick(r, [100, 500, 1000]);
@@ -142,7 +142,7 @@ export const control: Lesson = {
       return ask(`A digital control loop has a ${td} µs delay (ADC + compute + DAC). How much phase lag does that add at ${f} kHz, in degrees?`, qty(360 * f * 1e3 * td * 1e-6, '', 0.02, r3(360 * f * 1e3 * td * 1e-6).toString()), `φ = 360° × f × t_d = 360 × ${f} kHz × ${td} µs = ${r3(360 * f * 1e3 * td * 1e-6)}°. Delay eats phase margin, which is why fast loops (like qubit feedback) need very low latency.`, 'φ = 360 × f × delay.');
     }),
   ],
-  recap: ['Closed-loop gain A/(1 + Aβ) ≈ 1/β when the loop gain is large.', 'Feedback divides drift by (1 + T).', 'P leaves 1/(1 + K) error; I removes it; D adds damping.', 'Phase margin: 45° OK, 60° comfortable.', 'Bandwidth = GBW / gain.', 'Delay adds 360·f·t_d degrees of lag.'],
+  recap: ['Closed-loop gain A/(1 + Aβ) ≈ 1/β when the loop gain is large.', 'Feedback divides drift by (1 + T).', 'P leaves 1/(1 + K) error; I removes it; D adds damping.', 'Phase margin: 45° OK, 60° comfortable.', 'Bandwidth = GBW / noise gain.', 'Delay adds 360·f·t_d degrees of lag.'],
 };
 
 export const em: Lesson = {
@@ -181,7 +181,7 @@ export const em: Lesson = {
     gen((r) => {
       const g = pick(r, [0.2, -0.2, 0.333, -0.111]);
       const zl = (50 * (1 + g)) / (1 - g);
-      return ask(`A TDR on a 50 Ω line sees a reflection of Γ = ${g} from a connector. What is the connector's impedance, in Ω?`, qty(zl, 'Ω', 0.02, r3(zl).toString()), `Z = Z₀(1 + Γ)/(1 - Γ) = 50 × ${r3(1 + g)}/${r3(1 - g)} = ${r3(zl)} Ω. ${g > 0 ? 'Positive Γ: higher than 50 Ω (often too narrow a trace or a via stub).' : 'Negative Γ: lower than 50 Ω (extra capacitance, like a pad).'}`, 'Invert Γ = (Z - Z₀)/(Z + Z₀).');
+      return ask(`A TDR on a 50 Ω line sees a reflection of Γ = ${g} from a connector. What is the connector's impedance, in Ω?`, qty(zl, 'Ω', 0.02, r3(zl).toString()), `Z = Z₀(1 + Γ)/(1 - Γ) = 50 × ${r3(1 + g)}/${r3(1 - g)} = ${r3(zl)} Ω. ${g > 0 ? 'Positive Γ: higher than 50 Ω (too narrow a trace, a gap in the reference plane, connector or bond-wire inductance).' : 'Negative Γ: lower than 50 Ω (extra capacitance: pads, via barrels and stubs).'}`, 'Invert Γ = (Z - Z₀)/(Z + Z₀).');
     }),
     say('At high frequencies, current crowds into the outer skin of a conductor. The **skin depth** δ = √(ρ / (π·f·µ)) shrinks as 1/√f, so resistance, and loss, grow with frequency. In copper it is about 2 µm at 1 GHz.'),
     gen((r) => {
