@@ -175,7 +175,7 @@ export const GLOSSARY: Entry[] = [
   E('side channel|side-channel|dpa|power analysis|timing attack', 'Leaking secrets through power, EM or timing. DPA correlates power traces with key guesses.', 'hwsec'),
   E('constant time|constant-time', 'Code whose timing and memory accesses never depend on secret data.', 'hwsec'),
   E('fault injection|glitching|glitch attack', 'Voltage/clock glitches, lasers or EM pulses that make a chip skip or corrupt an operation.', 'hwsec'),
-  E('root of trust|secure boot|opentitan|caliptra', 'An immutable hardware anchor that verifies each boot stage before running it.', 'hwsec'),
+  E('root of trust|secure boot|opentitan|caliptra', 'A hardware anchor whose first stage (boot ROM and fused keys) is immutable; it verifies each boot stage before running it.', 'hwsec'),
   E('puf|physically unclonable function|trng', 'Turning manufacturing variation into a unique device key; TRNGs turn physical noise into random bits.', 'hwsec'),
   E('iso 26262|asil|functional safety|fusa', 'The automotive functional safety standard. ASIL A-D grade the risk; D is the strictest.', 'fusa'),
   E('fit|failures in time|mtbf|mttf', 'FIT = failures per 10⁹ device-hours. MTTF ≈ 10⁹ / FIT hours.', 'fusa'),

@@ -7,4 +7,6 @@ export const RULES_C_B: Rule[] = [
   { id: 'C10', why: 'C10: the radio allows about ±50 ppm; ±20 ppm is the design budget for the crystal alone', ban: /±20 ppm the protocol allows|protocol allows ±20 ppm/ },
   { id: 'C8', why: 'C8: load capacitance pulls a crystal by ppm, never by 8.75 percent', ban: /26\.1 MHz/ },
   { id: 'C12', why: 'C12: the Born rule is |b|², the squared magnitude, not b²', files: /practice\/domains|lessons\/quantum/, ban: /probability (is|=) [ab]²|the SQUARE of its amplitude/ },
+  { id: 'C14', why: 'C14: a PUF key is re-derived from stored non-secret helper data, so the claim "nothing stored" is wrong', ban: /PUF[^.]*nothing (is )?stored/i },
+  { id: 'C14b', why: 'C14: only the first stage of a root of trust is immutable', ban: /small, immutable block|An immutable hardware anchor|nothing can alter it/ },
 ];
