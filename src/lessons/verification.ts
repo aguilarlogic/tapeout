@@ -131,7 +131,7 @@ export const formal: Lesson = {
   concept: 'model checking, BMC, equivalence, assumptions',
   xp: 100,
   steps: [
-    say('Simulation tries some inputs. **Formal verification** proves a property holds for **all** inputs and all reachable states, using mathematics instead of stimulus. When it fails, it hands you a minimal counterexample trace.'),
+    say('Simulation tries some inputs. **Formal verification** proves a property holds for **all** inputs and all reachable states, using mathematics instead of stimulus. When it fails, it hands you a counterexample trace (bounded-model-checking engines return the shortest one).'),
     art(`
    design (RTL)  +  assertions (what must hold)
                  +  assumptions (what inputs are legal)
@@ -149,7 +149,7 @@ export const formal: Lesson = {
     mc('What is **over-constraining**?', ['Writing more assertions than the design needs', 'Assumptions that exclude legal inputs', 'Running the solver out of memory', 'Proving a property to too small a depth'], 1, 'Assumptions so strict that legal (bug-exposing) inputs are excluded, so real bugs are proven "safe". An over-constrained proof is a false sense of security. Check assumptions with cover properties (can the interesting scenarios still happen?) and, where possible, verify them as assertions on the neighbouring block.'),
     say('The other big use of formal is **equivalence checking** (LEC): proving the synthesized netlist implements exactly the same function as the RTL, and that ECO fixes and scan insertion did not break anything. Every tapeout runs it.'),
     mc('After synthesis you run logic equivalence checking. What is it comparing?', ['The netlist\'s timing against the SDC', 'The Boolean function of the RTL and the netlist', 'RTL and gate-level simulation waveforms', 'The netlist\'s power against the UPF'], 1, 'LEC maps state points (flops) between the two designs and proves the combinational logic between them is equivalent. It is exhaustive, unlike gate-level simulation.'),
-    ask('Name the formal result that shows a failing input sequence, as a waveform. (abbreviation)', words('cex', 'counterexample', 'counter-example', 'counter example'), 'A counterexample (CEX) is the shortest trace that violates the property. It is often the fastest way to understand a bug.', 'Three letters.'),
+    ask('Name the formal result that shows a failing input sequence, as a waveform. (abbreviation)', words('cex', 'counterexample', 'counter-example', 'counter example'), 'A counterexample (CEX) is a trace that violates the property (a bounded-model-checking engine finds the shortest). It is often the fastest way to understand a bug.', 'Three letters.'),
   ],
   recap: ['Formal proves properties for all inputs; failures come with a CEX.', 'State explosion: 2^n states; formal suits control logic.', 'BMC proves to depth k; induction gives full proofs.', 'Beware over-constraining assumptions; cover them.', 'LEC proves RTL ≡ netlist after synthesis and ECOs.'],
 };

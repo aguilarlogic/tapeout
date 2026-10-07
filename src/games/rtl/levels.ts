@@ -562,7 +562,7 @@ endmodule
   end
 endmodule`,
     stimulus: () => ({ vectors: random(33, 200, [['v', 16]]) }),
-    hints: ['Initialize count to 0 before the loop, or you infer a latch / accumulate forever.'],
+    hints: ['Initialize count to 0 before the loop, or you build a combinational loop (no latch: the value feeds back into itself).'],
   },
   {
     id: 'gray',
@@ -1192,7 +1192,7 @@ endmodule`,
     xp: 150,
     brief: `
       <p><b>Bug report:</b> "After reset the counter is stuck at zero." The spec uses an <b>active-low asynchronous</b> reset,
-      which is by far the most common reset style in ASICs (the <code>_n</code> suffix means active low).</p>
+      which is a very common reset style in ASICs (the <code>_n</code> suffix means active low).</p>
       <h4>Spec</h4><ul><li><code>rst_n == 0</code> clears count immediately</li><li>Otherwise count increments on each clock edge where <code>en</code> is high</li></ul>`,
     starter: `module counter(
   input            clk,

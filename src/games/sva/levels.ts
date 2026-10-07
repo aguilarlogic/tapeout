@@ -322,12 +322,12 @@ const ARB_BUG = `module arb3(input clk, input rst, input [2:0] req, output reg [
 endmodule
 `;
 const fixArb: SvaLevel = {
-  id: 'formal-fix', title: 'Fix the arbiter from a counterexample', concept: 'counterexample debug, fixing RTL until the proof closes', xp: 140, tier: 'guided',
+  id: 'formal-fix', title: 'Fix the arbiter from a counterexample', concept: 'counterexample debug, fixing RTL until no counterexample remains', xp: 140, tier: 'guided',
   ticket: 'Formal says the arbiter can grant two ports at once. Read the waveform, find why, fix the RTL.',
   build: () => ({
     mode: 'fix', depth: 5, env: ENV, design: ARB_BUG, golden: ARB, bias: {},
     brief: `<p>The arbiter below must grant exactly one requester, port 0 first, then 1, then 2, one cycle after the request. The given assertions are <code>$onehot0(gnt)</code> and <code>req != 0 |=&gt; $onehot(gnt)</code>.</p>
-<p>Press <b>Run formal</b>: the counterexample shows two grant bits high. Fix the design (keep the ports) so the proof closes and behaviour matches the reference priority.</p>`,
+<p>Press <b>Run formal</b>: the counterexample shows two grant bits high. Fix the design (keep the ports) so no counterexample exists up to the depth checked, and behaviour matches the reference priority.</p>`,
     hints: ['Look at what <code>gnt | 3\'b010</code> uses: the <i>old</i> grant value, not this cycle\'s requests.', 'A priority encoder is an if / else-if chain assigning one-hot constants.'],
     given: `m1: assert property (${C} $onehot0(gnt));\nm2: assert property (${C} req != 0 |=> $onehot(gnt));\n`,
     starter: ARB_BUG,
@@ -383,8 +383,8 @@ const bossBurst: SvaLevel = {
 };
 
 const bossWrap: SvaLevel = {
-  id: 'formal-boss-wrap', title: 'Boss: close the proof', concept: 'bounded proof depth, counterexample-driven fixing', xp: 260, tier: 'boss',
-  ticket: 'A modulo counter violates its range assertion only after a long run of enables, and the depth the checker needs changes with the modulus. Find it, fix it, close the proof. No hints.',
+  id: 'formal-boss-wrap', title: 'Boss: clear every counterexample', concept: 'bounded proof depth, counterexample-driven fixing', xp: 260, tier: 'boss',
+  ticket: 'A modulo counter violates its range assertion only after a long run of enables, and the depth the checker needs changes with the modulus. Find it, fix it, until no counterexample exists at the depth the checker needs. No hints.',
   build: (r: Rng) => {
     const m = between(r, 6, 12);
     return {
