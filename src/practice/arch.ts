@@ -401,16 +401,20 @@ export const dramPractice = practice('practice-dram', 'DRAM Drills', 'row hits a
   (r, d) => {
     const mt = pick(r, [4800, 5600, 6400]), ch = tier(d, 1, 2, pick(r, [4, 8]));
     const bw = (mt * 8 * ch) / 1000;
-    return walk(ask(`${ch} channel${ch > 1 ? 's' : ''} of DDR5-${mt} (64 data bits per channel). Peak bandwidth, in GB/s?`, qty(bw, 'GB/s', 0.01), `${mt} MT/s × 8 bytes × ${ch} = ${sig(bw)} GB/s. Sustained is usually 70-90% of that.`, 'Transfers/s × bytes per transfer × channels.'),
-      'DRAM peak bandwidth', 'Bandwidth is how many bytes move per second. A DDR channel does "mt" mega-transfers per second, and each transfer moves the channel width: 64 bits = 8 bytes. So one channel moves mt × 8 megabytes per second, and channels add up.',
-      calc('One channel, in GB/s: transfers per second × 8 bytes, divided by 1000 to convert MB to GB:', `${mt} × 8 / 1000`, (mt * 8) / 1000, 'GB/s', sig((mt * 8) / 1000, 4), 0.005),
-      calc(`All ${ch} channel${ch > 1 ? 's' : ''}, in GB/s:`, `${sig((mt * 8) / 1000, 4)} × ${ch}`, bw, 'GB/s', sig(bw), 0.01));
+    return walk(ask(`${ch} DDR5-${mt} DIMM${ch > 1 ? 's' : ''} (each 64 data bits, split into two independent 32-bit subchannels). Peak bandwidth, in GB/s?`, qty(bw, 'GB/s', 0.01), `${mt} MT/s × 8 bytes × ${ch} DIMM${ch > 1 ? 's' : ''} = ${sig(bw)} GB/s. Sustained is usually 70-90% of that.`, 'Transfers/s × bytes per transfer × DIMMs.'),
+      'DRAM peak bandwidth', 'Bandwidth is how many bytes move per second. A DDR5 DIMM does "mt" mega-transfers per second, and each transfer moves its 64 data bits (two 32-bit subchannels side by side) = 8 bytes. So one DIMM moves mt × 8 megabytes per second, and DIMMs add up.',
+      calc('One DIMM, in GB/s: transfers per second × 8 bytes, divided by 1000 to convert MB to GB:', `${mt} × 8 / 1000`, (mt * 8) / 1000, 'GB/s', sig((mt * 8) / 1000, 4), 0.005),
+      calc(`All ${ch} DIMM${ch > 1 ? 's' : ''}, in GB/s:`, `${sig((mt * 8) / 1000, 4)} × ${ch}`, bw, 'GB/s', sig(bw), 0.01));
   },
   (r, d) => {
-    const trfc = pick(r, [295, 410, 550]), trefi = pick(r, [3900, 7800]);
+    // d1 DDR4 (tREFI 7.8 us), d2 DDR5 (3.9 us), d3 either generation above 85 C (tREFI halves); tRFC is matched to the generation.
+    const D4 = [160, 260, 350, 550], D5 = [295, 410];
+    const [gen, trefi, trfc] = d === 1 ? pick(r, D4.map((t) => ['DDR4', 7800, t] as [string, number, number]))
+      : d === 2 ? pick(r, D5.map((t) => ['DDR5', 3900, t] as [string, number, number]))
+      : pick(r, [...D4.map((t) => ['DDR4', 3900, t]), ...D5.map((t) => ['DDR5', 1950, t])] as [string, number, number][]);
     const f = (trfc / trefi) * 100;
-    return walk(ask(`Each bank is refreshed every tREFI = ${trefi} ns and each refresh blocks it for tRFC = ${trfc} ns. What % of the time is it unavailable?`, qty(f, '%', 0.02, sig(f)), `${trfc}/${trefi} = ${sig(f)}%.${d === 3 ? ' Denser chips have longer tRFC, which is why DDR5 adds same-bank refresh.' : ' Refresh is a tax on bandwidth and latency.'}`, 'tRFC / tREFI.'),
-      'refresh overhead', 'DRAM cells leak, so every row must be refreshed regularly. Every tREFI a refresh command starts, and it blocks the bank for tRFC. The fraction of time lost is the blocked time over the period: tRFC ÷ tREFI.',
+    return walk(ask(`${gen}${d === 3 ? ' above 85 °C' : ''}: a refresh command is issued every tREFI = ${trefi} ns and an all-bank refresh blocks the whole rank for tRFC = ${trfc} ns. What % of the time is the rank unavailable?`, qty(f, '%', 0.02, sig(f)), `${trfc}/${trefi} = ${sig(f)}%.${d === 3 ? ' Heat halves tREFI, so the overhead doubles. DDR5 same-bank refresh (in fine-granularity refresh mode) refreshes the same bank number in every bank group and leaves the other banks free, which recovers much of this.' : ' Refresh is a tax on bandwidth and latency.'}`, 'tRFC / tREFI.'),
+      'refresh overhead', 'DRAM cells leak, so every row must be refreshed regularly. Every tREFI a refresh command starts, and an all-bank refresh blocks the whole rank for tRFC. The fraction of time lost is the blocked time over the period: tRFC ÷ tREFI.',
       calc('First the fraction of each period that is blocked:', `${trfc} / ${trefi}`, trfc / trefi, '', sig(trfc / trefi, 3), 0.02),
       calc('As a percentage, multiply by 100:', `${sig(trfc / trefi, 3)} × 100`, f, '%', sig(f), 0.03));
   },
