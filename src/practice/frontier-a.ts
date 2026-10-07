@@ -149,8 +149,8 @@ export const ioesdPractice = practice('practice-io-esd', 'I/O & ESD Drills', 'HB
         calc('τ = R × C, with 1500 Ω × 100 pF in ns:', '1500 × 100e-12 × 1e9', tau, 'ns', sig(tau), 0.02));
     }
     const e = 0.5 * 100e-12 * v * v * 1e6;
-    return walk(ask(`A ${v} V HBM zap starts with a 100 pF capacitor charged to ${v} V. How much energy does it hold, in µJ? (½CV²)`, qty(e, 'µJ', 0.03, sig(e)), `½ × 100e-12 × ${v}² = ${sig(e)} µJ. Small energy, but delivered in a hundred nanoseconds into a few microns of silicon.`, '½ C V².'),
-      'energy in the ESD model', 'The energy stored in the model capacitor is ½·C·V². It looks tiny in joules but it all goes into the protection device within about a microsecond, so the power density is enormous.',
+    return walk(ask(`A ${v} V HBM zap starts with a 100 pF capacitor charged to ${v} V. How much energy does it hold, in µJ? (½CV²)`, qty(e, 'µJ', 0.03, sig(e)), `½ × 100e-12 × ${v}² = ${sig(e)} µJ stored, but almost all of it is burned in the 1.5 kΩ body resistance. A clamp holding about 10 V while ${sig(v / 1500)} A flows for ~150 ns absorbs only about ${sig(10 * (v / 1500) * 150e-9 * 1e6)} µJ. That is small in joules but huge in a few cubic microns, which is why the clamp must be wide and well-contacted.`, '½ C V².'),
+      'energy in the ESD model', 'The energy stored in the model capacitor is ½·C·V². Most of it is burned in the 1.5 kΩ body resistance: the clamp holds the pin at about 10 V while the current flows, so it absorbs only V·I·t (about 10 V × the peak current × 150 ns). That is small in joules but huge in a few cubic microns, so the power density in the clamp is enormous.',
       calc('½ × C × V², with C in farads, result in µJ:', `0.5 × 100e-12 × ${v}² × 1e6`, e, 'µJ', sig(e), 0.03));
   },
   (r, d) => {
