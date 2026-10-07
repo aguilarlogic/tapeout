@@ -12,4 +12,6 @@ export const RULES_U_ARCH: Rule[] = [
   { id: 'U3', why: 'U3: PAM4 PCIe is not just FEC; flit mode changes the framing', files: /lessons\/arch/, ban: /PCIe 6 moves to \*\*PAM4/ },
   { id: 'U4', why: 'U4: AMBA says manager/subordinate (name the old terms once, "formerly master")', ban: /\bslaves?\b|\bmasters?\b/i, unless: /formerly (master|slave)|master branch|init\.defaultBranch|git/i, files: /^(?!.*glossary)/ },
   { id: 'U4-arm', why: 'U4: the company is Arm', ban: /ARM\\?'s/ },
+  { id: 'U5-cxl', why: 'U5: teach the CXL generations and device types', require: { file: /lessons\/arch\.ts$/, re: /CXL.*3\.x at 64 GT\/s/ } },
+  { id: 'U5-ucie', why: 'U5: teach the UCIe generations', require: { file: /lessons\/roles\.ts$/, re: /UCIe[^.]*48 and 64 GT\/s/ } },
 ];

@@ -322,6 +322,7 @@ export const pkg: Lesson = {
       const ySmall = Math.exp((-d0 * big) / n / 100) * 100;
       return ask(`A ${big} mm² monolithic die has ${r1(yBig)}% yield at D₀ = 0.1/cm². Split into ${n} chiplets of ${big / n} mm² each, what is the yield of **one chiplet**, in %?`, qty(ySmall, '%', 0.02, r1(ySmall).toString()), `Y = e^(-0.1 × ${big / n / 100}) = ${r1(ySmall)}%. Because chiplets are tested before assembly (known-good die), a defect only scraps a small chiplet instead of the whole large die. You pay for it with die-to-die interfaces (such as UCIe) and more complex packaging.`, 'Poisson yield with the smaller area.');
     }),
+    say('Chiplets need a common die-to-die link. **UCIe** is the standard for it: up to 32 GT/s per lane in the first generation, 48 and 64 GT/s in the newest, with standard and advanced (dense-bump) package types.'),
     gen((r) => {
       const [pitch, tech] = pick(r, [[150, 'C4 solder bumps'], [40, 'micro-bumps'], [10, 'hybrid bonding'], [3, 'fine-pitch hybrid bonding']] as const);
       const n = (10000 / pitch) ** 2;
