@@ -29,7 +29,7 @@ export function highlightAsm(src: string): string {
 
 const hx = (v: number) => `0x${(v >>> 0).toString(16).padStart(8, '0')}`;
 
-export const MODEL_NOTE = 'RV32IM, machine-level. ecall numbers follow the common teaching-simulator convention (a7 = service). The stack pointer must stay 16-byte aligned.';
+export const MODEL_NOTE = 'RV32IM, machine-level. ecall numbers are RARS-style (a7 = service). The stack pointer must stay 16-byte aligned.';
 
 export function isaPage(id: string): HTMLElement {
   const level = findIsaLevel(id);

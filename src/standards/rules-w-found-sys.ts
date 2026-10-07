@@ -18,4 +18,16 @@ export const RULES_W_FOUND_SYS: Rule[] = [
   { id: 'W1-static', why: 'W1: CMOS has no static current apart from leakage', ban: /no static current\.|so no DC current flows/ },
   { id: 'W1-sse', why: 'W1: 1/(1+K) holds for a step with no integrator in the plant', require: { file: /lessons\/signals/, re: /no integrator/ } },
 
+  // ---- W2 Systems and software
+  { id: 'W2-S22-ub', why: 'S2.2: name undefined behaviour in the C bug drills', require: { file: /practice\/systems/, re: /garbage, a crash, or appearing to work/ } },
+  { id: 'W2-S23-race', why: 'S2.3: the lost-update range is 2 to 2000, and a data race is undefined behaviour', ban: /Anywhere from about 1000 to 2000/ },
+  { id: 'W2-S26-gnu', why: 'S2.6: sed -i and \\b are GNU; macOS needs sed -i \'\'', require: { file: /practice\/tooling/, re: /macOS sed needs/ } },
+  { id: 'W2-S27-du', why: 'S2.7: du -ah lists directories and ., not only files', ban: /has\('du -ah \./ },
+  { id: 'W2-S28-bsearch', why: 'S2.8: worst-case comparisons are floor(log2 n) + 1, as in the practice set', ban: /takes at most about how many comparisons/ },
+  { id: 'W2-c-ext', why: 'W2: base instructions are 32 bits; the C extension adds 16-bit forms', ban: /Every instruction is 32 bits wide|'Instructions are 32 bits,/ },
+  { id: 'W2-bash-only', why: 'W2: &> is bash-only', ban: /`&>` both, and/ },
+  { id: 'W2-move', why: 'W2: a moved-from object is valid but unspecified (usually empty)', ban: /leaving v empty\./ },
+  { id: 'W2-putc', why: 'W2: putc is a reserved stdlib identifier; the driver calls it uart_putc', ban: /void putc\(/ },
+  { id: 'W2-rars', why: 'W2: the ISA lab says its ecall numbers are RARS-style', require: { file: /games\/isa\/page/, re: /RARS-style/ } },
+  { id: 'W2-imperative', why: 'W2: commit messages are in the imperative mood', ban: /say what and why, in the present tense/ },
 ];
