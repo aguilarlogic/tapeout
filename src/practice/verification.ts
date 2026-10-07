@@ -392,6 +392,58 @@ export const svaPractice = practice('practice-sva', 'Assertion Drills', 'evaluat
       count(`The cycle in question is ${t}. ${k} cycle${k > 1 ? 's' : ''} earlier is cycle:`, `${t} - ${k}`, t - k),
       count(`The value of x at cycle ${t - k}, read from the waveform:`, `x[${t - k}]`, x[t - k]));
   },
+  // [->n] against [=n]: where each match ends decides whether the c that follows is on time
+  (r, d) => {
+    const N = 14, n = tier(d, 2, pick(r, [2, 3]), pick(r, [2, 3]));
+    const pos: number[] = [];
+    let at = between(r, 1, 2);
+    for (let k = 0; k <= n; k++) { pos.push(at); at += between(r, 1, 3); }
+    const p = pos[n - 1], q = pos[n]; // the n-th b, and the (n+1)-th that closes the [=n] window
+    const scen = pick(r, ['on time', 'late', 'late', 'missing']);
+    const cc = scen === 'on time' ? p + 1 : scen === 'late' ? between(r, p + 2, q) : -1;
+    const b = Array.from({ length: N }, (_, t) => (pos.includes(t) ? 1 : 0));
+    const c = Array.from({ length: N }, (_, t) => (t === cc || (d === 3 && t > 0 && t <= p && r() < 0.3) ? 1 : 0));
+    const go = Array.from({ length: N }, (_, t) => (t === 0 ? 1 : 0));
+    const gotoOk = c[p + 1] === 1;
+    let nonOk = false;
+    for (let e = p; e < q; e++) if (c[e + 1] === 1) nonOk = true; // [=n] may end on any idle cycle up to the cycle before the next b
+    const wf = waveform([['go', go], ['b', b], ['c', c]]);
+    const idea = `b[->n] and b[=n] both count n occurrences of b, with any gaps. The difference is where the match ENDS. b[->n] ends exactly on the n-th b. b[=n] may also end on any idle cycle after the n-th b, up to the cycle before the next b (a further b would make it n+1 occurrences). A step like ##1 c after the repetition is counted from that end point.`;
+    const form = (g: boolean) => (g ? `b[->${n}]` : `b[=${n}]`);
+    const prop = (g: boolean) => `go |-> ##1 ${form(g)} ##1 c`;
+    const why = `The ${n === 2 ? 'second' : 'third'} b is at cycle ${p}, so b[->${n}] ends there and c is needed at cycle ${p + 1}${gotoOk ? ': it is there' : cc < 0 || cc > q ? ': it is not' : `, but c only comes at cycle ${cc}`}. b[=${n}] can end on any cycle from ${p} to ${q - 1} (the next b is at ${q}), so c may come at any cycle from ${p + 1} to ${q}${nonOk ? `: it does (${cc})` : ': it does not'}.`;
+    if (d === 1) {
+      return walk(ask(`${wf}At which cycle does the match of \`b[->${n}]\` end, counting from the first cycle of the trace (cycle 0)? (b[->${n}] waits for the ${n === 2 ? 'second' : 'third'} occurrence of b.)`, num(p), `b is high at cycles ${pos.slice(0, n).join(', ')}; the ${n === 2 ? 'second' : 'third'} is cycle ${p}, and a goto match ends exactly on it.`, 'List the cycles where b is 1 and take the n-th.'),
+        'where a goto repetition ends', idea,
+        step('The cycles where b is 1, up to the n-th:', exact(pos.slice(0, n).join(', '), pos.slice(0, n).join(' '))),
+        count('The match ends on the n-th of them, at cycle', `b[${n}]`, p));
+    }
+    if (d === 2) {
+      const g = r() < 0.5;
+      const ok = g ? gotoOk : nonOk;
+      return walk(mc(`${wf}Does \`${prop(g)}\` pass for the attempt that starts at cycle 0?`, ['Pass', 'Fail'], ok ? 0 : 1, why),
+        'goto against non-consecutive', idea,
+        step(`The cycle where b occurs for the ${n === 2 ? 'second' : 'third'} time:`, num(p)),
+        choice(g ? `b[->${n}] ends on that cycle, so c is needed on:` : `b[=${n}] may end on that cycle or on idle cycles after it, so c is needed on:`, g ? `cycle ${p + 1} only` : `any cycle from ${p + 1} up to the next b`, [g ? `any cycle from ${p + 1} up to the next b` : `cycle ${p + 1} only`, `cycle ${p}, together with the n-th b`]));
+    }
+    const right = gotoOk && nonOk ? 'Both pass' : gotoOk ? `Only b[->${n}] passes` : nonOk ? `Only b[=${n}] passes` : 'Neither passes';
+    const opts = ['Both pass', `Only b[->${n}] passes`, `Only b[=${n}] passes`, 'Neither passes'];
+    return walk(mc(`${wf}Which of \`go |-> ##1 b[->${n}] ##1 c\` and \`go |-> ##1 b[=${n}] ##1 c\` pass for the attempt that starts at cycle 0?`, opts, opts.indexOf(right), why),
+      'goto against non-consecutive', idea,
+      step(`The cycle where b occurs for the ${n === 2 ? 'second' : 'third'} time:`, num(p)),
+      step('The cycle where b occurs for the next time (it closes the b[=n] window):', num(q)),
+      choice(`So b[->${n}] needs c on cycle ${p + 1}; b[=${n}] accepts c on any cycle from ${p + 1} to:`, `${q}`, [`${p}`, `${q + 1}`]));
+  },
+  (r) => concept(r, [
+    ['Which property can a bounded check never fully prove?', '"Every request is eventually granted"', ['"No two grants are ever high together"', '"Each request is granted within 4 cycles"', '"The FIFO count is never above its depth"'], 'safety and liveness', 'A safety property ("nothing bad ever happens") has a finite counterexample, so a check to depth k can refute it and, with induction, prove it. A liveness property ("something good eventually happens") can only be refuted by an infinite trace in which the good thing never comes, so a check of k cycles can never rule that out. A bound like "within 4 cycles" turns liveness into safety.', ['A property with a deadline, such as "gnt within 4 cycles", is:', 'Safety', ['Liveness', 'Neither']]],
+    ['Which of these is a safety property?', 'The write pointer never laps the read pointer', ['Every write is eventually read out of the FIFO', 'The arbiter eventually serves every master that asks', 'The link eventually comes up after reset is released'], 'safety and liveness', 'Safety says nothing bad ever happens, and one bad cycle in a finite trace refutes it. The other three promise that something good will eventually happen, which is liveness: no finite trace can show that the good thing will never come.', ['"Nothing bad ever happens" describes:', 'Safety', ['Liveness', 'Fairness']]],
+    ['What can a finite simulation trace do to `req |-> s_eventually gnt`?', 'Confirm it, but never refute it', ['Refute it when no gnt appears before the trace ends', 'Refute it only if req stays high until the trace ends', 'Nothing, since strong operators are ignored in simulation'], 'strong eventually', 'The grant might arrive one cycle after the trace stops, so an attempt with no gnt yet is not wrong, just undecided (pending). Only an infinite run in which gnt never comes refutes the property. That is why bounded-latency versions such as ##[1:4] are what you actually check in simulation.', ['A grant that has not arrived when the trace ends is:', 'Undecided', ['A failure', 'A pass']]],
+    ['Why does a liveness proof need a fairness assumption?', 'The environment could stall for ever, so no design could deliver', ['The clock could stop, and then nothing would run at all', 'The reset could be released too early for any design', 'The tool could ignore every assertion that has a delay in it'], 'fairness', 'If the other side may hold ready low for ever, a correct arbiter would never be able to grant, and the tool would report a (useless) infinite counterexample. A fairness assumption, for example "stall never lasts more than 2 cycles" or "ready is high infinitely often", rules out those unfair environments.', ['A fairness assumption restricts the:', 'Environment', ['Design', 'Clock']]],
+    ['What does `s1 within s2` require?', 'A match of s1 that lies entirely inside a match of s2', ['A match of s1 that starts when a match of s2 ends', 'Matches of s1 and s2 that start and end together', 'Any match of s1, as long as s2 also matches somewhere'], 'within', '`within` nests one sequence in another: s1 may start at or after the start of s2, and must end at or before its end. Use it for "a burst must complete inside the transaction window". Where both must start and end together, that is `intersect` instead.', ['Which operator needs both sequences to have the same length?', 'intersect', ['within', 'throughout']]],
+    ['What does `s1 intersect s2` require?', 'Matches of both that start together and end together', ['A match of s1 that sits anywhere inside a match of s2', 'Matches of s1 and s2 that overlap in at least one cycle', 'A match of s1 followed one cycle later by one of s2'], 'intersect', 'Where `and` lets two sequences end at different times, `intersect` also forces equal length. `(a ##[1:3] b) intersect (##2 c)` can therefore only use the a ##2 b path.', ['`(a ##[1:3] b) intersect (##2 c)` uses the path where b comes after a by:', '2 cycles', ['1 cycle', '3 cycles']]],
+    ['What does `first_match(##[1:3] b)` do that `##[1:3] b` does not?', 'Keeps only the earliest match of the window', ['Makes the window wait until the last b in the three cycles', 'Requires b to be high on all three cycles of the window', 'Turns the window into an unbounded wait for the first b'], 'first_match', 'A range delay can match in several ways, and whatever follows is tried after each one. first_match cuts that down to the earliest end, so a following `##1 c` is checked only after the first b, not after the later ones.', ['After first_match(##[1:3] b), the follow-on step starts from the:', 'Earliest b', ['Latest b', 'Third cycle']]],
+    ['`req |-> ##[1:$] gnt` on a trace that ends without gnt: what is the verdict?', 'Undecided: the window could still be met later', ['Fail, since gnt was not seen after req had risen', 'Pass, since the window never closed on the trace', 'Vacuous, since req was true when it began'], 'unbounded delay', '`$` as the top of a range means "as late as you like". Nothing closes the window, so a finite trace can only ever show the grant arriving, never that it will not. The unbounded form is a liveness property in disguise.', ['An unbounded `##[1:$]` window closes:', 'Never', ['After one cycle', 'At the end of the trace']]],
+  ], (why) => `${why}.`),
   (r) => concept(r, [
     ['Difference between `a |-> b` and `a |=> b`?', '`|->` checks b the same cycle; `|=>` the next cycle', ['None: the two operators mean the same, with a different spelling', '`|=>` is for formal tools only', '`|->` checks b before a'], 'overlapping and non-overlapping implication', 'Both mean "if a happens, then b must follow". The difference is timing: |-> is overlapping, so b is checked in the SAME cycle a is true; |=> is non-overlapping, so b is checked one cycle LATER. So a |=> b is the same as a |-> ##1 b.', ['a |=> b checks b in:', 'The cycle after a', ['The same cycle as a', 'The cycle before a']], '|-> checks b in the same cycle as a; |=> checks b one cycle later (same as |-> ##1 b)'],
     ['What does `$rose(req)` mean at cycle t?', 'req is 1 at t and was 0 at t-1', ['req is 1 at t, whatever the value was in the cycle before it', 'req changed in either direction between the cycle before and t', 'req will be 1 at t+1'], '$rose', '$rose(x) detects a rising edge as seen by the clock: x is 1 now and was 0 on the previous clock cycle. Both values are sampled at clock edges, so it cannot see glitches between edges. ($fell is the opposite; $changed is either.)', ['$rose(req) is true when req:', 'Was 0 last cycle and is 1 now', ['Is 1', 'Is 0']], 'req is 1 at t and was 0 at t-1 (sampled values)'],
