@@ -116,10 +116,10 @@ export const socint: Lesson = {
     say('**The role.** A modern chip is mostly bought-in or reused blocks: CPU clusters, memory controllers, PCIe, USB, security, hundreds of peripherals. The **SoC integration** engineer assembles them: the address map, the interconnect, the interrupt tree, the clock and reset network, the power domains, the pad ring, the register models. Most "the chip does not boot" bugs are integration bugs, not block bugs.'),
     say('Every peripheral occupies a window of the **address map**: a base address and a size, with the size a power of two and the base aligned to it. The interconnect\'s decoder looks at the high address bits to choose the target.'),
     gen((r) => {
-      const slaves = [['UART', 0x1000, 0x1000], ['SPI', 0x2000, 0x1000], ['GPIO', 0x3000, 0x1000], ['SRAM', 0x10000, 0x10000]] as const;
-      const [name, base, size] = pick(r, slaves);
+      const subordinates = [['UART', 0x1000, 0x1000], ['SPI', 0x2000, 0x1000], ['GPIO', 0x3000, 0x1000], ['SRAM', 0x10000, 0x10000]] as const;
+      const [name, base, size] = pick(r, subordinates);
       const addr = base + Math.floor(r() * (size / 4)) * 4;
-      return ask(`Map: UART 0x1000-0x1FFF, SPI 0x2000-0x2FFF, GPIO 0x3000-0x3FFF, SRAM 0x10000-0x1FFFF. Which peripheral does address 0x${addr.toString(16).toUpperCase()} select? (UART, SPI, GPIO or SRAM)`, { canonical: name, check: (s) => s.trim().toLowerCase() === name.toLowerCase() }, `0x${addr.toString(16).toUpperCase()} falls inside ${name}'s window. An access that hits no window gets a bus error (or hangs, if the integrator forgot the default slave).`, 'Which window contains it?');
+      return ask(`Map: UART 0x1000-0x1FFF, SPI 0x2000-0x2FFF, GPIO 0x3000-0x3FFF, SRAM 0x10000-0x1FFFF. Which peripheral does address 0x${addr.toString(16).toUpperCase()} select? (UART, SPI, GPIO or SRAM)`, { canonical: name, check: (s) => s.trim().toLowerCase() === name.toLowerCase() }, `0x${addr.toString(16).toUpperCase()} falls inside ${name}'s window. An access that hits no window gets a bus error (or hangs, if the integrator forgot the default subordinate).`, 'Which window contains it?');
     }),
     gen((r) => {
       const kb = pick(r, [4, 16, 64, 256]);
@@ -130,12 +130,12 @@ export const socint: Lesson = {
     gen((r) => {
       const bw = pick(r, [32, 64, 128]), f = pick(r, [200, 400, 800]), eff = pick(r, [60, 80, 100]);
       const v = (bw / 8) * f * (eff / 100);
-      return ask(`A ${bw}-bit bus runs at ${f} MHz and delivers ${eff}% of its peak efficiency. What bandwidth, in MB/s?`, qty(v, 'MB/s', 0.02, sig(v)), `${bw / 8} bytes × ${f} MHz × ${eff / 100} = ${sig(v)} MB/s. Integrators size the bus width and frequency against the sum of what the masters need.`, 'bytes per cycle × clock × efficiency.');
+      return ask(`A ${bw}-bit bus runs at ${f} MHz and delivers ${eff}% of its peak efficiency. What bandwidth, in MB/s?`, qty(v, 'MB/s', 0.02, sig(v)), `${bw / 8} bytes × ${f} MHz × ${eff / 100} = ${sig(v)} MB/s. Integrators size the bus width and frequency against the sum of what the managers (formerly masters) need.`, 'bytes per cycle × clock × efficiency.');
     }),
-    mc('The firmware reads a peripheral register and the chip hangs. Which integration mistake is most likely?', ['A bug in the CPU', 'The peripheral\'s clock gate or reset was never released', 'The package is wrong', 'The interrupt priority is wrong, so the read is never completed'], 1, 'Or its address window overlaps another: the bus gets no response, and there is no timeout. A transaction that no slave answers waits forever. Good integration adds a default slave and bus timeouts so mistakes turn into error responses instead of hangs.'),
+    mc('The firmware reads a peripheral register and the chip hangs. Which integration mistake is most likely?', ['A bug in the CPU', 'The peripheral\'s clock gate or reset was never released', 'The package is wrong', 'The interrupt priority is wrong, so the read is never completed'], 1, 'Or its address window overlaps another: the bus gets no response, and there is no timeout. A transaction that no subordinate (formerly slave) answers waits forever. Good integration adds a default subordinate and bus timeouts so mistakes turn into error responses instead of hangs.'),
     mc('How do integration teams avoid copying hundreds of registers by hand into RTL, software headers and documentation?', ['They do it by hand, carefully, and check it at each review', 'One machine-readable source generates the RTL, headers and docs', 'They skip documentation, and let the software team read the RTL', 'They use only memory-mapped I/O, so no register list is needed'], 1, 'IP-XACT or a CSR language also produces the UVM register model. Single source of truth: one description, many generated views. Most register bugs are a mismatch between two hand-written copies.'),
   ],
-  recap: ['Address map: base + power-of-two size; decode the high bits.', 'Bus bandwidth = bytes × clock × efficiency.', 'Resets release in order; clocks must be stable first.', 'Isolation and retention cells at power-domain boundaries.', 'Default slaves and timeouts; generate registers from one source.'],
+  recap: ['Address map: base + power-of-two size; decode the high bits.', 'Bus bandwidth = bytes × clock × efficiency.', 'Resets release in order; clocks must be stable first.', 'Isolation and retention cells at power-domain boundaries.', 'Default subordinates and timeouts; generate registers from one source.'],
 };
 
 export const clocking: Lesson = {

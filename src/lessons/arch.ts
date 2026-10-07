@@ -200,14 +200,14 @@ export const bus: Lesson = {
   concept: 'topologies, AXI, valid/ready, credit flow control',
   xp: 100,
   steps: [
-    say('Blocks on a chip talk through **interconnects**. The simplest is a **shared bus** (one talker at a time, arbitrated). A **crossbar** connects every master to every slave in parallel but grows as N×M. Rings and meshes sit in between.'),
-    say('Most SoCs use ARM\'s **AMBA** family: **APB** for slow peripherals, **AXI** for high performance. AXI splits a transaction into five independent **channels**, each with its own handshake:'),
+    say('Blocks on a chip talk through **interconnects**. The simplest is a **shared bus** (one talker at a time, arbitrated). A **crossbar** connects every manager (formerly master) to every subordinate (formerly slave) in parallel but grows as N×M. Rings and meshes sit in between.'),
+    say('Most SoCs use Arm\'s **AMBA** family: **APB** for slow peripherals, **AXI** for high performance. AXI splits a transaction into five independent **channels**, each with its own handshake:'),
     art(`
-   write address  AW   master ─► slave
-   write data     W    master ─► slave
-   write response B    slave  ─► master
-   read address   AR   master ─► slave
-   read data      R    slave  ─► master
+   write address  AW   manager ─► subordinate
+   write data     W    manager ─► subordinate
+   write response B    subordinate ─► manager
+   read address   AR   manager ─► subordinate
+   read data      R    subordinate ─► manager
 
    every channel:  VALID (from source) + READY (from destination)
    a transfer happens on a clock edge where VALID && READY`),

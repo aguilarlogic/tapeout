@@ -68,7 +68,7 @@ export const socIncident: Incident = {
     { cmd: 'rst', cost: 15, what: 'read the reset controller state', read: by({ reset: 'SPI reset still asserted' }, 'SPI reset released') },
     { cmd: 'pwr', cost: 15, what: 'read the power-domain controller', read: by({ pd: 'PD_PERIPH off, isolation clamp enabled' }, 'PD_PERIPH on, isolation off') },
     { cmd: 'irq', cost: 20, what: 'check the interrupt wiring in the top-level netlist', read: by({ irq: 'SPI interrupt tied low, not connected to input 42' }, 'SPI interrupt routed to interrupt-controller input 42') },
-    { cmd: 'bus', cost: 25, what: 'trace the failing transaction on the interconnect', read: by({ overlap: 'transaction decoded to slave DMA', clkgate: 'no slave response: timeout after 1024 cycles', pd: 'no slave response: timeout after 1024 cycles', reset: 'OKAY response with data 0', irq: 'OKAY response with the right data', endian: 'OKAY response with the two 32-bit halves swapped' }) },
+    { cmd: 'bus', cost: 25, what: 'trace the failing transaction on the interconnect', read: by({ overlap: 'transaction decoded to subordinate DMA', clkgate: 'no subordinate response: timeout after 1024 cycles', pd: 'no subordinate response: timeout after 1024 cycles', reset: 'OKAY response with data 0', irq: 'OKAY response with the right data', endian: 'OKAY response with the two 32-bit halves swapped' }) },
   ],
 };
 
