@@ -129,29 +129,32 @@ const secDefend: ArchLevel = {
 };
 
 // ============================================================ FuSa 1: FMEDA
-interface FBlock { name: string; fit: number; safe: number; dc: number; lc: number }
+export interface FBlock { name: string; fit: number; safe: number; dc: number; lc: number }
 const BLOCKS = ['CPU core', 'SRAM', 'bus fabric', 'ADC', 'clock tree', 'PMIC interface'];
-const spfmLfm = (bs: FBlock[]) => {
-  const rel = bs.reduce((s, b) => s + b.fit * (1 - b.safe), 0);
+// ISO 26262-5 shape: safe faults stay in both denominators (Σλ is every failure of the hardware, not only the safety-related ones).
+export const spfmLfm = (bs: FBlock[]) => {
+  const total = bs.reduce((s, b) => s + b.fit, 0);
   const resid = bs.reduce((s, b) => s + b.fit * (1 - b.safe) * (1 - b.dc), 0);
   const latent = bs.reduce((s, b) => s + b.fit * (1 - b.safe) * b.dc * (1 - b.lc), 0);
-  return { spfm: 100 * (1 - resid / rel), lfm: 100 * (1 - latent / (rel - resid)), rel };
+  return { spfm: 100 * (1 - resid / total), lfm: 100 * (1 - latent / (total - resid)), total };
 };
-const asilOf = (spfm: number, lfm: number) => (spfm >= 99 && lfm >= 90 ? 'D' : spfm >= 97 && lfm >= 80 ? 'C' : spfm >= 90 && lfm >= 60 ? 'B' : 'none');
+export const asilOf = (spfm: number, lfm: number) => (spfm >= 99 && lfm >= 90 ? 'D' : spfm >= 97 && lfm >= 80 ? 'C' : spfm >= 90 && lfm >= 60 ? 'B' : 'none');
 
 const fusaFmeda: ArchLevel = {
   id: 'fusa-fmeda', title: 'FMEDA: SPFM, LFM and ASIL', concept: 'failure rates (FIT), residual and latent faults, single-point and latent fault metrics', xp: 170, lab: 'Safety', tier: 'guided',
   ticket: 'The assessor wants the hardware metrics for the brake controller. Fill the FMEDA table’s totals and say which ASIL it supports.',
   build: (r) => {
     const bs: FBlock[] = [];
-    for (const name of BLOCKS.slice(0, between(r, 4, 6))) bs.push({ name, fit: between(r, 2, 40) * 5, safe: pick(r, [0.2, 0.3, 0.5, 0.6]), dc: pick(r, [0.6, 0.9, 0.97, 0.99]), lc: pick(r, [0.6, 0.8, 0.9, 0.95]) });
+    // One coverage tier per design (with safe faults in the denominators a single global mix almost never reaches D), so every outcome turns up.
+    const dcs = pick(r, [[0.6, 0.9, 0.97], [0.9, 0.97, 0.99], [0.97, 0.99, 0.99], [0.99, 0.99, 0.99]]), lcs = pick(r, [[0.6, 0.8], [0.8, 0.9], [0.9, 0.95]]);
+    for (const name of BLOCKS.slice(0, between(r, 4, 6))) bs.push({ name, fit: between(r, 2, 40) * 5, safe: pick(r, [0.2, 0.3, 0.5, 0.6]), dc: pick(r, dcs), lc: pick(r, lcs) });
     const m = spfmLfm(bs), asil = asilOf(m.spfm, m.lfm);
     const text = ['block            FIT   safe-frac   DC     latent-cov', ...bs.map((b) => `${b.name.padEnd(16)} ${String(b.fit).padStart(4)}   ${b.safe.toFixed(2).padStart(6)}   ${b.dc.toFixed(2).padStart(6)}   ${b.lc.toFixed(2).padStart(6)}`)].join('\n');
     return {
       brief: `<p>An FMEDA lists each block's failure rate (<b>FIT</b> = failures per 10⁹ hours), the fraction of failures that cannot violate the safety goal (<b>safe fraction</b>), the <b>diagnostic coverage</b> DC of its safety mechanism and the coverage of <b>latent</b> faults in that mechanism.</p>
-<ul><li>Safety-related failure rate λ = FIT × (1 − safe).</li><li><b>Residual</b> (single-point) faults: λ × (1 − DC). <b>SPFM</b> = 1 − Σ residual / Σ λ.</li><li><b>Latent</b> faults: λ × DC × (1 − latent coverage). <b>LFM</b> = 1 − Σ latent / (Σ λ − Σ residual).</li><li>ASIL targets (SPFM, LFM): B 90%, 60% · C 97%, 80% · D 99%, 90%.</li></ul>
+<ul><li>λ = each block's FIT. Some of its failures are <b>safe</b> (they cannot violate the safety goal).</li><li><b>Residual</b> faults: λ × (1 − safe) × (1 − DC). <b>SPFM</b> = 1 − Σ residual / Σ λ.</li><li><b>Latent</b> faults: λ × (1 − safe) × DC × (1 − latent coverage). <b>LFM</b> = 1 − Σ latent / (Σ λ − Σ residual).</li><li>Safe faults count in both denominators: a block that rarely matters is still part of the hardware being measured.</li><li>ASIL targets (SPFM, LFM): B 90%, 60% · C 97%, 80% · D 99%, 90%.</li></ul>
 <p>Compute SPFM and LFM (percent, one decimal) for the table below and enter the highest ASIL it meets (B, C, D, or "none").</p>`,
-      hints: ['Compute the three sums once: Σ λ, Σ residual, Σ latent. Then both metrics follow.', 'The residual term uses (1 − DC); the latent term uses DC × (1 − latent coverage).', 'Compare both metrics against the table: you need to meet SPFM <i>and</i> LFM for an ASIL.'],
+      hints: ['Compute the three sums once: Σ λ, Σ residual, Σ latent. Then both metrics follow.', 'Residual = λ × (1 − safe) × (1 − DC); latent = λ × (1 − safe) × DC × (1 − latent coverage). Σ λ is the plain sum of the FITs.', 'Compare both metrics against the table: you need to meet SPFM <i>and</i> LFM for an ASIL.'],
       listing: { label: 'FMEDA table', text },
       controls: [{ id: 'spfm', kind: 'text', label: 'SPFM (%)', value: '', rows: 1 }, { id: 'lfm', kind: 'text', label: 'LFM (%)', value: '', rows: 1 }, { id: 'asil', kind: 'text', label: 'Highest ASIL (B, C, D or none)', value: '', rows: 1 }],
       run: (v) => {
@@ -160,7 +163,7 @@ const fusaFmeda: ArchLevel = {
           { label: 'LFM', ok: near(v.lfm, m.lfm, 0.06), note: near(v.lfm, m.lfm, 0.06) ? undefined : '1 − Σlatent / (Σλ − Σresidual)' },
           { label: 'ASIL', ok: String(v.asil).trim().toLowerCase() === asil.toLowerCase(), note: 'both metrics must meet the target' },
         ];
-        return { goals, metrics: [['safety-related FIT', String(r1(m.rel))]] };
+        return { goals, metrics: [['total FIT (Σλ)', String(r1(m.total))]] };
       },
       solution: { values: { spfm: m.spfm.toFixed(1), lfm: m.lfm.toFixed(1), asil } },
     };
@@ -204,8 +207,8 @@ const fusaAsil: ArchLevel = {
     return {
       brief: `<p>Same arithmetic as the FMEDA mission, but now you choose the mechanism for each block. Each option has a diagnostic coverage DC, a latent-fault coverage and an area/cost figure (shown in the menus). A block with no mechanism has DC = 0: every dangerous failure is a single-point fault.</p>
 <p>The target is <b>ASIL ${T.name}</b>: SPFM ≥ ${T.spfm}% and LFM ≥ ${T.lfm}%. Meet both with a total mechanism cost of at most <b>${b.cost}</b>.</p>`,
-      hints: ['Σ residual is dominated by the blocks with the largest FIT × (1 − safe): put coverage there first.', 'A 99% mechanism on a small block rarely pays: price per FIT removed is what matters.', 'LFM is usually easier than SPFM: if SPFM passes with solid mechanisms, check LFM afterwards.'],
-      listing: { label: 'Safety-related failure rates', text: table },
+      hints: ['Residual = λ × (1 − safe) × (1 − DC) and Σ λ counts every FIT, safe or not. The blocks with the largest FIT × (1 − safe) dominate Σ residual: put coverage there first.', 'A 99% mechanism on a small block rarely pays: price per FIT removed is what matters.', 'LFM is usually easier than SPFM: if SPFM passes with solid mechanisms, check LFM afterwards.'],
+      listing: { label: 'Block failure rates', text: table },
       controls: blocks.map((bk) => ({ id: bk.key, kind: 'select' as const, label: bk.label, options: MECHS[bk.key].map((m) => ({ value: m.id, label: `${m.label} (DC ${Math.round(m.dc * 100)}%, cost ${m.cost})` })), value: 'none' })),
       run: (v) => {
         const picks = blocks.map((bk) => String(v[bk.key]));
