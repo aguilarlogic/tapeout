@@ -10,4 +10,8 @@ export const RULES_C_B: Rule[] = [
   { id: 'C14', why: 'C14: a PUF key is re-derived from stored non-secret helper data, so the claim "nothing stored" is wrong', ban: /PUF[^.]*nothing (is )?stored/i },
   { id: 'C14b', why: 'C14: only the first stage of a root of trust is immutable', ban: /small, immutable block|An immutable hardware anchor|nothing can alter it/ },
   { id: 'C15', why: 'C15: power-down is stop clocks, isolate, save, switch off', ban: /Stop clocks(,| →) save retention(,| →) enable isolation/ },
+  { id: 'C16', why: 'C16: an ASIL belongs to a hazardous event, not to a function such as braking', ban: /ASIL D, for example braking and steering/ },
+  { id: 'C16b', why: 'C16: the 10 FIT PMHF budget is for the whole item; one chip gets a share', ban: /over the 10 FIT limit/ },
+  { id: 'C6', why: 'C6: KV-cache size uses the KV width, not the model width', ban: /KV cache: \$\{layers\} layers, model width/ },
+  { id: 'C8b', why: 'C8: a crystal is pulled by ppm, so no percent-level frequency error from load capacitors', ban: /load capacitance pulled it off frequency/ },
 ];
