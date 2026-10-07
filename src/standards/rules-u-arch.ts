@@ -14,4 +14,7 @@ export const RULES_U_ARCH: Rule[] = [
   { id: 'U4-arm', why: 'U4: the company is Arm', ban: /ARM\\?'s/ },
   { id: 'U5-cxl', why: 'U5: teach the CXL generations and device types', require: { file: /lessons\/arch\.ts$/, re: /CXL.*3\.x at 64 GT\/s/ } },
   { id: 'U5-ucie', why: 'U5: teach the UCIe generations', require: { file: /lessons\/roles\.ts$/, re: /UCIe[^.]*48 and 64 GT\/s/ } },
+  { id: 'U7-lut', why: 'U7: teach fracturable LUTs', require: { file: /lessons\/roles\.ts$/, re: /fracturable/ } },
+  { id: 'U7-dsp', why: 'U7: a DSP block is 27 x 18, not 25 x 18', require: { file: /glossary\.ts$/, re: /27 × 18/ } },
+  { id: 'U7', why: 'U7: DSP multipliers are 27 x 18 (older 25 x 18 and 18 x 18 are obsolete)', ban: /\b25 ?[x×] ?18\b/ },
 ];

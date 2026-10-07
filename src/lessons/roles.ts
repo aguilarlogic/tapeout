@@ -407,7 +407,7 @@ export const emu: Lesson = {
   xp: 100,
   steps: [
     say('**The role.** Emulation and prototyping engineers map multi-billion-gate designs onto emulators (Cadence Palladium, Synopsys ZeBu, Siemens Veloce) or boards full of FPGAs, so software and firmware can run on the chip months before silicon. FPGA engineers more broadly build products on FPGAs directly: networking, trading systems, radar, and the control electronics of quantum computers.'),
-    say('An FPGA is a sea of configurable blocks. The core one is the **LUT** (look-up table): a tiny memory whose address bits are the inputs, so it can implement any Boolean function of k inputs. Around them sit flip-flops, block RAMs, DSP multipliers and a programmable routing network.'),
+    say('An FPGA is a sea of configurable blocks. The core one is the **LUT** (look-up table): a tiny memory whose address bits are the inputs, so it can implement any Boolean function of k inputs. Modern LUTs are fracturable: a 6-input LUT can act as two 5-input LUTs sharing inputs, and vendors package them with flops and carry logic into slices or adaptive logic modules. Around them sit flip-flops, block RAMs, DSP multipliers and a programmable routing network.'),
     gen((r) => {
       const k = pick(r, [4, 5, 6]);
       return ask(`How many configuration bits does a ${k}-input LUT hold?`, num(2 ** k), `One bit per row of the truth table: 2^${k} = ${2 ** k}. Any ${k}-input function fits in one LUT, whether it is an AND, an XOR or something odd.`, 'One bit per truth-table row.');
