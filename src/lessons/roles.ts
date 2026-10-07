@@ -247,7 +247,7 @@ export const sram: Lesson = {
       const a = (mb * 8 * 1024 * 1024 * cell) / 1e6;
       return ask(`A bitcell is ${cell} µm². How much area do the cells alone take for ${mb} MB of SRAM, in mm²?`, qty(a, 'mm2', 0.03, String(+a.toPrecision(3))), `${mb} MB = ${mb * 8 * 1024 * 1024} bits × ${cell} µm² = ${+a.toPrecision(3)} mm². Real arrays are 1.5 to 2× bigger once you add sense amps, decoders and redundancy. SRAM density has almost stopped scaling at the newest nodes, which is one reason for 3D-stacked cache.`, 'bits × cell area. 1 mm² = 10⁶ µm².');
     }),
-    say('**DRAM** stores a bit as charge on a tiny capacitor behind one transistor (1T1C). Reading connects it to a bit line with much larger capacitance, so the signal is a small **charge-sharing** bump, and the read destroys the data: the sense amp writes it back. Charge also leaks, so every row must be **refreshed** every 64 ms (32 ms when hot).'),
+    say('**DRAM** stores a bit as charge on a tiny capacitor behind one transistor (1T1C). Reading connects it to a bit line with much larger capacitance, so the signal is a small **charge-sharing** bump, and the read destroys the data: the sense amp writes it back. Charge also leaks, so every row must be **refreshed**: every 64 ms in DDR4 (32 ms when hot); DDR5 halves that to 32 ms (16 ms above 85 °C).'),
     gen((r) => {
       const cs = pick(r, [10, 20, 25]);
       const cbl = pick(r, [60, 80, 100]);
@@ -261,7 +261,7 @@ export const sram: Lesson = {
     }),
     mc('A 64 MB cache comes back from the fab with 40 bad cells. What saves the chip?', ['Nothing; with 40 bad cells it is scrap', 'Spare rows and columns, swapped in with fuses', 'The OS marks those addresses as bad pages at every boot', 'Lowering the clock until the bad cells pass'], 1, 'Redundancy: memory BIST runs March algorithms at test time to find the failures, a repair analysis picks spare rows/columns, and fuses remap them. At runtime, ECC catches the occasional soft error from a particle strike.'),
   ],
-  recap: ['6T SRAM: two inverters + two access transistors.', 'Read stability vs write-ability sets the transistor ratios.', 'Sense amps detect ~100 mV swings.', 'DRAM: 1T1C, charge sharing, destructive read, refresh every 64 ms.', 'NAND: 2^bits levels per cell.', 'MBIST + redundancy + fuses repair arrays; ECC handles soft errors.'],
+  recap: ['6T SRAM: two inverters + two access transistors.', 'Read stability vs write-ability sets the transistor ratios.', 'Sense amps detect ~100 mV swings.', 'DRAM: 1T1C, charge sharing, destructive read, refresh every 32–64 ms (by generation).', 'NAND: 2^bits levels per cell.', 'MBIST + redundancy + fuses repair arrays; ECC handles soft errors.'],
 };
 
 export const fab: Lesson = {
