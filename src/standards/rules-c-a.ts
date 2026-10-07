@@ -6,4 +6,5 @@ export const RULES_C_A: Rule[] = [
   { id: 'C2', why: 'C2: CPA models the S-box output, not data XOR key', files: /practice\/domains/, ban: /(predict|model)[^.]*\(data XOR key\)|Hamming weight of data XOR key|computes data XOR key/i },
   { id: 'C3', why: 'C3: masking is not "cutting the leak"; traces scale with 1/rho^2, not 1/SNR^2', files: /practice\/domains/, ban: /Masking cuts the leak|1\/SNR²/ },
   { id: 'C4', why: 'C4: -44/-53/-74 dB are filter stopband attenuation, not first sidelobes', ban: /(Hamming|Hann|Blackman)[^.]*[-−]?\s?(53|44|74) ?dB[^.]*first sidelobe/ },
+  { id: 'C5', why: 'C5: run_phase is not the only time-consuming phase; run-time phases are not sub-phases of run', ban: /only (phase|one) that consumes|sub-?phases?( like| of run)/i },
 ];

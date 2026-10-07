@@ -86,7 +86,7 @@ export const GLOSSARY: Entry[] = [
   E('constrained random|dist|randomization', 'Random stimulus shaped by constraints and dist weights to hit legal, interesting cases.', 'crv'),
   E('functional coverage|covergroup|coverpoint|bins|cross', 'A model of what must be exercised; bins count hits; crosses multiply combinations.', 'crv'),
   E('uvm|agent|driver|monitor|sequencer|sequence', 'The Universal Verification Methodology: sequences make transactions, drivers drive pins, monitors observe, all inside agents.', 'uvm'),
-  E('objection|run_phase|phases', 'UVM phases: build (top-down), connect, run_phase (time passes), report. Objections keep run_phase alive.', 'uvm'),
+  E('objection|run_phase|phases', 'UVM phases: build (top-down), connect (bottom-up), run_phase (a task: time passes; the other common phases are zero-time functions), report. Objections keep run_phase alive.', 'uvm'),
   E('sva|assertion|property', 'SystemVerilog Assertions: temporal rules like `req |-> ##[1:3] gnt` checked every cycle.', 'sva'),
   E('vacuous|vacuity', 'A property whose trigger never happened passes vacuously. Use cover properties to prove triggers occur.', 'sva'),
   E('formal verification|model checking|bmc', 'Proving properties for all inputs mathematically. BMC checks all traces up to depth k.', 'formal'),
