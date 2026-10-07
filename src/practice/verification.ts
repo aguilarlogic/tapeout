@@ -3,7 +3,7 @@ import { hexa, num, qty, words } from '../lessons/answers';
 import { calc, choice, count, show, sim, step, walk } from '../lessons/teach';
 import { art, ask, between, mc, pick, say, type Rng } from '../lessons/types';
 import { boss, practice, tier } from './types';
-import { atLevel, concept, exact, hex, mcs, sci, shuffle, sig } from './util';
+import { atLevel, concept, exact, hex, mcs, sci, sig } from './util';
 
 const code = (s: string) => '\n```\n' + s + '\n```\n';
 const NONE = words('none', 'never', 'no failure', 'pass', 'passes', 'it passes', 'no');
@@ -254,20 +254,22 @@ const PHASES = ['build', 'connect', 'end_of_elaboration', 'start_of_simulation',
 export const uvmPractice = practice('practice-uvm', 'UVM Drills', 'phases, objections, components, factory, config_db', [
   (r, d) => {
     const i = between(r, 0, PHASES.length - 2);
-    const idea = 'UVM runs every component through the same sequence of phases, in a fixed order: build, connect, end_of_elaboration, start_of_simulation, run, extract, check, report, final. build creates the testbench hierarchy (top-down: a parent must exist before it can create its children); the others walk bottom-up. Only run takes simulation time; the rest are instant functions.';
+    const idea = 'UVM runs every component through the same sequence of phases, in a fixed order: build, connect, end_of_elaboration, start_of_simulation, run, extract, check, report, final. build creates the testbench hierarchy (top-down: a parent must exist before it can create its children), and final is top-down too; connect, end_of_elaboration, start_of_simulation, extract, check and report walk bottom-up; run starts in every component in parallel. Of these nine, run is the one that takes simulation time (the twelve run-time phases, pre_reset … post_shutdown, are tasks as well, but most teams use only run); the rest are instant functions.';
     if (d < 3) {
       const a = words(PHASES[i + 1], `${PHASES[i + 1]}_phase`);
-      return walk(ask(`Which UVM common phase comes right after ${PHASES[i]}_phase?`, a, `${PHASES.join(' → ')}. build runs top-down (parents create children); the rest bottom-up; run is the only time-consuming one.`, 'build, connect, end_of_elaboration, start_of_simulation, run, extract, check, report, final.'),
+      return walk(ask(`Which UVM common phase comes right after ${PHASES[i]}_phase?`, a, `${PHASES.join(' → ')}. build and final run top-down (parents first); connect, end_of_elaboration, start_of_simulation, extract, check and report run bottom-up; run is in parallel, and it is the time-consuming one of the nine.`, 'build, connect, end_of_elaboration, start_of_simulation, run, extract, check, report, final.'),
         'the UVM phase order', idea,
         show(PHASES.map((p, k) => `${k + 1}. ${p}`).join('\n'), 'the common phases, in order'),
-        choice('Only one of these phases consumes simulation time (the rest are instant functions). Which one?', 'run', ['build', 'connect', 'report'], 'run is where the testbench drives stimulus and time passes; everything else just sets up or reports.'),
+        choice('Of these common phases, one is a task that consumes simulation time (the rest are instant functions). Which one?', 'run', ['build', 'connect', 'report'], 'run is where the testbench drives stimulus and time passes; everything else just sets up or reports.'),
         step(`Which phase is next after ${PHASES[i]}?`, a));
     }
-    const k = between(r, 1, PHASES.length - 1);
-    const others = shuffle(r, PHASES.filter((p) => p !== PHASES[k - 1])).slice(0, 3);
-    return walk(mcs(r, `Which UVM common phase comes right before ${PHASES[k]}_phase?`, PHASES[k - 1], others, `The common phases run in this order: ${PHASES.join(' → ')}.`),
-      'the UVM phase order', idea,
-      choice('A parent has to create its children in its own build_phase. So the parent\'s build must run:', 'Before its children\'s build', ['After its children\'s build', 'At the same instant']));
+    const PH: [string, 'down' | 'up' | 'parallel'][] = [['build', 'down'], ['connect', 'up'], ['end_of_elaboration', 'up'], ['start_of_simulation', 'up'], ['run', 'parallel'], ['extract', 'up'], ['check', 'up'], ['report', 'up'], ['final', 'down']];
+    const [ph, dir] = pick(r, PH);
+    const right = dir === 'down' ? 'Top-down: parents before their children' : dir === 'up' ? 'Bottom-up: children before their parents' : 'In parallel: every component runs at once';
+    const wrong = [dir !== 'down' ? 'Top-down: parents before their children' : 'Bottom-up: children before their parents', dir === 'parallel' ? 'Bottom-up: children before their parents' : 'In parallel: every component runs at once', 'Alphabetical, by the instance names of the components'];
+    return walk(mcs(r, `In which order does UVM call the ${ph}_phase methods of a component tree?`, right, wrong, `${ph}_phase is ${dir === 'down' ? 'top-down' : dir === 'up' ? 'bottom-up' : 'the phase whose components all run in parallel, and it consumes time'}. Only build and final are top-down; run is concurrent; the rest are bottom-up.`),
+      'phase direction', idea,
+      choice(dir === 'down' ? 'A parent has to create its children in its own build_phase. So the parent\'s build must run:' : dir === 'up' ? 'Connecting needs the children to exist and be built first, so a child\'s method runs:' : 'run_phase is a task that consumes simulation time, so the components run it:', dir === 'down' ? 'Before its children\'s build' : dir === 'up' ? 'Before its parent\'s' : 'Concurrently', dir === 'down' ? ['After its children\'s build', 'At the same instant'] : dir === 'up' ? ['After its parent\'s', 'At the same instant'] : ['One after another', 'Bottom-up']));
   },
   (r, d) => {
     const tDrop = pick(r, [500, 800, 1000]), sDrop = tDrop + pick(r, [-200, 100, 300]), drain = d > 1 ? pick(r, [50, 100]) : 0;
@@ -293,6 +295,36 @@ export const uvmPractice = practice('practice-uvm', 'UVM Drills', 'phases, objec
       count(`Each active agent is 1 (the agent) + 3 (sequencer, driver, monitor) = 4, and there are ${a}:`, `${a} × 4`, a * 4),
       ...(p > 0 ? [count(`Each passive agent is 1 + 1 (monitor) = 2, and there are ${p}:`, `${p} × 2`, p * 2)] : []),
       count(`Add the scoreboard${extra ? ' and the coverage collectors' : ''}. Total:`, `${a * 4} + ${p * 2} + 1${extra ? ` + ${extra}` : ''}`, n));
+  },
+  // Phase order and kind (C5): d1 names a phase by its job, d2 sorts four common phases, d3 places a run-time phase against run_phase.
+  (r, d) => {
+    const idea = 'The nine common phases run in order: build, connect, end_of_elaboration, start_of_simulation, run, extract, check, report, final. build and final run top-down; connect, end_of_elaboration, start_of_simulation, extract, check and report run bottom-up. run_phase and the twelve run-time phases (pre_reset … post_shutdown) are tasks that consume time; the run-time phases run in parallel with run_phase and in sequence with each other. All other phases are zero-time functions. Most teams use only run_phase.';
+    if (d === 1) {
+      const [q, a, why] = pick(r, [
+        ['Which phase builds the component tree, top-down?', 'build', 'build runs top-down: a parent must exist before it can create its children.'],
+        ['Which phase hooks up TLM ports once every component exists?', 'connect', 'connect needs the whole tree built first, and runs bottom-up.'],
+        ['Which phase is the last one before simulation time starts moving?', 'start_of_simulation', 'start_of_simulation is the last zero-time function before run.'],
+        ['Which common phase prints the pass/fail summary?', 'report', 'report comes after extract and check, once results are gathered and judged.'],
+      ] as const);
+      return walk(ask(q, words(a, `${a}_phase`), why, 'One of the nine common phases.'), 'the UVM phases by job', idea,
+        choice('Which of these runs first of all?', 'build', ['report', 'final', 'run']),
+        step('So the phase asked for is:', words(a, `${a}_phase`)));
+    }
+    if (d === 2) {
+      const idx = [...PHASES.keys()].sort(() => r() - 0.5).slice(0, 4).sort((x, y) => x - y), names = idx.map((k) => PHASES[k]);
+      const shuffled = [...names]; for (let k = shuffled.length - 1; k > 0; k--) { const j = Math.floor(r() * (k + 1)); [shuffled[k], shuffled[j]] = [shuffled[j], shuffled[k]]; }
+      if (shuffled.join() === names.join()) shuffled.push(shuffled.shift()!);
+      return walk(ask(`Put these UVM phases in the order they run, first to last (comma-separated): ${shuffled.join(', ')}.`, exact(names.join(', '), names.join(' ')), `${PHASES.join(' → ')}; yours are ${names.join(' → ')}.`, 'build, connect, end_of_elaboration, start_of_simulation, run, extract, check, report, final.'),
+        'ordering the UVM phases', idea,
+        show(PHASES.map((p, k) => `${k + 1}. ${p}`).join('\n'), 'the common phases, in order'),
+        choice('Phases that create or wire the testbench come:', 'Before run', ['After run', 'Alongside report']),
+        step('The order of your four, first to last:', exact(names.join(', '), names.join(' '))));
+    }
+    const rt = pick(r, ['pre_reset', 'reset', 'post_reset', 'pre_configure', 'configure', 'post_configure', 'pre_main', 'main', 'post_main', 'pre_shutdown', 'shutdown', 'post_shutdown']);
+    return walk(ask(`Does ${rt}_phase run before, after or in parallel with run_phase?`, words('in parallel', 'parallel', 'parallel with run_phase'), `${rt}_phase is one of the twelve run-time phases. They run in parallel with run_phase (and in sequence with each other), so the answer is in parallel.`, 'Both are tasks that consume time.'),
+      'run-time phases', idea,
+      choice('The twelve run-time phases (pre_reset … post_shutdown) relate to run_phase as:', 'Running in parallel with it', ['Steps that run one at a time inside it', 'Running after it ends']),
+      step('So the answer is:', words('in parallel', 'parallel', 'parallel with run_phase')));
   },
   (r, d) => concept(r, [...atLevel(2, [
     ['A test calls `set_type_override_by_type(base_drv::get_type(), err_drv::get_type())`, but the agent creates its driver with `drv = new("drv", this);`. What happens?', 'The override is ignored', ['err_drv is created instead', 'Both drivers are created', 'Compilation fails with an error'], 'the UVM factory', 'The factory lets a test swap one class for another without touching the testbench code, but only for objects that are created BY the factory, using type_id::create. A plain new() builds exactly the named class directly and the factory never gets a say.', ['Which creation call lets the factory substitute a different type?', 'type_id::create', ['new()', 'Both, equally well']], 'Only objects created through the factory (type_id::create) can be overridden; new() bypasses it.'],
