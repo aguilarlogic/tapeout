@@ -19,6 +19,8 @@ function cexTable(cex: Cex, clock: string): HTMLElement {
   return h('div', { class: 'cex-wrap' }, h('table', { class: 'cex' }, h('thead', null, head), h('tbody', null, ...rows)));
 }
 
+export const MODEL_NOTE = 'This simulator is 2-state: X and Z are not modelled, and registers power up at 0. Real simulators start registers at X, so a missing reset shows up as X there.';
+
 export function svaPage(id: string): HTMLElement {
   const level = findSvaLevel(id);
   if (!level) return h('p', null, 'Unknown mission.');
@@ -36,7 +38,7 @@ export function svaPage(id: string): HTMLElement {
   // --- brief and hints
   const { hintBox, usage } = useHints(inst.hints, `${draftKey}.usage`);
 
-  const brief = briefPanel({ tag: `SVA · ${level.concept}`, ticket: level.ticket, html: inst.brief, note: boss ? 'Boss mission: no hints. Hidden bugs are checked on Submit.' : undefined, hintBox });
+  const brief = briefPanel({ tag: `SVA · ${level.concept}`, ticket: level.ticket, model: MODEL_NOTE, html: inst.brief, note: boss ? 'Boss mission: no hints. Hidden bugs are checked on Submit.' : undefined, hintBox });
 
   // --- the design (read only) and any given directives
   const shown = h('details', { class: 'src-view', open: '' },

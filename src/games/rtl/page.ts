@@ -7,6 +7,8 @@ import { waveform } from '../../ui/waveform';
 import { ALL_RTL, RtlLevel } from './levels';
 import { briefPanel, draftEditor, finish, resetButton, setStatus, useHints } from '../../ui/labkit';
 
+export const MODEL_NOTE = 'This simulator is 2-state: X and Z are not modelled, and registers power up at 0. Real simulators start registers at X, so a missing reset shows up as X there.';
+
 export function rtlPage(id: string): HTMLElement {
   const level = ALL_RTL.find((l) => l.id === id);
   if (!level) return h('p', null, 'Unknown level.');
@@ -17,7 +19,7 @@ export function rtlPage(id: string): HTMLElement {
 
   const ed = draftEditor(draftKey, level.starter, () => doRun());
 
-  const brief = briefPanel({ tag: level.concept, html: level.brief, hintBox });
+  const brief = briefPanel({ tag: level.concept, html: level.brief, model: MODEL_NOTE, hintBox });
 
   // --- results area
   const status = h('div', { class: 'status idle' }, 'Press Run (Ctrl+Enter) to simulate your design against the golden model.');

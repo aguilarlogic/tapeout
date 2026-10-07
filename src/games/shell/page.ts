@@ -20,6 +20,8 @@ function incomplete(src: string): boolean {
   }
 }
 
+export const MODEL_NOTE = 'A POSIX-style shell with GNU tools. Bash-only and GNU-only features are marked where they appear.';
+
 export function shellPage(id: string): HTMLElement {
   const level = findShellLevel(id);
   if (!level) return h('p', null, 'Unknown mission.');
@@ -34,7 +36,7 @@ export function shellPage(id: string): HTMLElement {
   // --- brief and hints
   const { hintBox, usage } = useHints(inst.hints, `${draftKey}.usage`);
 
-  const brief = briefPanel({ tag: `Shell · ${level.concept}`, ticket: level.ticket, html: inst.brief, note: boss ? 'Boss mission: no hints. Check runs hidden verification.' : undefined, hintBox });
+  const brief = briefPanel({ tag: `Shell · ${level.concept}`, ticket: level.ticket, model: MODEL_NOTE, html: inst.brief, note: boss ? 'Boss mission: no hints. Check runs hidden verification.' : undefined, hintBox });
 
   // --- terminal
   const screen = h('div', { class: 'sh-screen', tabindex: '-1' });

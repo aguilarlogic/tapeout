@@ -24,6 +24,8 @@ function coverageView(cov: CovGroupReport[]): HTMLElement | string {
   return h('div', { class: 'cov-box' }, h('h4', null, 'Functional coverage (correct design, first run)'), ...blocks);
 }
 
+export const MODEL_NOTE = 'This simulator is 2-state: X and Z are not modelled, and registers power up at 0. Real simulators start registers at X, so a missing reset shows up as X there.';
+
 export function svPage(id: string): HTMLElement {
   const level = findTbLevel(id);
   if (!level) return h('p', null, 'Unknown mission.');
@@ -41,7 +43,7 @@ export function svPage(id: string): HTMLElement {
   // --- brief and hints
   const { hintBox, usage } = useHints(inst.hints, `${draftKey}.usage`);
 
-  const brief = briefPanel({ tag: `${inst.uvm ? 'UVM' : 'Testbench'} · ${level.concept}`, ticket: level.ticket, html: inst.brief, note: boss ? 'Boss mission: no hints. Hidden bugs are checked on every run.' : undefined, hintBox });
+  const brief = briefPanel({ tag: `${inst.uvm ? 'UVM' : 'Testbench'} · ${level.concept}`, ticket: level.ticket, model: MODEL_NOTE, html: inst.brief, note: boss ? 'Boss mission: no hints. Hidden bugs are checked on every run.' : undefined, hintBox });
 
   // --- code provided around the learner's (read only)
   const provided = inst.fixed.replace('@@DUT@@', inst.dut ?? '').trim();

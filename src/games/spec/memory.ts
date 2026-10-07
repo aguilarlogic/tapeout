@@ -30,6 +30,7 @@ const cellArea = (c: Cell) => 2 * (c.pd + c.ax + c.pu);
 const WS = Array.from({ length: 17 }, (_, i) => 1 + i * 0.25);
 const memSnm: ArchLevel = {
   id: 'mem-snm', title: 'Size a 6T SRAM cell', concept: 'beta ratio, read disturb, write ability, mismatch, cell area', xp: 170, lab: 'Memory', tier: 'guided',
+  model: 'A divider-based read-disturb margin, a proxy for the butterfly-curve noise margin.',
   ticket: 'A billion bits means the rare cell decides the yield. Size the six transistors so the worst cell in the array still reads without flipping and still writes, at the smallest area.',
   build: (r) => {
     const k = pick(r, [4, 4.5, 5]);

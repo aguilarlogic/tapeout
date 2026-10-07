@@ -38,10 +38,12 @@ export function finish(levelId: string, xp: number, stars: number, notes: string
 export const hintNote = (hintsUsed: number) => (hintsUsed ? ['Solve it without hints for another star.'] : []);
 
 /** The left-hand panel of a lab: tag, optional ticket line, the brief, any extras, an optional note (boss rules), then the hint box. */
-export function briefPanel(o: { tag: string; ticket?: string; html: string; note?: string; hintBox?: Node | string }, ...extra: (Node | string | false | undefined)[]) {
+export function briefPanel(o: { tag: string; ticket?: string; html: string; note?: string; model?: string; hintBox?: Node | string }, ...extra: (Node | string | false | undefined)[]) {
   return h('aside', { class: 'brief panel' },
     h('div', { class: 'tag' }, o.tag),
     o.ticket ? h('p', { class: 'dim small' }, o.ticket) : '',
+    // where the lab simplifies reality, say so: a professional would notice
+    o.model ? h('p', { class: 'dim small model-note' }, h('b', null, 'About this simulator: '), o.model) : '',
     h('div', { class: 'brief-body', html: o.html }),
     ...extra.map((x) => x || ''),
     o.note ? h('p', { class: 'dim small' }, o.note) : '',

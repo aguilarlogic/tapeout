@@ -6,6 +6,8 @@ import { highlightC, highlightPy } from '../../ui/editor';
 import { findCodeLevel, instanceFor, starsFor } from './levels';
 import { runCode, type CodeReport } from './run';
 
+export const MODEL_NOTE = 'C here behaves like 64-bit Linux with GCC: int is 32 bits, long is 64, char is signed. Undefined behaviour stops the program with a sanitizer-style error instead of doing something unpredictable.';
+
 export function codePage(id: string): HTMLElement {
   const level = findCodeLevel(id);
   if (!level) return h('p', null, 'Unknown mission.');
@@ -24,7 +26,7 @@ export function codePage(id: string): HTMLElement {
   const { hintBox, usage } = useHints(inst.hints, `${draftKey}.usage`);
 
   const tierNote = level.tier === 'debug' ? 'Bug hunt: run it, read the sanitizer report, find the root cause.' : boss ? 'Boss mission: no hints. Hidden cases run on Submit.' : '';
-  const brief = briefPanel({ tag: `${langName} · ${level.concept}`, ticket: level.ticket, html: inst.brief, note: tierNote, hintBox });
+  const brief = briefPanel({ tag: `${langName} · ${level.concept}`, ticket: level.ticket, model: MODEL_NOTE, html: inst.brief, note: tierNote, hintBox });
 
   // --- results
   const status = h('div', { class: 'status idle' }, 'Run (Ctrl+Enter) tries the example cases. Submit checks everything, including the hidden cases.');

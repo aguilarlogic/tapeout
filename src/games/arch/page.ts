@@ -81,7 +81,7 @@ export function archPage(id: string): HTMLElement {
 
   const { hintBox, usage } = useHints(inst.hints, `${draftKey}.usage`);
 
-  const brief = briefPanel({ tag: `${level.lab} Lab · ${level.concept}`, ticket: level.ticket, html: inst.brief, note: boss ? 'Boss mission: no hints. A new variant changes the workload and the targets.' : undefined, hintBox }, inst.listing ? h('details', { class: 'src-view', open: '' }, h('summary', null, inst.listing.label), h('pre', { class: 'arch-listing' }, inst.listing.text)) : '');
+  const brief = briefPanel({ tag: `${level.lab} Lab · ${level.concept}`, ticket: level.ticket, model: level.model, html: inst.brief, note: boss ? 'Boss mission: no hints. A new variant changes the workload and the targets.' : undefined, hintBox }, inst.listing ? h('details', { class: 'src-view', open: '' }, h('summary', null, inst.listing.label), h('pre', { class: 'arch-listing' }, inst.listing.text)) : '');
 
   // ---- controls
   const form = h('div', { class: 'arch-controls' });

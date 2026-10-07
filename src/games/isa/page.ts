@@ -28,6 +28,8 @@ export function highlightAsm(src: string): string {
 
 const hx = (v: number) => `0x${(v >>> 0).toString(16).padStart(8, '0')}`;
 
+export const MODEL_NOTE = 'RV32IM, machine-level. ecall numbers follow the common teaching-simulator convention (a7 = service). The stack pointer must stay 16-byte aligned.';
+
 export function isaPage(id: string): HTMLElement {
   const level = findIsaLevel(id);
   if (!level) return h('p', null, 'Unknown mission.');
@@ -41,7 +43,7 @@ export function isaPage(id: string): HTMLElement {
 
   const { hintBox, usage } = useHints(inst.hints, `${draftKey}.usage`);
 
-  const brief = briefPanel({ tag: `ISA Lab · ${level.concept}`, ticket: level.ticket, html: inst.brief, note: boss ? 'Boss mission: no hints, hidden cases. A new variant picks a different routine.' : undefined, hintBox }, inst.fixed ? h('details', { class: 'src-view' }, h('summary', null, 'Provided code (appended after yours)'), h('pre', { class: 'ed-hl src', html: highlightAsm(inst.fixed) })) : '');
+  const brief = briefPanel({ tag: `ISA Lab · ${level.concept}`, ticket: level.ticket, model: MODEL_NOTE, html: inst.brief, note: boss ? 'Boss mission: no hints, hidden cases. A new variant picks a different routine.' : undefined, hintBox }, inst.fixed ? h('details', { class: 'src-view' }, h('summary', null, 'Provided code (appended after yours)'), h('pre', { class: 'ed-hl src', html: highlightAsm(inst.fixed) })) : '');
 
   // ---- results
   const status = h('div', { class: 'status idle' }, 'Check assembles your code and runs every case. Submit also banks the result.');
