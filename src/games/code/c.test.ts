@@ -151,6 +151,8 @@ describe('c subset: memory errors', () => {
   });
   it('exposes uninitialised locals as garbage rather than zero', () => {
     expect(out(main('int x; printf("%d\\n", x == 0);'))).toBe('0\n');
+    // fresh stack is filled with 0xCC (the MSVC debug stack fill); 0xCD is the heap fill and must not appear here
+    expect(out(main('int x; printf("%x\\n", x);'))).toBe('cccccccc\n');
   });
   it('reports compile errors with a line', () => {
     const r = run('int main() {\n  int x = ;\n  return 0;\n}');

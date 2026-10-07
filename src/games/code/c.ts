@@ -149,7 +149,7 @@ export class CInterp {
     if (a < STACK_LIMIT) throw new CError('Segmentation fault: stack overflow (infinite recursion?)', this.line, 'segv');
     this.mark(a - 0, size, S_OK);
     this.mark(a + size, Math.min(rz, this.sp - (a + size)), S_RED);
-    this.u8.fill(0xcd, a, a + size);
+    this.u8.fill(0xcc, a, a + size); // MSVC debug stack fill; real GCC/Clang leave garbage
     this.sp = a;
     return a;
   }
