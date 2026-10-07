@@ -209,7 +209,7 @@ export const controlPractice = practice('practice-control', 'Loop Drills', 'loop
     const K = pick(r, tier(d, [1, 2, 4, 9, 19, 99], [9, 19, 24, 49, 99, 999], [2, 5, 14, 24, 49, 199, 999]));
     const e = 1 / (1 + K);
     return walk(ask(`A proportional loop with DC loop gain K = ${K} and a step input. Steady-state error, in %?`, qty(e * 100, '%', 0.02, sig(e * 100)), `e_ss = 1/(1 + K) = ${sig(e * 100)}%. An integrator (infinite DC gain) would drive it to zero.`, 'e = 1/(1 + K).'),
-      'steady-state error', 'A proportional controller only pushes when there is an error, so some error must remain to keep it pushing. With loop gain K, the output settles where the error is 1/(1 + K) of the step. More gain, less error; an integrator (infinite DC gain) removes it entirely.',
+      'steady-state error', 'A proportional controller only pushes when there is an error, so some error must remain to keep it pushing. With loop gain K, the output settles where, for a plant with no integrator in the loop, the error is 1/(1 + K) of the step. More gain, less error; an integrator (infinite DC gain) removes it entirely.',
       count('1 + K:', `1 + ${K}`, 1 + K),
       calc('Error = 1/(1 + K), as a %:', `100 / ${1 + K}`, e * 100, '%', sig(e * 100), 0.02));
   },

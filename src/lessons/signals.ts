@@ -119,7 +119,7 @@ export const control: Lesson = {
       const drop = pick(r, [10, 20, 50]);
       return ask(`With loop gain T = ${t}, the amplifier's own gain A drifts by ${drop}% over temperature. Roughly how much does the closed-loop gain drift, in %?`, qty(drop / (1 + t), '%', 0.05, r3(drop / (1 + t)).toString()), `Feedback divides sensitivity by (1 + T): ${drop}% / ${1 + t} ≈ ${r3(drop / (1 + t))}%. This is the whole point of feedback: precision from imprecise parts.`, 'Divide by (1 + T).');
     }),
-    say('A controller that only multiplies the error (**P**, proportional) leaves a steady-state error of 1/(1 + K). Adding an **integral** term (**I**) accumulates the error until it is gone. A **derivative** term (**D**) reacts to how fast the error changes and adds damping. Together: **PID**.'),
+    say('A controller that only multiplies the error (**P**, proportional) leaves a steady-state error of 1/(1 + K) for a step input with a plant that has no integrator. Adding an **integral** term (**I**) accumulates the error until it is gone. A **derivative** term (**D**) reacts to how fast the error changes and adds damping. Together: **PID**.'),
     gen((r) => {
       const kk = pick(r, [4, 9, 19, 99]);
       return ask(`A proportional controller with loop gain K = ${kk} tracks a step. What steady-state error remains, as a % of the step?`, qty(100 / (1 + kk), '%', 0.01), `e = 1/(1 + K) = 1/${1 + kk} = ${r3(100 / (1 + kk))}%. To drive it to zero, add integral action (a pole at DC): that is what the I in PID and the integrator in a PLL's loop filter do.`, 'e = 1 / (1 + K).');

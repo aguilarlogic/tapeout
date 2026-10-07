@@ -143,7 +143,7 @@ export const electronics: Lesson = {
       return ask(`At room temperature, how much does a diode's forward voltage rise when its current increases ${10 ** dec}×, in mV?`, qty(mv, 'mV', 0.03), `ΔV = VT·ln(${10 ** dec}) ≈ ${mv} mV. That is the famous "60 mV per decade". The same exponential governs subthreshold leakage in MOSFETs.`, 'ΔV = VT × ln(current ratio), with VT ≈ 25.9 mV.');
     }),
     mc('Every chip I/O pad has diodes from the pad to Vdd and to ground. What are they for?', ['Rectifying the incoming supply', 'ESD protection for the gate oxide', 'Shifting the logic level of the pad', 'Making the pad drive edges faster'], 1, 'A static zap is clamped into the supply rails instead of punching through the thin gate oxide. Electrostatic discharge can be thousands of volts. The diodes (and clamps between the rails) steer that current away from the fragile transistors inside.'),
-    say('The **bipolar junction transistor (BJT)** came before the MOSFET and still matters in analog. A small base current controls a large collector current: I_C = β·I_B. Its transconductance is the best of any device: gm = I_C / VT.'),
+    say('The **bipolar junction transistor (BJT)** came before the MOSFET and still matters in analog. A small base current controls a large collector current: I_C = β·I_B. Its transconductance per unit current is the highest of the common devices: gm = I_C / VT. (A MOSFET in weak inversion approaches it: gm/I_D ≈ 1/(n·V_T).)'),
     gen((r) => {
       const ic = pick(r, [0.1, 0.5, 1, 2]);
       const gm = ic / 25.85;

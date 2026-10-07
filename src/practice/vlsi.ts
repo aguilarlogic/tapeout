@@ -200,7 +200,7 @@ export const powerPractice = practice('practice-power', 'Power Drills', 'dynamic
     const idea = 'Leakage is current that flows through every transistor even when nothing switches. Total leakage power = (number of cells) × (leakage current per cell) × (supply voltage). It is paid all the time, which is why idle chips still drain batteries.';
     if (d < 3) return walk(ask(`${cn} cells each leak ${eng(il, 'A')} at ${V} V. Total leakage power, in mW?`, qty(P * 1000, 'mW', 0.02), `${cn} × ${eng(il, 'A')} × ${V} V = ${eng(P, 'W')}. It flows whether or not the chip does anything.`, 'P = N × I_leak × V.'),
       'leakage power', idea,
-      calc('Total leakage current, cells × current each (in amps):', `${cn} × ${il}`, cells * il, 'A', sig(cells * il), 0.005),
+      calc('Total leakage current, cells × current each (in amperes):', `${cn} × ${il}`, cells * il, 'A', sig(cells * il), 0.005),
       calc('Power = current × voltage, in mW (× 1000):', `${sig(cells * il)} × ${V} × 1000`, P * 1000, 'mW', sig(P * 1000), 0.02));
     const hvt = pick(r, [0.6, 0.8]), ratio = pick(r, [5, 10]);
     const P2 = cells * il * V * (1 - hvt + hvt / ratio);

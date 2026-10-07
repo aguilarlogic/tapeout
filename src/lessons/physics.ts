@@ -21,13 +21,13 @@ export const semi: Lesson = {
     mc('Why are insulators like SiO2 insulators?', ['They contain no electrons at all', 'Their band gap is too wide for electrons to cross', 'Their electrons are too heavy to move', 'Their atoms are packed too tightly'], 1, 'Almost no electrons reach the conduction band. At room temperature thermal energy is about 26 meV. Crossing 9 eV essentially never happens, while crossing 1.12 eV happens just enough to give pure silicon a small intrinsic carrier density, n_i ≈ 1e10 per cm³.'),
     say('Pure silicon barely conducts. We **dope** it. Add phosphorus or arsenic (5 valence electrons) and you get spare electrons: **n-type**. Add boron (3 valence electrons) and you get holes: **p-type**.'),
     mc('Boron is added to silicon. What type does the silicon become?', ['n-type', 'p-type', 'intrinsic', 'metallic'], 1, 'Boron has 3 valence electrons, one short of silicon\'s 4, so each boron atom accepts an electron and creates a hole. It is an acceptor, so the silicon becomes p-type.'),
-    say('One law ties the carriers together in equilibrium: the **mass-action law**, n · p = n_i². Dope heavily with electrons and the holes almost vanish.'),
+    say('One law ties the carriers together in equilibrium: the **mass-action law**, n · p = n_i² (n_i ≈ 1e10 cm⁻³ for silicon at 300 K is the round figure the game uses; a revised value is 9.65e9). Dope heavily with electrons and the holes almost vanish.'),
     gen((r) => {
       const e = pick(r, [15, 16, 17, 18]);
       const p = 20 - e;
       return ask(`n_i = 1e10 cm⁻³. Silicon is doped n-type with N_D = 1e${e} cm⁻³. What is the hole concentration? (answer like 1e${p})`, qty(10 ** p, '', 0.05, `1e${p}`), `n ≈ N_D = 1e${e}, so p = n_i²/n = 1e20/1e${e} = 1e${p} cm⁻³. The electrons are the majority carriers; the holes are a tiny minority.`, 'p = n_i² / n, and n_i² = 1e20.');
     }),
-    say('Put p-type next to n-type and you get a **PN junction**. Carriers diffuse across and recombine, leaving a **depletion region** with no free carriers and a built-in electric field, about 0.7 V worth in silicon.'),
+    say('Put p-type next to n-type and you get a **PN junction**. Carriers diffuse across and recombine, leaving a **depletion region** with no free carriers and a built-in electric field. Its built-in potential is roughly 0.6–0.9 V depending on doping (V_bi = V_T·ln(N_A·N_D/n_i²); very heavy doping pushes it towards 1 V), not the same as the ~0.7 V forward drop.'),
     art(`
       p-type  │ depletion │  n-type
      + + + +  │  - - │+ + │  - - - -
@@ -83,7 +83,7 @@ export const mosphys: Lesson = {
     say('Which brings us to the enemy of modern chips: **leakage**. A transistor that is "off" still conducts a little, and a billion of them add up to watts.'),
     art(`
    subthreshold   exponential in -Vt/(n·V_T): the biggest one
-   gate           electrons tunnel through a few-atom-thick oxide (fixed by high-k dielectrics)
+   gate           electrons tunnel through a few-atom-thick oxide (reduced by high-k dielectrics)
    GIDL           gate-induced drain leakage at high gate-drain fields
    junction       reverse-biased PN junction leakage`),
     say('Subthreshold current drops by 10× for every **S** millivolts of Vt, where S, the subthreshold swing, can never beat about 60 mV/decade at room temperature (it is the same kT/q physics as the diode). Real devices manage 70 to 90.'),

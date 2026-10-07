@@ -251,7 +251,7 @@ const sigPid: ArchLevel = {
     const ts = Math.ceil(b.settle * 1.1 * 10) / 10;
     return {
       brief: `<p>The plant is a second-order, under-damped system (natural frequency ωn = ${plant.wn} rad/s, damping ζ = ${plant.zeta}, DC gain 1${plant.delay ? `, plus ${plant.delay * 1000} ms of dead time` : ''}). You close the loop with a PID controller on the error e = r − y:</p>
-<ul><li><b>P (Kp)</b> reacts to the error now: faster, but a pure P loop leaves a steady-state error of 1/(1+Kp).</li>
+<ul><li><b>P (Kp)</b> reacts to the error now: faster, but a pure P loop leaves a steady-state error of 1/(1+Kp) for a step with a plant that has no integrator.</li>
 <li><b>I (Ki)</b> accumulates the error: removes the steady-state error but adds lag and overshoot.</li>
 <li><b>D (Kd)</b> reacts to the error's slope: adds damping, but amplifies noise and delay turns it unstable.</li></ul>
 <p>Goal for a unit step: <b>overshoot ≤ ${osLimit}%</b>, <b>steady-state error ≤ 1%</b>, <b>2% settling time ≤ ${ts} s</b>, and stable.</p>`,
@@ -319,7 +319,7 @@ const sigBoss: ArchLevel = {
     const budget = b.cost * 1.08;
     const startFs = Math.ceil((2.2 * s.B) / 5) * 5;
     return {
-      brief: `<p>A MEMS vibration sensor feeds an ADC through a passive RC filter of <b>order n</b> (n identical poles at the corner <b>fc</b>: |H|² = (1 + (f/fc)²)<sup>−n</sup>). The channel must satisfy all of these at once:</p>
+      brief: `<p>A MEMS vibration sensor feeds an ADC through a passive RC filter of <b>order n</b> (n identical RC poles, each with its corner at <b>fc</b>: |H|² = (1 + (f/fc)²)<sup>−n</sup>; not a Butterworth, so the −3 dB point of the cascade sits below fc). The channel must satisfy all of these at once:</p>
 <ol><li><b>Signal band</b> 0 – ${s.B} kHz is intact: fs ≥ 2.2·B.</li>
 <li><b>No overload:</b> a strong interferer at <b>${s.fi} kHz</b> is ${s.D} dB above the signal. After the filter it may be at most 6 dB above full scale: attenuation ≥ ${s.D - 6} dB.</li>
 <li><b>No in-band fold:</b> if the interferer aliases inside the band (apparent frequency ≤ ${r1(1.1 * s.B)} kHz), the filter must remove it by ≥ ${s.D + 50} dB, which is practically impossible: choose fs so it folds out of the band.</li>
