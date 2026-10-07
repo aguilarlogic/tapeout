@@ -9,4 +9,5 @@ export const RULES_C_B: Rule[] = [
   { id: 'C12', why: 'C12: the Born rule is |b|², the squared magnitude, not b²', files: /practice\/domains|lessons\/quantum/, ban: /probability (is|=) [ab]²|the SQUARE of its amplitude/ },
   { id: 'C14', why: 'C14: a PUF key is re-derived from stored non-secret helper data, so the claim "nothing stored" is wrong', ban: /PUF[^.]*nothing (is )?stored/i },
   { id: 'C14b', why: 'C14: only the first stage of a root of trust is immutable', ban: /small, immutable block|An immutable hardware anchor|nothing can alter it/ },
+  { id: 'C15', why: 'C15: power-down is stop clocks, isolate, save, switch off', ban: /Stop clocks, save retention, enable isolation/ },
 ];
