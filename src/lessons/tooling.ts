@@ -24,7 +24,7 @@ export const shell: Lesson = {
    grep UVM_ERROR *.log | sort | uniq -c | sort -rn  which errors are most common?
    find . -name "*.sv" | xargs grep -l "always_latch"  which files use latches?`),
     ask('Write one command that counts how many lines in `run.log` contain `UVM_ERROR`.', has('grep -c UVM_ERROR run.log', ['grep'], ['uvm_error'], ['run.log'], ['-c', 'wc -l', 'wc']), 'Either `grep -c UVM_ERROR run.log` or `grep UVM_ERROR run.log | wc -l`. The first is shorter; the second shows the pipe idea.', 'grep finds the lines; -c counts them (or pipe into wc -l).'),
-    mc('What does `>` do in `grep FAIL results.txt > fails.txt`, and how is `>>` different?', ['They are the same, and both of them append to the file', '`>` writes into a file, replacing it; `>>` appends to it', '`>` compares numbers, while `>>` compares the text of files', '`>>` runs the command in the background, while `>` waits for it'], 1, 'Redirection. `2>` redirects errors, `&>` both, and `< file` feeds a file in as input.'),
+    mc('What does `>` do in `grep FAIL results.txt > fails.txt`, and how is `>>` different?', ['They are the same, and both of them append to the file', '`>` writes into a file, replacing it; `>>` appends to it', '`>` compares numbers, while `>>` compares the text of files', '`>>` runs the command in the background, while `>` waits for it'], 1, 'Redirection. `2>` redirects errors, `&>` both (bash only; the portable form is `> file 2>&1`), and `< file` feeds a file in as input.'),
     say('grep patterns are **regular expressions**: a tiny language for describing text. Learn these and you can find anything in a million-line log.'),
     art(`
    .        any character          ^ / $    start / end of line
@@ -61,7 +61,7 @@ export const git: Lesson = {
    git switch -c fix-fifo  create and switch to a new branch
    git pull / git push     sync with the shared remote`),
     mc('What is the **staging area** (the index) for?', ['It backs up your files', 'It lets you pick which changes go into the next commit', 'It compiles the code', 'It stores deleted files, so that they can be brought back later'], 1, 'So one commit holds one logical change. `git add` stages; `git commit` records what is staged. Small, focused commits make history readable and bugs easy to find.'),
-    ask('What command creates a commit from the staged changes with the message "fix fifo overflow"?', words('git commit -m "fix fifo overflow"', "git commit -m 'fix fifo overflow'", 'git commit -m fix fifo overflow', 'git commit --message "fix fifo overflow"', 'git commit --message="fix fifo overflow"'), '`git commit -m "fix fifo overflow"`. Good messages say what and why, in the present tense.', 'git commit with the -m flag.'),
+    ask('What command creates a commit from the staged changes with the message "fix fifo overflow"?', words('git commit -m "fix fifo overflow"', "git commit -m 'fix fifo overflow'", 'git commit -m fix fifo overflow', 'git commit --message "fix fifo overflow"', 'git commit --message="fix fifo overflow"'), '`git commit -m "fix fifo overflow"`. Good messages say what and why, in the imperative mood ("fix", not "fixed").', 'git commit with the -m flag.'),
     say('A **branch** is a movable pointer to a line of commits. You make a branch for your change, commit on it, and when it is reviewed, **merge** it back into `main`. If two people changed the same lines, git cannot decide, and you get a **merge conflict** to resolve by hand.'),
     art(`
    <<<<<<< HEAD

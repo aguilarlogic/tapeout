@@ -18,7 +18,7 @@ describe('lab model notes (S0.3)', () => {
     expect(CODE).toBe('C here behaves like 64-bit Linux with GCC: int is 32 bits, long is 64, char is signed. Undefined behaviour stops the program with a sanitizer-style error instead of doing something unpredictable.');
   });
   it('ISA lab describes the RV32IM model', () => {
-    expect(ISA).toBe('RV32IM, machine-level. ecall numbers follow the common teaching-simulator convention (a7 = service). The stack pointer must stay 16-byte aligned.');
+    expect(ISA).toBe('RV32IM, machine-level. ecall numbers are RARS-style (a7 = service). The stack pointer must stay 16-byte aligned.');
   });
   it('Shell lab describes the POSIX-style model', () => {
     expect(SHELL).toBe('A POSIX-style shell with GNU tools. Bash-only and GNU-only features are marked where they appear.');
