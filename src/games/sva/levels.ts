@@ -259,6 +259,42 @@ const cover: SvaLevel = {
   }),
 };
 
+// ===================================================================== 8b. goto
+const BATCH = `module batch(input clk, input rst, input start, input gnt, output reg busy, output reg done);
+  reg [1:0] n;
+  always @(posedge clk) begin
+    if (rst) begin busy <= 1'b0; n <= 2'd0; done <= 1'b0; end
+    else begin
+      done <= 1'b0;
+      if (!busy && start) begin busy <= 1'b1; n <= 2'd0; end
+      else if (busy && gnt) begin
+        if (n == 2'd2) begin busy <= 1'b0; n <= 2'd0; done <= 1'b1; end
+        else n <= n + 2'd1;
+      end
+    end
+  end
+endmodule
+`;
+const gotoCount: SvaLevel = {
+  id: 'sva-goto', title: 'Count three grants', concept: 'goto repetition [->n], consecutive against non-consecutive, request/grant counting', xp: 110, tier: 'guided',
+  ticket: 'A batch engine finishes after the third grant it sees, however slowly the grants trickle in. The consecutive-repeat operator cannot say that. The goto operator can.',
+  build: () => ({
+    mode: 'write', depth: 7, minAsserts: 2, bias: { start: 0.3, gnt: 0.5 }, env: ENV, design: BATCH,
+    brief: `<p><code>batch</code> starts when <code>start</code> is high while it is not <code>busy</code>. While busy it counts the cycles where <code>gnt</code> is high (a grant in the start cycle itself is not counted). On the <b>third</b> grant it drops <code>busy</code> and raises <code>done</code> for <b>one cycle, the cycle after that third grant</b>. Grants arrive with gaps of any length.</p>
+<p>Spec: <b>(1)</b> an accepted start (<code>start &amp;&amp; !busy</code>) is followed, from the next cycle on, by the third grant and then <code>done</code> in the cycle after it; <b>(2)</b> <code>done</code> lasts one cycle only.</p>
+<p><code>gnt[*3]</code> means three grants <i>back to back</i>, which would fire a false alarm here. <code>gnt[-&gt;3]</code> (goto) waits for the <i>third occurrence</i> and the match <b>ends on that grant</b>, so <code>##1 done</code> after it lands on the cycle after the grant. <code>gnt[=3]</code> would also allow idle cycles after the third grant, which is not what this spec says.</p>`,
+    hints: ['Start counting from the cycle after the start: <code>start &amp;&amp; !busy |-&gt; ##1 gnt[-&gt;3] ##1 done</code>.', 'If you wrote <code>gnt[*3]</code> the correct design raises a false alarm: its grants have gaps.', 'Rule 2: <code>done |=&gt; !done</code>.'],
+    starter: '// rule 1 needs gnt[->3];  rule 2 is one line\n',
+    solution: `g1: assert property (${C} start && !busy |-> ##1 gnt[->3] ##1 done);\ng2: assert property (${C} done |=> !done);\n`,
+    mutants: [
+      mut('it finishes after two grants', BATCH, "n == 2'd2", "n == 2'd1"),
+      mut('it waits for four grants', BATCH, "n == 2'd2", "n == 2'd3"),
+      mut('a grant in the start cycle is counted', BATCH, "begin busy <= 1'b1; n <= 2'd0; end", "begin busy <= 1'b1; n <= gnt ? 2'd1 : 2'd0; end"),
+      mut('done stays high until the next start', BATCH, "done <= 1'b0;\n      if", "done <= done && !start;\n      if"),
+    ],
+  }),
+};
+
 // ===================================================================== assume mode
 const CNT_RAW = `module cnt4(input clk, input rst, input push, input pop, output full, output empty, output reg [2:0] count);
   assign full = (count == 3'd4);
@@ -399,5 +435,5 @@ const bossWrap: SvaLevel = {
   },
 };
 
-export const SVA_LEVELS: SvaLevel[] = [latency, reg, arbiter, fifoCount, handshakeProto, fsm, pulse, cover, assume, formalDepth, fixArb, bossBurst, bossWrap];
+export const SVA_LEVELS: SvaLevel[] = [latency, reg, arbiter, fifoCount, handshakeProto, fsm, pulse, cover, gotoCount, assume, formalDepth, fixArb, bossBurst, bossWrap];
 export const findSvaLevel = (id: string) => SVA_LEVELS.find((l) => l.id === id);

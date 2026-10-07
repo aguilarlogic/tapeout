@@ -105,7 +105,7 @@ export const SKILLS: Skill[] = [
   S('uvm-factory', 'Verification', 'UVM factory, overrides and config_db', ['dv'], ['uvm'], ['tbu-config', 'tbu-factory'], ['tbu-boss']),
   S('uvm-seq', 'Verification', 'Sequences, virtual sequences, TLM', ['dv'], ['uvm'], ['tbu-seq', 'tbu-monsb'], ['tbu-boss']),
   S('uvm-ral', 'Verification', 'UVM register abstraction layer (RAL)', ['dv', 'soc'], ['uvm'], ['tb-regmodel'], [], 'the full uvm_reg flow (field, block, map, adapter, predictor)'),
-  S('sva', 'Verification', 'SystemVerilog assertions', ['dv', 'rtl'], ['sva'], ['practice-sva', 'sva-latency', 'sva-reg', 'sva-arbiter', 'sva-fifo', 'sva-valid-ready', 'sva-fsm', 'sva-repeat', 'sva-cover'], ['boss-sva', 'sva-boss-burst']),
+  S('sva', 'Verification', 'SystemVerilog assertions', ['dv', 'rtl'], ['sva'], ['practice-sva', 'sva-latency', 'sva-reg', 'sva-arbiter', 'sva-fifo', 'sva-valid-ready', 'sva-fsm', 'sva-repeat', 'sva-cover', 'sva-goto'], ['boss-sva', 'sva-boss-burst']),
   S('formal', 'Verification', 'Formal verification and formal apps (CDC, X-prop, connectivity)', ['dv'], ['formal'], ['practice-formal', 'formal-assume', 'formal-depth', 'formal-fix'], ['boss-formal', 'formal-boss-wrap']),
   S('testplan', 'Verification', 'Test planning and sign-off', ['dv'], [], [], [], 'test-plan project'),
   S('regress', 'Verification', 'Regressions, seeds and failure triage', ['dv', 'rtl'], [], [], [], 'Shell Lab triage game'),
