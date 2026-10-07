@@ -7,7 +7,7 @@ import { alignOf, CNode, CSyntaxError, CType, parseC, Program, sizeOf, StructDef
 export { CSyntaxError };
 
 export class CError extends Error {
-  constructor(msg: string, public line: number, public kind: 'segv' | 'asan' | 'fpe' | 'abort' | 'timeout' | 'runtime' = 'runtime') { super(msg); }
+  constructor(msg: string, public line: number, public kind: 'segv' | 'asan' | 'fpe' | 'ubsan' | 'abort' | 'timeout' | 'runtime' = 'runtime') { super(msg); }
 }
 class ExitSignal { constructor(public code: number) {} }
 
@@ -149,7 +149,7 @@ export class CInterp {
     if (a < STACK_LIMIT) throw new CError('Segmentation fault: stack overflow (infinite recursion?)', this.line, 'segv');
     this.mark(a - 0, size, S_OK);
     this.mark(a + size, Math.min(rz, this.sp - (a + size)), S_RED);
-    this.u8.fill(0xcd, a, a + size);
+    this.u8.fill(0xcc, a, a + size); // MSVC debug stack fill; real GCC/Clang leave garbage
     this.sp = a;
     return a;
   }
@@ -685,7 +685,9 @@ export class CInterp {
         if (isFloat(v.ty)) return { ty: v.ty, v: -(v.v as number) };
         if (!isInt(v.ty)) throw new CError(`wrong type argument to unary minus`, e.line);
         const t = this.promote(v.ty) as Extract<CType, { k: 'int' }>;
-        return this.conv({ ty: t, v: -(v.v as bigint) }, t);
+        const nv = this.conv(v, t).v as bigint;
+        if (t.signed && -nv > (1n << BigInt(t.bits - 1)) - 1n) throw new CError(`runtime error: negation of ${nv} cannot be represented in type '${typeStr(t)}': signed integer overflow`, e.line, 'ubsan');
+        return this.conv({ ty: t, v: -nv }, t);
       }
       case '+': { const v = this.rv(e.e); return isInt(v.ty) ? this.conv(v, this.promote(v.ty)) : v; }
       case '~': {
@@ -742,12 +744,22 @@ export class CInterp {
     const it = ct as Extract<CType, { k: 'int' }>;
     const wrap = (n: bigint): V => ({ ty: it, v: it.signed ? BigInt.asIntN(it.bits, n) : BigInt.asUintN(it.bits, n) });
     const x = this.conv(a, it).v as bigint, y = this.conv(b, it).v as bigint;
+    // signed overflow is undefined behaviour (UBSan reports it); unsigned arithmetic wraps by definition.
+    // Conversions are different: `char c = 127; c++` narrows an int 128 back to char, which is implementation-defined, so it still gives -128.
+    const sw = (n: bigint): V => {
+      if (it.signed && BigInt.asIntN(it.bits, n) !== n) throw new CError(`runtime error: signed integer overflow: ${x} ${op} ${y} cannot be represented in type '${typeStr(it)}'`, line, 'ubsan');
+      return wrap(n);
+    };
     switch (op) {
-      case '+': return wrap(x + y);
-      case '-': return wrap(x - y);
-      case '*': return wrap(x * y);
-      case '/': if (y === 0n) throw new CError('Floating point exception: integer division by zero', line, 'fpe'); return wrap(x / y);
-      case '%': if (y === 0n) throw new CError('Floating point exception: integer modulo by zero', line, 'fpe'); return wrap(x % y);
+      case '+': return sw(x + y);
+      case '-': return sw(x - y);
+      case '*': return sw(x * y);
+      case '/': case '%': {
+        if (y === 0n) throw new CError(`Floating point exception: integer ${op === '/' ? 'division' : 'modulo'} by zero`, line, 'fpe');
+        // x86 idiv raises SIGFPE on INT_MIN / -1 (the quotient does not fit), and the C standard makes it undefined for % too
+        if (it.signed && y === -1n && x === -(1n << BigInt(it.bits - 1))) throw new CError(`Floating point exception: INT_MIN / -1 overflows (${x} ${op} -1)`, line, 'fpe');
+        return wrap(op === '/' ? x / y : x % y);
+      }
       case '&': return wrap(x & y);
       case '|': return wrap(x | y);
       case '^': return wrap(x ^ y);
@@ -755,7 +767,15 @@ export class CInterp {
         // the result has the promoted type of the left operand only
         const lt = this.promote(a.ty) as Extract<CType, { k: 'int' }>;
         const lx = this.conv(a, lt).v as bigint;
-        const cnt = BigInt(Number(BigInt.asUintN(64, b.v as bigint)) & (lt.bits - 1));
+        // C does not mask the count the way RISC-V and Verilog do: a negative count or one >= the width is undefined behaviour
+        const cnt = b.v as bigint;
+        if (cnt < 0n) throw new CError(`runtime error: shift exponent ${cnt} is negative`, line, 'ubsan');
+        if (cnt >= BigInt(lt.bits)) throw new CError(`runtime error: shift exponent ${cnt} is too large for ${lt.bits}-bit type '${typeStr(lt)}'`, line, 'ubsan');
+        if (op === '<<' && lt.signed) {
+          if (lx < 0n) throw new CError(`runtime error: left shift of negative value ${lx}`, line, 'ubsan');
+          if ((lx << cnt) >> BigInt(lt.bits - 1) !== 0n) throw new CError(`runtime error: left shift of ${lx} by ${cnt} places cannot be represented in type '${typeStr(lt)}'`, line, 'ubsan');
+        }
+        // >> of a negative signed value is implementation-defined; GCC and Clang shift arithmetically, and so does this lab
         const r = op === '<<' ? lx << cnt : lx >> cnt;
         return { ty: lt, v: lt.signed ? BigInt.asIntN(lt.bits, r) : BigInt.asUintN(lt.bits, r) };
       }

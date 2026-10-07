@@ -364,9 +364,9 @@ const bugDangling: CodeLevel = {
 
 const bugUninit: CodeLevel = {
   id: 'code-c-bug-uninit', title: 'Bug hunt: the unset accumulator', concept: 'uninitialised locals hold garbage', xp: 80, tier: 'debug', lang: 'c',
-  ticket: 'Unit test says -842150449, and nobody can explain it.',
+  ticket: 'Unit test says -858993458, and nobody can explain it.',
   build: () => ({
-    brief: `<p><code>count_neg</code> should count the negative values. It returns a huge strange number. Why?</p>`,
+    brief: `<p><code>count_neg</code> should count the negative values. It returns a huge strange number. Why?</p><p>Reading a local that was never set is undefined behaviour: GCC and Clang may give anything. The lab fills fresh stack with <code>0xCC</code> so you can see it. <code>-Wall</code> (<code>-Wuninitialized</code>) and MemorySanitizer catch this.</p>`,
     starter: `int count_neg(const int *a, int n) {
     int count;
     for (int i = 0; i < n; i++)
@@ -375,7 +375,7 @@ const bugUninit: CodeLevel = {
     return count;
 }
 `,
-    hints: ['In C a local variable has no initial value; it holds whatever the stack held before.', '-842150451 is 0xCDCDCDCD: the debug allocator\'s "uninitialised" pattern. Initialise count.'],
+    hints: ['In C a local variable has no initial value; it holds whatever the stack held before.', '-858993460 is 0xCCCCCCCC: the lab\'s fill pattern for fresh stack (a real compiler would leave whatever was there). Initialise count.'],
     solution: 'int count_neg(const int *a, int n) {\n    int count = 0;\n    for (int i = 0; i < n; i++)\n        if (a[i] < 0)\n            count++;\n    return count;\n}\n',
     cases: [
       { pre: 'int a[] = {1, -2, 3, -4};', call: 'count_neg(a, 4)' },
@@ -397,7 +397,8 @@ const bossRing: CodeLevel = {
         if (r() < 0.55) lines.push(`h = h * 31 + ring_push(&r, ${between(r, 1, 99)});`);
         else lines.push('h = h * 31 + (ring_pop(&r, &out) == 0 ? out : -1);');
       }
-      return { pre: `struct ring r; ring_init(&r, ${cap}); int out = 0; long h = 7;\n${lines.join('\n')}`, call: 'h', fmt: '%ld', post: 'ring_free(&r);' };
+      // unsigned: this checksum wraps on purpose, and only unsigned arithmetic may (signed overflow is undefined behaviour)
+      return { pre: `struct ring r; ring_init(&r, ${cap}); int out = 0; unsigned long h = 7;\n${lines.join('\n')}`, call: 'h', fmt: '%lu', post: 'ring_free(&r);' };
     };
     return {
       brief: `<p>Write a FIFO of ints with a fixed capacity, stored on the heap:</p><pre>struct ring;                                  // you define it

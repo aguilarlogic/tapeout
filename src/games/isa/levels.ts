@@ -245,14 +245,14 @@ const abi: IsaLevel = {
     style: 'function', entry: 'sumsq', mode: 'write',
     fixed: SQUARE,
     brief: `<p>The <b>calling convention</b> (ABI) says who may change what. <b>Caller-saved</b> (<code>a0-a7</code>, <code>t0-t6</code>, <code>ra</code>): a function may overwrite them, so a caller that needs a value afterwards must save it itself. <b>Callee-saved</b> (<code>s0-s11</code>, <code>sp</code>): a function must give them back unchanged, so if it uses one it saves the old value on the stack first.</p>
-<p>A function that <i>calls</i> another overwrites <code>ra</code> with <code>jal</code>, so it must save its own <code>ra</code> too. The stack grows down: <code>addi sp, sp, -16</code> to make room, <code>sw ra, 12(sp)</code> to save, and undo both before <code>ret</code>.</p>
+<p>A function that <i>calls</i> another overwrites <code>ra</code> with <code>jal</code>, so it must save its own <code>ra</code> too. The stack grows down: <code>addi sp, sp, -16</code> to make room, <code>sw ra, 12(sp)</code> to save, and undo both before <code>ret</code>. Frames are always a multiple of 16 bytes so <code>sp</code> stays 16-byte aligned at every call.</p>
 <p>The helper <code>square</code> (provided below, and deliberately messy: it destroys <code>a1</code>-<code>a7</code> and every <code>t</code> register) returns <code>a0²</code>. Write <code>sumsq</code>: given <code>a0 = a</code> and <code>a1 = b</code>, return <code>a² + b²</code> by calling <code>square</code> twice. The test checks the result, that <code>s0-s11</code> and <code>sp</code> are exactly as they were, and that you return to the caller.</p>`,
-    hints: ['You need to keep <code>b</code> alive across the first call: put it in a callee-saved register such as <code>s0</code>, which means saving <code>s0</code> itself first. Also save <code>ra</code>.', 'Frame: <code>addi sp, sp, -12</code>; <code>sw ra, 8(sp)</code>; <code>sw s0, 4(sp)</code>; <code>sw s1, 0(sp)</code>. Keep the first square in <code>s1</code>. Restore all three and <code>addi sp, sp, 12</code> before <code>ret</code>.'],
+    hints: ['You need to keep <code>b</code> alive across the first call: put it in a callee-saved register such as <code>s0</code>, which means saving <code>s0</code> itself first. Also save <code>ra</code>.', 'Frame: <code>addi sp, sp, -16</code> (the stack pointer must stay 16-byte aligned); <code>sw ra, 12(sp)</code>; <code>sw s0, 8(sp)</code>; <code>sw s1, 4(sp)</code>. Keep the first square in <code>s1</code>. Restore all three and <code>addi sp, sp, 16</code> before <code>ret</code>.'],
     starter: `# a0 = a, a1 = b.  Return a*a + b*b in a0, by calling square twice.\nsumsq:\n    # TODO\n    ret\n`,
     cases: fnCases([[3, 4], [0, 9], [10, -7], [between(r, 1, 100), between(r, 1, 100)], [between(r, 1, 100), between(r, 1, 100)]].map(([a, b]) => ({
       label: `a=${a}, b=${b}`, setup: { regs: { a0: a, a1: b } }, check: (m: Machine) => eq(m, 'a0', a * a + b * b),
     }))),
-    solution: 'sumsq:\n    addi sp, sp, -12\n    sw ra, 8(sp)\n    sw s0, 4(sp)\n    sw s1, 0(sp)\n    mv s0, a1\n    call square\n    mv s1, a0\n    mv a0, s0\n    call square\n    add a0, a0, s1\n    lw s1, 0(sp)\n    lw s0, 4(sp)\n    lw ra, 8(sp)\n    addi sp, sp, 12\n    ret\n',
+    solution: 'sumsq:\n    addi sp, sp, -16\n    sw ra, 12(sp)\n    sw s0, 8(sp)\n    sw s1, 4(sp)\n    mv s0, a1\n    call square\n    mv s1, a0\n    mv a0, s0\n    call square\n    add a0, a0, s1\n    lw s1, 4(sp)\n    lw s0, 8(sp)\n    lw ra, 12(sp)\n    addi sp, sp, 16\n    ret\n',
   }),
 };
 
@@ -303,7 +303,7 @@ const recfib: IsaLevel = {
       label: `fib(${n})`, setup: { regs: { a0: n } },
       check: (m: Machine) => { const v = eq(m, 'a0', fibn(n)); if (v !== true) return v; return n >= 4 && STACK_TOP - m.minSp < 24 ? 'the stack never grew: fib must call itself' : true; },
     }))),
-    solution: 'fib:\n    li t0, 2\n    blt a0, t0, base\n    addi sp, sp, -12\n    sw ra, 8(sp)\n    sw s0, 4(sp)\n    sw a0, 0(sp)\n    addi a0, a0, -1\n    call fib\n    mv s0, a0\n    lw a0, 0(sp)\n    addi a0, a0, -2\n    call fib\n    add a0, a0, s0\n    lw s0, 4(sp)\n    lw ra, 8(sp)\n    addi sp, sp, 12\nbase:\n    ret\n',
+    solution: 'fib:\n    li t0, 2\n    blt a0, t0, base\n    addi sp, sp, -16\n    sw ra, 12(sp)\n    sw s0, 8(sp)\n    sw a0, 4(sp)\n    addi a0, a0, -1\n    call fib\n    mv s0, a0\n    lw a0, 4(sp)\n    addi a0, a0, -2\n    call fib\n    add a0, a0, s0\n    lw s0, 8(sp)\n    lw ra, 12(sp)\n    addi sp, sp, 16\nbase:\n    ret\n',
   }),
 };
 
@@ -435,7 +435,7 @@ const recBoss: IsaLevel = {
         hints: [],
         starter: fnStarter('bsearch', 'a0 = array, a1 = lo, a2 = hi, a3 = key.  Return its index or -1 (recursively).'),
         cases: fnCases(cases, 0),
-        solution: 'bsearch:\n    bgt a1, a2, notfound\n    addi sp, sp, -8\n    sw ra, 4(sp)\n    add t0, a1, a2\n    srli t0, t0, 1\n    slli t1, t0, 2\n    add t1, t1, a0\n    lw t1, 0(t1)\n    beq t1, a3, found\n    blt t1, a3, right\n    addi a2, t0, -1\n    call bsearch\n    j out\nright:\n    addi a1, t0, 1\n    call bsearch\n    j out\nfound:\n    mv a0, t0\nout:\n    lw ra, 4(sp)\n    addi sp, sp, 8\n    ret\nnotfound:\n    li a0, -1\n    ret\n',
+        solution: 'bsearch:\n    bgt a1, a2, notfound\n    addi sp, sp, -16\n    sw ra, 12(sp)\n    add t0, a1, a2\n    srli t0, t0, 1\n    slli t1, t0, 2\n    add t1, t1, a0\n    lw t1, 0(t1)\n    beq t1, a3, found\n    blt t1, a3, right\n    addi a2, t0, -1\n    call bsearch\n    j out\nright:\n    addi a1, t0, 1\n    call bsearch\n    j out\nfound:\n    mv a0, t0\nout:\n    lw ra, 12(sp)\n    addi sp, sp, 16\n    ret\nnotfound:\n    li a0, -1\n    ret\n',
       };
     }
     if (v === 1) {
@@ -447,7 +447,7 @@ const recBoss: IsaLevel = {
         hints: [],
         starter: fnStarter('power', 'a0 = base, a1 = exponent >= 0.  Return base^exp (low 32 bits), recursively by squaring.'),
         cases: fnCases(pairs.map(([b, e]) => ({ label: `${b}^${e}`, setup: { regs: { a0: b, a1: e } }, check: (m: Machine) => { const g = eq(m, 'a0', pw(b, e)); return g !== true ? g : e >= 4 ? deep(m, 1) : true; } })), 0),
-        solution: 'power:\n    bnez a1, rec\n    li a0, 1\n    ret\nrec:\n    addi sp, sp, -12\n    sw ra, 8(sp)\n    sw a0, 4(sp)\n    sw a1, 0(sp)\n    srli a1, a1, 1\n    call power\n    mul a0, a0, a0\n    lw t0, 0(sp)\n    andi t0, t0, 1\n    beqz t0, even\n    lw t1, 4(sp)\n    mul a0, a0, t1\neven:\n    lw ra, 8(sp)\n    addi sp, sp, 12\n    ret\n',
+        solution: 'power:\n    bnez a1, rec\n    li a0, 1\n    ret\nrec:\n    addi sp, sp, -16\n    sw ra, 12(sp)\n    sw a0, 8(sp)\n    sw a1, 4(sp)\n    srli a1, a1, 1\n    call power\n    mul a0, a0, a0\n    lw t0, 4(sp)\n    andi t0, t0, 1\n    beqz t0, even\n    lw t1, 8(sp)\n    mul a0, a0, t1\neven:\n    lw ra, 12(sp)\n    addi sp, sp, 16\n    ret\n',
       };
     }
     const col = (n: number): number => (n === 1 ? 0 : 1 + col(n % 2 === 0 ? n / 2 : 3 * n + 1));
@@ -458,7 +458,7 @@ const recBoss: IsaLevel = {
       hints: [],
       starter: fnStarter('collatz', 'a0 = n >= 1.  Return the number of Collatz steps to reach 1, recursively.'),
       cases: fnCases(ns.map((n) => ({ label: `collatz(${n})`, setup: { regs: { a0: n } }, check: (m: Machine) => { const g = eq(m, 'a0', col(n)); return g !== true ? g : col(n) >= 3 ? deep(m, col(n)) : true; } })), 0),
-      solution: 'collatz:\n    li t0, 1\n    bne a0, t0, rec\n    li a0, 0\n    ret\nrec:\n    addi sp, sp, -8\n    sw ra, 4(sp)\n    andi t0, a0, 1\n    bnez t0, odd\n    srli a0, a0, 1\n    j go\nodd:\n    slli t1, a0, 1\n    add a0, a0, t1\n    addi a0, a0, 1\ngo:\n    call collatz\n    addi a0, a0, 1\n    lw ra, 4(sp)\n    addi sp, sp, 8\n    ret\n',
+      solution: 'collatz:\n    li t0, 1\n    bne a0, t0, rec\n    li a0, 0\n    ret\nrec:\n    addi sp, sp, -16\n    sw ra, 12(sp)\n    andi t0, a0, 1\n    bnez t0, odd\n    srli a0, a0, 1\n    j go\nodd:\n    slli t1, a0, 1\n    add a0, a0, t1\n    addi a0, a0, 1\ngo:\n    call collatz\n    addi a0, a0, 1\n    lw ra, 12(sp)\n    addi sp, sp, 16\n    ret\n',
     };
   },
 };

@@ -47,17 +47,21 @@ export interface Program {
   used: Set<string>;
 }
 
-const stripComment = (l: string) => {
-  let out = '';
+/** One source line → its statements. `#` starts a comment and `;` separates statements, as in GNU as for RISC-V; `//` is a non-standard convenience. Quotes protect both. */
+const statements = (l: string): string[] => {
+  const out: string[] = [];
+  let cur = '';
   let q = '';
   for (let i = 0; i < l.length; i++) {
     const c = l[i];
-    if (q) { out += c; if (c === q && l[i - 1] !== '\\') q = ''; continue; }
-    if (c === '"' || c === "'") { q = c; out += c; continue; }
-    if (c === '#' || (c === '/' && l[i + 1] === '/') || c === ';') break;
-    out += c;
+    if (q) { cur += c; if (c === q && l[i - 1] !== '\\') q = ''; continue; }
+    if (c === '"' || c === "'") { q = c; cur += c; continue; }
+    if (c === '#' || (c === '/' && l[i + 1] === '/')) break;
+    if (c === ';') { out.push(cur.trim()); cur = ''; continue; }
+    cur += c;
   }
-  return out.trim();
+  out.push(cur.trim());
+  return out;
 };
 
 /** Split operands at commas outside quotes and parentheses. */
@@ -103,6 +107,7 @@ function expandPseudo(m: string, a: string[], line: number): string[] | null {
     case 'j': need(1); return [`jal x0, ${a[0]}`];
     case 'jr': need(1); return [`jalr x0, ${a[0]}, 0`];
     case 'ret': need(0); return ['jalr x0, ra, 0'];
+    // call/tail/la are simplified to one instruction here; real toolchains emit auipc+jalr, auipc+jr and auipc+addi (the lesson says so)
     case 'call': need(1); return [`jal ra, ${a[0]}`];
     case 'tail': need(1); return [`jal x0, ${a[0]}`];
     default: return null;
@@ -138,9 +143,8 @@ export function assemble(src: string): Program {
   };
 
   // ---- pass 1: sizes and labels
-  lines.forEach((raw, idx) => {
-    const line = idx + 1;
-    let t = stripComment(raw);
+  lines.flatMap((raw, idx) => statements(raw).map((st) => [st, idx + 1] as const)).forEach(([stmt, line]) => {
+    let t = stmt;
     while (true) {
       const lm = /^([A-Za-z_.$][\w.$]*):\s*(.*)$/.exec(t);
       if (!lm) break;

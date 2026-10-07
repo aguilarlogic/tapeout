@@ -28,6 +28,8 @@ export class Machine {
   traceLimit = 5000;
   /** lowest stack pointer seen, to tell that a recursion really used the stack */
   minSp = 0;
+  /** sp at the first call (jal/jalr with rd = ra) made while sp was not 16-byte aligned; the ABI keeps sp aligned at every call */
+  misalignedCallSp?: number;
   readonly textEnd: number;
 
   constructor(prog: Program, opts: { regs?: Record<number, number>; sp?: number } = {}) {
@@ -79,6 +81,7 @@ export class Machine {
       const immS = ((w >> 25) << 5) | ((w >> 7) & 31);
       const immB = ((w >> 31) << 12) | (((w >> 7) & 1) << 11) | (((w >> 25) & 0x3f) << 5) | (((w >> 8) & 0xf) << 1);
       const immJ = ((w >> 31) << 20) | (((w >> 12) & 0xff) << 12) | (((w >> 20) & 1) << 11) | (((w >> 21) & 0x3ff) << 1);
+      if ((opcode === 0x6f || opcode === 0x67) && rd === 1 && (r[2] & 15) && this.misalignedCallSp === undefined) this.misalignedCallSp = r[2] >>> 0;
       let next = pc + 4;
       let res: number | undefined;
       let memEv: Step['mem'];
@@ -148,7 +151,10 @@ export class Machine {
           break;
         }
         case 0x73: {
-          if (w === 0x00100073) { this.stopped = 'ebreak'; break; }
+          // SYSTEM: funct3 0 is ecall/ebreak (by imm); funct3 1-3 and 5-7 are the CSR instructions, which this lab does not implement
+          if (f3 !== 0) this.fail('illegal instruction: CSR access not supported in this lab');
+          if (immI === 1) { this.stopped = 'ebreak'; break; }
+          if (immI !== 0) this.fail(`illegal instruction 0x${(w >>> 0).toString(16).padStart(8, '0')}`);
           const n = r[17];
           if (n === 93) { this.stopped = 'exit'; this.exitCode = r[10]; } else if (n === 1) this.out += String(r[10]); else if (n === 11) this.out += String.fromCharCode(r[10] & 255);
           else this.fail(`unknown ecall ${n} (use a7=93 to exit, 1 to print an integer, 11 to print a character)`);

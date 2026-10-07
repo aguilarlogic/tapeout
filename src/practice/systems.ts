@@ -121,6 +121,65 @@ export const cPractice = practice('practice-c', 'C Drills', 'pointers, struct la
       choice('Which byte does a little-endian machine put at the lowest address (+0)?', 'The least significant byte (the rightmost one)', ['The most significant byte (the leftmost one)', 'The middle bytes first']),
       step(`On this ${little ? 'little' : 'big'}-endian machine, the byte at address +${k} is (hex):`, hexa(byte, 2)));
   },
+  (r, d) => {
+    // RISC-V and Verilog mask the shift amount to the low 5 bits (32-bit values); C does not, so a count of 32 or more is undefined there.
+    const k = between(r, 1, 7), cnt = d === 3 ? 32 * between(r, 1, 3) + k : 32 + k;
+    const x = d === 2 ? between(r, 0x100, 0xfff) : between(r, 0x10000001, 0x7fffffff);
+    if (d === 1) {
+      return walk(mcs(r, `On RV32, \`sll x1, x2, x3\` runs with x3 = ${cnt}. By how many places is x2 shifted?`, `${k}: only the low 5 bits of x3 count`, [`${cnt}: every bit is shifted out and x1 is 0`, 'Undefined, as in C, so the result is unpredictable', `0: a count of 32 or more shifts nothing at all`], `The shift unit reads only the low 5 bits of x3, so ${cnt} acts as ${cnt} mod 32 = ${k}. In C the same count is undefined behaviour.`),
+        'shift amounts in hardware', 'A 32-bit shifter only needs 5 bits to say how far to move (0 to 31), so RISC-V sll, srl and sra (and Verilog shifts built on them) ignore every higher bit of the count. C makes no such promise: shifting by the width or more is undefined.',
+        count(`The low 5 bits of ${cnt} are ${cnt} mod 32:`, `${cnt} mod 32`, k));
+    }
+    const left = d === 3 || r() < 0.5;
+    const res = left ? (x << k) >>> 0 : x >>> k;
+    return walk(ask(`On RV32: x2 = ${hex(x, 1)}, x3 = ${cnt}. After \`${left ? 'sll' : 'srl'} x1, x2, x3\`, what is x1? (${d === 3 ? 'hex' : 'decimal'})`, d === 3 ? hexa(res, 8) : num(res), `The shift amount is ${cnt} mod 32 = ${k}, so x1 = ${hex(x, 1)} ${left ? '<<' : '>>'} ${k} = ${hex(res, 1)}. (In C this would be undefined behaviour.)`, 'Only the low 5 bits of x3 are used.'),
+      'shift amounts in hardware', 'A 32-bit shifter only needs 5 bits to say how far to move (0 to 31), so RISC-V sll, srl and sra ignore every higher bit of the count. Reduce the count modulo 32 first, then shift.',
+      count(`Shift amount (${cnt} mod 32):`, `${cnt} mod 32`, k),
+      d === 3 ? step(`Shift x2 = ${hex(x, 1)} ${left ? 'left' : 'right'} by ${k}; x1 in hex (8 digits):`, hexa(res, 8)) : count(`x2 ${left ? '<<' : '>>'} ${k}, as a decimal number:`, `${x} ${left ? '<<' : '>>'} ${k}`, res));
+  },
+  (r, d) => {
+    // data models: RV32 is ILP32 (int, long and pointers are 32 bits); x86-64 Linux and RV64 are LP64 (long and pointers are 64)
+    const lp64 = r() < 0.5;
+    const abi = lp64 ? 'x86-64 Linux (LP64)' : 'RV32 (ILP32)';
+    const L = lp64 ? 8 : 4;
+    if (d === 1) {
+      return walk(ask(`On ${abi}, what is \`sizeof(long)\`?`, num(L), `${lp64 ? 'LP64: long and pointers are 64 bits' : 'ILP32: int, long and pointers are all 32 bits'}, so a long is ${L} bytes. Code that assumes long is 32 bits breaks when it moves between the two; uint32_t says what you mean.`, 'The data model names which of int, long and pointer are 32 or 64 bits.'),
+        'data models (ILP32 and LP64)', 'The size of int, long and pointers is a choice made by the platform, called the data model. ILP32 (int, long and pointers 32 bits) is what RV32 and 32-bit Arm use. LP64 (int 32 bits; long and pointers 64 bits) is what x86-64 Linux and 64-bit RISC-V use. char, short and int do not change.',
+        choice('In ILP32, which types are 32 bits wide?', 'int, long and pointers', ['Only int', 'int and pointers, but not long']),
+        count(`In ${lp64 ? 'LP64' : 'ILP32'}, long is ${L * 8} bits. In bytes:`, `${L * 8} / 8`, L));
+    }
+    const mix = pick(r, [['char', 1], ['short', 2], ['int', 4], ['long', L], ['char *', L]] as const);
+    const fields = d === 2 ? [mix, pick(r, [['int', 4], ['long', L]] as const)] : [pick(r, [['char', 1], ['short', 2]] as const), mix, pick(r, [['int', 4], ['long', L], ['char', 1]] as const)];
+    let off = 0, align = 1;
+    const starts = fields.map(([, s2]) => { off = Math.ceil(off / s2) * s2; const at = off; off += s2; align = Math.max(align, s2); return at; });
+    const size = Math.ceil(off / align) * align;
+    return walk(ask(`On ${abi}:${code(`struct s {\n${fields.map(([t], i) => `    ${t} f${i};`).join('\n')}\n};`)}What is sizeof(struct s)?`, num(size), `Here long and pointers are ${L} bytes, each field starts at a multiple of its size, and the struct is padded to a multiple of ${align}: ${size} bytes.`, 'long and char * change size with the data model; place the fields one by one.'),
+      'struct layout across data models', 'Alignment and padding work as always, but long and pointers are 4 bytes in ILP32 and 8 bytes in LP64, so the same struct can have a different layout on each platform.',
+      ...fields.map(([t, s2], i) => count(`f${i} is a ${t} (${s2} byte${s2 > 1 ? 's' : ''} here). Its offset:`, `offset of f${i}`, starts[i])),
+      count(`The fields end at offset ${off}. Round up to a multiple of ${align}:`, `round up ${off} to a multiple of ${align}`, size));
+  },
+  (r, d) => {
+    // plain char has implementation-defined signedness: signed on x86-64 Linux, unsigned on RISC-V and Arm Linux
+    if (d === 1) {
+      return walk(mcs(r, 'Is plain `char` signed in C?', 'It depends on the ABI: signed on x86-64 Linux, unsigned on RISC-V and Arm Linux', ['Always signed, because every integer type in C is signed unless it is declared unsigned', 'Always unsigned, since bytes have no sign', 'Signed in C but unsigned in C++, because the two languages define char differently'], 'The C standard leaves it to the implementation. Each platform ABI picks one, and the choice differs between the common ones, so portable code uses signed char or unsigned char (or uint8_t) whenever the sign matters.'),
+        'plain char is implementation-defined', 'char, signed char and unsigned char are three distinct types. Whether plain char behaves like signed char or unsigned char is decided by the compiler and ABI, not by the language.',
+        choice('For code that must behave the same everywhere, which is safest?', 'uint8_t or unsigned char, spelling out the sign', ['Plain char, since it is the same everywhere', 'int8_t, since plain char is always signed']));
+    }
+    const signed = r() < 0.5, plat = signed ? 'x86-64 Linux, where plain char is signed' : 'RISC-V Linux, where plain char is unsigned';
+    const v = between(r, 128, 255), k = between(r, 1, 4);
+    const asVal = signed ? v - 256 : v;
+    if (d === 2) {
+      return walk(ask(`On ${plat}:${code(`char c = ${v};\nprintf("%d", c);`)}Output?`, num(asVal), `${v} does not fit a signed char, so it becomes ${v} - 256 = ${v - 256}; an unsigned one keeps ${v}. On this platform the answer is ${asVal}.`, 'Is the top bit of the byte a sign bit here?'),
+        'sign of plain char', 'When a char is promoted to int, an unsigned char becomes 0 to 255, while a signed char with its top bit set becomes negative (the sign bit is copied upwards).',
+        choice(`On this platform, is plain char signed?`, signed ? 'Yes' : 'No', [signed ? 'No' : 'Yes']),
+        count('The value that printf sees:', signed ? `${v} - 256` : `${v}`, asVal));
+    }
+    const res = asVal >> k;
+    return walk(ask(`On ${plat}:${code(`char c = ${v};\nprintf("%d", c >> ${k});`)}Output?`, num(res), `c promotes to ${asVal}, and >> ${k} on it gives ${res} (GCC and Clang shift negative values arithmetically).`, 'Promote to int first, then shift.'),
+      'sign of plain char and shifts', 'c is promoted to int before the shift. A signed char with its top bit set promotes to a negative number, and the right shift keeps the sign; an unsigned one stays positive.',
+      count('The promoted value of c:', signed ? `${v} - 256` : `${v}`, asVal),
+      count(`${asVal} >> ${k} (round toward minus infinity):`, `floor(${asVal} / ${2 ** k})`, res));
+  },
   (r) => {
     const i = between(r, 0, C_BUGS.length - 1);
     const others = shuffle(r, C_BUGS.filter((_, j) => j !== i).map((b) => b[1])).slice(0, 3);

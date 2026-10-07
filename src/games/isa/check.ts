@@ -47,6 +47,7 @@ export function runCase(inst: IsaInstance, prog: Program, c: IsaCase, steps = 20
       const bad = S_REGS.findIndex((r, i) => m.regs[r] !== (c.setup.regs?.[`s${i}`] ?? MAGIC(i)));
       if (bad >= 0) return { m, problem: `the function changed callee-saved register s${bad} without restoring it` };
       if ((m.regs[2] >>> 0) !== STACK_TOP) return { m, problem: `sp is 0x${(m.regs[2] >>> 0).toString(16)} on return; it must be back at 0x${STACK_TOP.toString(16)} (unbalanced push/pop)` };
+      if (m.misalignedCallSp !== undefined) return { m, problem: `Stack misaligned at a call: sp = 0x${m.misalignedCallSp.toString(16)} is not a multiple of 16.` };
     }
   } else if (m.stopped !== 'exit') {
     return { m, problem: m.stopped === 'ebreak' ? 'the program stopped at ebreak; exit with li a7, 93 then ecall' : 'the program did not exit (li a7, 93 ; ecall)' };
