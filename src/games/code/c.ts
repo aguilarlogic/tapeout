@@ -7,7 +7,7 @@ import { alignOf, CNode, CSyntaxError, CType, parseC, Program, sizeOf, StructDef
 export { CSyntaxError };
 
 export class CError extends Error {
-  constructor(msg: string, public line: number, public kind: 'segv' | 'asan' | 'fpe' | 'abort' | 'timeout' | 'runtime' = 'runtime') { super(msg); }
+  constructor(msg: string, public line: number, public kind: 'segv' | 'asan' | 'fpe' | 'ubsan' | 'abort' | 'timeout' | 'runtime' = 'runtime') { super(msg); }
 }
 class ExitSignal { constructor(public code: number) {} }
 
@@ -685,7 +685,9 @@ export class CInterp {
         if (isFloat(v.ty)) return { ty: v.ty, v: -(v.v as number) };
         if (!isInt(v.ty)) throw new CError(`wrong type argument to unary minus`, e.line);
         const t = this.promote(v.ty) as Extract<CType, { k: 'int' }>;
-        return this.conv({ ty: t, v: -(v.v as bigint) }, t);
+        const nv = this.conv(v, t).v as bigint;
+        if (t.signed && -nv > (1n << BigInt(t.bits - 1)) - 1n) throw new CError(`runtime error: negation of ${nv} cannot be represented in type '${typeStr(t)}': signed integer overflow`, e.line, 'ubsan');
+        return this.conv({ ty: t, v: -nv }, t);
       }
       case '+': { const v = this.rv(e.e); return isInt(v.ty) ? this.conv(v, this.promote(v.ty)) : v; }
       case '~': {
@@ -742,10 +744,16 @@ export class CInterp {
     const it = ct as Extract<CType, { k: 'int' }>;
     const wrap = (n: bigint): V => ({ ty: it, v: it.signed ? BigInt.asIntN(it.bits, n) : BigInt.asUintN(it.bits, n) });
     const x = this.conv(a, it).v as bigint, y = this.conv(b, it).v as bigint;
+    // signed overflow is undefined behaviour (UBSan reports it); unsigned arithmetic wraps by definition.
+    // Conversions are different: `char c = 127; c++` narrows an int 128 back to char, which is implementation-defined, so it still gives -128.
+    const sw = (n: bigint): V => {
+      if (it.signed && BigInt.asIntN(it.bits, n) !== n) throw new CError(`runtime error: signed integer overflow: ${x} ${op} ${y} cannot be represented in type '${typeStr(it)}'`, line, 'ubsan');
+      return wrap(n);
+    };
     switch (op) {
-      case '+': return wrap(x + y);
-      case '-': return wrap(x - y);
-      case '*': return wrap(x * y);
+      case '+': return sw(x + y);
+      case '-': return sw(x - y);
+      case '*': return sw(x * y);
       case '/': if (y === 0n) throw new CError('Floating point exception: integer division by zero', line, 'fpe'); return wrap(x / y);
       case '%': if (y === 0n) throw new CError('Floating point exception: integer modulo by zero', line, 'fpe'); return wrap(x % y);
       case '&': return wrap(x & y);
