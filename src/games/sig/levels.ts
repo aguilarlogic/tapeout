@@ -88,7 +88,7 @@ const sigFir: ArchLevel = {
 <p>Spec (frequencies are in cycles/sample, Nyquist = 0.5):</p>
 <ul><li>passband edge <b>${spec.fp}</b>: gain no lower than −1 dB;</li><li>stopband from <b>${spec.fst}</b> to 0.5: gain at or below <b>−${spec.atten} dB</b>;</li><li>at most <b>${budget} taps</b> (multipliers).</li></ul>
 <p>Pick the number of taps (odd), the window, and the cutoff <i>fc</i> (halfway through the transition band is the usual start).</p>`,
-      hints: ['Rectangular windows have narrow transitions but only about −21 dB of stopband. Look at the sidelobes in the plot.', 'Hann ≈ −44 dB, Hamming ≈ −53 dB, Blackman ≈ −74 dB of first sidelobe; pick the cheapest window that clears the attenuation.', 'Transition width ≈ 3.3/N (Hamming) or 5.5/N (Blackman): estimate N from the transition band, then trim.'],
+      hints: ['Rectangular windows have narrow transitions but only about −21 dB of stopband. Look at the stopband ripple in the plot.', 'Windowed-sinc filters reach about −44 dB (Hann), −53 dB (Hamming) and −74 dB (Blackman) of stopband attenuation. The windows\' own spectra have first sidelobes at about −13 (rectangular), −31 (Hann), −41 (Hamming) and −57 dB (Blackman). Pick the cheapest window that clears the attenuation.', 'Transition width ≈ 3.3/N (Hamming) or 5.5/N (Blackman): estimate N from the transition band, then trim.'],
       controls: [
         { id: 'taps', kind: 'number', label: 'Taps (odd)', min: 5, max: 63, step: 2, value: 9 },
         { id: 'win', kind: 'select', label: 'Window', options: WINDOWS.map((w) => ({ value: w, label: w })), value: 'rect' },
