@@ -1,7 +1,7 @@
 import { tokenize, Token, VerilogError } from './lexer';
 import type { AlwaysBlock, CaseItem, Decl, Expr, ModuleAst, NetKind, Sensitivity, Stmt } from './ast';
 
-// Binary operator precedence (higher binds tighter), per IEEE 1364 table 5-4.
+// Binary operator precedence (higher binds tighter), per IEEE 1800 (SystemVerilog, which absorbed 1364) table 11-2.
 const BIN_PREC: Record<string, number> = {
   '||': 1,
   '&&': 2,
