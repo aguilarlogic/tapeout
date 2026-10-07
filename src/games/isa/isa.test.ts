@@ -94,4 +94,21 @@ describe('execution', () => {
   it('x0 stays zero', () => {
     expect(run('li x0, 5\n addi x0, x0, 3\n li a7, 93\n ecall').regs[0]).toBe(0);
   });
+  it('; separates statements and # starts a comment', () => {
+    expect(run('li a0, 1 ; addi a0, a0, 1\n li a7, 93\n ecall').regs[10]).toBe(2);
+    expect(run('li a0, 7 # ; addi a0, a0, 1\n li a7, 93 ; ecall').regs[10]).toBe(7);
+    expect(run('start: li a0, 3 ; li a7, 93 ; ecall').regs[10]).toBe(3);
+    expect(words('li a0, 1 ; addi a0, a0, 1')).toHaveLength(2);
+    expect(words('.string "a;b"')).toHaveLength(0);
+  });
+  it('SYSTEM words: ecall and ebreak by imm, CSR opcodes are illegal here', () => {
+    const patched = (w: number) => { const p = assemble('nop\nnop'); for (let i = 0; i < 4; i++) p.mem[i] = (w >>> (8 * i)) & 255; return new Machine(p); };
+    const csrr = patched(0xb0002573); // csrrs a0, mcycle, x0
+    csrr.run(10);
+    expect(csrr.stopped).toBe('error');
+    expect(csrr.error?.msg).toMatch(/illegal instruction: CSR access not supported in this lab/);
+    for (const f3 of [1, 2, 3, 5, 6, 7]) { const m = patched(((0xb00 << 20) | (f3 << 12) | (10 << 7) | 0x73) >>> 0); m.run(10); expect(m.error?.msg, `funct3 ${f3}`).toMatch(/CSR access/); }
+    const mret = patched(0x30200073); mret.run(10);
+    expect(mret.error?.msg).toMatch(/illegal instruction/);
+  });
 });
