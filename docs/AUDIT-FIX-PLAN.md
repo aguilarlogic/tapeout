@@ -33,7 +33,7 @@ job"), 1 is cosmetic. The `Pri` column (Parts A and B) says how soon to do the i
 
 ## Part A: bug fixes
 
-### A1 · Practice grading fails 9/10 runs (Sev 4, Pri 5)
+### A1 · Practice grading fails 9/10 runs (Sev 4, Pri 5) ✅ done
 
 **Problem.** A practice run is 10 questions. It starts at warm-up difficulty (◆), climbs one level after two first-try
 answers in a row, and drops one level after a miss. To pass, a run needs 8 right with at least 4 of them at hard (◆◆◆);
