@@ -131,3 +131,16 @@ describe('sva: within, intersect, first_match, s_eventually (G1.4)', () => {
     expect(run('a: assert property (@(posedge clk) req |-> ##[1:3] gnt);', { req: '100000', gnt: '000000' }).fails.length).toBe(1);
   });
 });
+
+describe('sva: the lesson trace for goto against non-consecutive (G1.4)', () => {
+  const sigs = { go: '10000000', b: '00101000', c: '00000010' };
+  it('b[->2] ##1 c fails and b[=2] ##1 c passes on the lesson trace', () => {
+    expect(run('a: assert property (@(posedge clk) go |-> ##1 b[->2] ##1 c);', sigs).fails.map((f) => f.start)).toEqual([0]);
+    expect(run('a: assert property (@(posedge clk) go |-> ##1 b[=2] ##1 c);', sigs).fails).toEqual([]);
+  });
+  it('an unbounded window is undecided on a finite trace', () => {
+    const r = run('a: assert property (@(posedge clk) req |-> ##[1:$] gnt);', { req: '1000', gnt: '0000' });
+    expect(r.fails).toEqual([]);
+    expect(r.pending).toBe(1);
+  });
+});

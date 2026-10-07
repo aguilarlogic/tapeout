@@ -91,7 +91,7 @@ export const uvm: Lesson = {
 export const sva: Lesson = {
   id: 'sva',
   title: 'Assertions',
-  concept: 'SVA: |->, |=>, ##n, $rose',
+  concept: 'SVA: |->, |=>, ##n, $rose, [->n], within, liveness',
   xp: 90,
   steps: [
     say('Scoreboards check the data. **Assertions** check the **rules**: "every request gets a grant within 4 cycles", "the FIFO never overflows". They sit right next to the RTL and fire the moment a rule breaks.'),
@@ -120,9 +120,23 @@ export const sva: Lesson = {
         `The window is cycles ${rise + 1} to ${rise + 3}. gnt is high at cycle ${g}, which is ${pass ? 'inside' : 'outside'} the window, so it ${pass ? 'passes' : 'fails'}.`);
     }),
     mc('An assertion "never fails" in regression. What should make you suspicious?', ['Nothing, a clean regression is the goal', 'It might be passing vacuously every time', 'The seed is fixed across the regression', 'Assertions only fail in formal tools'], 1, 'The antecedent may never have happened. Always pair assertions with cover properties (`cover property ($rose(req))`) to prove the trigger actually happened.'),
+    say('Repetition is where interviews get nasty. `b[*3]` is b on **3 consecutive** cycles. `b[->3]` (goto) waits for the **3rd occurrence** of b, with gaps allowed, and the match **ends on that 3rd b**. `b[=3]` (non-consecutive) counts 3 occurrences too, but the match may **carry on through idle cycles** after the 3rd b, until a 4th b would spoil the count.'),
+    art(`
+  cycle:  0 1 2 3 4 5 6 7
+  go   :  1 0 0 0 0 0 0 0
+  b    :  0 0 1 0 1 0 0 0
+  c    :  0 0 0 0 0 0 1 0`, 'a trace'),
+    mc('Does `go |-> ##1 b[->2] ##1 c` pass on this trace?', ['Pass', 'Fail'], 1, 'The second b is at cycle 4 and the goto match ends right there, so c is needed at cycle 5. It only arrives at cycle 6: fail.'),
+    mc('Does `go |-> ##1 b[=2] ##1 c` pass on the same trace?', ['Pass', 'Fail'], 0, 'b[=2] may end on any idle cycle after the second b (cycles 4, 5, 6, 7), so the match that ends at cycle 5 is followed by c at cycle 6: pass. Same trace, different operator, different verdict.'),
+    say('Three operators combine sequences. `x throughout s` holds x on every cycle of s (a bus that must stay busy for a whole burst). `s1 within s2` fits s1 entirely inside the span of s2. `s1 intersect s2` needs both to **start together and end together**. `first_match(s)` keeps only the earliest way s can match, which stops a `##[1:3]` from matching three times.'),
+    mc('What does `(a ##[1:3] b) intersect (##2 c)` accept?', ['Only the path with b two cycles after a, and c on the second cycle', 'Any b within three cycles of a, followed by c two cycles later', 'a and c together, with b somewhere inside the next three cycles', 'b three cycles after a, as long as c arrives two cycles before it'], 0, 'intersect forces equal length. The right-hand sequence is exactly 2 cycles long, so only the a ##2 b path of the left-hand one can match.'),
+    say('Sampled-value functions let a property look at the past. `$rose(x)` and `$fell(x)` spot edges, `$stable(x)` and `$changed(x)` compare with the previous clock, and `$past(x, n)` reads x from n clocks ago. Typical use: `valid && !ready |=> $stable(data)`, so data may not move while the receiver is stalling you.'),
+    say('One more split matters to formal tools. A **safety** property says "nothing bad ever happens": `!(gnt0 && gnt1)`. One finite trace can **refute** it, by showing the bad cycle. A **liveness** property says "something good eventually happens": `req |-> s_eventually gnt`. No finite trace can refute it, because the grant might simply arrive one cycle after the trace stops. Our checker reports such attempts as pending, never as failed.', 'thinking'),
+    mc('Which property can a finite trace refute?', ['No two grants are ever high together', 'Every request is eventually granted', 'Every packet is eventually delivered', 'No requester is starved for ever'], 0, 'Only safety properties have a finite counterexample. The other three are liveness: they can only be refuted by an infinite trace in which the good thing never comes.'),
+    mc('Why does a liveness proof need a fairness assumption?', ['Without it the environment may stall for ever, which makes any design starve', 'Without it the clock may stop, so no simulator could give a result', 'It lets the tool skip the reset sequence and start in a legal state', 'It is only needed to make the assertion run in a simulator'], 0, 'If the other side may hold ready low for ever, no arbiter can ever deliver. Assume the stall is bounded (or that ready comes back infinitely often) and the proof has something fair to work with. In practice we also write the bounded form, `req |-> ##[1:4] gnt`, which is a safety property any bounded check can use.'),
     say('Assertions are also what **formal verification** tools prove mathematically, for every possible input, with no testbench at all. That is where the field is heading.', 'thinking'),
   ],
-  recap: ['Assertions encode rules; they fire at the exact cycle a rule breaks.', '|-> same cycle, |=> next cycle; ##[m:n] is a delay window.', 'A property with no trigger passes vacuously: add cover properties.', 'Formal tools prove assertions exhaustively.'],
+  recap: ['Assertions encode rules; they fire at the exact cycle a rule breaks.', '|-> same cycle, |=> next cycle; ##[m:n] is a delay window.', 'A property with no trigger passes vacuously: add cover properties.', 'b[->n] ends on the n-th b; b[=n] may continue with idle cycles; b[*n] is back to back.', 'throughout, within, intersect and first_match combine sequences.', 'Safety is refuted by a finite trace; liveness needs an infinite trace and a fairness assumption.', 'Formal tools prove assertions exhaustively.'],
 };
 
 export const formal: Lesson = {
