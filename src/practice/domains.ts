@@ -4,6 +4,7 @@ import { num, qty } from '../lessons/answers';
 import { calc, choice, count, sim, step, walk } from '../lessons/teach';
 import { art, ask, mc, pick, say } from '../lessons/types';
 import { boss, practice, tier } from './types';
+import { AES_SBOX } from './aes';
 import { atLevel, concept, exact, hex, sci, sig } from './util';
 
 const popcount = (x: number) => { let n = 0; for (; x; x >>= 1) n += x & 1; return n; };
@@ -170,12 +171,14 @@ export const hwsecPractice = practice('practice-hwsec', 'Security Drills', 'brut
       step(`${hex(w)} in binary (8 digits):`, exact(b8(w))),
       step('XOR the two: a bit is 1 where they differ:', exact(b8(v ^ w))),
       count('Count the 1s (the bits that toggle):', 'number of ones', popcount(v ^ w)));
-    return walk(ask(`The first AES step computes data XOR key. The data byte is ${hex(v)} and you guess the key byte is ${hex(w)}. What Hamming weight does your model predict?`, num(popcount(v ^ w)), `${hex(v)} ⊕ ${hex(w)} = ${hex(v ^ w)} → weight ${popcount(v ^ w)}. DPA repeats this for all 256 guesses over thousands of traces; the guess whose predictions correlate with the power is the key.`, 'XOR the guess with the data.'),
-      'a power-analysis prediction', `${idea} In a DPA attack, you guess a key byte, predict the intermediate value (data XOR key) and its Hamming weight, and check whether the real power traces rise and fall with your predictions. Only the right key guess will correlate.`,
+    const sb = AES_SBOX[v ^ w];
+    return walk(ask(`A power-analysis attack predicts the Hamming weight of the first S-box output, Sbox(data ⊕ key). The data byte is ${hex(v)} and your key guess is ${hex(w)}. Sbox(${hex(v ^ w)}) = ${hex(sb)}. What Hamming weight does your model predict?`, num(popcount(sb)), `${hex(v)} ⊕ ${hex(w)} = ${hex(v ^ w)}; the S-box maps that to ${hex(sb)}, which has ${popcount(sb)} ones. Attacks target the S-box output, not the XOR. XOR is linear, so a key guess and its bitwise complement produce perfectly anti-correlated predictions and cannot be told apart. The S-box's non-linearity makes only the right guess correlate.`, 'XOR, look up the S-box value given, then count its ones.'),
+      'a power-analysis prediction', `${idea} In a DPA attack, you guess a key byte, predict the Hamming weight of the first S-box output, Sbox(data ⊕ key), and check whether the real power traces rise and fall with your predictions. Attacks target the S-box output, not the XOR. XOR is linear, so a key guess and its bitwise complement produce perfectly anti-correlated predictions and cannot be told apart. The S-box's non-linearity makes only the right guess correlate.`,
       step(`${hex(v)} in binary:`, exact(b8(v))),
       step(`Your guess ${hex(w)} in binary:`, exact(b8(w))),
       step('data XOR guess:', exact(b8(v ^ w))),
-      count('The predicted Hamming weight (number of 1s):', 'number of ones', popcount(v ^ w)));
+      step(`Look up the S-box (it gives ${hex(sb)}); in binary:`, exact(b8(sb))),
+      count('The predicted Hamming weight of the S-box output (number of 1s):', 'number of ones', popcount(sb)));
   },
   (r, d) => {
     const n = pick(r, [1000, 5000, 20000]), k = tier(d, 2, pick(r, [4, 10]), pick(r, [10, 30])), need = n * k * k;
@@ -209,7 +212,10 @@ export const hwsecPractice = practice('practice-hwsec', 'Security Drills', 'brut
     ['What does a secure boot chain check at each stage?', 'The next image\'s signature', ['The image\'s file size', 'The CPU die temperature', 'That the image is compressed'], 'secure boot', 'Before running the next piece of code, each stage verifies its digital signature, using a public key that traces back to the root of trust. A valid signature proves the code came from the key holder and has not been altered.', ['A digital signature proves the image:', 'Is authentic and unmodified', ['Is encrypted so nobody can read it', 'Is compressed']], 'A valid signature proves the image came from the key holder and was not modified, using a key anchored in the root of trust.'],
   ]),
     ...atLevel(1, [['What does a TPM or secure element do?', 'Stores keys and runs crypto in isolation', ['Speeds up the processor by caching code in a fast tier', 'Holds the operating system kernel', 'Stores the user\'s video files'], 'secure elements', 'A TPM or secure element holds keys and performs cryptographic operations inside its own boundary. Software outside can ask for a signature, but cannot read the key.', ['Keys in a secure element can be read by:', 'Nothing outside it', ['Any application', 'The user']]]]),
-    ...atLevel(3, [['What does a side-channel attack use?', 'Timing, power, or radiated emissions', ['A flaw in the encryption math alone', 'Stolen passwords from a phishing email', 'A bug in the operating system only'], 'side channels', 'A side-channel attack measures something the device leaks while it computes: how long an operation takes, how much power it draws, or what it radiates. The secret is recovered from the physical behaviour, not from a broken formula.', ['A timing attack measures:', 'How long an operation takes', ['The cipher name', 'The key size']]]]),
+    ...atLevel(3, [['What does a side-channel attack use?', 'Timing, power, or radiated emissions', ['A flaw in the encryption math alone', 'Stolen passwords from a phishing email', 'A bug in the operating system only'], 'side channels', 'A side-channel attack measures something the device leaks while it computes: how long an operation takes, how much power it draws, or what it radiates. The secret is recovered from the physical behaviour, not from a broken formula.', ['A timing attack measures:', 'How long an operation takes', ['The cipher name', 'The key size']]],
+      ['Why do CPA attacks on AES model the S-box output, not data ⊕ key?', 'XOR is linear: the key\'s complement fits as well', ['The S-box output is computed first, so leaks most', 'The XOR step draws no current, so never shows up', 'The S-box output has fewer bits, so ranks faster'],
+        'power-analysis models', 'The model must separate the right key guess from the wrong ones. XOR with a key guess and with its complement give outputs that are bit-for-bit opposite, so their Hamming weights are perfectly anti-correlated and the two guesses look equally good. The S-box is non-linear, so only the right guess lines up with the real power.',
+        ['A key guess and its bitwise complement give XOR results that are:', 'Complements of each other', ['Identical', 'Unrelated']], 'XOR is linear, so wrong guesses (such as the key\'s complement) correlate as strongly as the right one; the S-box\'s non-linearity breaks that tie']]),
   ], (why) => `${why}.`, d),
 ]);
 

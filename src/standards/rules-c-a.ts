@@ -3,4 +3,5 @@ import type { Rule } from './types';
 // Part C items C1-C5 and C13 (content that is wrong regardless of date). See docs/STANDARDS-PLAN.md.
 export const RULES_C_A: Rule[] = [
   { id: 'C1', why: 'C1: len inside {[64:1500]} on an 8-bit len is satisfiable (64..255)', ban: /unsatisfiable[^']*\(len is 8 bits|nothing satisfies 64\.\.1500/ },
+  { id: 'C2', why: 'C2: CPA models the S-box output, not data XOR key', files: /practice\/domains/, ban: /(predict|model)[^.]*\(data XOR key\)|Hamming weight of data XOR key|computes data XOR key/i },
 ];
