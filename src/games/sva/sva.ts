@@ -389,12 +389,18 @@ function ends(s: Seq, ctx: Ctx, t: number): Set<number> {
         if (s.hi === INF) ctx.trunc = true;
       } else {
         // goto [->n]: the n-th occurrence (match ends there); nonconsecutive [=n]: may be followed by idle cycles
-        let count = 0;
+        let count = 0, closed = false;
+        const hi = s.hi === INF ? Infinity : s.hi;
         for (let u = t; u < ctx.tr.n; u++) {
-          if (ends(s.s, ctx, u).size) { count++; if (count >= s.lo && count <= (s.hi === INF ? count : s.hi)) { out.add(u); } if (s.hi !== INF && count >= s.hi) break; }
-          if (s.mode === '=' && count >= s.lo && count <= (s.hi === INF ? count : s.hi)) out.add(u);
+          if (ends(s.s, ctx, u).size) {
+            if (count === hi) { closed = true; break; } // one occurrence too many: no match extends past here
+            count++;
+            if (count >= s.lo) out.add(u); // [->n] and [=n] both end on the n-th occurrence…
+            if (s.mode === '->' && count === hi) { closed = true; break; } // …and [->n] has no later end point
+          } else if (s.mode === '=' && count >= s.lo) out.add(u); // …[=n] may also end on idle cycles after it
         }
-        ctx.trunc = true;
+        // only undecided if the trace ran out while a (longer) match could still form
+        if (!closed && (count < hi || s.mode === '=')) ctx.trunc = true;
       }
       break;
     }

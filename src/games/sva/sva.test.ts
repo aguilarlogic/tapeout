@@ -74,3 +74,23 @@ describe('sva: implication and delays', () => {
     expect(checkTrace(parseSva('a: assert property (@(posedge clk) (g + 1) == 2 |-> g == 1);'), t)[0].fails).toEqual([]);
   });
 });
+
+describe('sva: goto [->n] and nonconsecutive [=n] can fail (E7)', () => {
+  const go = 'a: assert property (@(posedge clk) a |-> ##1 b[->2] ##1 c);';
+  const nc = 'a: assert property (@(posedge clk) a |-> ##1 b[=2] ##1 c);';
+  it('[->2] ends on the second b, so c must follow it', () => {
+    expect(run(go, { a: '1000000', b: '0010100', c: '0000001' }).fails.map((f) => f.start)).toEqual([0]); // c at 6, needed at 5
+    expect(run(go, { a: '1000000', b: '0010100', c: '0000010' }).fails).toEqual([]);
+  });
+  it('[=2] lets idle cycles follow the second b', () => {
+    expect(run(nc, { a: '1000000', b: '0010100', c: '0000001' }).fails).toEqual([]);
+  });
+  it('[=2] fails on a third occurrence', () => {
+    expect(run(nc, { a: '1000000', b: '0010110', c: '0000001' }).fails.map((f) => f.start)).toEqual([0]);
+  });
+  it('a trace that ends after one b is still pending', () => {
+    const r = run(go, { a: '10000', b: '00100', c: '00000' });
+    expect(r.fails).toEqual([]);
+    expect(r.pending).toBe(1);
+  });
+});
