@@ -282,7 +282,7 @@ export const emerging: Lesson = {
   concept: 'subthreshold swing, nanosheets and CFETs, 2D materials, spintronics',
   xp: 100,
   steps: [
-    say('**The role.** Silicon scaling is slowing and the industry is lining up what comes next: gate-all-around nanosheets, stacked complementary FETs (CFETs), 2D semiconductors, new memories (MRAM, RRAM, ferroelectric), and backside power. Device engineers and researchers at imec, TSMC, Intel, Samsung, universities and national labs work on these; process-integration and TCAD roles are the entry points.'),
+    say('**The role.** Silicon scaling now leans on new device and wiring structures. Gate-all-around nanosheet transistors and backside power delivery are in volume production at the 2 nm class (one foundry pairs them in the same node, another adds backside power a node later). Next on the roadmap are stacked complementary FETs (CFETs, expected in the 2030s), 2D-material channels, and new memories (MRAM, RRAM, ferroelectric). Node names such as "2 nm", "18A" or "A16" are marketing labels: no feature on the chip is 2 nm long. Device engineers and researchers at imec, TSMC, Intel, Samsung, universities and national labs work on these; process-integration and TCAD roles are the entry points.'),
     say('A transistor turns off as the gate voltage drops below threshold, and the current falls exponentially: the **subthreshold swing (SS)** is how many millivolts it takes to cut the current by 10×. Thermionic physics limits it to **60 mV per decade at room temperature**.'),
     gen((r) => {
       const vt = pick(r, [300, 400, 500]), ss = pick(r, [60, 70, 80]);
