@@ -152,7 +152,7 @@ export const sipi: Lesson = {
   concept: 'IR drop, L·di/dt, target impedance, transmission lines, eyes',
   xp: 110,
   steps: [
-    say('**The role.** SI/PI engineers make sure fast signals arrive clean and power arrives steady, across the die, the package and the board. They simulate channels (for PCIe, DDR, Ethernet SerDes), design power delivery networks, pick decoupling capacitors, and correlate everything against lab measurements with oscilloscopes and network analyzers. Tools include Ansys (SIwave, HFSS, RedHawk), Cadence Sigrity, Keysight ADS and Voltus.'),
+    say('**The role.** SI/PI engineers make sure fast signals arrive clean and power arrives steady, across the die, the package and the board. They simulate channels (for PCIe, DDR, Ethernet SerDes), design power delivery networks, pick decoupling capacitors, and correlate everything against lab measurements with oscilloscopes and network analyzers. Tools include Synopsys (which acquired Ansys: HFSS, SIwave, RedHawk-SC), Cadence (Sigrity, Clarity, Voltus) and Keysight ADS.'),
     say('**Power integrity** starts with Ohm\'s law. Modern chips draw hundreds of amps at under 1 V, so even micro-ohms matter. Static drop is **I·R**; the drop from sudden current changes is **L·di/dt**.'),
     gen((r) => {
       const i = pick(r, [20, 50, 100, 200]);

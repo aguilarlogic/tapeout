@@ -112,25 +112,40 @@ export const verilog: Lesson = {
     say('Big mindset shift, {name}: Verilog looks like code, but it is not a program that runs line by line. Every statement is a piece of hardware, and it all runs **at the same time**.'),
     art(`
   module and_or (
-    input  wire a, b, c,
-    output wire y
+    input  logic a, b, c,
+    output logic y
   );
     assign y = (a & b) | c;   // continuous: a wire with gates on it
   endmodule`),
     mc('What does `assign y = (a & b) | c;` build?', ['A flip-flop whose input is the AND of a and b, and then c', 'An AND gate feeding an OR gate', 'A feedback loop, since y is used again on the right-hand side', 'Nothing, until a testbench calls it, as it is a function of time'], 1, 'assign describes combinational logic that is always active, like soldering gates together.'),
-    say('Registers come from `always` blocks triggered by a clock edge. Inside them, use the **non-blocking** assignment `<=`.'),
+    say('Registers come from `always_ff` blocks triggered by a clock edge. Inside them, use the **non-blocking** assignment `<=`.'),
     art(`
-  always @(posedge clk) begin
-    if (rst) count <= 0;
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) count <= 0;
     else     count <= count + 1;   // a register with an adder feeding it
   end`),
-    mc('Two flops: `always @(posedge clk) begin b <= a; c <= b; end`. What is c one clock later?', ['The new value of a', 'The old value of b', 'Undefined', 'Zero'], 1, 'Non-blocking assignments all sample their right-hand sides before any of them update. So c gets the old b, which gives you a two-stage shift register. With blocking `=`, c would get a directly and the pipeline would collapse.'),
+    mc('Two flops: `always_ff @(posedge clk) begin b <= a; c <= b; end`. What is c one clock later?', ['The new value of a', 'The old value of b', 'Undefined', 'Zero'], 1, 'Non-blocking assignments all sample their right-hand sides before any of them update. So c gets the old b, which gives you a two-stage shift register. With blocking `=`, c would get a directly and the pipeline would collapse.'),
     say('The rule of thumb that will save your career: **`<=` in clocked blocks, `=` in combinational blocks**. And in combinational blocks, assign every output on every path, or you will infer a latch.'),
-    mc('`always @(*) if (en) y = d;` What hardware does this infer?', ['A mux', 'A flip-flop', 'A latch', 'A wire'], 2, 'When en is 0, y must hold its value, and holding without a clock is a latch. Add an else branch or a default at the top.'),
+    art(`
+  typedef enum logic [1:0] { IDLE, RUN, DONE } state_t;
+  state_t state, next;
+
+  always_comb begin
+    next = state;                 // default first: no latch
+    unique case (state)           // tools check the arms do not overlap
+      IDLE:    if (start) next = RUN;
+      RUN:     if (last)  next = DONE;
+      DONE:    next = IDLE;
+      default: next = IDLE;
+    endcase
+  end`),
+    say('`always_comb` works out its own sensitivity list and tells you if you infer a latch. `unique case` promises the arms do not overlap and `priority case` says the first match wins. Both let the tools warn you when the promise breaks.'),
+    say('Older code uses `reg`/`wire` and `always @(*)`. It means the same thing; you will read plenty of it. VHDL is the other HDL, common in FPGA, aerospace and defence work and in Europe.'),
+    mc('`always_comb if (en) y = d;` What hardware does this infer?', ['A mux', 'A flip-flop', 'A latch', 'A wire'], 2, 'When en is 0, y must hold its value, and holding without a clock is a latch. Add an else branch or a default at the top.'),
     ask('What is the width of `{4\'b1010, 2\'b11}`?', num(6), 'Concatenation joins the pieces: 4 + 2 = 6 bits, value 101011.', 'Add up the widths inside the braces.'),
     say('That is enough to start. The RTL lab has a real simulator: you write the module, it runs against a golden model, and you get a waveform. Go make something.', 'excited'),
   ],
-  recap: ['Verilog describes hardware; everything runs in parallel.', 'assign = combinational wires; always @(posedge clk) = registers.', 'Use <= in clocked blocks, = in combinational ones.', 'Incomplete assignments in combinational blocks infer latches.'],
+  recap: ['Verilog describes hardware; everything runs in parallel.', 'assign and always_comb = combinational logic; always_ff @(posedge clk) = registers.', 'Use <= in clocked blocks, = in combinational ones.', 'Incomplete assignments in combinational blocks infer latches.', 'typedef enum names FSM states; unique case / priority case state your intent.'],
 };
 
 export const alu: Lesson = {
@@ -226,7 +241,7 @@ export const clk: Lesson = {
       const depth = Math.ceil(B - (B * fr) / fw);
       return ask(`A burst of ${B} words is written at ${fw} MHz (one per cycle) and read out at ${fr} MHz (one per cycle). What minimum FIFO depth avoids overflow?`, num(depth), `The burst lasts ${B}/${fw} MHz; in that time ${B * fr / fw} words are read. Depth ≥ ${B} - ${B * fr / fw} = ${depth}. Real designs add margin for synchronizer latency.`, 'Words left over = written during the burst - read during the burst.');
     }),
-    mc('Which of these is a CDC **bug**?', ['A 2-flop synchronizer on a slow single-bit enable signal that crosses', 'An AND of two domain-A signals feeding a domain-B synchronizer', 'An async FIFO that uses Gray-coded pointers between the two clocks', 'A req/ack handshake whose control bits each use their own synchronizer'], 1, 'Combinational logic before the synchronizer can glitch. Combinational logic before the synchronizer can glitch, and the synchronizer may capture the glitch. Always register the signal in the source domain first. CDC lint tools (Spyglass, Questa CDC) check for exactly this.'),
+    mc('Which of these is a CDC **bug**?', ['A 2-flop synchronizer on a slow single-bit enable signal that crosses', 'An AND of two domain-A signals feeding a domain-B synchronizer', 'An async FIFO that uses Gray-coded pointers between the two clocks', 'A req/ack handshake whose control bits each use their own synchronizer'], 1, 'Combinational logic before the synchronizer can glitch. Combinational logic before the synchronizer can glitch, and the synchronizer may capture the glitch. Always register the signal in the source domain first. CDC tools (Synopsys VC SpyGlass CDC, Siemens Questa CDC and Questa Signoff CDC, Cadence Jasper CDC/RDC App with Conformal Litmus on the implementation side, Real Intent Meridian CDC) check for exactly this.'),
   ],
   recap: ['CTS builds a low-skew clock tree; skew is spatial, jitter temporal.', 'Resets: assert async, deassert sync (reset synchronizer).', 'Metastability can\'t be avoided; MTBF grows as e^(t/τ) with each synchronizer flop.', 'Multi-bit crossings: Gray codes, handshakes, async FIFOs.', 'Never put combinational logic right before a synchronizer.'],
 };

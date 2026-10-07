@@ -28,7 +28,7 @@ const KEYWORDS = new Set([
   'module', 'endmodule', 'input', 'output', 'inout', 'wire', 'reg', 'logic', 'integer', 'int',
   'assign', 'always', 'always_comb', 'always_ff', 'always_latch', 'posedge', 'negedge', 'or',
   'begin', 'end', 'if', 'else', 'case', 'casez', 'casex', 'endcase', 'default', 'for',
-  'parameter', 'localparam', 'initial', 'function', 'task', 'generate', 'genvar', 'signed', 'unique', 'priority',
+  'parameter', 'localparam', 'initial', 'function', 'task', 'generate', 'genvar', 'signed', 'unique', 'priority', 'typedef', 'enum',
 ]);
 
 // Longest operators first so the scanner is greedy.
