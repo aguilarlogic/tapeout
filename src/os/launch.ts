@@ -1,9 +1,10 @@
 // Opening minigame windows. Lessons await the result; the arcade just lets you play.
 import { findGame, MINIGAMES } from '../minigames/apps';
-import { complete, recordBest } from '../state';
+import { recordBest } from '../state';
 import { h, stars } from '../ui/dom';
 import { mentorSay } from './mentor';
 import { openWindow } from './wm';
+import { award, promotionLine } from '../mastery/promotion';
 
 export const MINI_XP = 40;
 
@@ -33,9 +34,9 @@ export function launchGame(id: string, opts: { rounds?: number; fromLesson?: boo
         last = { score, max };
         const frac = max ? score / max : 0;
         const st = frac >= 0.9 ? 3 : frac >= 0.6 ? 2 : 1;
-        const gained = complete(`mini.${game.id}`, MINI_XP, st);
+        const { gained, promotedTo } = award(`mini.${game.id}`, MINI_XP, st);
         const best = recordBest(game.id, Math.round(frac * 100));
-        mentorSay(frac >= 0.9 ? `${score} out of ${max}. You are getting dangerous, {name}.` : frac >= 0.6 ? `${score} out of ${max}. Solid. A couple more rounds and it will be automatic.` : `${score} out of ${max}. That is how everyone starts. Try it again sometime.`, frac >= 0.9 ? 'excited' : frac >= 0.6 ? 'happy' : 'concerned');
+        mentorSay((frac >= 0.9 ? `${score} out of ${max}. You are getting dangerous, {name}.` : frac >= 0.6 ? `${score} out of ${max}. Solid. A couple more rounds and it will be automatic.` : `${score} out of ${max}. That is how everyone starts. Try it again sometime.`) + (promotedTo ? ` ${promotionLine(promotedTo)}` : ''), frac >= 0.9 || promotedTo ? 'excited' : frac >= 0.6 ? 'happy' : 'concerned');
         host.replaceChildren(h('div', { class: 'mg-result' },
           h('div', { class: 'big' }, `${score} / ${max}`),
           stars(st),

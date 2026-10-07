@@ -12,10 +12,11 @@ import { BOSSES, findBoss, findPractice, PRACTICE, problem } from '../practice';
 import { gradePractice, PRACTICE_COUNT, PRACTICE_HARD, PRACTICE_PASS, PRACTICE_START, rampStep, type Boss, type Difficulty, type PracticeSet } from '../practice/types';
 import { setMood } from '../os/avatar';
 import { launchGame, randomGame } from '../os/launch';
-import { best, complete, levelRecord, load, playerName, prefs, Prefs, Profile, profile, rank, RANKS, recordBest, resetAll, setPrefs, setProfile, totalXp, updateCard } from '../state';
+import { best, levelRecord, load, playerName, prefs, Prefs, Profile, profile, rank, RANKS, recordBest, resetAll, setPrefs, setProfile, totalXp, updateCard } from '../state';
 import { h, stars as starEls } from '../ui/dom';
 import { runIncident } from './incident';
 import { Interrupted, Redirect, rich, Terminal } from './terminal';
+import { award, promotionLine } from '../mastery/promotion';
 
 const pickOne = <T>(xs: T[]) => xs[Math.floor(Math.random() * xs.length)];
 const PRAISE = ['Correct.', 'Yes.', 'Exactly.', 'Nice.', 'Right on.', 'That\'s it.'];
@@ -413,10 +414,11 @@ export class Shell {
       return;
     }
     const grade = gradePractice(results);
-    const gained = grade ? complete(o.id, o.xp, grade) : 0;
+    const { gained, promotedTo } = grade ? award(o.id, o.xp, grade) : { gained: 0, promotedTo: undefined };
     void t.block(h('div', { class: 'term-done' },
       h('div', null, h('b', null, grade ? 'PRACTICE PASSED' : 'PRACTICE RUN COMPLETE'), ' ', grade ? starEls(grade) : null),
       h('div', { class: 'dim' }, `${ok}/${PRACTICE_COUNT} first try · ${hard} at hard${grade ? ` · ${gained ? `+${gained} XP` : 'no new XP'}` : ` · need ${PRACTICE_PASS} with ${PRACTICE_HARD} hard to pass`}`)), 'type', 2);
+    if (promotedTo) await t.say(promotionLine(promotedTo), 'excited');
     await t.say(grade === 3 ? 'Near perfect at full difficulty. This topic is yours.' : grade ? 'Passed. That is practised, not just aware: it counts toward your skill level.' : ok >= 6 ? 'Close. The hard ones are where it counts; run it again.' : 'Keep at it. Every miss came with an explanation; a second run always goes better.', grade ? 'proud' : 'thinking');
     const next = grade && !o.mix ? neighbours(o.id).next : undefined;
     const opts = [...(next ? [`Continue: **${next.title}** (${KIND_LABEL[next.kind].toLowerCase()})`] : []), 'Run it again', 'Endless mode', 'Back to the shell'];
@@ -603,16 +605,14 @@ export class Shell {
       t.print(`score: ${firstTry}/${asked} (${Math.round(pct * 100)}%)`, 'hl');
       if (!st) { await t.say('Not quite enough to sign off yet: you need 60%. Every question you missed points at a lesson worth revisiting. Try again whenever you are ready.', 'concerned'); return; }
     } else st = misses === 0 ? 3 : misses <= 2 ? 2 : 1;
-    const before = rank().index;
-    const gained = complete(l.id, l.xp, st);
-    const after = rank();
+    const { gained, promotedTo } = award(l.id, l.xp, st);
     const card = h('div', { class: 'term-done' },
       h('div', null, h('b', null, bossDef ? 'BOSS DEFEATED' : exam ? 'TAPEOUT REVIEW PASSED' : 'LESSON COMPLETE'), ' ', starEls(st)),
       h('div', { class: 'dim' }, `${firstTry}/${asked} first try · ${gained ? `+${gained} XP` : 'no new XP (you already did better)'}`),
       l.recap.length ? h('ul', { class: 'recap' }, ...l.recap.map((r) => h('li', null, ...rich(r)))) : null);
     void t.block(card, 'type', 1.6);
     const mood: Mood = st === 3 ? 'proud' : st === 2 ? 'happy' : 'neutral';
-    if (after.index > before) await t.say(`And that means a promotion. You are now a **${after.title}**, {name}!`, 'excited');
+    if (promotedTo) await t.say(promotionLine(promotedTo), 'excited');
     if (bossDef) await t.say(pickOne(['Boss down. That is job-level work, {name}: no hints, no second tries.', 'Defeated. Somewhere a senior engineer just nodded approvingly.', 'That is the real thing. You earned that level.']), 'proud');
     else if (mode === 'final') await t.say('That is it. Every block signed off, every question answered. Your chip is ready for tapeout. For real next steps: put a design on silicon with Tiny Tapeout, and bring these answers to your interviews. I am proud of you, {name}.', 'proud');
     else await t.say(st === 3 ? pickOne(['Flawless. Onward.', 'Perfect run. You make this look easy.', 'Every question first try. Nice.']) : st === 2 ? 'Good work. A couple of stumbles, which is exactly how learning is supposed to feel.' : 'Done. This one was tough; come back and replay it for more stars later.', mood);

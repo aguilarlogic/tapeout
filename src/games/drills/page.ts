@@ -1,9 +1,10 @@
-import { complete, load, updateCard } from '../../state';
+import { load, updateCard } from '../../state';
 import { mentorSay } from '../../os/mentor';
 import { pace } from '../../term/terminal';
 import { typeOnPage } from '../../term/typewriter';
 import { h } from '../../ui/dom';
 import { Card, CARDS, DECKS } from './cards';
+import { award, promotionLine } from '../../mastery/promotion';
 
 const SESSION = 10;
 
@@ -57,8 +58,8 @@ export function drillsPage(deckParam?: string): HTMLElement {
     };
     const summary = () => {
       const frac = right / session.length;
-      const gained = complete('drills', 150, frac >= 0.9 ? 3 : frac >= 0.7 ? 2 : 1);
-      mentorSay(frac >= 0.9 ? `${right} of ${session.length}. Interviewers would be impressed, {name}.` : `${right} of ${session.length}. The misses come back soon: that is how they stick.`, frac >= 0.9 ? 'proud' : 'happy');
+      const { gained, promotedTo } = award('drills', 150, frac >= 0.9 ? 3 : frac >= 0.7 ? 2 : 1);
+      mentorSay((frac >= 0.9 ? `${right} of ${session.length}. Interviewers would be impressed, {name}.` : `${right} of ${session.length}. The misses come back soon: that is how they stick.`) + (promotedTo ? ` ${promotionLine(promotedTo)}` : ''), promotedTo ? 'excited' : frac >= 0.9 ? 'proud' : 'happy');
       root.replaceChildren(
         h('header', { class: 'level-head' }, h('nav', { class: 'crumbs' }, h('a', { href: '#/map' }, 'Map'), ' / ', h('a', { href: '#/drills', onclick: (e: Event) => { e.preventDefault(); home(); } }, 'Interview Prep')),
           h('div', { class: 'title-row' }, h('h2', null, 'Session complete'))),

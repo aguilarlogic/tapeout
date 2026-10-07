@@ -3,9 +3,10 @@
 import { INCIDENTS } from '../incidents';
 import { Investigation, key } from '../incidents/engine';
 import { HINT_COST, type Incident, type Instrument, WRONG_COST } from '../incidents/types';
-import { complete, levelRecord, rank } from '../state';
+import { levelRecord } from '../state';
 import { h, stars as starEls } from '../ui/dom';
 import { Interrupted, rich, type Terminal } from './terminal';
+import { award, promotionLine } from '../mastery/promotion';
 
 /** Lab minutes as "3h20m" or "45m". */
 export const hm = (m: number) => {
@@ -206,9 +207,7 @@ function expertMinutes(inv: Investigation): number {
 
 async function finish(t: Terminal, inv: Investigation): Promise<IncidentResult> {
   const st = inv.stars();
-  const before = rank().index;
-  const gained = st ? complete(inv.inc.id, inv.inc.xp, st) : 0;
-  const after = rank();
+  const { gained, promotedTo } = st ? award(inv.inc.id, inv.inc.xp, st) : { gained: 0, promotedTo: undefined };
   const expert = expertMinutes(inv);
   void t.block(h('div', { class: 'term-done' },
     h('div', null, h('b', null, st ? 'INCIDENT RESOLVED' : 'RESOLVED, BUT LATE'), ' ', st ? starEls(st) : null),
@@ -217,7 +216,7 @@ async function finish(t: Terminal, inv: Investigation): Promise<IncidentResult> 
       h('li', null, ...rich(`**What happened:** ${inv.cause.story}`)),
       h('li', null, ...rich(`**The fix:** ${inv.cause.fix}`)),
       h('li', null, ...rich(`**Your path:** ${[...inv.notes.keys()].map((k) => `\`${k}\``).join(' → ') || 'straight to a diagnosis'}`)))), 'type', 1.6);
-  if (after.index > before) await t.say(`And that means a promotion. You are now a **${after.title}**, {name}!`, 'excited');
+  if (promotedTo) await t.say(promotionLine(promotedTo), 'excited');
   await t.say(st === 3 ? 'Clean and quick: that is how a senior engineer works an incident. The customer never knew how close it was.'
     : st === 2 ? 'Solved. One slip, which is normal under a pager. Replay it: the root cause will be different next time.'
       : st === 1 ? 'Solved, the hard way. Every wrong call cost real time; next time, let one more reading settle it before you commit.'

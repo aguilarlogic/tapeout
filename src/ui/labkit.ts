@@ -1,6 +1,7 @@
 // The pieces every lab page shares: the seed a boss keeps until rerolled, the hint box, the star rule and signoff.
 import { mentorSay } from '../os/mentor';
-import { complete, levelRecord, loadDraft, saveDraft } from '../state';
+import { award } from '../mastery/promotion';
+import { levelRecord, loadDraft, saveDraft } from '../state';
 import { type Child, h } from './dom';
 import { celebrate, levelHeader, nextHref } from './layout';
 
@@ -100,6 +101,6 @@ export const finishLab = (level: { id: string; xp: number }, hintsUsed: number) 
 
 /** Bank a pass and show the signoff. Empty notes are dropped. */
 export function finish(levelId: string, xp: number, stars: number, notes: string[] = []) {
-  const gained = complete(levelId, xp, stars);
-  celebrate(stars, gained, notes.filter(Boolean), nextHref(levelId));
+  const { gained, promotedTo } = award(levelId, xp, stars);
+  celebrate(stars, gained, notes.filter(Boolean), nextHref(levelId), promotedTo);
 }

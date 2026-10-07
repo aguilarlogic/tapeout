@@ -1,8 +1,8 @@
 import { findModule, KIND_LABEL, neighbours } from '../curriculum';
 import { avatar, setMood } from '../os/avatar';
-import { STORY } from '../mastery/career';
+import { type Promotion, promotionLine } from '../mastery/promotion';
 import { mentorSay } from '../os/mentor';
-import { playerName, rank, totalXp } from '../state';
+import { playerName } from '../state';
 import { h, stars as starEls } from './dom';
 
 export function nextHref(levelId: string): string {
@@ -32,13 +32,10 @@ const PRAISE: Record<number, string[]> = {
   1: ['It passes, and passing is what tapes out. Come back for more stars once it clicks.', 'Done! Replay it later to polish it.'],
 };
 
-export function celebrate(stars: number, gained: number, notes: string[], nextRoute: string) {
-  const before = rank(totalXp() - gained);
-  const after = rank();
-  const promoted = after.index > before.index;
+export function celebrate(stars: number, gained: number, notes: string[], nextRoute: string, promoted?: Promotion) {
   const line = (PRAISE[stars] ?? PRAISE[1])[Math.floor(Math.random() * (PRAISE[stars] ?? PRAISE[1]).length)].replace(/\{name\}/g, playerName());
   setMood(stars === 3 ? 'proud' : 'happy');
-  mentorSay(promoted ? `${line} And you just got promoted to ${after.title}! ${STORY[Math.min(after.index, STORY.length - 1)].line}` : line, promoted ? 'excited' : stars === 3 ? 'proud' : 'happy');
+  mentorSay(promoted ? `${line} ${promotionLine(promoted)}` : line, promoted ? 'excited' : stars === 3 ? 'proud' : 'happy');
   const close = () => overlay.remove();
   const overlay = h('div', { class: 'modal-bg', onclick: (e: Event) => { if (e.target === overlay) close(); } },
     h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Level complete' },
@@ -47,7 +44,7 @@ export function celebrate(stars: number, gained: number, notes: string[], nextRo
       starEls(stars),
       h('p', { class: 'modal-say' }, line),
       h('p', { class: 'gain' }, gained > 0 ? `+${gained} XP` : 'No new XP (you already have a better result)'),
-      promoted ? h('p', { class: 'promo' }, `Promoted to ${after.title}!`) : null,
+      promoted ? h('p', { class: 'promo' }, `Promoted to ${promoted.title}!`) : null,
       ...notes.map((n) => h('p', { class: 'dim' }, n)),
       h('div', { class: 'modal-actions' },
         h('button', { class: 'btn ghost', onclick: close }, 'Stay here'),

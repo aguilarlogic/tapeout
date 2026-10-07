@@ -224,7 +224,7 @@ it has to be split, ship the bosses and capstones first (their gate alone), then
 3. **Numeric generators that ignore `d`.** Use the existing `tier(d, …)` helper to widen ranges or add a step at
    d = 3 (for example a unit conversion, or a second stage of the calculation).
 
-### A6 · Promotion story beat missing in most places (Sev 3, Pri 3)
+### A6 · Promotion story beat missing in most places (Sev 3, Pri 3) ✅ done
 
 **Problem.** Phase 11 promised that TAPEOUT tells a story beat at every promotion. Only lab pages do
 (`src/ui/layout.ts:41`):
