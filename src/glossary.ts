@@ -113,6 +113,8 @@ export const GLOSSARY: Entry[] = [
   E('dram|ddr5|row buffer|refresh', 'Dynamic RAM: 1T1C cells in banks of rows; row buffer hits are fast; needs periodic refresh.', 'dram'),
   E('hbm', 'High bandwidth memory: stacked DRAM on an interposer next to the processor; 1024-bit interface per stack through HBM3E, 2048-bit from HBM4.', 'dram'),
   E('axi|amba|valid ready|handshake', 'AMBA AXI: five channels with VALID/READY handshakes; a transfer happens when both are high.', 'bus'),
+  E('manager|master', 'The bus agent that starts transactions (formerly called the master): a CPU, DMA engine or accelerator on an AXI interconnect.', 'bus'),
+  E('subordinate|slave', 'The bus agent that answers transactions (formerly called the slave): a memory or peripheral on an AXI interconnect.', 'bus'),
   E('credit|flow control|backpressure', 'Flow control: VALID/READY backpressure or credits (one per free receiver buffer).', 'bus'),
   E('noc|network on chip|mesh|flit|wormhole', 'On-chip networks of routers and links carrying packets split into flits; wormhole switching pipelines them.', 'noc'),
   E('serdes|pcie|cxl|pam4|8b/10b|128b/130b', 'High-speed serial links: SerDes with embedded clocks; PCIe (each generation doubles the rate: Gen 5 = 32 GT/s, 6.0 = 64 GT/s PAM4 with flits, 7.0 = 128 GT/s) and CXL protocols; encodings like 128b/130b and PAM4.', 'serdes'),

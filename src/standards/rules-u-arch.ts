@@ -10,4 +10,6 @@ export const RULES_U_ARCH: Rule[] = [
   { id: 'U2d', why: 'U2: Rowhammer mitigations include RFM and PRAC, not just refreshing neighbours', ban: /Mitigations: refresh the neighbours sooner, and ECC/ },
   { id: 'U3-req', why: 'U3: the PCIe lesson must reach PCIe 7.0', require: { file: /lessons\/arch\.ts$/, re: /PCIe 7\.0|Gen ?7/ } },
   { id: 'U3', why: 'U3: PAM4 PCIe is not just FEC; flit mode changes the framing', files: /lessons\/arch/, ban: /PCIe 6 moves to \*\*PAM4/ },
+  { id: 'U4', why: 'U4: AMBA says manager/subordinate (name the old terms once, "formerly master")', ban: /\bslaves?\b|\bmasters?\b/i, unless: /formerly (master|slave)|master branch|init\.defaultBranch|git/i, files: /^(?!.*glossary)/ },
+  { id: 'U4-arm', why: 'U4: the company is Arm', ban: /ARM\\?'s/ },
 ];

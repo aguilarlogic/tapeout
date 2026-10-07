@@ -248,19 +248,19 @@ const arb: Scenario = {
   concept: 'round-robin arbitration & cross coverage',
   xp: 250,
   brief: `
-    <p>A round-robin arbiter gives the grant to each requester in turn. After master <i>n</i> wins, the search for the next
-    grant starts at master <i>n+1</i> and wraps around after master 3.</p>
+    <p>A round-robin arbiter gives the grant to each requester in turn. After requester <i>n</i> wins, the search for the next
+    grant starts at requester <i>n+1</i> and wraps around after requester 3.</p>
     <p>Random requests hit the usual cases: one or two requesters. The corners are rarer: <b>no</b> requests at all, and
-    <b>all four</b> requesting. The hardest one is when all four request right after master 3 won, because the grant has to
+    <b>all four</b> requesting. The hardest one is when all four request right after requester 3 won, because the grant has to
     wrap around.</p>
-    <p><b>Cross coverage</b> counts the combination, not the parts. "All four request" and "master 3 just won" are each easy
+    <p><b>Cross coverage</b> counts the combination, not the parts. "All four request" and "requester 3 just won" are each easy
     to hit; both at once is one bin, and only a directed mix of request patterns fills it.</p>
     <h4>Goal</h4><ul><li>Cover every request pattern, every grant and the wrap-around corner, and let the scoreboard catch the bug.</li>
     <li>3 stars: 40 transactions or fewer.</li></ul>`,
   knobs: [
     {
       id: 'req', label: 'requests',
-      options: [{ id: 'none', label: 'none' }, { id: 'one', label: 'one master' }, { id: 'two', label: 'two masters' }, { id: 'all', label: 'all four' }],
+      options: [{ id: 'none', label: 'none' }, { id: 'one', label: 'one requester' }, { id: 'two', label: 'two requesters' }, { id: 'all', label: 'all four' }],
       defaults: { none: 0, one: 1, two: 1, all: 0 },
     },
   ],
@@ -269,9 +269,9 @@ const arb: Scenario = {
     { id: 'req_one', group: 'cp_req', label: 'one request' },
     { id: 'req_two', group: 'cp_req', label: 'two requests' },
     { id: 'req_all', group: 'cp_req', label: 'all four request' },
-    ...[0, 1, 2, 3].map((i) => ({ id: `win_${i}`, group: 'cp_grant', label: `master ${i} wins` })),
-    { id: 'wrap', group: 'cp_ptr', label: 'grant wraps from master 3 to master 0' },
-    { id: 'all_after3', group: 'cx_req_ptr', label: 'all four request right after master 3 won' },
+    ...[0, 1, 2, 3].map((i) => ({ id: `win_${i}`, group: 'cp_grant', label: `requester ${i} wins` })),
+    { id: 'wrap', group: 'cp_ptr', label: 'grant wraps from requester 3 to requester 0' },
+    { id: 'all_after3', group: 'cx_req_ptr', label: 'all four request right after requester 3 won' },
   ],
   budget: 200,
   par: 40,
@@ -297,7 +297,7 @@ const arb: Scenario = {
         const start = last < 0 ? 0 : (last + 1) % 4;
         let gnt = -1;
         for (let k = 0; k < 4 && gnt < 0; k++) if (req & (1 << ((start + k) % 4))) gnt = (start + k) % 4;
-        // Planted bug: with all four requesting right after master 3 won, the DUT skips master 0 and grants master 1.
+        // Planted bug: with all four requesting right after requester 3 won, the DUT skips requester 0 and grants requester 1.
         const dut = req === 0xf && last === 3 ? 1 : gnt;
         const h: string[] = [];
         const pc = popcount(req);

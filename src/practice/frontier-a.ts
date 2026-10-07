@@ -234,7 +234,7 @@ export const socintPractice = practice('practice-soc-int', 'SoC Integration Dril
       count('Bytes per cycle:', `${bw} / 8`, bw / 8), calc('MB/s = bytes × MHz × efficiency:', `${bw / 8} × ${f} × ${eff / 100}`, v, 'MB/s', sig(v), 0.02));
     const need = pick(r, [3000, 4000, 6000]), w2 = pick(r, [64, 128]);
     const f2 = need / ((w2 / 8) * (eff / 100));
-    return walk(ask(`The masters on a ${w2}-bit bus need ${need} MB/s in total and the bus delivers ${eff}% of peak. What minimum clock frequency, in MHz?`, qty(f2, 'MHz', 0.02, sig(f2)), `${need} ÷ (${w2 / 8} × ${eff / 100}) = ${sig(f2)} MHz.`, 'Invert the bandwidth formula.'),
+    return walk(ask(`The managers on a ${w2}-bit bus need ${need} MB/s in total and the bus delivers ${eff}% of peak. What minimum clock frequency, in MHz?`, qty(f2, 'MHz', 0.02, sig(f2)), `${need} ÷ (${w2 / 8} × ${eff / 100}) = ${sig(f2)} MHz.`, 'Invert the bandwidth formula.'),
       'sizing a bus clock', 'Bandwidth = bytes per cycle × frequency × efficiency. To meet a requirement, solve for the frequency: divide by the other two factors.',
       calc('Effective bytes per cycle:', `${w2 / 8} × ${eff / 100}`, (w2 / 8) * (eff / 100), 'B', sig((w2 / 8) * (eff / 100)), 0.01),
       calc('Frequency = required ÷ bytes per cycle, in MHz:', `${need} / ${sig((w2 / 8) * (eff / 100))}`, f2, 'MHz', sig(f2), 0.02));
@@ -262,7 +262,7 @@ export const socintPractice = practice('practice-soc-int', 'SoC Integration Dril
 
 export const socintBoss = bossOf(socintPractice, 'boss-soc-int', 'The Integration Review', 'address windows, bandwidth, interrupt latency and register maps', 220,
   'Boss fight, {name}. First silicon is back and the top-level checklist is open. Every number must be defensible. Exam rules.', [0, 1, 2, 3],
-  [mc('The chip hangs on a read from a peripheral. What do you check first?', ['The compiler\'s optimization flags', 'Its clock enable, reset and address window', 'The boot ROM size and its checksum', 'The interrupt priority set for that peripheral'], 1, 'Check that the peripheral\'s clock is enabled, its reset is released and its address window is not overlapped, and that the interconnect has a default slave or timeout so a mistake gives an error rather than a hang. Hangs are almost always an unanswered bus transaction.')]);
+  [mc('The chip hangs on a read from a peripheral. What do you check first?', ['The compiler\'s optimization flags', 'Its clock enable, reset and address window', 'The boot ROM size and its checksum', 'The interrupt priority set for that peripheral'], 1, 'Check that the peripheral\'s clock is enabled, its reset is released and its address window is not overlapped, and that the interconnect has a default subordinate or timeout so a mistake gives an error rather than a hang. Hangs are almost always an unanswered bus transaction.')]);
 
 // ------------------------------------------------------------------ clocking and PLLs
 
