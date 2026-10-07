@@ -115,7 +115,7 @@ export const ohm: Lesson = {
     say('Chips are digital on the inside, but they live in an analog world. Before we go further, you need three quantities in your bones.'),
     art(`
    V  voltage     "pressure"    volts   (V)
-   I  current     "flow"        amps    (A)
+   I  current     "flow"        amperes (A)
    R  resistance  "narrowness"  ohms    (Ω)
 
           V = I × R          P = V × I`, "Ohm's law and power"),
@@ -142,7 +142,7 @@ export const ohm: Lesson = {
     }),
     app('divider', 'Your turn to design one. Pick standard resistor values to hit each target voltage. Real parts only come in certain values (the E12 series), so you will have to get creative.', 3),
     say('Last: power. Every milliwatt in a chip turns into heat. P = V × I, or with Ohm\'s law, P = V²/R = I²R.'),
-    ask('A chip draws 2 A from a 0.9 V core supply. How many watts is that?', qty(1.8, 'W'), 'P = V × I = 0.9 × 2 = 1.8 W. Modern GPUs draw hundreds of amps at under 1 V, which is why their power delivery is so hard.', 'P = V × I'),
+    ask('A chip draws 2 A from a 0.9 V core supply. How many watts is that?', qty(1.8, 'W'), 'P = V × I = 0.9 × 2 = 1.8 W. Modern GPUs draw hundreds of amperes at under 1 V, which is why their power delivery is so hard.', 'P = V × I'),
     say('Good. You will use V = IR for the rest of your career, {name}. Even STA engineers do, for IR drop.', 'happy'),
   ],
   recap: ['V = I × R; P = V × I.', 'Series resistors add; parallel ones combine to less than the smallest.', 'Divider: Vout = Vin × R2/(R1+R2).', 'Real resistors come in standard series (E12, E24, E96).'],
@@ -171,7 +171,7 @@ export const rc: Lesson = {
       const tau = R * C * 1e6;
       return ask(`R = ${R / 1000} kΩ, C = ${C * 1e9} nF. What is τ in **µs**?`, qty(tau, 'us'), `τ = RC = ${R} × ${C * 1e9}e-9 = ${tau.toPrecision(3)} µs.`, 'Multiply R in ohms by C in farads to get seconds, then convert to µs.');
     }),
-    say('Why does a chip designer care? Every wire in a chip has resistance, and every gate input is a tiny capacitor. **Every signal is an RC circuit.** That delay is what timing analysis measures.'),
+    say('Why does a chip designer care? Every wire in a chip has resistance, and every gate input is a tiny capacitor. **Every signal is an RC circuit.** The delay to the 50% point is about 0.69·R·C. That delay is what timing analysis measures.'),
     mc('A gate drives a long wire to 10 inputs. How do you make it switch **faster**?', ['Add more loads, so that the signal is spread over more branches', 'Use a stronger (lower-resistance) driver', 'Make the wire longer, so the signal has more time to settle on it', 'Lower the clock frequency, so the delay becomes smaller in itself'], 1, 'Delay ≈ R_driver × C_load. A bigger driver (lower R) or less capacitance (shorter wire, fewer loads) both help. You will do exactly this in the timing lab.'),
     say('An RC also makes a **low-pass filter**: slow signals get through, fast ones are smoothed away. The corner frequency is f = 1 / (2πRC).'),
     gen((r) => {
@@ -184,7 +184,7 @@ export const rc: Lesson = {
     say('One more thing: when millions of gates switch at once, they gulp current from the supply in nanoseconds. The wires to the power supply are too slow (inductance!), so we park **decoupling capacitors** right next to the chip as local charge reservoirs.'),
     mc('Where should a decoupling capacitor go?', ['Anywhere on the board, since a capacitor acts on the whole rail', 'As close as possible to the chip\'s power pin', 'Next to the power connector, where the supply enters the board', 'On a separate board'], 1, 'The loop between the cap and the pin should be as short as possible: shorter loop, less inductance, faster charge delivery. You will route this yourself in the board lab.'),
   ],
-  recap: ['τ = RC; ~63% after 1τ, ~99% after 5τ.', 'Gate delay ≈ R_driver × C_load: every wire is an RC.', 'Low-pass corner: f = 1/(2πRC).', 'Decoupling caps are local charge reservoirs: keep them close.'],
+  recap: ['τ = RC; ~63% after 1τ, ~99% after 5τ.', 'Gate delay ≈ 0.69·R_driver·C_load to the 50% point: every wire is an RC.', 'Low-pass corner: f = 1/(2πRC).', 'Decoupling caps are local charge reservoirs: keep them close.'],
 };
 
 export const mos: Lesson = {
@@ -212,7 +212,7 @@ export const mos: Lesson = {
       └─┤ NMOS
          │
         GND          the CMOS inverter`),
-    mc('Why does a CMOS gate burn almost no power when it is **not switching**?', ['The transistors are too small to leak at all when they are off', 'In steady state there is never a path from VDD to GND', 'The clock is off', 'Capacitors store the power'], 1, 'One network is always off, so no DC current flows. Power is mostly spent charging capacitances when things switch, which is why P ≈ αCV²f.'),
+    mc('Why does a CMOS gate burn almost no power when it is **not switching**?', ['The transistors are too small to leak at all when they are off', 'In steady state there is never a conducting path from VDD to GND', 'The clock is off', 'Capacitors store the power'], 1, 'One network is always off, so there is no static current apart from leakage. Power is mostly spent charging capacitances when things switch, which is why P ≈ αCV²f.'),
     say('The rules for building a gate: in the pull-down, NMOS in **series** make AND, in **parallel** make OR. The pull-up is the **dual**: swap series and parallel.'),
     art(`
    NAND2:  pull-down = two NMOS in series   (both on -> Y pulled to 0)
@@ -221,7 +221,7 @@ export const mos: Lesson = {
     mc('Why is there no 4-transistor CMOS **AND** gate?', ['There is one, but it is rare, and not found in the usual libraries', 'A single stage inverts, so AND is NAND plus an inverter: 6', 'AND needs a clock, to decide when the two inputs are both high', 'PMOS cannot be placed in series, so only an OR can be built'], 1, 'NMOS pull down, PMOS pull up, so a single stage can only produce inverting functions (NAND, NOR, AOI...). AND needs a NAND followed by an inverter. That is why standard cell libraries are full of inverting gates.'),
     say('Enough talk. I have a transistor-level lab ready for you, {name}. Let us see if you can build these by hand.', 'excited'),
   ],
-  recap: ['NMOS: on with gate=1, pulls down. PMOS: on with gate=0, pulls up.', 'CMOS: complementary pull-up/pull-down; no static current.', 'Series in pull-down = parallel in pull-up (duality).', 'Single CMOS stages are inverting: NAND2 = 4T, AND2 = 6T.'],
+  recap: ['NMOS: on with gate=1, pulls down. PMOS: on with gate=0, pulls up.', 'CMOS: complementary pull-up/pull-down; no static current apart from leakage.', 'Series in pull-down = parallel in pull-up (duality).', 'Single CMOS stages are inverting: NAND2 = 4T, AND2 = 6T.'],
 };
 
 export const FOUNDATION_LESSONS = [bits, twos, bool, ohm, rc, mos];

@@ -111,7 +111,7 @@ const sedMission: ShellLevel = {
   ticket: 'The clock port is being renamed from clk_i to clk across the RTL. A blind replace would also mangle clk_i_n.',
   build: () => ({
     brief: `<p>In every <code>rtl/*.v</code> file replace the whole word <code>clk_i</code> with <code>clk</code>, editing the files in place. Leave names that merely <i>contain</i> it (like <code>clk_i_n</code>) alone.</p>`,
-    hints: ['<code>sed -i \'s/old/new/g\' files...</code> edits in place.', 'Anchor the match on word boundaries: <code>\\bclk_i\\b</code>.'],
+    hints: ['<code>sed -i \'s/old/new/g\' files...</code> edits in place (GNU sed; macOS needs <code>sed -i \'\'</code>).', 'Anchor the match on word boundaries: <code>\\bclk_i\\b</code> (a GNU extension; macOS sed uses <code>[[:<:]]</code> and <code>[[:>:]]</code>).'],
     files: { 'rtl/core.v': 'module core(input clk_i, input clk_i_n);\n  always @(posedge clk_i) q <= d;\nendmodule\n', 'rtl/mem.v': 'module mem(input clk_i);\n  wire g = clk_i & en; // clk_i gates\nendmodule\n' },
     solution: ["sed -i 's/\\bclk_i\\b/clk/g' rtl/*.v"],
     goals: [
