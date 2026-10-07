@@ -13,7 +13,7 @@ export const eda: Lesson = {
   concept: 'algorithms behind the tools: placement, routing, SAT, BDDs, graph timing',
   xp: 120,
   steps: [
-    say('**The role.** Every tool in this game (synthesis, placement, routing, STA, simulators, formal checkers) was written by an EDA engineer: Synopsys, Cadence, Siemens EDA, Ansys, and every chip company\'s internal CAD team. The work is software engineering with a large dose of algorithms: C++ and Python, graph theory, optimization, parallelism. The inputs are enormous: a chip is billions of shapes and hundreds of millions of cells.'),
+    say('**The role.** Every tool in this game (synthesis, placement, routing, STA, simulators, formal checkers) was written by an EDA engineer: Synopsys, Cadence, Siemens EDA, and every chip company\'s internal CAD team. The work is software engineering with a large dose of algorithms: C++ and Python, graph theory, optimization, parallelism. The inputs are enormous: a chip is billions of shapes and hundreds of millions of cells.'),
     say('Almost everything reduces to a few families of algorithms. **Graph traversal** (timing propagation, netlist queries), **optimization** (simulated annealing and analytical solvers for placement), **shortest path** (routing), and **Boolean reasoning** (SAT solvers and BDDs for equivalence checking and formal verification).'),
     gen((r) => {
       const n = pick(r, [4, 5, 6]);
