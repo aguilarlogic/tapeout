@@ -169,10 +169,44 @@ export const flows: Lesson = {
       const items = ['u_alu', 'u_fifo', 'u_ctrl', 'u_dma', 'u_uart'].slice(0, n);
       return ask(`What does this TCL print?\n\n\`set blocks {${items.join(' ')}}\`\n\`puts [llength $blocks]\``, num(n), `llength counts list elements: ${n}. TCL lists are space-separated words in braces.`, 'Count the words in the list.');
     }),
+    say('**Braces versus quotes** is the rule that trips everyone. `"..."` still substitutes `$x` and `[cmd]`. `{...}` substitutes **nothing**: it hands the text over untouched, which is how a script is passed to `if`, `foreach`, `proc` and `catch` to run later.'),
+    art(`
+   set n 3
+   puts "n is $n"        →  n is 3
+   puts {n is $n}        →  n is $n
+
+   proc area {w h} { return [expr {$w * $h}] }
+   puts [area 4 5]                      →  20
+
+   set l {a b c}
+   lappend l d                          # l is now {a b c d}
+   puts "[llength $l] [lindex $l 1]"    →  4 b
+
+   dict set d clk 2.0                   # a dict maps keys to values
+   puts [dict get $d clk]               →  2.0
+
+   regexp {u_(\\w+)/(\\d+)} "u_alu/7" all name idx
+   puts "$name $idx"                    →  alu 7
+
+   set rc [catch {error "bad"} msg]     # catch returns 1 and keeps the message
+   puts "$rc $msg"                      →  1 bad`),
+    mc('A script runs `set n 3` and then `puts {n is $n}`. What appears?', ['n is 3', 'n is $n', 'The command fails with an error', 'Nothing is printed'], 1, 'Curly braces stop all substitution, so the text goes to puts exactly as typed. Double quotes would have printed n is 3.'),
+    mc('Why wrap a risky command in `catch`?', ['It makes the command run faster, as it skips the usual checks', 'An error becomes return code 1 plus a message, and the script goes on', 'It hides the output of the command from the log file', 'It sends the command to run on the compute farm instead'], 1, 'Without catch, one error stops the whole flow. With catch you can test the code, log the message and decide what to do next.'),
+    say('The EDA commands return **collections** of design objects, and a loop over them uses `foreach_in_collection`. A filter picks objects by attribute, for example every flop whose library cell starts with DFF.'),
+    art(`
+   set flops [get_cells -hier -filter "ref_name =~ DFF*"]
+   foreach_in_collection c $flops {
+     puts [get_attribute $c full_name]
+   }
+   puts [sizeof_collection [get_pins -hier */D]]`),
+    gen((r) => {
+      const a = pick(r, [4, 6, 8]), b = pick(r, [2, 3, 5]);
+      return ask(`What does this TCL print?\n\n\`set x ${a}\`\n\`set y {$x}\`\n\`puts [expr $y + ${b}]\``, num(a + b), `The braces keep y as the text $x, but expr substitutes variables again when it evaluates its arguments: ${a} + ${b} = ${a + b}.`, 'expr evaluates the text of its arguments, including any $ in it.');
+    }),
     mc('In a synthesis script, what do `create_clock -period 1.0 [get_ports clk]` and `set_input_delay` define?', ['The RTL clock generator', 'Timing constraints (SDC)', 'Pin placement for the clock and inputs', 'Simulation stimulus for the testbench'], 1, 'They define the clock and when inputs arrive relative to it, which synthesis and STA optimize against. SDC is itself TCL. Constraints tell the tools what "fast enough" means; wrong constraints are a top cause of silicon timing failures.'),
     mc('A regression flow runs 5,000 tests every night. What turns this into something one engineer can manage?', ['Opening every log by hand each morning to check for errors', 'A scripted flow that farms out, parses and summarizes runs', 'A faster workstation running them in sequence', 'Running only the tests that passed yesterday'], 1, 'A test list, a scheduler that farms runs out in parallel, automatic pass/fail parsing, and a summary report with failure signatures. Regression infrastructure is itself engineering. The triage lab later in the game makes you do it.'),
   ],
-  recap: ['Make: targets, dependencies, recipes (TAB!); rebuild only what is stale.', 'TCL: `set x 5`, `$x`, `[cmd]` substitution, `expr {}`, lists, foreach.', 'EDA tools and SDC constraints are TCL.', 'Flows = scripted pipelines; regressions = test lists + scheduler + parsing + reports.'],
+  recap: ['Make: targets, dependencies, recipes (TAB!); rebuild only what is stale.', 'TCL: `set x 5`, `$x`, `[cmd]` substitution, `expr {}`, lists, foreach.', 'Quotes substitute, braces do not; proc, dict, regexp and catch (return code 1 plus message).', 'EDA idiom: get_cells / get_pins with -filter, then foreach_in_collection.', 'EDA tools and SDC constraints are TCL.', 'Flows = scripted pipelines; regressions = test lists + scheduler + parsing + reports.'],
 };
 
 export const TOOLING_LESSONS = [shell, git, python, flows];
