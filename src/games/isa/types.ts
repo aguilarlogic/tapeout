@@ -34,7 +34,7 @@ export interface IsaInstance {
   maxInstrs?: number;
   /** limit on executed instructions per case, reported as a goal */
   budget?: number;
-  /** a function must restore s0-s11 and sp (default true for function style) */
+  /** a function must restore s0-s11 and sp, and keep sp 16-byte aligned at every call (default true for function style) */
   abi?: boolean;
   solution: string;
 }

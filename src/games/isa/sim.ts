@@ -28,6 +28,8 @@ export class Machine {
   traceLimit = 5000;
   /** lowest stack pointer seen, to tell that a recursion really used the stack */
   minSp = 0;
+  /** sp at the first call (jal/jalr with rd = ra) made while sp was not 16-byte aligned; the ABI keeps sp aligned at every call */
+  misalignedCallSp?: number;
   readonly textEnd: number;
 
   constructor(prog: Program, opts: { regs?: Record<number, number>; sp?: number } = {}) {
@@ -79,6 +81,7 @@ export class Machine {
       const immS = ((w >> 25) << 5) | ((w >> 7) & 31);
       const immB = ((w >> 31) << 12) | (((w >> 7) & 1) << 11) | (((w >> 25) & 0x3f) << 5) | (((w >> 8) & 0xf) << 1);
       const immJ = ((w >> 31) << 20) | (((w >> 12) & 0xff) << 12) | (((w >> 20) & 1) << 11) | (((w >> 21) & 0x3ff) << 1);
+      if ((opcode === 0x6f || opcode === 0x67) && rd === 1 && (r[2] & 15) && this.misalignedCallSp === undefined) this.misalignedCallSp = r[2] >>> 0;
       let next = pc + 4;
       let res: number | undefined;
       let memEv: Step['mem'];
