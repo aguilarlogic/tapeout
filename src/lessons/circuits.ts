@@ -95,6 +95,12 @@ export const ac: Lesson = {
       const [a, b] = pick(r, [[3, 4], [6, 8], [5, 12], [8, 15], [20, 21]] as const);
       return ask(`A ${a} Ω resistor in series with an inductor of reactance ${b} Ω (Z = ${a} + j${b}). What is |Z|, in Ω?`, qty(Math.hypot(a, b), 'Ω', 0.01), `|Z| = √(${a}² + ${b}²) = ${Math.hypot(a, b)} Ω, at a phase of ${Math.round((Math.atan2(b, a) * 180) / Math.PI)}°.`, '√(a² + b²).');
     }),
+    say('The tool behind phasors is **Euler\'s formula**: e^(jθ) = cos θ + j·sin θ, a point on the unit circle at angle θ. Write a phasor as magnitude ∠ angle. To **multiply** phasors, multiply the magnitudes and add the angles; to **divide**, divide the magnitudes and subtract the angles. That is why 1/(jωC) lags by 90°: j is 1∠90°, so dividing by it subtracts 90°.'),
+    gen((r) => {
+      const [m1, a1] = pick(r, [[2, 30], [3, 45], [5, 20], [4, 60]] as const);
+      const [m2, a2] = pick(r, [[3, 60], [2, 15], [4, 25], [5, 30]] as const);
+      return ask(`Multiply the phasors ${m1}∠${a1}° and ${m2}∠${a2}°. What is the angle of the product, in degrees?`, qty(a1 + a2, '', 0.01, String(a1 + a2)), `Angles add: ${a1} + ${a2} = ${a1 + a2}°. The magnitude is ${m1} × ${m2} = ${m1 * m2}.`, 'Add the angles.');
+    }),
     say('The classic first filter: an RC **low-pass**. The output divides the input between R and the capacitor\'s impedance: H(jω) = 1 / (1 + jωRC). Below the cutoff fc = 1/(2πRC) it passes; above, it falls by 20 dB per decade (10× in frequency).'),
     art(`
    gain (dB)
@@ -127,7 +133,7 @@ export const ac: Lesson = {
     }),
     mc('A load has current lagging voltage by 60°. The meter reads 10 V rms and 1 A rms. What real power does it consume?', ['10 W', '5 W', '8.7 W', '0 W'], 1, 'P = 10 × 1 × cos 60° = 5 W. The rest is reactive power, sloshing back and forth into the inductance.'),
   ],
-  recap: ['Z_R = R, Z_C = 1/(jωC), Z_L = jωL.', '|a + jb| = √(a² + b²).', 'RC low-pass: fc = 1/(2πRC), -3 dB and -45° at fc, -20 dB/decade per pole.', 'Voltage dB = 20·log10.', 'Resonance f0 = 1/(2π√LC), bandwidth = f0/Q.', 'V_rms = V_peak/√2; P = V·I·cos φ.'],
+  recap: ['Z_R = R, Z_C = 1/(jωC), Z_L = jωL.', '|a + jb| = √(a² + b²). e^(jθ) = cos θ + j·sin θ; multiply phasors by multiplying magnitudes and adding angles.', 'RC low-pass: fc = 1/(2πRC), -3 dB and -45° at fc, -20 dB/decade per pole.', 'Voltage dB = 20·log10.', 'Resonance f0 = 1/(2π√LC), bandwidth = f0/Q.', 'V_rms = V_peak/√2; P = V·I·cos φ.'],
 };
 
 export const electronics: Lesson = {
@@ -175,8 +181,45 @@ export const electronics: Lesson = {
       return ask(`A transistor has gm = ${gm} mS and output resistance ro = ${ro} kΩ. What is its intrinsic gain gm·ro?`, num(gm * ro), `gm·ro = ${gm} mS × ${ro} kΩ = ${gm * ro}. That is the highest gain one transistor can give. It shrinks at advanced nodes (short channels, low ro), which is why modern analog stacks transistors in cascodes.`, 'Multiply them; mS × kΩ is dimensionless.');
     }),
     mc('Why are the inputs of nearly every op-amp and comparator a **differential pair** (two matched transistors sharing a tail current)?', ['It uses fewer transistors than a single-ended input stage would', 'It amplifies the difference and rejects noise common to both', 'It runs faster than one transistor, as its gm adds up directly', 'It needs no bias current, since the two sides balance each other'], 1, 'Such as supply or substrate noise. Common-mode rejection. The same idea makes differential signalling (LVDS, PCIe, USB) robust on boards.'),
+    say('Every amplifier you build has to hear a signal over **noise**: small random voltages and currents that the parts add on their own. The first source is **thermal noise**. Charge carriers in any resistor jiggle with heat, so the resistor shows a random voltage v_n = √(4kTRB) rms, where B is the bandwidth you look through. At 300 K, 4kT ≈ 1.66 × 10⁻²⁰ J, so a 1 kΩ resistor gives about **4.07 nV/√Hz**. The noise grows as the square root of R and of B: 4× the resistance only doubles it.'),
+    gen((r) => {
+      const R = pick(r, [100, 1000, 4700, 10000, 100000]);
+      const e = Math.sqrt(4 * 1.38e-23 * 300 * R) * 1e9;
+      return ask(`What is the thermal noise density of a ${R >= 1000 ? `${r3(R / 1000)} kΩ` : `${R} Ω`} resistor at 300 K, in nV/√Hz? (4kT ≈ 1.66 × 10⁻²⁰ J)`, qty(e, 'nV', 0.03, r3(e).toString()), `√(4kT·R) = √(1.66e-20 × ${R}) = ${r3(e)} nV/√Hz. Multiply by √B to get rms volts over a bandwidth B.`, 'e_n = √(4kT·R). 1 kΩ is 4.07 nV/√Hz, and the rest scales as √R.');
+    }),
+    say('The second is **kT/C noise**. When a switch samples a voltage onto a capacitor, its thermal noise is frozen onto the capacitor: v_n = √(kT/C). The resistance has dropped out of the answer, because a bigger R makes the noise per hertz larger but narrows the bandwidth by the same amount. At 300 K, 1 pF gives about 64 µV rms.'),
+    gen((r) => {
+      const [c, cs] = pick(r, [[0.1e-12, '0.1 pF'], [0.5e-12, '0.5 pF'], [1e-12, '1 pF'], [4e-12, '4 pF'], [10e-12, '10 pF']] as const);
+      const v = Math.sqrt((1.38e-23 * 300) / c) * 1e6;
+      return ask(`How much kT/C noise does a ${cs} capacitor hold at 300 K, in µV rms? (kT ≈ 4.14 × 10⁻²¹ J)`, qty(v, 'uV', 0.03, r3(v).toString()), `√(kT/C) = √(4.14e-21 / ${cs.replace(' pF', 'e-12')}) = ${r3(v)} µV. It does not matter what resistor charged it.`, 'v = √(kT/C). 1 pF is 64 µV.');
+    }),
+    say('The third is **shot noise**. Current is made of whole charges arriving at random, so a DC current I carries i_n = √(2qIB) rms in a bandwidth B (q = 1.6 × 10⁻¹⁹ C). It grows with the current, which is why a photodiode or a bias current is never perfectly quiet.'),
+    gen((r) => {
+      const [i, is] = pick(r, [[0.1e-3, '0.1 mA'], [1e-3, '1 mA'], [10e-3, '10 mA']] as const);
+      const n = Math.sqrt(2 * 1.602e-19 * i * 1e6) * 1e9;
+      return ask(`A DC current of ${is} flows through a junction. What is its shot noise over a 1 MHz bandwidth, in nA rms?`, qty(n, 'nA', 0.03, r3(n).toString()), `i_n = √(2qIB) = √(2 × 1.6e-19 × ${is.replace(' mA', 'e-3')} × 1e6) = ${r3(n)} nA. It rises as √I: 100× the current is only 10× the noise.`, 'i_n = √(2 q I B).');
+    }),
+    say('The fourth is **flicker noise**, also called **1/f noise**. Its power density rises as frequency falls, so it rules at low frequency and the flat thermal floor rules above it. The **corner frequency** is where the two are equal. MOSFETs show a lot of it, which is why precision amplifiers use large input devices or chopping to get away from it.'),
+    gen((r) => {
+      const w = pick(r, [2, 4, 5, 10]);
+      const m = pick(r, [3, 5, 8, 10]);
+      return ask(`An amplifier has a white noise floor of ${w} nV/√Hz. Its 1/f noise density is ${w * m} nV/√Hz at 1 Hz and falls as 1/√f. What is the corner frequency, in Hz?`, qty(m * m, 'Hz', 0.03, String(m * m)), `The 1/f density is ${w * m}/√f. It meets ${w} when √f = ${m}, so f = ${m * m} Hz. Above that, the floor is white.`, 'Solve A/√f = floor for f.');
+    }),
+    say('A signal always goes through a filter before you measure it, and the filter is not a brick wall. For a single-pole low-pass with a −3 dB frequency f₋₃dB, white noise of density e_n integrates to e_n·√ENBW, where the **equivalent noise bandwidth** is ENBW = (π/2)·f₋₃dB ≈ 1.57 × f₋₃dB. It is wider than the −3 dB point because the filter lets some noise through beyond it.'),
+    gen((r) => {
+      const f = pick(r, [1, 2, 5, 10, 20, 100]);
+      return ask(`A single-pole filter has f₋₃dB = ${f} kHz. What is its equivalent noise bandwidth, in kHz?`, qty((Math.PI / 2) * f, 'kHz', 0.02, r3((Math.PI / 2) * f).toString()), `ENBW = (π/2) × ${f} kHz = ${r3((Math.PI / 2) * f)} kHz.`, 'Multiply by π/2.');
+    }),
+    say('When several noise sources are **uncorrelated**, they add in power, not in voltage: v_total = √(v₁² + v₂² + …). That is adding in **quadrature**, like the sides of a right-angled triangle. A source a third the size of the biggest adds only 5% to the total; the biggest one decides.'),
+    mc('Two uncorrelated noise sources of 3 µV rms and 4 µV rms act at the same point. What is the total?', ['5 µV rms', '7 µV rms', '1 µV rms', '3.5 µV rms'], 0, 'They add in power: √(3² + 4²) = 5 µV. A straight sum (7 µV) would only be right if the two were perfectly correlated.'),
+    say('To compare amplifiers fairly, refer all the noise to the input. **Input-referred noise** is the noise source at the input that would give the same output noise: divide the output noise by the gain. Then it can be set directly against the signal: SNR = signal ÷ input-referred noise.'),
+    gen((r) => {
+      const g = pick(r, [10, 20, 50, 100, 200]);
+      const vo = pick(r, [100, 200, 500, 1000]);
+      return ask(`An amplifier with a gain of ${g} has ${vo} µV rms of noise at its output. What is the input-referred noise, in µV rms?`, qty(vo / g, 'uV', 0.02, r3(vo / g).toString()), `${vo} µV / ${g} = ${r3(vo / g)} µV rms at the input. A ${r3(vo / g)} µV signal would have an SNR of 1.`, 'Divide the output noise by the gain.');
+    }),
   ],
-  recap: ['Diode: exponential, ~60 mV per decade of current; ESD diodes guard pads.', 'BJT: I_C = β·I_B, gm = I_C/VT; bandgap references cancel VBE drift.', 'MOSFET square law; gm = 2·I_D/V_ov.', 'Current mirrors bias circuits by copying a reference current.', 'Common source = gain, source follower = buffer, common gate = low input impedance.', 'Intrinsic gain gm·ro; differential pairs reject common-mode noise.'],
+  recap: ['Diode: exponential, ~60 mV per decade of current; ESD diodes guard pads.', 'BJT: I_C = β·I_B, gm = I_C/VT; bandgap references cancel VBE drift.', 'MOSFET square law; gm = 2·I_D/V_ov.', 'Current mirrors bias circuits by copying a reference current.', 'Common source = gain, source follower = buffer, common gate = low input impedance.', 'Intrinsic gain gm·ro; differential pairs reject common-mode noise.', 'Thermal noise √(4kTRB): 1 kΩ gives 4.07 nV/√Hz. kT/C noise √(kT/C) ignores R: 1 pF is 64 µV.', 'Shot noise √(2qIB); flicker noise falls as 1/f, with a corner where it meets the white floor.', 'ENBW of a single pole is (π/2)·f₋₃dB. Uncorrelated noise adds in quadrature; refer it to the input by dividing by the gain.'],
 };
 
 export const CIRCUIT_LESSONS = [kcl, ac, electronics];

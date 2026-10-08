@@ -32,6 +32,13 @@ export const signals: Lesson = {
       const f = pick(r, [100, 500, 1000]);
       return ask(`A ${f} MHz square-wave clock. What is the frequency of its ${n === 3 ? 'third' : n === 5 ? 'fifth' : 'seventh'} harmonic, in MHz?`, qty(n * f, 'MHz', 0.001), `${n} × ${f} = ${n * f} MHz, at 1/${n} of the fundamental's amplitude. Those harmonics are what radiates as EMI and what a channel must carry to keep edges sharp.`, 'Multiply by the harmonic number.');
     }),
+    say('That is a **Fourier series**: a periodic signal x(t) = a₀ + Σ [aₙ·cos(nω₀t) + bₙ·sin(nω₀t)], with the coefficients found by integrating x against each sine and cosine over one period. For a square wave of amplitude A (+A, then −A), only odd sines survive: bₙ = 4A/(nπ). The fundamental is 4/π ≈ 1.27 times the amplitude.'),
+    gen((r) => {
+      const a = pick(r, [1, 2, 3, 5]);
+      const n = pick(r, [1, 3, 5]);
+      const b = (4 * a) / (n * Math.PI);
+      return ask(`A square wave swings between +${a} V and −${a} V. What is the amplitude of its ${n === 1 ? 'fundamental' : `${n === 3 ? 'third' : 'fifth'} harmonic`}, in V?`, qty(b, 'V', 0.02, r3(b).toString()), `bₙ = 4A/(nπ) = 4 × ${a} / (${n}π) = ${r3(b)} V.`, 'bₙ = 4A / (nπ) for odd n.');
+    }),
     say('The **Fourier transform** works for any signal, periodic or not. One rule of thumb is worth memorizing for digital design: a fast edge contains high frequencies. The bandwidth of a signal with rise time t_r is about **0.35 / t_r**.'),
     gen((r) => {
       const tr = pick(r, [35, 50, 100, 350]);
@@ -45,6 +52,17 @@ export const signals: Lesson = {
       return ask(`Where is the pole of an RC low-pass with R = ${rr} kΩ and C = ${c} nF? Give its magnitude in rad/s.`, qty(p, '', 0.01, r3(p).toString()), `s = -1/RC = -1/(${rr} kΩ × ${c} nF) = -${r3(p)} rad/s (or ${r3(p / (2 * Math.PI))} Hz).`, 'Pole at s = -1/(RC).');
     }),
     mc('A system\'s poles are at s = -2, and s = +1 ± 3j. Is it stable?', ['Yes, since one of the poles is negative and so it decays', 'No: poles in the right half-plane mean responses that grow', 'Only at low frequency, where the growing pair has no effect', 'Poles do not affect stability, which depends on the zeros only'], 1, 'The growth is forever. Every pole must be in the left half-plane. A pair with positive real part is an oscillation that grows: the math of a feedback loop gone wrong.'),
+    say('To get back to the time domain, use the **inverse Laplace transform**. The pairs to know: 1/(s + a) ↔ e^(−at), and a step through 1/(1 + sτ) gives 1 − e^(−t/τ), which reaches 63.2% at t = τ. The **final-value theorem** gives where a response ends up without finding the whole waveform: y(∞) = lim s→0 of s·Y(s). It only works if all the poles of s·Y(s) lie in the left half-plane; for a stable H(s) with a step input, y(∞) = H(0).'),
+    gen((r) => {
+      const k = pick(r, [2, 5, 10, 100]);
+      const tau = pick(r, [1, 10, 100]);
+      return ask(`A system H(s) = ${k} / (1 + s/${1000 / tau}) is driven by a unit step. Using the final-value theorem, where does the output settle?`, qty(k, '', 0.01, String(k)), `Y(s) = H(s)/s, so y(∞) = lim s→0 of s·Y(s) = H(0) = ${k}. The pole is in the left half-plane, so the theorem applies.`, 'Set s = 0 in H(s).');
+    }),
+    gen((r) => {
+      const m = pick(r, [1, 2, 3]);
+      const v = (1 - Math.exp(-m)) * 100;
+      return ask(`A unit step goes through 1/(1 + sτ). How far has the output got at t = ${m}τ, in % of its final value?`, qty(v, '%', 0.02, r3(v).toString()), `y(t) = 1 − e^(−t/τ) = 1 − e^(−${m}) = ${r3(v / 100)}, so ${r3(v)}%.`, '1 − e^(−t/τ).');
+    }),
     say('Finally, **sampling**. To capture a signal digitally you need to sample faster than twice its highest frequency (the **Nyquist** rate). Anything above fs/2 does not disappear; it **aliases**, folding down to a false frequency.'),
     gen((r) => {
       const fs = pick(r, [10, 44.1, 100]);
@@ -54,7 +72,7 @@ export const signals: Lesson = {
       return ask(`A ${f} kHz tone is sampled at ${fs} kHz with no anti-alias filter. At what frequency does it appear in the samples, in kHz?`, qty(a, 'kHz', 0.02, r3(a).toString()), `It folds around multiples of fs: |${f} - ${fs}| → ${r3(a)} kHz. That is why every ADC has an analog anti-alias filter in front of it.`, 'Subtract the nearest multiple of fs and take the absolute value.');
     }),
   ],
-  recap: ['LTI systems are fully described by their impulse response; output = convolution.', 'Square waves: odd harmonics at 1/n amplitude.', 'Bandwidth ≈ 0.35 / rise time.', 'Laplace: poles decide behaviour; all poles in the left half-plane = stable.', 'Sample above 2·f_max or it aliases.'],
+  recap: ['LTI systems are fully described by their impulse response; output = convolution.', 'Square waves: odd harmonics at 1/n amplitude.', 'Bandwidth ≈ 0.35 / rise time.', 'Laplace: poles decide behaviour; all poles in the left half-plane = stable. 1/(s+a) ↔ e^(−at); final value = lim s·Y(s) when stable.', 'Fourier series: a square wave has bₙ = 4A/(nπ) for odd n.', 'Sample above 2·f_max or it aliases.'],
 };
 
 export const dsp: Lesson = {
@@ -100,7 +118,7 @@ export const dsp: Lesson = {
 export const control: Lesson = {
   id: 'control',
   title: 'Feedback and Control',
-  concept: 'closed-loop gain, loop gain, stability margins, PID, bandwidth',
+  concept: 'closed-loop gain, loop gain, Bode plots, stability margins, PID, bandwidth',
   xp: 100,
   steps: [
     say('**Feedback** is how engineers make precise systems out of imprecise parts. Measure the output, compare it with what you want, and correct the difference. Op-amps, voltage regulators, PLLs, DVFS governors, thermal throttling and qubit calibration loops all work this way.'),
@@ -130,6 +148,34 @@ export const control: Lesson = {
       const pm = pick(r, [10, 30, 45, 60, 75]);
       return mc(`A regulator loop has a phase margin of ${pm}°. How does it respond to a load step?`, ['Rings a lot, close to oscillating', 'Some overshoot, acceptable', 'Clean and well damped'], pm < 35 ? 0 : pm < 55 ? 1 : 2, `${pm}° is ${pm < 35 ? 'too little: expect heavy ringing, and a slow corner could make it oscillate' : pm < 55 ? 'acceptable: a little overshoot' : 'comfortable: well damped'}. Designers add compensation (a capacitor that moves a pole) to fix low margins.`);
     }),
+    say('To see margins, draw the loop gain on a **Bode plot**: magnitude in dB and phase in degrees against log frequency. You can sketch one from poles and zeros alone. Each **pole** bends the magnitude down to −20 dB per decade from its frequency, and its phase falls by 90° in total: −45° exactly at the pole, about −6° a decade below it and −84° a decade above. A **zero** does the opposite: +20 dB per decade and +90°.'),
+    art(`
+   gain (dB)                                phase
+     60 ─╮ p1                                0° ─╮
+          ╲  -20 dB/decade                       ╲   -45° at p1
+      0 ───╲──── crossover, |L| = 1       -90° ───╲____
+            ╲╲   -40 dB/decade after p2                 ╲   -135° at p2
+                                         -180° ─ ─ ─ ─ ─ ─╲─ ─ ─
+                log f →                              log f →
+   phase margin = 180° + the phase where the gain curve crosses 0 dB`),
+    gen((r) => {
+      const x = pick(r, [0.1, 1, 10]);
+      const ph = -(Math.atan(x) * 180) / Math.PI;
+      return ask(`A single-pole low-pass has its pole at p. What is its phase at f = ${x}·p, in degrees? (a lag is negative)`, qty(ph, '', 0.03, r3(ph).toString()), `phase = −atan(f/p) = −atan(${x}) = ${r3(ph)}°. The phase is −45° at the pole and tends to −90° well above it.`, 'phase = −atan(f/p).');
+    }),
+    say('Now the two margins, both read from the loop gain L = A·β. **Phase margin** is 180° plus the phase of L at the frequency where |L| = 1 (0 dB). **Gain margin** is −|L| in dB at the frequency where the phase of L is −180°: how much more gain you could add before the loop oscillates. A stable loop has both positive.'),
+    gen((r) => {
+      const ph = pick(r, [-100, -115, -125, -135, -150, -160]);
+      return ask(`A loop has a phase of ${ph}° where its gain crosses 0 dB. What is the phase margin, in degrees?`, qty(180 + ph, '', 0.02, String(180 + ph)), `PM = 180° + (${ph}°) = ${180 + ph}°. It is the phase you could still lose before reaching −180°.`, 'PM = 180° + phase at crossover.');
+    }),
+    gen((r) => {
+      const g = pick(r, [6, 8, 10, 12, 15, 20]);
+      return ask(`The loop gain is −${g} dB at the frequency where the phase crosses −180°. What is the gain margin, in dB?`, qty(g, 'dB', 0.02, String(g)), `GM = −(−${g} dB) = ${g} dB. The gain could rise by ${r3(10 ** (g / 20))}× before the loop oscillates.`, 'GM = −|L| in dB at the −180° point.');
+    }),
+    say('Rules of thumb. Designers aim for a phase margin of 45–60°. For loops that look like two poles, PM ≈ 100·ζ (PM in degrees, ζ the damping ratio, good for ζ below about 0.7). That puts 45° at roughly 23% step overshoot and 60° at roughly 9%. Below 30° or so the step response rings hard; at 0° it never settles.'),
+    mc('A feedback loop has only 20° of phase margin. What does its step response look like?', ['Strong ringing, with a large overshoot', 'A slow, smooth creep with no overshoot at all', 'A clean step with about 9% overshoot', 'It is perfectly flat, because the loop is stable'], 0, 'Phase margin maps to damping: ζ ≈ 0.2 rings for many cycles. 60° would give about 9%; 20° gives a large overshoot and a long ring-down.'),
+    say('Where does the stability test itself come from? From the **Nyquist criterion**. Plot L(jω) in the complex plane as ω runs from 0 to ∞ (and mirror it for negative ω). The closed loop is stable when that curve does not encircle the point −1. Phase and gain margin are the two ways of measuring how close the curve passes to −1: along the unit circle (phase) or along the negative real axis (gain).'),
+    mc('What does the Nyquist criterion look at?', ['How the plot of the loop gain circles the point −1', 'Whether the step response has any overshoot at all', 'The sampling rate of the loop, compared with its signal', 'Whether the DC gain of the loop is above 1'], 0, 'If the plot of L(jω) winds around −1, the closed loop is unstable. Gain and phase margin are distances to that point.'),
     say('For a single-pole amplifier, gain × bandwidth is constant: the **gain-bandwidth product** (GBW). Close the loop and the bandwidth becomes GBW / noise gain: GBW / G for a non-inverting amplifier, GBW / (1 + |G|) for an inverting one.'),
     gen((r) => {
       const gbw = pick(r, [1, 10, 100]);
@@ -142,7 +188,7 @@ export const control: Lesson = {
       return ask(`A digital control loop has a ${td} µs delay (ADC + compute + DAC). How much phase lag does that add at ${f} kHz, in degrees?`, qty(360 * f * 1e3 * td * 1e-6, '', 0.02, r3(360 * f * 1e3 * td * 1e-6).toString()), `φ = 360° × f × t_d = 360 × ${f} kHz × ${td} µs = ${r3(360 * f * 1e3 * td * 1e-6)}°. Delay eats phase margin, which is why fast loops (like qubit feedback) need very low latency.`, 'φ = 360 × f × delay.');
     }),
   ],
-  recap: ['Closed-loop gain A/(1 + Aβ) ≈ 1/β when the loop gain is large.', 'Feedback divides drift by (1 + T).', 'P leaves 1/(1 + K) error; I removes it; D adds damping.', 'Phase margin: 45° OK, 60° comfortable.', 'Bandwidth = GBW / noise gain.', 'Delay adds 360·f·t_d degrees of lag.'],
+  recap: ['Closed-loop gain A/(1 + Aβ) ≈ 1/β when the loop gain is large.', 'Feedback divides drift by (1 + T).', 'P leaves 1/(1 + K) error; I removes it; D adds damping.', 'Phase margin: 45° OK, 60° comfortable.', 'Bode: a pole is −20 dB/decade and −90° (−45° at the pole). PM = 180° + phase where |L| = 1; GM = −|L| dB where phase = −180°. PM ≈ 100·ζ.', 'Nyquist: stable if the plot of L does not encircle −1.', 'Bandwidth = GBW / noise gain.', 'Delay adds 360·f·t_d degrees of lag.'],
 };
 
 export const em: Lesson = {
