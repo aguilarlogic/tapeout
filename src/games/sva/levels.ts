@@ -91,7 +91,7 @@ endmodule
 `;
 const arbiter: SvaLevel = {
   id: 'sva-arbiter', title: 'Arbiter safety and liveness', concept: '$onehot0, safety vs liveness, priority', xp: 110, tier: 'guided',
-  ticket: 'Three masters share a bus through a fixed-priority arbiter. Two grants at once corrupt the bus; a lost request hangs a master.',
+  ticket: 'Three managers share a bus through a fixed-priority arbiter. Two grants at once corrupt the bus; a lost request hangs a manager.',
   build: () => ({
     mode: 'write', depth: 4, minAsserts: 4, bias: {}, env: ENV, design: ARB,
     brief: `<p><code>arb3</code> registers one grant bit per requester. Port 0 has the highest priority.</p>

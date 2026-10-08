@@ -183,15 +183,15 @@ export const dram: Lesson = {
       const bw = (mt * 8) / 1000;
       return ask(`A DDR5-${mt} DIMM transfers ${mt} MT/s on a 64-bit data path (two 32-bit subchannels). Peak bandwidth in **GB/s**?`, qty(bw, 'GB/s', 0.01), `${mt}e6 transfers/s × 8 bytes = ${bw.toFixed(1)} GB/s.`, 'Transfers per second × bytes per transfer.');
     }),
-    say('GPUs and AI accelerators need far more. **HBM** stacks DRAM dies on top of each other and sits next to the processor on a silicon interposer, with a **1024-bit** interface per stack. Very wide, moderately fast, and lower energy per bit.'),
+    say('GPUs and AI accelerators need far more. **HBM** stacks DRAM dies on top of each other and sits next to the processor on a silicon interposer, Up to HBM3E each stack has a **1024-bit** interface (HBM3E parts run about 9.2 to 9.8 Gb/s per pin, about 1.2 TB/s per stack); **HBM4** doubles it to **2048 bits** at up to about 8 Gb/s per pin, about 2 TB/s per stack. Very wide, moderately fast, and lower energy per bit.'),
     gen((r) => {
-      const gbps = pick(r, [3.2, 6.4, 8]);
-      const bw = (1024 * gbps) / 8;
-      return ask(`An HBM stack has a 1024-bit interface at ${gbps} Gb/s per pin. Peak bandwidth in **GB/s**?`, qty(bw, 'GB/s', 0.01), `1024 × ${gbps} Gb/s / 8 = ${bw.toFixed(1)} GB/s per stack. An accelerator with 6 to 8 stacks passes several TB/s.`, 'Pins × rate per pin ÷ 8 bits per byte.');
+      const [gen, w, gbps] = pick(r, [['HBM2E', 1024, 3.2], ['HBM3', 1024, 6.4], ['HBM3E', 1024, 9.6], ['HBM4', 2048, 8]] as [string, number, number][]);
+      const bw = (w * gbps) / 8;
+      return ask(`An ${gen} stack has a ${w}-bit interface at ${gbps} Gb/s per pin. Peak bandwidth in **GB/s**?`, qty(bw, 'GB/s', 0.01), `${w} × ${gbps} Gb/s / 8 = ${bw.toFixed(1)} GB/s per stack. An accelerator with 6 to 8 stacks passes several TB/s.`, 'Pins × rate per pin ÷ 8 bits per byte.');
     }),
-    mc('Why is HBM placed on an **interposer** right next to the die instead of on DIMMs?', ['It is cheaper than the DIMM slots, which need a lot of board area', 'A wide bus needs short, dense wires that only interposers give', 'HBM cannot be refreshed unless it is mounted next to the die itself', 'For cooling, since the interposer carries the heat away from the die'], 1, 'Microscopic interposer wires make it short, dense and low energy; the bus is impossible on a PCB. Thousands of short wires on silicon beat a few long ones on a board: this is the core idea of 2.5D/3D packaging and chiplets.'),
+    mc('Why is HBM placed on an **interposer** right next to the die instead of on DIMMs?', ['It is cheaper than the DIMM slots, which need a lot of board area', 'A wide bus needs short, dense wires that only interposers give', 'HBM cannot be refreshed unless it is mounted next to the die itself', 'For cooling, since the interposer carries the heat away from the die'], 1, 'Microscopic interposer wires make it short, dense and low energy; a 1024- or 2048-bit bus is impossible on a PCB. Thousands of short wires on silicon beat a few long ones on a board: this is the core idea of 2.5D/3D packaging and chiplets.'),
   ],
-  recap: ['DRAM: 1T1C, refresh, destructive reads, row buffers.', 'Hit: CL. Closed: tRCD + CL. Conflict: tRP + tRCD + CL.', 'Controllers schedule for row hits (FR-FCFS) and bank parallelism.', 'DDR5 BW = MT/s × 8 B; HBM = 1024 bits × Gb/s ÷ 8 per stack.', 'Wide, short interposer wires make HBM possible.'],
+  recap: ['DRAM: 1T1C, refresh, destructive reads, row buffers.', 'Hit: CL. Closed: tRCD + CL. Conflict: tRP + tRCD + CL.', 'Controllers schedule for row hits (FR-FCFS) and bank parallelism.', 'DDR5 BW = MT/s × 8 B; HBM BW = interface bits × Gb/s ÷ 8 per stack (1024 bits through HBM3E, 2048 from HBM4).', 'Wide, short interposer wires make HBM possible.'],
 };
 
 export const bus: Lesson = {
@@ -200,14 +200,14 @@ export const bus: Lesson = {
   concept: 'topologies, AXI, valid/ready, credit flow control',
   xp: 100,
   steps: [
-    say('Blocks on a chip talk through **interconnects**. The simplest is a **shared bus** (one talker at a time, arbitrated). A **crossbar** connects every master to every slave in parallel but grows as N×M. Rings and meshes sit in between.'),
-    say('Most SoCs use ARM\'s **AMBA** family: **APB** for slow peripherals, **AXI** for high performance. AXI splits a transaction into five independent **channels**, each with its own handshake:'),
+    say('Blocks on a chip talk through **interconnects**. The simplest is a **shared bus** (one talker at a time, arbitrated). A **crossbar** connects every manager (formerly master) to every subordinate (formerly slave) in parallel but grows as N×M. Rings and meshes sit in between.'),
+    say('Most SoCs use Arm\'s **AMBA** family: **APB** for slow peripherals, **AXI** for high performance. AXI splits a transaction into five independent **channels**, each with its own handshake:'),
     art(`
-   write address  AW   master ─► slave
-   write data     W    master ─► slave
-   write response B    slave  ─► master
-   read address   AR   master ─► slave
-   read data      R    slave  ─► master
+   write address  AW   manager ─► subordinate
+   write data     W    manager ─► subordinate
+   write response B    subordinate ─► manager
+   read address   AR   manager ─► subordinate
+   read data      R    subordinate ─► manager
 
    every channel:  VALID (from source) + READY (from destination)
    a transfer happens on a clock edge where VALID && READY`),
@@ -280,20 +280,20 @@ export const serdes: Lesson = {
 
    the clock is embedded in the data, so there is no separate clock to skew`),
     mc('How does the receiver know when to sample if there is no clock wire?', ['It guesses the right moment, using a free-running local oscillator', 'Clock and data recovery (CDR): a loop locks onto data transitions', 'The transmitter sends a clock on a separate lane in every case', 'By counting bits from the start of the frame, with a fixed delay'], 1, 'It is a PLL-like loop. That is why encodings guarantee enough transitions: long runs of identical bits would let the CDR drift.'),
-    say('Encodings add overhead for DC balance and transitions. **8b/10b** (PCIe 1-2, USB 3.0) spends 10 bits for 8, a 20% overhead. **128b/130b** (PCIe 3-5) spends just ~1.5%. PCIe 6 moves to **PAM4**: four voltage levels carry 2 bits per symbol, with FEC to fix the extra errors.'),
+    say('Encodings add overhead for DC balance and transitions. **8b/10b** (PCIe 1-2, USB 3.0) spends 10 bits for 8, a 20% overhead. **128b/130b** (PCIe 3-5) spends just ~1.5%. PCIe 6.0 (64 GT/s) moves to **PAM4**, four voltage levels carrying 2 bits per symbol, and to fixed-size **flits** with light forward error correction. PCIe 7.0 (128 GT/s) keeps PAM4 and doubles the rate again; 8.0 targets 256 GT/s.'),
     gen((r) => {
-      const [gen_, gt, eff] = pick(r, [[3, 8, 128 / 130], [4, 16, 128 / 130], [5, 32, 128 / 130], [2, 5, 0.8]] as const);
+      const [gen_, gt, eff] = pick(r, [[3, 8, 128 / 130], [4, 16, 128 / 130], [5, 32, 128 / 130], [6, 64, 236 / 256], [7, 128, 236 / 256], [2, 5, 0.8]] as const);
       const lanes = pick(r, [4, 8, 16]);
       const bw = (gt * eff * lanes) / 8;
-      return ask(`PCIe Gen${gen_} runs ${gt} GT/s per lane with ${gen_ === 2 ? '8b/10b' : '128b/130b'} encoding. Usable bandwidth of a x${lanes} link, per direction, in **GB/s**?`, qty(bw, 'GB/s', 0.02), `${gt} × ${gen_ === 2 ? '0.8' : '128/130'} × ${lanes} / 8 ≈ ${bw.toFixed(2)} GB/s per direction (before packet overheads).`, 'Rate × encoding efficiency × lanes ÷ 8.');
+      return ask(`PCIe Gen${gen_} runs ${gt} GT/s per lane with ${gen_ === 2 ? '8b/10b' : gen_ >= 6 ? 'flit mode (about 236 of every 256 bytes carry TLP data)' : '128b/130b'} encoding. Usable bandwidth of a x${lanes} link, per direction, in **GB/s**?`, qty(bw, 'GB/s', 0.02), `${gt} × ${gen_ === 2 ? '0.8' : gen_ >= 6 ? '236/256' : '128/130'} × ${lanes} / 8 ≈ ${bw.toFixed(2)} GB/s per direction (before packet overheads).`, 'Rate × encoding efficiency × lanes ÷ 8.');
     }),
     say('PCIe is layered like a network stack. The **transaction layer** makes packets (TLPs: memory reads/writes, completions). The **data link layer** adds sequence numbers and a CRC, and **replays** anything that was corrupted (ACK/NAK). The **physical layer** does encoding, lane training and equalization.'),
-    mc('A TLP arrives with a bad LCRC. What happens?', ['The data is used anyway, and an error flag is set for software', 'The link layer NAKs it, and the sender replays it from its buffer', 'The link goes down at once, and has to be retrained from scratch', 'Software must resend the packet, after an interrupt from the port'], 1, 'Link-level retry makes PCIe reliable without involving software. (Flit-mode PCIe 6 adds FEC on top.)'),
-    say('**CXL** (Compute Express Link) reuses the PCIe physical layer but adds **coherent** protocols: CXL.io (PCIe-like), **CXL.cache** (a device caches host memory coherently) and **CXL.mem** (the host uses device memory as normal memory).'),
+    mc('A TLP arrives with a bad LCRC. What happens?', ['The data is used anyway, and an error flag is set for software', 'The link layer NAKs it, and the sender replays it from its buffer', 'The link goes down at once, and has to be retrained from scratch', 'Software must resend the packet, after an interrupt from the port'], 1, 'Link-level retry makes PCIe reliable without involving software. In flit mode the per-packet LCRC is replaced by a CRC over each 256-byte flit, a light FEC corrects small errors, and replay still handles the rest.'),
+    say('**CXL** (Compute Express Link) rides on PCIe\'s physical layer: 1.x and 2.0 at 32 GT/s, 3.x at 64 GT/s, 4.0 at 128 GT/s. It adds cache- and memory-**coherent** protocols to PCIe-style I/O (CXL.io): **CXL.cache** (a device caches host memory coherently) and **CXL.mem** (the host uses device memory as normal memory). Type 1 devices cache host memory, Type 2 also expose their own memory, Type 3 are memory expanders.'),
     mc('What is a common use of **CXL.mem**?', ['Replacing Ethernet between the servers of a data centre rack', 'Memory expansion and pooling, through a CXL device', 'Encrypting disks, using the keys stored in the memory device', 'Driving displays, from the frame buffer of the host processor'], 1, 'DRAM is added to a server and accessed with ordinary loads and stores. Data centres use CXL to add capacity and bandwidth beyond the DIMM slots, and to pool memory between servers.'),
     mc('At 32 GT/s the channel loses most of the signal. Which receiver block cancels inter-symbol interference using decisions about previous bits?', ['CDR, the loop that recovers the clock from the data stream', 'DFE (decision feedback equalizer)', 'PLL, which cleans up the clock of the receiver in the lane', '8b/10b decoder, which maps ten-bit symbols back to bytes'], 1, 'The DFE subtracts the known tail of previous bits from the current sample. With CTLE and TX FFE, equalization opens an eye that would otherwise be closed.'),
   ],
-  recap: ['SerDes: serial differential lanes with embedded clocks (CDR).', '8b/10b = 20% overhead; 128b/130b ≈ 1.5%; PCIe 6 uses PAM4 + FEC.', 'PCIe BW ≈ GT/s × efficiency × lanes ÷ 8 per direction.', 'Layers: transaction (TLP), data link (CRC, replay), physical.', 'CXL: .io, .cache, .mem on the PCIe PHY; equalization with CTLE/FFE/DFE.'],
+  recap: ['SerDes: serial differential lanes with embedded clocks (CDR).', '8b/10b = 20% overhead; 128b/130b ≈ 1.5%; PCIe 6.0 (64 GT/s) uses PAM4 + flits + light FEC; 7.0 is 128 GT/s.', 'PCIe BW ≈ GT/s × efficiency × lanes ÷ 8 per direction.', 'Layers: transaction (TLP), data link (CRC, replay), physical.', 'CXL: .io, .cache, .mem on the PCIe PHY; equalization with CTLE/FFE/DFE.'],
 };
 
 export const perf: Lesson = {
@@ -309,7 +309,8 @@ export const perf: Lesson = {
    cycle-approximate          ~1-10 MIPS    good-enough timing
    cycle-accurate             ~0.1-1 MIPS   every pipeline stage every cycle
    RTL simulation             ~1-100 KIPS   the real design
-   emulation / FPGA prototype ~1-10 MHz     real design, real speed-ish`),
+   hardware emulation         ~1-5 MHz      real design, full visibility
+   FPGA prototype             ~10-50 MHz+   real design, limited visibility`),
     mc('Most architecture simulators are **discrete-event** simulators. What does that mean?', ['They simulate every picosecond, one step after the other, in turn', 'They keep a time-ordered event queue and jump between events', 'They only model discrete components, such as separate chips', 'They run on GPUs, which can step many events in parallel at once'], 1, 'No work is done in between the events. Verilog simulators are discrete-event too: an event wheel of signal changes. The same core idea scales from gates to data centres.'),
     say('The best-known academic simulator is **gem5**. It has fast functional CPU models (Atomic), timing models (TimingSimple, in-order Minor, out-of-order O3), a detailed memory system (Ruby, where you can write coherence protocols), and two modes: **SE** (syscall emulation, run one program) and **FS** (full system, boot Linux).'),
     mc('You want to study a new L2 replacement policy in gem5 on a real Linux workload. Which setup?', ['SE mode with the Atomic CPU, which runs the fastest of the modes', 'FS mode with a timing CPU (O3 or Minor) and detailed caches', 'RTL simulation of the whole core, with the Linux boot in it', 'A spreadsheet of the miss rates taken from published papers'], 1, 'Atomic CPUs do not model timing, so cache effects would not show up in performance. FS mode captures OS effects too.'),

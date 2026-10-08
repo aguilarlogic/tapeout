@@ -247,7 +247,7 @@ export const sram: Lesson = {
       const a = (mb * 8 * 1024 * 1024 * cell) / 1e6;
       return ask(`A bitcell is ${cell} µm². How much area do the cells alone take for ${mb} MB of SRAM, in mm²?`, qty(a, 'mm2', 0.03, String(+a.toPrecision(3))), `${mb} MB = ${mb * 8 * 1024 * 1024} bits × ${cell} µm² = ${+a.toPrecision(3)} mm². Real arrays are 1.5 to 2× bigger once you add sense amps, decoders and redundancy. SRAM density has almost stopped scaling at the newest nodes, which is one reason for 3D-stacked cache.`, 'bits × cell area. 1 mm² = 10⁶ µm².');
     }),
-    say('**DRAM** stores a bit as charge on a tiny capacitor behind one transistor (1T1C). Reading connects it to a bit line with much larger capacitance, so the signal is a small **charge-sharing** bump, and the read destroys the data: the sense amp writes it back. Charge also leaks, so every row must be **refreshed** every 64 ms (32 ms when hot).'),
+    say('**DRAM** stores a bit as charge on a tiny capacitor behind one transistor (1T1C). Reading connects it to a bit line with much larger capacitance, so the signal is a small **charge-sharing** bump, and the read destroys the data: the sense amp writes it back. Charge also leaks, so every row must be **refreshed**: every 64 ms in DDR4 (32 ms when hot); DDR5 halves that to 32 ms (16 ms above 85 °C).'),
     gen((r) => {
       const cs = pick(r, [10, 20, 25]);
       const cbl = pick(r, [60, 80, 100]);
@@ -261,7 +261,7 @@ export const sram: Lesson = {
     }),
     mc('A 64 MB cache comes back from the fab with 40 bad cells. What saves the chip?', ['Nothing can be done, and the whole chip is scrap at that point', 'Redundancy: spare rows and columns, fused in after memory BIST', 'The OS avoids those addresses, once it has been told about them', 'Lowering the clock, so that the marginal cells have time to work'], 1, 'They are programmed at test time, via fuses. Memory BIST runs March algorithms at test time, a repair analysis picks spare rows/columns, and fuses remap them. At runtime, ECC catches the occasional soft error from a particle strike.'),
   ],
-  recap: ['6T SRAM: two inverters + two access transistors.', 'Read stability vs write-ability sets the transistor ratios.', 'Sense amps resolve tens of mV to about 100 mV.', 'DRAM: 1T1C, charge sharing, destructive read, refresh every 64 ms.', 'NAND: 2^bits levels per cell.', 'MBIST + redundancy + fuses repair arrays; ECC handles soft errors.'],
+  recap: ['6T SRAM: two inverters + two access transistors.', 'Read stability vs write-ability sets the transistor ratios.', 'Sense amps resolve tens of mV to about 100 mV.', 'DRAM: 1T1C, charge sharing, destructive read, refresh every 32–64 ms (by generation).', 'NAND: 2^bits levels per cell.', 'MBIST + redundancy + fuses repair arrays; ECC handles soft errors.'],
 };
 
 export const fab: Lesson = {
@@ -322,12 +322,13 @@ export const pkg: Lesson = {
       const ySmall = Math.exp((-d0 * big) / n / 100) * 100;
       return ask(`A ${big} mm² monolithic die has ${r1(yBig)}% yield at D₀ = 0.1/cm². Split into ${n} chiplets of ${big / n} mm² each, what is the yield of **one chiplet**, in %?`, qty(ySmall, '%', 0.02, r1(ySmall).toString()), `Y = e^(-0.1 × ${big / n / 100}) = ${r1(ySmall)}%. Because chiplets are tested before assembly (known-good die), a defect only scraps a small chiplet instead of the whole large die. You pay for it with die-to-die interfaces (such as UCIe) and more complex packaging.`, 'Poisson yield with the smaller area.');
     }),
+    say('Chiplets need a common die-to-die link. **UCIe** is the standard for it: up to 32 GT/s per lane in the first generation, 48 and 64 GT/s in the newest, with standard and advanced (dense-bump) package types.'),
     gen((r) => {
       const [pitch, tech] = pick(r, [[150, 'C4 solder bumps'], [40, 'micro-bumps'], [10, 'hybrid bonding'], [3, 'fine-pitch hybrid bonding']] as const);
       const n = (10000 / pitch) ** 2;
       return ask(`A 10 mm × 10 mm die uses ${tech} on a ${pitch} µm grid. About how many connections is that?`, qty(n, '', 0.05, Math.round(n).toString()), `(10 mm / ${pitch} µm)² = ${Math.round(10000 / pitch)}² ≈ ${Math.round(n).toLocaleString('en-US')}. Shrinking the pitch gives quadratically more die-to-die bandwidth, which is why hybrid bonding (copper to copper, no solder) enables stacking cache directly on a CPU.`, '(side / pitch) squared.');
     }),
-    mc('Why does HBM sit on a silicon interposer right next to the GPU, instead of on the board like normal DRAM?', ['It is cheaper to mount than a set of DIMMs on the board itself', 'A 1024-bit interface per stack; only an interposer routes it', 'Boards cannot carry the power that a DRAM stack needs to run', 'HBM needs no cooling, so it can be placed in the middle of the die'], 1, 'Thousands of fine wires over a few millimetres need silicon. Wide and slow beats narrow and fast for energy per bit. Thousands of short wires are only possible with silicon-interposer wiring density.'),
+    mc('Why does HBM sit on a silicon interposer right next to the GPU, instead of on the board like normal DRAM?', ['It is cheaper to mount than a set of DIMMs on the board itself', 'A 1024- or 2048-bit interface per stack; only an interposer routes it', 'Boards cannot carry the power that a DRAM stack needs to run', 'HBM needs no cooling, so it can be placed in the middle of the die'], 1, 'Thousands of fine wires over a few millimetres need silicon. Wide and slow beats narrow and fast for energy per bit. Thousands of short wires are only possible with silicon-interposer wiring density.'),
     say('Everything that burns power makes heat. Junction temperature is roughly **Tj = T_ambient + P × θ_ja**, where θ_ja is the thermal resistance from junction to ambient, in °C/W. Treat it as the quick estimate. Maximum junction temperature is typically 95–125 °C, depending on the product; automotive parts are qualified for 125–150 °C.'),
     say('Datasheet θ_ja is measured on a standard test board, so it is for **comparing packages**, not for predicting your product. Real designs model the path θ_jc + θ_cs + θ_sa (junction to case, case to heatsink through the paste, heatsink to air). In the system itself, estimate Tj from the temperature on top of the package: **Tj ≈ T_top + Ψ_JT × P**, where Ψ_JT is the junction-to-top characterisation parameter.'),
     gen((r) => {
@@ -407,12 +408,12 @@ export const emu: Lesson = {
   xp: 100,
   steps: [
     say('**The role.** Emulation and prototyping engineers map multi-billion-gate designs onto emulators (Cadence Palladium, Synopsys ZeBu, Siemens Veloce) or boards full of FPGAs, so software and firmware can run on the chip months before silicon. FPGA engineers more broadly build products on FPGAs directly: networking, trading systems, radar, and the control electronics of quantum computers.'),
-    say('An FPGA is a sea of configurable blocks. The core one is the **LUT** (look-up table): a tiny memory whose address bits are the inputs, so it can implement any Boolean function of k inputs. Around them sit flip-flops, block RAMs, DSP multipliers and a programmable routing network.'),
+    say('An FPGA is a sea of configurable blocks. The core one is the **LUT** (look-up table): a tiny memory whose address bits are the inputs, so it can implement any Boolean function of k inputs. Modern LUTs are fracturable: a 6-input LUT can act as two 5-input LUTs sharing inputs, and vendors package them with flops and carry logic into slices or adaptive logic modules. Around them sit flip-flops, block RAMs, DSP multipliers and a programmable routing network.'),
     gen((r) => {
       const k = pick(r, [4, 5, 6]);
       return ask(`How many configuration bits does a ${k}-input LUT hold?`, num(2 ** k), `One bit per row of the truth table: 2^${k} = ${2 ** k}. Any ${k}-input function fits in one LUT, whether it is an AND, an XOR or something odd.`, 'One bit per truth-table row.');
     }),
-    mc('Rank by speed: RTL simulation, hardware emulation, FPGA prototype.', ['Simulation > emulation > FPGA prototype, in that order of speed', 'FPGA prototype > emulation > simulation', 'All three run at the same speed', 'Emulation > simulation > FPGA prototype'], 1, 'About 10-100 MHz, 1-5 MHz, and 10 Hz-1 kHz for a full SoC. Simulation has full visibility but is slow. Emulators are fast and still offer good debug visibility. FPGA prototypes are fastest but hardest to debug and slow to compile. Teams use all three.'),
+    mc('Rank by speed: RTL simulation, hardware emulation, FPGA prototype.', ['Simulation > emulation > FPGA prototype, in that order of speed', 'FPGA prototype > emulation > simulation', 'All three run at the same speed', 'Emulation > simulation > FPGA prototype'], 1, 'For a full SoC, hardware emulators run at roughly 1-5 MHz with full visibility; FPGA prototypes run at roughly 10-50 MHz or more with limited visibility; RTL simulation manages 10 Hz-1 kHz. Teams use all three, and prototypes are the hardest to debug and slow to compile. Teams use all three.'),
     gen((r) => {
       const cyc = pick(r, [2, 5, 10]);
       const f = pick(r, [1, 2]);
