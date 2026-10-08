@@ -128,6 +128,61 @@ const secDefend: ArchLevel = {
   },
 };
 
+// ============================================================ FuSa 0: hazard analysis to ASIL
+/** ASIL from severity S0-3, exposure E0-4 and controllability C0-3: any class 0 is QM, otherwise the sum S + E + C sets it (10 D, 9 C, 8 B, 7 A, 6 or less QM). */
+export const asilFromSEC = (s: number, e: number, c: number) => (s === 0 || e === 0 || c === 0 ? 'QM' : (['QM', 'A', 'B', 'C', 'D'] as const)[Math.max(0, Math.min(4, s + e + c - 6))]);
+
+// [event, S, E, C]: class 0 rows are the ones that need no safety goal at all.
+const HAZARDS: [string, number, number, number][] = [
+  ['Steering assist is lost on a motorway bend', 3, 4, 3],
+  ['The brakes fade to nothing on a wet mountain descent (rare)', 3, 3, 3],
+  ['Cruise control will not disengage when the driver brakes', 3, 4, 2],
+  ['The lane-keeping system steers towards oncoming traffic', 3, 3, 2],
+  ['The headlights fail on an unlit rural road at night', 3, 2, 2],
+  ['The wipers stop in heavy rain', 2, 3, 2],
+  ['The doors unlock while the car is moving fast', 2, 4, 1],
+  ['The brake lights stay off when braking', 2, 4, 2],
+  ['An electric car loses half its torque at low speed', 2, 2, 3],
+  ['The rear camera freezes while reversing', 2, 2, 2],
+  ['The instrument cluster goes blank at night', 1, 4, 3],
+  ['The seat heater stays on after the car is parked', 1, 3, 1],
+  ['The radio volume jumps up', 1, 4, 0],
+  ['A parking sensor gives a false alarm in a car park', 0, 4, 1],
+  ['The airbag controller resets on a closed test track', 3, 0, 3],
+  ['Throttle stuck open on a downhill motorway ramp', 3, 4, 3],
+  ['The infotainment screen reboots while driving', 0, 4, 3],
+  ['The windscreen washer stops working in the dry', 1, 3, 2],
+];
+const CLASS_NOTE = 'S: severity of harm (S0 none … S3 life-threatening). E: how often the situation occurs (E0 incredible … E4 high probability). C: how well a typical driver can control it (C0 controllable in general … C3 difficult or uncontrollable).';
+
+const fusaHara: ArchLevel = {
+  id: 'fusa-hara', title: 'Hazard analysis: rate each event', concept: 'severity, exposure and controllability; the ASIL lookup; QM', xp: 150, lab: 'Safety', tier: 'guided',
+  ticket: 'The hazard analysis is half done: the team rated five hazardous events but nobody has looked up the ASILs. Fill them in before the safety goals are written.',
+  build: (r) => {
+    let ev: [string, number, number, number][] = [], kinds = 0;
+    for (let tries = 0; tries < 50 && kinds < 3; tries++) {
+      const pool = [...HAZARDS];
+      ev = Array.from({ length: 5 }, () => pool.splice(between(r, 0, pool.length - 1), 1)[0]);
+      kinds = new Set(ev.map(([, s, e, c]) => asilFromSEC(s, e, c))).size;
+    }
+    const want = ev.map(([, s, e, c]) => asilFromSEC(s, e, c));
+    const text = ev.map(([n, s, e, c], i) => `${i + 1}. ${n}\n     S${s}  E${e}  C${c}`).join('\n');
+    return {
+      brief: `<p>A <b>hazardous event</b> is rated on three scales. ${CLASS_NOTE}</p>
+<p>With all three at class 1 or above, the ASIL follows the <b>sum S + E + C</b>: 10 is D, 9 is C, 8 is B, 7 is A and 6 or less is QM (no safety requirement beyond normal quality). If <i>any</i> class is 0, the event is QM whatever the others are.</p>
+<p>Choose the ASIL of each of the five events below.</p>`,
+      hints: ['Add the three class numbers, but first check whether any of them is 0.', 'S3 + E4 + C3 = 10 is the only way to reach D. Nine is C, eight is B.', 'QM is a real answer: it means the hazard is rated but needs no safety goal.'],
+      listing: { label: 'Hazardous events', text },
+      controls: ev.map((_, i) => ({ id: `e${i + 1}`, kind: 'select' as const, label: `Event ${i + 1}`, options: [{ value: '', label: 'choose' }, ...['QM', 'A', 'B', 'C', 'D'].map((a) => ({ value: a, label: a === 'QM' ? 'QM' : `ASIL ${a}` }))], value: '' })),
+      run: (v) => {
+        const goals: Goal[] = ev.map(([, s, e, c], i) => ({ label: `event ${i + 1}: S${s} E${e} C${c}`, ok: String(v[`e${i + 1}`]) === want[i], note: String(v[`e${i + 1}`]) === want[i] ? undefined : s === 0 || e === 0 || c === 0 ? 'look for a class 0' : 'add S + E + C' }));
+        return { goals, metrics: [['events rated', `${goals.filter((g) => g.ok).length} / 5`]] };
+      },
+      solution: { values: Object.fromEntries(want.map((a, i) => [`e${i + 1}`, a])) },
+    };
+  },
+};
+
 // ============================================================ FuSa 1: FMEDA
 export interface FBlock { name: string; fit: number; safe: number; dc: number; lc: number }
 const BLOCKS = ['CPU core', 'SRAM', 'bus fabric', 'ADC', 'clock tree', 'PMIC interface'];
@@ -259,4 +314,4 @@ const fusaCampaign: ArchLevel = {
   },
 };
 
-export const SECSAFE_LEVELS: ArchLevel[] = [secDpa, secDefend, fusaFmeda, fusaAsil, fusaCampaign];
+export const SECSAFE_LEVELS: ArchLevel[] = [secDpa, secDefend, fusaHara, fusaFmeda, fusaAsil, fusaCampaign];

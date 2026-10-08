@@ -147,7 +147,7 @@ export const SKILLS: Skill[] = [
   S('fpga', 'Specialties', 'FPGAs, prototyping and emulation', ['fpga', 'dv'], ['emu'], ['practice-emu', 'fpga-map', 'fpga-fmax'], ['boss-fpga']),
   S('ai-hw', 'Specialties', 'AI accelerators', ['ai', 'arch'], ['npu'], ['practice-npu', 'ai-tile'], ['boss-ai', 'ai-boss']),
   S('hwsec', 'Specialties', 'Hardware security', ['security', 'dv', 'arch'], ['hwsec'], ['practice-hwsec', 'sec-dpa', 'sec-defend'], ['boss-hwsec', 'inc-key']),
-  S('fusa', 'Specialties', 'Functional safety', ['fusa', 'dv'], ['fusa'], ['practice-fusa', 'fusa-fmeda', 'fusa-asil', 'fusa-campaign'], ['boss-fusa', 'inc-limp']),
+  S('fusa', 'Specialties', 'Functional safety', ['fusa', 'dv'], ['fusa'], ['practice-fusa', 'fusa-hara', 'fusa-fmeda', 'fusa-asil', 'fusa-campaign'], ['boss-fusa', 'inc-limp']),
   S('photonics', 'Specialties', 'Silicon photonics', ['photonics'], ['photonics'], ['practice-photonics', 'ph-budget', 'ph-wdm'], ['boss-photonics', 'inc-optical']),
   S('quantum-hw', 'Specialties', 'Quantum hardware', ['quantum'], ['qubit'], ['practice-qubit', 'q-gates', 'q-coherence'], ['boss-qubit']),
   S('quantum-ctrl', 'Specialties', 'Quantum control and cryo-electronics', ['quantum'], ['qctrl'], ['practice-qctrl', 'qc-pulse'], ['boss-qctrl', 'inc-qubit']),
