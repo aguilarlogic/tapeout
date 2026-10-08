@@ -35,4 +35,12 @@ export const RULES_G_ARCH: Rule[] = [
   { id: 'G1.7-msi', why: 'G1.7: a PCIe device signals an interrupt with a message (MSI / MSI-X), not a wire', require: { file: /lessons\/frontier/, re: /MSI-X/ } },
   { id: 'G1.7-gic', why: 'G1.7: the Arm GIC classes are SPI, PPI, SGI and LPI', require: { file: /lessons\/frontier/, re: /GIC.*shared peripheral/ } },
   { id: 'G1.7-aia', why: 'G1.7: RISC-V PLIC and its replacement, APLIC (wires) and IMSIC (messages)', require: { file: /lessons\/frontier/, re: /APLIC.*IMSIC/ } },
+
+  // G3.3: architecture extras
+  { id: 'G3.3-gustafson', why: 'G3.3: Gustafson\'s law next to Amdahl', require: { file: /lessons\/arch/, re: /Gustafson/ } },
+  { id: 'G3.3-four-cs', why: 'G3.3: coherence misses are a fourth C', require: { file: /lessons\/arch/, re: /\*\*4 Cs\*\*.*\*\*coherence\*\*/ } },
+  { id: 'G3.3-three-cs', why: 'G3.3: the miss taxonomy has four Cs once coherence misses are counted', files: /lessons|practice|glossary/, ban: /\*\*3 Cs\*\*|three flavours, the 3 Cs/ },
+  { id: 'G3.3-mesif', why: 'G3.3: MESIF adds a Forward state', require: { file: /lessons\/arch/, re: /MESIF/ } },
+  { id: 'G3.3-tomasulo', why: 'G3.3: Tomasulo\'s algorithm named in the out-of-order lesson', require: { file: /lessons\/arch/, re: /Tomasulo/ } },
+  { id: 'G3.3-dataflows', why: 'G3.3: row-, input-, weight- and output-stationary dataflows', require: { file: /lessons\/roles/, re: /row stationary/ } },
 ];
