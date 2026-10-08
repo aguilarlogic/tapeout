@@ -13,7 +13,7 @@ numbers refer to that commit.
 | Item | State | Note |
 |---|---|---|
 | A1 practice grading | done | `grading.test.ts` enumerates all 1024 runs |
-| A2 incident evidence rule | done | guesses score 0; the terminal warns first |
+| A2 incident evidence rule | done | guesses score 0; the terminal warns first. Only the final, correct call is judged, so an early wrong call does not spoil a run that later proves its answer; hints and the coach count readings only |
 | A3 answer-length balance | done | `mc-balance.test.ts` gates every pool on both the longest and the shortest side |
 | A4 hiring panels | done | per-attempt deal; thin roles padded from boss lessons; foundations capped at 2 |
 | A5 difficulty and variety | done | every generator responds to difficulty and yields at least 6 distinct questions at the hard level; `variety.test.ts` has no allow-lists |

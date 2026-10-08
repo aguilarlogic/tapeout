@@ -23,9 +23,9 @@ export class Investigation {
   readonly ruledOut = new Set<string>();
   diagnosed = false;
   solved = false;
-  /** Set when any call was made while the readings alone still left several causes standing. */
+  /** Set when the right call was made while the readings alone still left several causes standing. */
   guessed = false;
-  /** A reading that would have split the candidates at the moment of the first guess. */
+  /** A reading that would have split the causes the readings left standing when the guess was made. */
   guessHint: { ins: Instrument; arg: string } | undefined;
 
   constructor(readonly inc: Incident, seed: number, cause?: string) {
@@ -79,10 +79,10 @@ export class Investigation {
 
   /**
    * The most useful next reading: the one whose worst case leaves the fewest candidates, cheapest first on ties.
-   * This is what the senior engineer suggests, and what the solvability tests play.
+   * This is what the senior engineer suggests, and what the solvability tests play. `cands` defaults to the causes
+   * still standing.
    */
-  bestNext(): { ins: Instrument; arg: string } | undefined {
-    const cands = this.consistent();
+  bestNext(cands: string[] = this.consistent()): { ins: Instrument; arg: string } | undefined {
     if (cands.length <= 1) return undefined;
     let best: { ins: Instrument; arg: string; worst: number } | undefined;
     for (const p of probes(this.inc)) {
@@ -100,16 +100,21 @@ export class Investigation {
   hint(): { ins: Instrument; arg: string } | undefined {
     this.hints++;
     this.spent += HINT_COST;
-    return this.bestNext();
+    // Readings only: after a wrong call, the reading that proves the answer is still the one worth taking.
+    return this.bestNext(this.byEvidence());
   }
 
-  /** Commit to a root cause. A wrong one costs time and is crossed off. */
+  /**
+   * Commit to a root cause. A wrong one costs time and is crossed off. A right one made while the readings still leave
+   * other causes standing is a guess: only this final call is judged, so an earlier wrong call does not spoil a run that
+   * later proves its answer.
+   */
   diagnose(id: string): boolean {
-    if (!this.guessed && this.byEvidence().length > 1) {
-      this.guessHint = this.bestNext();
-      this.guessed = true;
+    if (id === this.world.cause) {
+      if (this.byEvidence().length > 1) { this.guessHint = this.bestNext(this.byEvidence()); this.guessed = true; }
+      this.diagnosed = true;
+      return true;
     }
-    if (id === this.world.cause) { this.diagnosed = true; return true; }
     this.mistakes++;
     this.spent += WRONG_COST;
     this.ruledOut.add(id);
