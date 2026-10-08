@@ -1,6 +1,6 @@
 // ISA Lab missions: RISC-V assembly programs and functions judged against hidden cases.
 import { between, pick, type Rng } from '../../lessons/types';
-import { regNum } from './asm';
+import { regNum, type Program } from './asm';
 import { STACK_TOP, type Machine } from './sim';
 import type { IsaCase, IsaInstance, IsaLevel } from './types';
 
@@ -463,5 +463,144 @@ const recBoss: IsaLevel = {
   },
 };
 
-export const ISA_LEVELS: IsaLevel[] = [first, minmax, sumto, arrsum, strlen, popcount, mulhand, gcd, copy, reverse, abi, fixSigned, fixMax, recfib, sortLvl, strBoss, perfBoss, recBoss];
+// ===================================================================== 19-21. privileged basics: traps, the timer, start-up
+const TRAP_REPS = 0x6000;
+const TMAGIC = [0, 1, 2, 3, 4, 5, 6].map((i) => (0x7a000000 + i * 0x1111) | 0);
+const T_NAMES = ['t0', 't1', 't2', 't3', 't4', 't5', 't6'];
+const trapHarness = `
+.text
+# ---- test harness (appended after your code) ----
+run_tests:
+    li s10, ${TRAP_REPS}
+    lw s11, 0(s10)                 # how many illegal instructions to run
+${TMAGIC.map((v, i) => `    li ${T_NAMES[i]}, ${v}`).join('\n')}
+again:
+    beqz s11, done
+    unimp                          # always illegal
+    addi s11, s11, -1
+    j again
+done:
+    la a0, snap
+${T_NAMES.map((n, i) => `    sw ${n}, ${4 * i}(a0)`).join('\n')}
+    ret
+.data
+count: .word 0                     # yours to increment
+save: .space 16                    # a register save area for the handler
+snap: .space 28
+`;
+const trapLevel: IsaLevel = {
+  id: 'isa-trap', title: 'Catch the illegal instruction', concept: 'Zicsr, traps, mtvec/mepc/mcause, mret, mscratch', xp: 160, tier: 'guided',
+  ticket: 'Bring-up firmware must survive a bad opcode and report it, not hang. Install a trap handler that counts the illegal instructions it sees.',
+  build: (r) => {
+    const sets = [3, 5, between(r, 1, 2), between(r, 6, 9)];
+    return {
+      style: 'program', mode: 'write',
+      brief: `<p>A <b>trap</b> is the processor taking an unplanned detour. In machine mode the hardware does five things at once: it saves the address of the offending instruction in <code>mepc</code>, writes the reason into <code>mcause</code> (2 means illegal instruction), turns interrupts off, and jumps to the address held in <code>mtvec</code>. Your handler finishes with <code>mret</code>, which jumps back to <code>mepc</code>. These registers are <b>CSRs</b> (control and status registers): <code>csrr rd, csr</code> reads one, <code>csrw csr, rs</code> writes one, and <code>csrrw rd, csr, rs</code> swaps.</p>
+<p>The harness supplies <code>run_tests</code>: it fills <code>t0</code>-<code>t6</code> with known values and then runs an illegal instruction (<code>unimp</code>) a number of times. Install a handler so that:</p>
+<ul><li>every trap adds 1 to the word <code>count</code> (supplied);</li><li><code>mepc</code> points <b>at</b> the faulting instruction, so move it on by 4 or you will trap forever;</li><li>the interrupted code never notices: <code>t0</code>-<code>t6</code> come back unchanged. A handler has no free register to start with. The trick is <code>csrrw t0, mscratch, t0</code>, which swaps <code>t0</code> with <code>mscratch</code>: point <code>mscratch</code> at the supplied <code>save</code> area first, and swap again before <code>mret</code> to put everything back.</li></ul>
+<p>Write <code>_start</code> to set up <code>mtvec</code> and <code>mscratch</code>, call <code>run_tests</code>, then exit with <code>a0 = count</code>. Once <code>mtvec</code> is set, <code>ecall</code> is itself a trap, so clear it (<code>csrw mtvec, zero</code>) just before the exit call.</p>`,
+      hints: ['<code>la t0, handler</code> then <code>csrw mtvec, t0</code>. Do the same for <code>mscratch</code> with <code>save</code>.', 'In the handler, start with <code>csrrw t0, mscratch, t0</code>; <code>t0</code> is now the save area and the caller\'s <code>t0</code> sits in <code>mscratch</code>. Save <code>t1</code> and <code>t2</code> there before you use them.', 'Step over the instruction: <code>csrr t1, mepc</code>, <code>addi t1, t1, 4</code>, <code>csrw mepc, t1</code>. Undo your saves, swap <code>t0</code> back, then <code>mret</code>.'],
+      starter: `# Install a handler that counts illegal instructions, run the tests, exit with a0 = count.\n_start:\n    # TODO: mtvec = handler, mscratch = save\n    call run_tests\n    # TODO: stop trapping before the exit call, then a0 = count\n${EXIT}\nhandler:\n    # TODO: count++, mepc += 4, keep t0-t6 intact\n    mret\n`,
+      fixed: trapHarness,
+      cases: sets.map((reps, i) => ({
+        label: `${reps} illegal instruction${reps === 1 ? '' : 's'}`, hidden: i > 1, setup: { data: [{ addr: TRAP_REPS, words: [reps] }] },
+        check: (m: Machine, prog: Program) => {
+          const count = m.word(prog.labels.get('count')!);
+          if (count !== reps) return `count = ${count}, expected ${reps}`;
+          if (m.traps.length !== reps || m.traps.some((t) => t.cause !== 2)) return `expected ${reps} illegal-instruction traps (mcause 2), saw ${m.traps.length}`;
+          const snap = prog.labels.get('snap')!;
+          for (let k = 0; k < 7; k++) {
+            const got = m.word(snap + 4 * k);
+            if (got !== TMAGIC[k]) return `${T_NAMES[k]} = ${hex(got)} after the traps, expected ${hex(TMAGIC[k])}: the handler must give back every register it uses`;
+          }
+          return m.exitCode === reps ? true : `exit code (a0) = ${m.exitCode}, expected ${reps}`;
+        },
+      } as IsaCase)),
+      solution: `_start:\n    la t0, handler\n    csrw mtvec, t0\n    la t0, save\n    csrw mscratch, t0\n    call run_tests\n    csrw mtvec, zero\n    la t0, count\n    lw a0, 0(t0)\n${EXIT}handler:\n    csrrw t0, mscratch, t0\n    sw t1, 0(t0)\n    sw t2, 4(t0)\n    la t1, count\n    lw t2, 0(t1)\n    addi t2, t2, 1\n    sw t2, 0(t1)\n    csrr t1, mepc\n    addi t1, t1, 4\n    csrw mepc, t1\n    lw t2, 4(t0)\n    lw t1, 0(t0)\n    csrrw t0, mscratch, t0\n    mret\n`,
+    };
+  },
+};
+
+const MTIMECMP_ADDR = '0x02004000', MTIME_ADDR = '0x0200bff8';
+const timerLevel: IsaLevel = {
+  id: 'isa-timer', title: 'Blink on the timer', concept: 'machine timer interrupt, mie/mstatus, mtimecmp', xp: 170, tier: 'guided',
+  ticket: 'The board has no scheduler yet, only a timer. Make the status LED flip on every tick without the main loop touching it.',
+  build: (r) => {
+    const runs: [number, number][] = [[3, 60], [5, 80], [1, 50], [between(r, 4, 7), between(r, 55, 90)]];
+    return {
+      style: 'program', mode: 'write',
+      brief: `<p>An <b>interrupt</b> is a trap the hardware raises from outside the instruction stream. The machine timer keeps a 64-bit counter <code>mtime</code> (here it ticks once per instruction) and a 64-bit compare value <code>mtimecmp</code>. When <code>mtime &gt;= mtimecmp</code> a timer interrupt is <b>pending</b>. It is <b>taken</b> only if both enable bits are set: <code>MTIE</code> (bit 7 of <code>mie</code>) and <code>MIE</code> (bit 3 of <code>mstatus</code>). The cause is <code>0x80000007</code>: the top bit marks an interrupt rather than an exception.</p>
+<p>The timer registers are memory mapped: <code>mtimecmp</code> at <code>${MTIMECMP_ADDR}</code> (low word) and <code>+4</code> (high word), and <code>mtime</code> at <code>${MTIME_ADDR}</code>. After reset <code>mtimecmp</code> is all ones, so nothing fires until you write it. Write the high word with 0 <b>first</b>, then the low word, so the compare value never briefly reads as huge or tiny; all the counts here stay below 2<sup>32</sup>.</p>
+<p>On entry <code>a0</code> = <i>n</i> (ticks wanted) and <code>a1</code> = the period in time units. Write a program that:</p>
+<ul><li>sets up <code>mtvec</code> and <code>mscratch</code> as in the trap mission, then schedules the first tick one period from now;</li><li>in the handler adds 1 to the word <code>ticks</code>, flips the word <code>led</code> between 0 and 1, and moves <code>mtimecmp</code> on by one period (without disturbing the registers the main loop uses; the main loop below may keep <i>n</i> and the period in <code>s0</code> and <code>s1</code>);</li><li>idles in a loop until <code>ticks</code> reaches <i>n</i>, then turns interrupts off, clears <code>mtvec</code> (so <code>ecall</code> works again) and exits with <code>a0 = ticks</code>.</li></ul>
+<p>Define <code>ticks</code> and <code>led</code> as words in <code>.data</code>, plus a small save area for the handler.</p>`,
+      hints: ['Set the three enables in this order: <code>mtvec</code>, <code>mtimecmp</code>, <code>csrs mie, t0</code> with <code>t0 = 0x80</code>, and last <code>csrsi mstatus, 8</code>.', 'First tick: read <code>mtime</code> with <code>lw</code>, add the period (<code>a1</code>, kept in <code>s1</code>), store to the low word of <code>mtimecmp</code>. In the handler, load <code>mtimecmp</code>, add <code>s1</code>, store it back: that also clears the pending interrupt.', 'Flip the LED with <code>xori t2, t2, 1</code>. The handler may use <code>s1</code> but must not change it.'],
+      starter: `# a0 = n ticks wanted, a1 = period.  Blink led on every timer tick; exit with a0 = ticks.\n    .data\nticks: .word 0\nled:   .word 0\nsave:  .space 16\n    .text\n_start:\n    # TODO: handler, mscratch, first mtimecmp, enable MTIE and MIE\nwait:\n    # TODO: idle until ticks == n, then interrupts off\n${EXIT}\nhandler:\n    # TODO: ticks++, flip led, next mtimecmp\n    mret\n`,
+      cases: runs.map(([n, period], i) => ({
+        label: `${n} tick${n === 1 ? '' : 's'}, period ${period}`, hidden: i > 1, setup: { regs: { a0: n, a1: period } }, maxSteps: 60_000,
+        check: (m: Machine, prog: Program) => {
+          const t = prog.labels.get('ticks'), l = prog.labels.get('led');
+          if (t === undefined || l === undefined) return 'define the words `ticks` and `led` in .data';
+          const ticks = m.word(t);
+          if (ticks !== n) return `ticks = ${ticks}, expected ${n}`;
+          if (m.word(l) !== (n & 1)) return `led = ${m.word(l)} after ${n} flips, expected ${n & 1}`;
+          if (m.traps.length !== n || m.traps.some((x) => x.cause !== 0x80000007)) return `expected exactly ${n} timer interrupts (mcause 0x80000007), saw ${m.traps.length}`;
+          for (let k = 1; k < m.traps.length; k++) {
+            const gap = m.traps[k].step - m.traps[k - 1].step;
+            if (gap < period || gap > period + 40) return `interrupt ${k + 1} came ${gap} ticks after the one before; the period is ${period}`;
+          }
+          return m.exitCode === n ? true : `exit code (a0) = ${m.exitCode}, expected ${n}`;
+        },
+      } as IsaCase)),
+      solution: `    .data\nticks: .word 0\nled:   .word 0\nsave:  .space 16\n    .text\n_start:\n    mv s0, a0\n    mv s1, a1\n    la t0, handler\n    csrw mtvec, t0\n    la t0, save\n    csrw mscratch, t0\n    li t0, ${MTIMECMP_ADDR}\n    sw zero, 4(t0)\n    li t1, ${MTIME_ADDR}\n    lw t2, 0(t1)\n    add t2, t2, s1\n    sw t2, 0(t0)\n    li t0, 0x80\n    csrs mie, t0\n    csrsi mstatus, 8\n    la t3, ticks\nwait:\n    lw t1, 0(t3)\n    blt t1, s0, wait\n    csrci mstatus, 8\n    csrw mtvec, zero\n    mv a0, t1\n${EXIT}handler:\n    csrrw t0, mscratch, t0\n    sw t1, 0(t0)\n    sw t2, 4(t0)\n    la t1, ticks\n    lw t2, 0(t1)\n    addi t2, t2, 1\n    sw t2, 0(t1)\n    la t1, led\n    lw t2, 0(t1)\n    xori t2, t2, 1\n    sw t2, 0(t1)\n    li t1, ${MTIMECMP_ADDR}\n    lw t2, 0(t1)\n    add t2, t2, s1\n    sw t2, 0(t1)\n    lw t2, 4(t0)\n    lw t1, 0(t0)\n    csrrw t0, mscratch, t0\n    mret\n`,
+    };
+  },
+};
+
+const FLASH = 0x6000, RAM = 0x4000;
+const crt0Level: IsaLevel = {
+  id: 'isa-crt0', title: 'Before main: crt0', concept: 'bare-metal start-up: stack pointer, copy .data from flash, zero .bss', xp: 170, tier: 'guided',
+  ticket: 'The chip has just left reset: RAM holds garbage, and C globals will not work until start-up code has prepared it.',
+  build: (r) => {
+    const nd = between(r, 3, 6), nb = between(r, 4, 8);
+    const sdata = RAM, edata = RAM + 4 * nd, sbss = edata, ebss = sbss + 4 * nb;
+    const cases = [0, 1, 2, 3].map((i) => {
+      const vals = Array.from({ length: nd }, () => between(r, 1, 900));
+      const junk = (n: number) => Array.from({ length: n }, () => (0x5eed0000 + between(r, 1, 0xfff)) | 0);
+      const total = vals.reduce((a, b) => a + b, 0);
+      return {
+        label: `${nd} initialised words, ${nb} zero words`, hidden: i > 1,
+        setup: { regs: { sp: 0 }, data: [{ addr: FLASH, words: vals }, { addr: sdata - 4, words: [0x0ddba11] }, { addr: sdata, words: junk(nd + nb) }, { addr: ebss, words: [0x0ddba12] }] },
+        check: (m: Machine) => {
+          const e = eq(m, 'a0', total);
+          if (e !== true) return `${e}: main sums the .data words and the .bss words, so one of them was not set up`;
+          const dw = words(m, sdata, nd);
+          if (dw.some((w, k) => w !== vals[k])) return `.data was not copied from flash: RAM holds ${dw.map(hex).join(' ')}, expected ${vals.map(hex).join(' ')}`;
+          const bw = words(m, sbss, nb);
+          if (bw.slice(1).some((w) => w !== 0)) return `.bss is not all zero: ${bw.map(hex).join(' ')} (word 0 holds main's total)`;
+          if (m.word(sdata - 4) !== 0x0ddba11 || m.word(ebss) !== 0x0ddba12) return 'you wrote outside _sdata.._ebss: the loops ran one word too far';
+          return true;
+        },
+      } as IsaCase;
+    });
+    return {
+      style: 'program', mode: 'write',
+      brief: `<p>A C program assumes three things that raw silicon does not give it: a <b>stack pointer</b>, initialised globals, and zeroed uninitialised globals. The start-up code (<b>crt0</b>) provides them before <code>main</code> runs. The linker decides where things go and hands crt0 the boundaries as symbols:</p>
+<pre>_sidata          where the initial values of .data are stored in flash (the load address)
+_sdata, _edata   where .data lives in RAM (the run address): start, and end
+_sbss,  _ebss    where .bss lives in RAM (start, end)
+_estack          top of RAM, for the stack pointer</pre>
+<p>Use the symbols by name (they are defined for you, below your code, with a <code>main</code> that uses the variables). At reset the stack pointer is 0 and RAM holds garbage, so your <code>_start</code> must, in order:</p>
+<ol><li>load <code>sp</code> with <code>_estack</code>;</li><li>copy the words from <code>_sidata</code> up to <code>_sdata</code>..<code>_edata</code> (flash to RAM);</li><li>store zero over every word from <code>_sbss</code> to <code>_ebss</code>;</li><li><code>call main</code>, then exit with the value it returns (it is already in <code>a0</code>).</li></ol>
+<p>Both regions are a whole number of words. The end symbols are the first address <b>after</b> each region, so loop while the pointer is below the end.</p>`,
+      hints: ['<code>la sp, _estack</code> is the whole first step. Without it <code>main</code>\'s first push goes to a wild address.', 'Copy loop: three pointers (source, destination, end). <code>bgeu dst, end, done</code>; <code>lw</code>, <code>sw</code>, advance both by 4, <code>j</code> back.', 'Zeroing is the same loop with <code>sw zero, 0(ptr)</code> and no source. Count a word too many and the guard values around the region will catch you.'],
+      starter: `# Linker symbols: _sidata _sdata _edata _sbss _ebss _estack\n_start:\n    # 1. stack pointer\n    # 2. copy .data from flash\n    # 3. zero .bss\n    call main\n${EXIT}`,
+      fixed: `\n.text\n.equ _sidata, ${FLASH}\n.equ _sdata, ${sdata}\n.equ _edata, ${edata}\n.equ _sbss, ${sbss}\n.equ _ebss, ${ebss}\n.equ _estack, ${STACK_TOP}\n# main sums the .data words and the .bss words (which must be zero), keeps the total in the first .bss word and returns it\nmain:\n    addi sp, sp, -16\n    sw ra, 12(sp)\n    la t0, _sdata\n    la t1, _edata\n    li a0, 0\nmd: bgeu t0, t1, mb\n    lw t2, 0(t0)\n    add a0, a0, t2\n    addi t0, t0, 4\n    j md\nmb: la t0, _sbss\n    la t1, _ebss\nmz: bgeu t0, t1, me\n    lw t2, 0(t0)\n    add a0, a0, t2\n    addi t0, t0, 4\n    j mz\nme: la t0, _sbss\n    sw a0, 0(t0)\n    lw ra, 12(sp)\n    addi sp, sp, 16\n    ret\n`,
+      cases,
+      solution: `_start:\n    la sp, _estack\n    la t0, _sidata\n    la t1, _sdata\n    la t2, _edata\ncopy:\n    bgeu t1, t2, copied\n    lw t3, 0(t0)\n    sw t3, 0(t1)\n    addi t0, t0, 4\n    addi t1, t1, 4\n    j copy\ncopied:\n    la t1, _sbss\n    la t2, _ebss\nzero:\n    bgeu t1, t2, zeroed\n    sw zero, 0(t1)\n    addi t1, t1, 4\n    j zero\nzeroed:\n    call main\n${EXIT}`,
+    };
+  },
+};
+
+export const ISA_LEVELS: IsaLevel[] = [first, minmax, sumto, arrsum, strlen, popcount, mulhand, gcd, copy, reverse, abi, fixSigned, fixMax, recfib, sortLvl, trapLevel, timerLevel, crt0Level, strBoss, perfBoss, recBoss];
 export const findIsaLevel = (id: string) => ISA_LEVELS.find((l) => l.id === id);

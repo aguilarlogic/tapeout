@@ -11,7 +11,7 @@ import { findIsaLevel } from './levels';
 import { Machine, STACK_TOP } from './sim';
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-const PSEUDO = ['nop', 'li', 'la', 'mv', 'not', 'neg', 'seqz', 'snez', 'sltz', 'sgtz', 'beqz', 'bnez', 'blez', 'bgez', 'bltz', 'bgtz', 'bgt', 'ble', 'bgtu', 'bleu', 'j', 'jr', 'ret', 'call', 'tail'];
+const PSEUDO = ['nop', 'li', 'la', 'mv', 'not', 'neg', 'seqz', 'snez', 'sltz', 'sgtz', 'beqz', 'bnez', 'blez', 'bgez', 'bltz', 'bgtz', 'bgt', 'ble', 'bgtu', 'bleu', 'j', 'jr', 'ret', 'call', 'tail', 'csrr', 'csrw', 'csrs', 'csrc', 'csrwi', 'csrsi', 'csrci', 'unimp'];
 const OPSET = new Set([...MNEMONICS, ...PSEUDO]);
 const REGSET = new Set([...REG_NAMES, ...Array.from({ length: 32 }, (_, i) => `x${i}`), 'fp']);
 
@@ -29,7 +29,7 @@ export function highlightAsm(src: string): string {
 
 const hx = (v: number) => `0x${(v >>> 0).toString(16).padStart(8, '0')}`;
 
-export const MODEL_NOTE = 'RV32IM, machine-level. ecall numbers are RARS-style (a7 = service). The stack pointer must stay 16-byte aligned.';
+export const MODEL_NOTE = 'RV32IM, machine mode only, with CSRs, traps and a memory-mapped timer. ecall numbers are RARS-style (a7 = service); once mtvec is set, ecall traps instead. The stack pointer must stay 16-byte aligned.';
 
 export function isaPage(id: string): HTMLElement {
   const level = findIsaLevel(id);

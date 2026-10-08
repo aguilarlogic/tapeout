@@ -25,6 +25,14 @@ const weak: { id: string; entry?: string; why: string; src: string | ((sol: stri
   { id: 'isa-boss-perf', entry: 'isqrt', why: 'counting up is far over budget', src: 'isqrt:\n    li t0, 0\nl:\n    addi t1, t0, 1\n    mul t2, t1, t1\n    bltu a0, t2, d\n    bgeu t2, t1, ok\n    j d\nok:\n    mv t0, t1\n    j l\nd:\n    mv a0, t0\n    ret\n', fails: /within 420|no return|case/ },
   { id: 'isa-boss-perf', entry: 'parity', why: 'a 32-iteration loop is over budget', src: 'parity:\n    li t0, 0\n    li t1, 32\nl:\n    andi t2, a0, 1\n    xor t0, t0, t2\n    srli a0, a0, 1\n    addi t1, t1, -1\n    bnez t1, l\n    mv a0, t0\n    ret\n', fails: /within 40/ },
   { id: 'isa-boss-rec', entry: 'collatz', why: 'a loop is not recursion', src: 'collatz:\n    li t0, 0\n    li t3, 1\nl:\n    beq a0, t3, d\n    andi t1, a0, 1\n    bnez t1, odd\n    srli a0, a0, 1\n    j n\nodd:\n    slli t2, a0, 1\n    add a0, a0, t2\n    addi a0, a0, 1\nn:\n    addi t0, t0, 1\n    j l\nd:\n    mv a0, t0\n    ret\n', fails: /must be recursive/ },
+  { id: 'isa-trap', why: 'a handler that never advances mepc traps on the same instruction forever', src: (sol) => sol.replace('    addi t1, t1, 4\n', ''), fails: /no exit|instruction|expected/ },
+  { id: 'isa-trap', why: 'a handler that clobbers t1 and t2 without saving them', src: '_start:\n    la t0, handler\n    csrw mtvec, t0\n    call run_tests\n    csrw mtvec, zero\n    la t0, count\n    lw a0, 0(t0)\n    li a7, 93\n    ecall\nhandler:\n    la t1, count\n    lw t2, 0(t1)\n    addi t2, t2, 1\n    sw t2, 0(t1)\n    csrr t1, mepc\n    addi t1, t1, 4\n    csrw mepc, t1\n    mret\n', fails: /give back every register/ },
+  { id: 'isa-trap', why: 'forgetting to clear mtvec turns the exit ecall into a trap', src: (sol) => sol.replace('    csrw mtvec, zero\n', ''), fails: /./ },
+  { id: 'isa-timer', why: 'interrupts left running past the target count', src: (sol) => sol.replace('    csrci mstatus, 8\n    csrw mtvec, zero\n', ''), fails: /mtvec is 0|expected exactly|ticks/ },
+  { id: 'isa-timer', why: 'mtimecmp only moves once, so the LED never blinks again', src: (sol) => sol.replace('    add t2, t2, s1\n    sw t2, 0(t1)\n    lw t2, 4(t0)', '    lw t2, 4(t0)'), fails: /./ },
+  { id: 'isa-crt0', why: 'skips zeroing .bss', src: (sol) => sol.replace('    sw zero, 0(t1)\n', ''), fails: /bss|zero|total/ },
+  { id: 'isa-crt0', why: 'never sets the stack pointer', src: (sol) => sol.replace('    la sp, _estack\n', ''), fails: /outside memory/ },
+  { id: 'isa-crt0', why: 'zeroes one word too many past _ebss', src: (sol) => sol.replace('    bgeu t1, t2, zeroed', '    bgtu t1, t2, zeroed'), fails: /outside|bss|guard|wrote/ },
 ];
 
 describe('weak ISA solutions are rejected', () => {

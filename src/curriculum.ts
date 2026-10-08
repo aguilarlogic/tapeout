@@ -156,7 +156,7 @@ export const ACTS: Act[] = [
   {
     id: 'ada2', n: 2, kind: 'chip', name: 'ADA-2: a RISC-V core', tagline: 'A 32-bit RISC-V core: assembly, a single-cycle datapath, clocks, then a pipeline', region: 'CPU CORE',
     chapters: [
-      { name: 'Hardware/software interface', modules: [...drill('asm'), ...isa('isa-first', 'isa-branch', 'isa-loop', 'isa-array', 'isa-strlen', 'isa-popcount', 'isa-mul', 'isa-gcd', 'isa-copy', 'isa-reverse', 'isa-abi', 'isa-fix-signed', 'isa-fix-max', 'isa-fib', 'isa-sort'), bossMod('boss-asm'), ...isa('isa-boss-str', 'isa-boss-perf', 'isa-boss-rec'), incident('inc-isa')] },
+      { name: 'Hardware/software interface', modules: [...drill('asm'), ...isa('isa-first', 'isa-branch', 'isa-loop', 'isa-array', 'isa-strlen', 'isa-popcount', 'isa-mul', 'isa-gcd', 'isa-copy', 'isa-reverse', 'isa-abi', 'isa-fix-signed', 'isa-fix-max', 'isa-fib', 'isa-sort', 'isa-trap', 'isa-timer', 'isa-crt0'), bossMod('boss-asm'), ...isa('isa-boss-str', 'isa-boss-perf', 'isa-boss-rec'), incident('inc-isa')] },
       { name: 'Microarchitecture', modules: [...drill('alu'), ...rv('rv-alu', 'rv-branch', 'rv-mem', 'rv-mext'), bossMod('boss-uarch'), ...rv('rv-boss'), incident('inc-datapath')] },
       { name: 'Clocks & resets', modules: [...drill('clk'), ...cdc('cdc-sync', 'cdc-pulse', 'cdc-gray', 'cdc-handshake'), bossMod('boss-cdc'), ...cdc('cdc-fifo'), incident('inc-crossing')] },
       { name: 'Pipelines', modules: [...drill('pipe'), ...arch('pipe-fwd', 'pipe-branch', 'pipe-sched', 'pipe-unroll'), ...arch('pipe-boss'), incident('inc-pipeline')] },
