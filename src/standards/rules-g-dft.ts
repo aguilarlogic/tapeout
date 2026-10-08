@@ -3,6 +3,7 @@ import type { Rule } from './types';
 // G1.5 (DFT coverage, at-speed test, test architecture), G3.1 (verification practice), G3.2 (CDC and RDC).
 const V = /lessons\/verification/;
 const ATE = /lessons\/roles/;
+const CLK = /lessons\/digital/;
 export const RULES_G_DFT: Rule[] = [
   { id: 'G1.5-test-coverage', why: 'G1.5: name the second metric, test coverage = detected / (all - untestable)', require: { file: V, re: /\*\*test coverage\*\*/ } },
   { id: 'G1.5-denominator', why: 'G1.5: tools differ in which faults leave the denominator; redundant out, ATPG-aborted stay in', require: { file: V, re: /ATPG-untestable[^\n]*stay in/ } },
@@ -31,4 +32,9 @@ export const RULES_G_DFT: Rule[] = [
   { id: 'G3.1-first-silicon', why: 'G3.1: first-silicon success is rare (no number, no survey name)', require: { file: V, re: /first-silicon success is rare/ } },
   { id: 'G3.1-no-survey-number', why: 'G3.1: no survey percentage for first-silicon success', files: /lessons|practice/, ban: /first[- ]silicon (success|pass)[^\n]{0,60}\d+ ?%/ },
 
+  { id: 'G3.2-rdc', why: 'G3.2: a reset asserted asynchronously in one domain corrupts a flop in another', require: { file: CLK, re: /reset-domain crossing/ } },
+  { id: 'G3.2-clock-mux', why: 'G3.2: glitch-free clock muxes', require: { file: CLK, re: /glitch-free clock mux/ } },
+  { id: 'G3.2-injection', why: 'G3.2: metastability injection in simulation', require: { file: CLK, re: /metastability injection/ } },
+  { id: 'G3.2-mission', why: 'G3.2: the cdc-rdc lab mission', require: { file: /games\/cdc\/levels/, re: /id: 'cdc-rdc'/ } },
+  { id: 'G3.2-wired', why: 'G3.2: cdc-rdc is wired into the cdc skill lab list', require: { file: /mastery\/skills/, re: /'cdc-rdc'/ } },
 ];
