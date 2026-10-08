@@ -3,6 +3,7 @@ import { num, qty } from '../lessons/answers';
 import { calc, choice, count, show, walk } from '../lessons/teach';
 import { art, ask, between, mc, pick, say } from '../lessons/types';
 import { boss, practice, tier } from './types';
+import { ELECTRONICS_NOISE } from './g-analog';
 import { atLevel, concept, eng, mcs, sci, sig } from './util';
 
 const par = (...rs: number[]) => 1 / rs.reduce((a, x) => a + 1 / x, 0);
@@ -390,6 +391,7 @@ export const electronicsPractice = practice('practice-electronics', 'Amplifier D
       'gain-bandwidth trade-off', idea,
       calc('BW = GBW / G:', `${gbw} / ${sig(G)}`, gbw / G, 'Hz', undefined, 0.02));
   },
+  ...ELECTRONICS_NOISE,
 ]);
 
 // ------------------------------------------------------------------ semiconductor physics
@@ -647,6 +649,8 @@ export const electronicsBoss = boss({
     { t: 'gen', make: (r) => { const I = pick(r, [100, 200]), vov = pick(r, [0.15, 0.2]); const gm = (2 * I) / vov / 1000, ro = 1 / (0.1 * I * 1e-3); const RD = 0.9 / (I * 1e-3); const A = gm * par(RD, ro); return ask(`You want the output to sit at 0.9 V, so R_D drops 0.9 V at ${I} µA. With r_o included, what is |A_v|?`, qty(A, '', 0.03, sig(A)), `R_D = 0.9 V/${I} µA = ${sig(RD)} kΩ; r_o = 1/(λI_D) = ${sig(ro)} kΩ; |A_v| = ${sig(gm)} mS × ${sig(par(RD, ro))} kΩ = ${sig(A)}.`); } },
     { t: 'gen', make: (r) => { const vov = pick(r, [0.15, 0.2]); const vmin = vov; return ask(`How low can the output swing before M1 leaves saturation, in mV? (V_DS ≥ V_ov)`, qty(vmin * 1000, 'mV', 0.01), `V_DS,min = V_ov = ${vov * 1000} mV. Headroom is the other half of analog design: small V_ov gives swing and g_m, but needs big devices.`); } },
     { t: 'gen', make: (r) => { const CL = pick(r, [0.5, 1, 2]) * 1e-12, I = pick(r, [100, 200]); const RD = 0.9 / (I * 1e-6); const f = 1 / (2 * Math.PI * RD * CL); return ask(`The output drives ${eng(CL, 'F')}. Ignoring r_o, where is the output pole (1/(2πR_D C_L)), in MHz?`, qty(f / 1e6, 'MHz', 0.02), `R_D = ${K(RD)}; f_p = 1/(2π·${K(RD)}·${eng(CL, 'F')}) = ${eng(f, 'Hz')}.`); } },
+    { t: 'gen', make: (r) => { const R = pick(r, [10, 20, 50]), e = Math.sqrt(4 * 1.38e-23 * 300 * R * 1e3) * 1e9; return ask(`The sensor driving the amplifier has a source resistance of ${R} kΩ. Its thermal noise density at 300 K, in nV/√Hz?`, qty(e, 'nV', 0.03, sig(e)), `√(4kT·R) = √(1.66e-20 × ${R}e3) = ${sig(e)} nV/√Hz. Noise from the source alone sets a floor no amplifier can beat.`, 'e_n = √(4kT·R).'); } },
+    { t: 'gen', make: (r) => { const R = pick(r, [10, 20, 50]), ea = pick(r, [4, 5, 6]), e = Math.sqrt(4 * 1.38e-23 * 300 * R * 1e3) * 1e9, t = Math.hypot(e, ea); return ask(`The amplifier adds ${ea} nV/√Hz of its own input noise, uncorrelated with the ${R} kΩ sensor's. What is the total input noise density, in nV/√Hz?`, qty(t, 'nV', 0.03, sig(t)), `Uncorrelated sources add in quadrature: √(${sig(e)}² + ${ea}²) = ${sig(t)} nV/√Hz. Here the sensor already dominates, so a quieter amplifier would barely help.`, 'Square, add, root.'); } },
     mc('The gain came out below target. Which change raises it without touching the current?', ['Lower V_ov (bigger W/L) or add a cascode', 'Raise V_ov with a smaller W/L', 'Lower R_D to raise the headroom', 'Swap the stage for a source follower instead'], 0, 'Lower V_ov (bigger W/L) and/or add a cascode to raise the output resistance. Gain = g_m·R_out. For a fixed current, g_m rises as V_ov falls; a cascode multiplies r_o by roughly g_m·r_o.'),
   ],
   recap: ['Size from the square law.', 'Mirror ratios set bias currents.', 'Gain = g_m(R_D ∥ r_o); swing needs V_DS ≥ V_ov.', 'Output pole = 1/(2πR_out C_L).'],
