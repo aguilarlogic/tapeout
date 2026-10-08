@@ -4,7 +4,7 @@ import { qty } from '../lessons/answers';
 import { calc, choice, walk } from '../lessons/teach';
 import { ask, mc, pick, say } from '../lessons/types';
 import { boss, practice } from './types';
-import { ANALOG_MARGINS, ANALOG_NOISE } from './g-analog';
+import { ANALOG_CONVERTER, ANALOG_MARGINS, ANALOG_NOISE, RF_LINEARITY } from './g-analog';
 import { concept, sci, sig } from './util';
 
 const kT = 1.38e-23 * 300;
@@ -132,6 +132,7 @@ export const analogPractice = practice('practice-analog', 'Analog Drills', 'op-a
   ], (why) => `${why}.`),
   ...ANALOG_NOISE,
   ...ANALOG_MARGINS,
+  ...ANALOG_CONVERTER,
 ]);
 
 export const analogBoss = boss({
@@ -147,6 +148,8 @@ export const analogBoss = boss({
     mc('So what limits the ADC?', ['Clock jitter, which caps SNR near 64 dB', 'Quantization noise', 'The reference voltage, since its noise adds to every sample', 'Differential non-linearity in the converter at each code step'], 0, 'Far below the 74 dB that 12 bits could reach. No amount of work on the converter itself helps. Measured 62.5 dB sits just under the 64 dB jitter ceiling. No amount of work on the converter itself helps; the clock must get cleaner.'),
     { t: 'gen', make: () => { const fs = (10 ** (-72 / 20) / (2 * Math.PI * 200e6)) * 1e15; return ask('To allow 72 dB at 200 MHz, how much rms jitter can the clock have, in fs?', qty(fs, 'fs', 0.03, sig(fs)), `σ = 10^(-72/20) / (2π × 200e6) = ${sig(fs)} fs. That needs a low-noise PLL and a clean clock path all the way to the sampling switch.`); } },
     { t: 'gen', make: () => { const q = 1 / 4096 / Math.sqrt(12), c = (kT / q ** 2) * 1e12; return ask('The LSB is 1 V / 4096 and quantization noise is LSB/√12. How big must the sampling capacitor be so its kT/C noise is no larger than the quantization noise, in pF?', qty(c, 'pF', 0.04, sig(c)), `LSB/√12 = ${sig(q * 1e6)} µV. C = kT/v² = 4.14e-21 / (${sig(q)})² = ${sig(c)} pF. Every extra bit would need 4× this.`); } },
+    { t: 'gen', make: (r) => { const sfdr = pick(r, [60, 64, 68]), e = (sfdr - 1.76) / 6.02; return ask(`The spectrum also shows a spur ${sfdr} dBc below the 200 MHz tone, far above the noise floor. If that spur sets SINAD, what is the ENOB, in bits?`, qty(e, 'bits', 0.03, sig(e)), `ENOB = (${sfdr} − 1.76) / 6.02 = ${sig(e)} bits. A second, separate limit: even a perfect clock would not fix a spur.`, 'SINAD ≈ SFDR when a spur dominates.'); } },
+    { t: 'gen', make: (r) => { const w = pick(r, [0, 0.5, 1.5]); return ask(`A code-density test finds one code ${w} LSB wide. What is its DNL, in LSB?`, qty(w - 1, '', 0.02, String(w - 1)), `DNL = ${w} / 1 − 1 = ${w - 1} LSB.${w === 0 ? ' DNL = −1 is a missing code: the code never appears at the output.' : ''}`, 'DNL = width ÷ 1 LSB − 1.'); } },
     mc('The PLL that makes the sample clock can use a wide or a narrow loop bandwidth. What does widening it do?', ['Cuts more of the VCO\'s own noise but passes more of the reference\'s', 'Removes all of the jitter on the sample clock, whichever way', 'Only changes the lock time of the loop, not the noise at all', 'Nothing measurable on the output, since the filter is identical'], 0, 'Inside the loop bandwidth the output follows the reference; outside it, the VCO. The best bandwidth is where their noise curves cross.'),
   ],
   recap: ['SNR and ENOB.', 'Aperture jitter sets a ceiling at high input frequencies.', 'kT/C sizing.', 'PLL bandwidth trade-off.'],
@@ -277,6 +280,7 @@ export const rfPractice = practice('practice-rf', 'RF Drills', 'dBm, wavelength,
         ['A lower noise figure is:', 'Better', ['Worse', 'Irrelevant']]],
     ], (why) => `${why}.`);
   },
+  ...RF_LINEARITY,
 ]);
 
 export const rfBoss = boss({
@@ -292,6 +296,8 @@ export const rfBoss = boss({
     { t: 'gen', make: () => { const l = fspl(100, 2.4e9); return ask('Free-space path loss at 2.4 GHz over 100 m, in dB?', qty(l, 'dB', 0.01, sig(l)), `20·log10(4π × 100 × 2.4e9 / 3e8) = ${sig(l)} dB.`); } },
     { t: 'gen', make: () => { const nf = db10(lin(1.5) + (lin(10) - 1) / lin(15)), s = -114 + nf + 10, m = 0 - fspl(100, 2.4e9) - s; return ask('The tag transmits 0 dBm with 0 dBi antennas on both ends. Link margin at 100 m (received power minus sensitivity), in dB?', qty(m, 'dB', 0.03, sig(m)), `Received: -${sig(fspl(100, 2.4e9))} dBm. Margin = ${sig(-fspl(100, 2.4e9))} - (${sig(s)}) = ${sig(m)} dB. Warehouse shelving and fading can take 20 to 30 dB, so this link is fragile.`); } },
     { t: 'gen', make: () => { const g = 25 / 75; return ask('The antenna measures 25 Ω on the 50 Ω line. Reflection coefficient magnitude |Γ|?', qty(g, '', 0.02, sig(g)), `|25 - 50| / (25 + 50) = ${sig(g)}: ${sig(g * g * 100)}% of the power bounces back. A matching network fixes it.`); } },
+    { t: 'gen', make: () => ask('A two-tone test at −20 dBm per tone shows IM3 products 40 dB below the tones. What is the LNA\'s input IP3, in dBm?', qty(0, 'dBm', 0.02, '0'), 'IIP3 = P_in + ΔP/2 = −20 + 40/2 = 0 dBm.') },
+    { t: 'gen', make: () => { const t = 1 / (1 / lin(-5) + lin(15) / lin(5)); return ask('The LNA (gain 15 dB, IIP3 = −5 dBm) feeds a mixer with IIP3 = +5 dBm. What is the cascaded input IP3, in dBm?', qty(db10(t), 'dBm', 0.04, sig(db10(t))), `1/IIP3 = 1/0.316 + 31.6/3.16 = 13.2 per mW, so IIP3 = ${sig(t, 2)} mW = ${sig(db10(t))} dBm. The mixer is the weak point: the LNA\'s gain hands it a 15 dB bigger signal.`, 'Linear power: 1/IIP3 = 1/IIP3₁ + G₁/IIP3₂.'); } },
     mc('Near a Wi-Fi access point the link drops even at short range. Most likely cause?', ['A strong nearby blocker overloads the front end: linearity limits it', 'The noise floor rose, so the weak wanted signal is buried below it', 'The antenna is too long for the band, so it picks up too much', 'The crystal is off frequency, so the receiver tunes to the wrong channel now'], 0, 'IP3 and compression, not noise. Sensitivity is about weak signals; blocking is about strong unwanted ones. Real receivers are designed for both.'),
   ],
   recap: ['Noise floor and noise figure.', 'Sensitivity.', 'Path loss and link margin.', 'Matching and blockers.'],
