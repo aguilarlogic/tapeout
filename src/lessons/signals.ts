@@ -32,6 +32,13 @@ export const signals: Lesson = {
       const f = pick(r, [100, 500, 1000]);
       return ask(`A ${f} MHz square-wave clock. What is the frequency of its ${n === 3 ? 'third' : n === 5 ? 'fifth' : 'seventh'} harmonic, in MHz?`, qty(n * f, 'MHz', 0.001), `${n} × ${f} = ${n * f} MHz, at 1/${n} of the fundamental's amplitude. Those harmonics are what radiates as EMI and what a channel must carry to keep edges sharp.`, 'Multiply by the harmonic number.');
     }),
+    say('That is a **Fourier series**: a periodic signal x(t) = a₀ + Σ [aₙ·cos(nω₀t) + bₙ·sin(nω₀t)], with the coefficients found by integrating x against each sine and cosine over one period. For a square wave of amplitude A (+A, then −A), only odd sines survive: bₙ = 4A/(nπ). The fundamental is 4/π ≈ 1.27 times the amplitude.'),
+    gen((r) => {
+      const a = pick(r, [1, 2, 3, 5]);
+      const n = pick(r, [1, 3, 5]);
+      const b = (4 * a) / (n * Math.PI);
+      return ask(`A square wave swings between +${a} V and −${a} V. What is the amplitude of its ${n === 1 ? 'fundamental' : `${n === 3 ? 'third' : 'fifth'} harmonic`}, in V?`, qty(b, 'V', 0.02, r3(b).toString()), `bₙ = 4A/(nπ) = 4 × ${a} / (${n}π) = ${r3(b)} V.`, 'bₙ = 4A / (nπ) for odd n.');
+    }),
     say('The **Fourier transform** works for any signal, periodic or not. One rule of thumb is worth memorizing for digital design: a fast edge contains high frequencies. The bandwidth of a signal with rise time t_r is about **0.35 / t_r**.'),
     gen((r) => {
       const tr = pick(r, [35, 50, 100, 350]);
@@ -45,6 +52,17 @@ export const signals: Lesson = {
       return ask(`Where is the pole of an RC low-pass with R = ${rr} kΩ and C = ${c} nF? Give its magnitude in rad/s.`, qty(p, '', 0.01, r3(p).toString()), `s = -1/RC = -1/(${rr} kΩ × ${c} nF) = -${r3(p)} rad/s (or ${r3(p / (2 * Math.PI))} Hz).`, 'Pole at s = -1/(RC).');
     }),
     mc('A system\'s poles are at s = -2, and s = +1 ± 3j. Is it stable?', ['Yes, since one of the poles is negative and so it decays', 'No: poles in the right half-plane mean responses that grow', 'Only at low frequency, where the growing pair has no effect', 'Poles do not affect stability, which depends on the zeros only'], 1, 'The growth is forever. Every pole must be in the left half-plane. A pair with positive real part is an oscillation that grows: the math of a feedback loop gone wrong.'),
+    say('To get back to the time domain, use the **inverse Laplace transform**. The pairs to know: 1/(s + a) ↔ e^(−at), and a step through 1/(1 + sτ) gives 1 − e^(−t/τ), which reaches 63.2% at t = τ. The **final-value theorem** gives where a response ends up without finding the whole waveform: y(∞) = lim s→0 of s·Y(s). It only works if all the poles of s·Y(s) lie in the left half-plane; for a stable H(s) with a step input, y(∞) = H(0).'),
+    gen((r) => {
+      const k = pick(r, [2, 5, 10, 100]);
+      const tau = pick(r, [1, 10, 100]);
+      return ask(`A system H(s) = ${k} / (1 + s/${1000 / tau}) is driven by a unit step. Using the final-value theorem, where does the output settle?`, qty(k, '', 0.01, String(k)), `Y(s) = H(s)/s, so y(∞) = lim s→0 of s·Y(s) = H(0) = ${k}. The pole is in the left half-plane, so the theorem applies.`, 'Set s = 0 in H(s).');
+    }),
+    gen((r) => {
+      const m = pick(r, [1, 2, 3]);
+      const v = (1 - Math.exp(-m)) * 100;
+      return ask(`A unit step goes through 1/(1 + sτ). How far has the output got at t = ${m}τ, in % of its final value?`, qty(v, '%', 0.02, r3(v).toString()), `y(t) = 1 − e^(−t/τ) = 1 − e^(−${m}) = ${r3(v / 100)}, so ${r3(v)}%.`, '1 − e^(−t/τ).');
+    }),
     say('Finally, **sampling**. To capture a signal digitally you need to sample faster than twice its highest frequency (the **Nyquist** rate). Anything above fs/2 does not disappear; it **aliases**, folding down to a false frequency.'),
     gen((r) => {
       const fs = pick(r, [10, 44.1, 100]);
@@ -54,7 +72,7 @@ export const signals: Lesson = {
       return ask(`A ${f} kHz tone is sampled at ${fs} kHz with no anti-alias filter. At what frequency does it appear in the samples, in kHz?`, qty(a, 'kHz', 0.02, r3(a).toString()), `It folds around multiples of fs: |${f} - ${fs}| → ${r3(a)} kHz. That is why every ADC has an analog anti-alias filter in front of it.`, 'Subtract the nearest multiple of fs and take the absolute value.');
     }),
   ],
-  recap: ['LTI systems are fully described by their impulse response; output = convolution.', 'Square waves: odd harmonics at 1/n amplitude.', 'Bandwidth ≈ 0.35 / rise time.', 'Laplace: poles decide behaviour; all poles in the left half-plane = stable.', 'Sample above 2·f_max or it aliases.'],
+  recap: ['LTI systems are fully described by their impulse response; output = convolution.', 'Square waves: odd harmonics at 1/n amplitude.', 'Bandwidth ≈ 0.35 / rise time.', 'Laplace: poles decide behaviour; all poles in the left half-plane = stable. 1/(s+a) ↔ e^(−at); final value = lim s·Y(s) when stable.', 'Fourier series: a square wave has bₙ = 4A/(nπ) for odd n.', 'Sample above 2·f_max or it aliases.'],
 };
 
 export const dsp: Lesson = {

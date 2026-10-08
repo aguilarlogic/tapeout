@@ -95,6 +95,12 @@ export const ac: Lesson = {
       const [a, b] = pick(r, [[3, 4], [6, 8], [5, 12], [8, 15], [20, 21]] as const);
       return ask(`A ${a} Ω resistor in series with an inductor of reactance ${b} Ω (Z = ${a} + j${b}). What is |Z|, in Ω?`, qty(Math.hypot(a, b), 'Ω', 0.01), `|Z| = √(${a}² + ${b}²) = ${Math.hypot(a, b)} Ω, at a phase of ${Math.round((Math.atan2(b, a) * 180) / Math.PI)}°.`, '√(a² + b²).');
     }),
+    say('The tool behind phasors is **Euler\'s formula**: e^(jθ) = cos θ + j·sin θ, a point on the unit circle at angle θ. Write a phasor as magnitude ∠ angle. To **multiply** phasors, multiply the magnitudes and add the angles; to **divide**, divide the magnitudes and subtract the angles. That is why 1/(jωC) lags by 90°: j is 1∠90°, so dividing by it subtracts 90°.'),
+    gen((r) => {
+      const [m1, a1] = pick(r, [[2, 30], [3, 45], [5, 20], [4, 60]] as const);
+      const [m2, a2] = pick(r, [[3, 60], [2, 15], [4, 25], [5, 30]] as const);
+      return ask(`Multiply the phasors ${m1}∠${a1}° and ${m2}∠${a2}°. What is the angle of the product, in degrees?`, qty(a1 + a2, '', 0.01, String(a1 + a2)), `Angles add: ${a1} + ${a2} = ${a1 + a2}°. The magnitude is ${m1} × ${m2} = ${m1 * m2}.`, 'Add the angles.');
+    }),
     say('The classic first filter: an RC **low-pass**. The output divides the input between R and the capacitor\'s impedance: H(jω) = 1 / (1 + jωRC). Below the cutoff fc = 1/(2πRC) it passes; above, it falls by 20 dB per decade (10× in frequency).'),
     art(`
    gain (dB)
@@ -127,7 +133,7 @@ export const ac: Lesson = {
     }),
     mc('A load has current lagging voltage by 60°. The meter reads 10 V rms and 1 A rms. What real power does it consume?', ['10 W', '5 W', '8.7 W', '0 W'], 1, 'P = 10 × 1 × cos 60° = 5 W. The rest is reactive power, sloshing back and forth into the inductance.'),
   ],
-  recap: ['Z_R = R, Z_C = 1/(jωC), Z_L = jωL.', '|a + jb| = √(a² + b²).', 'RC low-pass: fc = 1/(2πRC), -3 dB and -45° at fc, -20 dB/decade per pole.', 'Voltage dB = 20·log10.', 'Resonance f0 = 1/(2π√LC), bandwidth = f0/Q.', 'V_rms = V_peak/√2; P = V·I·cos φ.'],
+  recap: ['Z_R = R, Z_C = 1/(jωC), Z_L = jωL.', '|a + jb| = √(a² + b²). e^(jθ) = cos θ + j·sin θ; multiply phasors by multiplying magnitudes and adding angles.', 'RC low-pass: fc = 1/(2πRC), -3 dB and -45° at fc, -20 dB/decade per pole.', 'Voltage dB = 20·log10.', 'Resonance f0 = 1/(2π√LC), bandwidth = f0/Q.', 'V_rms = V_peak/√2; P = V·I·cos φ.'],
 };
 
 export const electronics: Lesson = {
