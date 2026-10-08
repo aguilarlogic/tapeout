@@ -4,7 +4,7 @@ import { num, qty } from '../lessons/answers';
 import { calc, choice, count, sim, walk } from '../lessons/teach';
 import { art, ask, mc, pick, say } from '../lessons/types';
 import { boss, practice, tier } from './types';
-import { concept, sci, sig } from './util';
+import { concept, mcs, sci, sig } from './util';
 
 /** Elmore delay of a distributed RC wire, in ps: r in Ω/µm, c in fF/µm, length in µm. */
 const wire = (rr: number, cc: number, len: number) => 0.5 * rr * cc * len * len * 1e-3;
@@ -412,6 +412,35 @@ export const fabPractice = practice('practice-fab', 'Fab & Yield Drills', 'litho
       calc('The half-width, (USL - LSL) ÷ 2:', `(${usl} - ${lsl}) / 2`, (usl - lsl) / 2, '', sig((usl - lsl) / 2, 4), 0.005),
       calc('σ = half-width ÷ (3 × 1.33):', `${sig((usl - lsl) / 2, 4)} / (3 × 1.33)`, sm, '', sig(sm), 0.02));
   },
+  (r, d) => {
+    // Weibull shape parameter by region of the bathtub curve.
+    const regions = [
+      { beta: 'β < 1', names: ['infant mortality', 'the falling start'], looks: ['the failure rate falls with time, as the weak parts die first', 'the failure rate drops steeply over the first weeks'], mech: ['defective parts that fail early', 'weak oxide or particle defects that kill parts in the first weeks'] },
+      { beta: 'β = 1', names: ['random failures', 'the flat middle'], looks: ['the failure rate is constant, so the FIT figure applies', 'the failure rate is flat and does not depend on age'], mech: ['chance events such as a particle strike', 'failures that show no link to the age of the part'] },
+      { beta: 'β > 1', names: ['wear-out', 'the rising end'], looks: ['the failure rate climbs with time as the part ages', 'the failure rate rises faster and faster late in life'], mech: ['aging mechanisms such as electromigration', 'oxide breakdown after years of stress'] },
+    ] as const;
+    const g = pick(r, regions), all = ['β < 1', 'β = 1', 'β > 1'];
+    const idea = 'Over a part\'s life the failure rate follows a bathtub curve. A Weibull shape parameter β describes each region: below 1 the rate falls with time (infant mortality), at 1 it is constant (random failures, the FIT figure) and above 1 it rises (wear-out).';
+    const q = d === 1 ? `On a failure-rate plot, ${pick(r, g.looks)}. Which Weibull β describes that region?` : d === 2 ? `Which Weibull β describes ${pick(r, g.names)}?` : `A failure analysis finds ${pick(r, g.mech)}. Which Weibull β does that region of the bathtub curve have?`;
+    return walk(mcs(r, q, g.beta, all.filter((b) => b !== g.beta), `${g.beta} is ${g.names[0]}: below 1 the rate falls (infant mortality), at 1 it is constant (random failures) and above 1 it rises (wear-out).`),
+      'reading the bathtub curve', idea,
+      choice(`A constant failure rate means β is:`, 'Equal to 1', ['Below 1', 'Above 1']));
+  },
+  (r, d) => {
+    const mb = pick(r, [16, 64, 256]), rate = pick(r, [100, 500, 1000]);
+    const idea = 'Soft errors are bit flips from neutron or alpha-particle strikes: the cell is not damaged. Their rate is quoted in FIT per Mbit, so a memory of M Mbit has M × (FIT per Mbit) FIT. ECC corrects single flips, so only the uncorrected fraction can cause trouble.';
+    if (d === 1) return walk(ask(`A memory of ${mb} Mbit has a soft-error rate of ${rate} FIT per Mbit. Total soft-error FIT?`, qty(mb * rate, '', 0.01, String(mb * rate)), `${mb} × ${rate} = ${mb * rate} FIT.`, 'Mbit × FIT per Mbit.'),
+      'soft-error FIT of a memory', idea, calc('Total FIT = Mbit × FIT per Mbit:', `${mb} × ${rate}`, mb * rate, '', String(mb * rate), 0.01));
+    if (d === 2) { const f = mb * rate, h = 1e9 / f; return walk(ask(`A memory of ${mb} Mbit has a soft-error rate of ${rate} FIT per Mbit. On average, how many hours between soft errors?`, qty(h, 'h', 0.02, sig(h)), `${mb * rate} FIT, so 10⁹ / ${mb * rate} = ${sig(h)} h.`, 'MTBF = 10⁹ / FIT.'),
+      'time between soft errors', idea,
+      calc('Total FIT = Mbit × FIT per Mbit:', `${mb} × ${rate}`, f, '', String(f), 0.01),
+      calc('Hours between errors = 10⁹ ÷ FIT:', `1e9 / ${f}`, h, 'h', sig(h), 0.02)); }
+    const cov = pick(r, [0.99, 0.999]), f = mb * rate, res = f * (1 - cov);
+    return walk(ask(`A memory of ${mb} Mbit has a soft-error rate of ${rate} FIT per Mbit. ECC corrects ${cov * 100}% of the events. Residual FIT?`, qty(res, '', 0.03, sig(res)), `${f} × ${sig(1 - cov, 3)} = ${sig(res)} FIT left over.`, 'Total FIT times the uncorrected fraction.'),
+      'residual soft-error FIT', idea,
+      calc('Total FIT = Mbit × FIT per Mbit:', `${mb} × ${rate}`, f, '', String(f), 0.01),
+      calc('Residual = total × (1 - coverage):', `${f} × ${sig(1 - cov, 3)}`, res, '', sig(res), 0.03));
+  },
   (r) => concept(r, [
     ['Designers sign off at TT, FF, SS, FS and SF. What do the letters mean?', 'The speed of the NMOS and PMOS devices: typical, fast or slow', ['Temperature and frequency, as a pair', 'Test and function', 'Film thickness of the oxide and of the metal layers, in the process'], 'process corners', 'Manufacturing variation makes the N and P transistors on a chip each come out typical, fast or slow. The two letters name the NMOS and PMOS speeds: TT, FF, SS, and the skewed corners FS (fast N, slow P) and SF. Timing is checked at each.', ['In "FS", the F stands for the speed of:', 'The NMOS transistors', ['The clock', 'The frequency']]],
     ['After years at high temperature a chip\'s paths are slower. Likely mechanism?', 'BTI and hot-carrier injection shift transistor thresholds', ['Poisson yield, which sets how many dies fail during their life', 'Electromagnetic interference from the board that the chip is on', 'Lithography blur, which grows slowly as the masks wear over time'], 'transistor aging', 'Bias temperature instability (BTI) traps charge near the gate while a transistor is on, and hot-carrier injection (HCI) damages the oxide. Both raise the threshold voltage, which slows transistors down with age. Designs therefore add margin for aging.', ['A higher threshold voltage makes a transistor:', 'Slower', ['Faster', 'Unchanged']], 'BTI and hot-carrier injection shift transistor thresholds over time'],
@@ -444,8 +473,10 @@ export const processBoss = boss({
     mc('Failures cluster on the right edge of every wafer in lot 7. Most likely cause?', ['A tool problem at that edge (chuck, film or focus)', 'Random particles', 'A design bug that only shows up in dies near the wafer edge', 'A bad test program'], 0, 'Not random defects: systematic signatures point at a tool. Random defects fall like rain; systematic signatures point at a tool. Find the tool the lot shared and fix it.'),
     { t: 'gen', make: () => ask('Split the die into four 150 mm² chiplets. Yield of one chiplet at D₀ = 0.1, in %?', qty(yieldOf(150, 0.1) * 100, '%', 0.02, sig(yieldOf(150, 0.1) * 100)), `e^(-1.5 × 0.1) = ${sig(yieldOf(150, 0.1) * 100)}%.`) },
     { t: 'gen', make: () => { const c = 17000 / (dpw(150) * yieldOf(150, 0.1)) * 4; return ask('Cost of four good 150 mm² chiplets (known-good dies, before packaging), in $?', qty(c, '', 0.04, sig(c)), `${Math.round(dpw(150))} dies per wafer × ${sig(yieldOf(150, 0.1))} = ${Math.round(dpw(150) * yieldOf(150, 0.1))} good. 4 × 17000 / that = $${sig(c)}, less than the monolithic die. Packaging and die-to-die links eat part of the savings.`); } },
+    mc('The customer is an automotive maker for engine-bay electronics. Which temperature grade does the part need, and what is its ambient range?', ['Grade 3, −40 to 85 °C', 'Grade 2, −40 to 105 °C', 'Grade 1, −40 to 125 °C or hotter', 'Grade 1, −40 to 105 °C'], 2, 'Engine-bay parts need grade 1 (−40 to 125 °C) or grade 0 (−40 to 150 °C). Grade 2 is −40 to 105 °C and grade 3 −40 to 85 °C, fine for the cabin only.'),
+    mc('Failures in the field fall steeply in the first weeks, then settle to a constant rate. Which Weibull β describes the first weeks?', ['β < 1', 'β = 1', 'β > 1', 'β = 0'], 0, 'A falling failure rate has β below 1: infant mortality. A constant rate is β = 1 and wear-out is above 1. Burn-in and early-life screening target the first region.'),
   ],
-  recap: ['Dies per wafer and yield.', 'Cost per good die.', 'Systematic vs random signatures.', 'The chiplet trade.'],
+  recap: ['Dies per wafer and yield.', 'Cost per good die.', 'Systematic vs random signatures.', 'The chiplet trade.', 'Temperature grades and the bathtub curve.'],
 });
 
 // ------------------------------------------------------------------ packaging
@@ -737,7 +768,62 @@ export const atePractice = practice('practice-ate', 'Production Test Drills', 't
       calc('Gain from the moved parts, fraction × price difference:', `${m} × (${price[0]} - ${price[2]})`, gain, '', sig(gain), 0.01),
       calc('New average = old + gain:', `${sig(base)} + ${sig(gain)}`, after, '', sig(after), 0.01));
   },
+  (r, d) => {
+    // Arrhenius acceleration factor, k in eV/K.
+    const K = 8.617e-5, idea = 'Heat speeds up the chemistry of wear-out, so a short hot test stands in for years of use. The Arrhenius acceleration factor is AF = exp[(Ea/k) × (1/T_use - 1/T_stress)], with both temperatures in kelvin (add 273.15 to °C), k = 8.617e-5 eV/K and Ea the activation energy in eV.';
+    const ea = pick(r, [0.6, 0.7, 0.8]);
+    if (d === 1) {
+      const [tu, ts] = pick(r, [[328, 398], [333, 398], [323, 378], [338, 423]] as const), af = Math.exp((ea / K) * (1 / tu - 1 / ts));
+      return walk(ask(`Ea = ${ea} eV, use at ${tu} K, stress at ${ts} K. Arrhenius acceleration factor? (k = 8.617e-5 eV/K)`, qty(af, '', 0.05, sig(af)), `exp[(${ea} / 8.617e-5) × (1/${tu} - 1/${ts})] = ${sig(af)}.`, 'Put the temperatures in the exponent as 1/T.'),
+        'the Arrhenius acceleration factor', idea,
+        calc('Ea ÷ k, in kelvin:', `${ea} / 8.617e-5`, ea / K, 'K', sig(ea / K, 4), 0.005),
+        calc('1/T_use - 1/T_stress:', `1/${tu} - 1/${ts}`, 1 / tu - 1 / ts, '', sig(1 / tu - 1 / ts, 4), 0.01),
+        calc('AF = e to the power of their product:', `exp(${sig(ea / K, 4)} × ${sig(1 / tu - 1 / ts, 4)})`, af, '', sig(af), 0.05));
+    }
+    const tuC = pick(r, [45, 55, 65, 85]), tsC = pick(r, [105, 125, 150]), tu = tuC + 273.15, ts = tsC + 273.15, af = Math.exp((ea / K) * (1 / tu - 1 / ts));
+    if (d === 2) return walk(ask(`Ea = ${ea} eV, use at ${tuC} °C, stress at ${tsC} °C. Arrhenius acceleration factor? (k = 8.617e-5 eV/K)`, qty(af, '', 0.05, sig(af)), `Kelvin: ${tu} and ${ts}. AF = exp[(${ea} / 8.617e-5) × (1/${tu} - 1/${ts})] = ${sig(af)}.`, 'Convert to kelvin first.'),
+      'the acceleration factor from °C', idea,
+      calc('Use temperature in kelvin:', `${tuC} + 273.15`, tu, 'K', sig(tu, 5), 0.001),
+      calc('Stress temperature in kelvin:', `${tsC} + 273.15`, ts, 'K', sig(ts, 5), 0.001),
+      calc('AF = exp[(Ea/k) × (1/T_use - 1/T_stress)]:', `exp(${sig(ea / K, 4)} × (1/${sig(tu, 5)} - 1/${sig(ts, 5)}))`, af, '', sig(af), 0.05));
+    const yrs = pick(r, [5, 10, 15]), h = (yrs * 8760) / af;
+    return walk(ask(`Ea = ${ea} eV, use at ${tuC} °C, stress at ${tsC} °C. How many stress hours demonstrate ${yrs} years of use? (${yrs} years = ${(yrs * 8760).toLocaleString('en-US')} h)`, qty(h, 'h', 0.06, String(Math.round(h))), `AF = ${sig(af)}, so ${(yrs * 8760).toLocaleString('en-US')} / ${sig(af)} ≈ ${Math.round(h)} h. A standard 1000-hour test covers ${Math.round((1000 * af) / 8760)} years at this AF.`, 'Hours of use divided by AF.'),
+      'stress hours for a life target', `${idea} One hour of stress equals AF hours of use, so the stress time for a target life is (hours of use) ÷ AF.`,
+      calc('AF, with kelvin temperatures:', `exp[(${ea}/8.617e-5) × (1/${sig(tu, 5)} - 1/${sig(ts, 5)})]`, af, '', sig(af), 0.05),
+      calc('Stress hours = hours of use ÷ AF:', `${yrs * 8760} / ${sig(af)}`, h, 'h', String(Math.round(h)), 0.06));
+  },
+  (r, d) => {
+    // Zero-failure FIT at 60% confidence: chi-squared(0.6, 2) = 1.83.
+    const idea = 'A test with no failures still bounds the failure rate. With zero failures at 60% confidence, λ = χ² ÷ (2 × N × t × AF), where χ²(0.6, 2) ≈ 1.83, N is the number of parts, t the hours each and AF the acceleration factor. Multiply by 10⁹ to get FIT.';
+    const n = pick(r, [77, 154, 231, 308]), t = 1000;
+    if (d === 1) {
+      const fit = (1.83 / (2 * n * t)) * 1e9;
+      return walk(ask(`${n} parts run ${t} h with no failures and no acceleration (AF = 1). FIT demonstrated at 60% confidence? (χ² ≈ 1.83)`, qty(fit, '', 0.03, String(+fit.toPrecision(3))), `1.83 / (2 × ${n} × ${t}) × 10⁹ = ${+fit.toPrecision(3)} FIT.`, 'χ² over twice the device-hours, times 10⁹.'),
+        'FIT from a zero-failure test', idea,
+        calc('Twice the device-hours, 2 × N × t:', `2 × ${n} × ${t}`, 2 * n * t, '', String(2 * n * t), 0.001),
+        calc('FIT = 1.83 ÷ that × 10⁹:', `1.83 / ${2 * n * t} × 1e9`, fit, '', String(+fit.toPrecision(3)), 0.03));
+    }
+    const af = pick(r, [40, 78, 120]);
+    if (d === 2) {
+      const fit = (1.83 / (2 * n * t * af)) * 1e9;
+      return walk(ask(`${n} parts run ${t} h at an acceleration factor of ${af} with no failures. FIT demonstrated at 60% confidence? (χ² ≈ 1.83)`, qty(fit, '', 0.03, String(+fit.toPrecision(3))), `1.83 / (2 × ${n} × ${t} × ${af}) × 10⁹ = ${+fit.toPrecision(3)} FIT.`, 'Include AF in the denominator.'),
+        'FIT with acceleration', idea,
+        calc('Equivalent device-hours, 2 × N × t × AF:', `2 × ${n} × ${t} × ${af}`, 2 * n * t * af, '', String(2 * n * t * af), 0.001),
+        calc('FIT = 1.83 ÷ that × 10⁹:', `1.83 / ${2 * n * t * af} × 1e9`, fit, '', String(+fit.toPrecision(3)), 0.03));
+    }
+    const target = pick(r, [25, 50, 100]), need = (1.83e9) / (2 * t * af * target), nn = Math.ceil(need);
+    return walk(ask(`To show ${target} FIT or better at 60% confidence with zero failures, running ${t} h at an acceleration factor of ${af}, how many parts are needed at least? (χ² ≈ 1.83)`, qty(nn, '', 0.03, String(nn)), `N = 1.83 × 10⁹ / (2 × ${t} × ${af} × ${target}) = ${sig(need, 4)}, so ${nn} parts.`, 'Rearrange the FIT formula for N and round up.'),
+      'parts needed for a FIT target', idea,
+      calc('Rearranged: N = 1.83e9 ÷ (2 × t × AF × FIT). The bottom is:', `2 × ${t} × ${af} × ${target}`, 2 * t * af * target, '', String(2 * t * af * target), 0.001),
+      calc('N = 1.83e9 ÷ that, rounded up:', `1.83e9 / ${2 * t * af * target}`, need, '', String(nn), 0.03));
+  },
   (r) => concept(r, [
+    ['A grade-1 automotive part\'s ambient range?', '−40 to 125 °C', ['−40 to 85 °C', '−40 to 105 °C', '−40 to 150 °C'],
+      'temperature grades', 'Automotive parts are graded by ambient range: grade 0 is −40 to 150 °C, grade 1 −40 to 125 °C, grade 2 −40 to 105 °C and grade 3 −40 to 85 °C. The qualification stress temperature follows the grade.',
+      ['A part under the hood needs a grade with a:', 'Higher top temperature', ['Lower top temperature', 'Narrower range']], 'Grade 0 reaches 150 °C, grade 1 125 °C, grade 2 105 °C and grade 3 85 °C, all from −40 °C'],
+    ['Qualification runs a high-temperature operating life test. How many lots and parts, and how many failures allowed?', 'Three lots of 77 parts, none allowed', ['One lot of 77 parts, one allowed', 'Three lots of 231 parts, three allowed', 'Ten lots of 10 parts, none allowed'],
+      'the operating life test', 'The usual test runs 1000 hours at the temperature of the part\'s grade on three lots of 77 parts (231 in all) with zero failures allowed. Using several lots shows that the result does not depend on one production run.',
+      ['Three lots of 77 parts make this many parts:', '231', ['77', '154']], 'Three lots of 77 parts (231 in all), run for 1000 hours at the grade temperature, with zero failures allowed'],
     ['Difference between wafer sort and final test?', 'Sort probes bare dies; final tests packaged parts', ['They are the same test', 'Final test happens first', 'Wafer sort tests only the memory, and final test only the logic'], 'two test stages', 'Wafer sort tests bare dies on the wafer with needle probes, so bad dies are found before the cost of packaging is spent on them. Final test happens after packaging, to catch assembly damage and to verify speed and temperature specs.', ['Wafer sort happens:', 'Before packaging', ['After packaging', 'After shipping']], 'Wafer sort probes each die before dicing, so bad dies are not packaged; final test checks packaged parts, often at temperature and speed'],
     ['Why do some parts get burn-in?', 'To trigger infant-mortality failures before shipping', ['To make them faster, by ageing the transistors beforehand', 'To program the fuses that hold the trim and repair data', 'To test the package only, and not the die that is inside it'], 'burn-in', 'Failures are more common very early in a part\'s life (infant mortality) and late (wear-out). Running parts hot and at high voltage for a while ages weak ones quickly, so they fail in the factory instead of in the customer\'s product.', ['Burn-in makes weak parts fail:', 'In the factory, before shipping', ['At the customer', 'Never']], 'To trigger infant-mortality failures before shipping, under heat and high voltage'],
     ['What does IDDQ testing look for?', 'Abnormal quiescent supply current from shorts and leakage', ['The clock frequency that the part can run at, at best', 'Timing paths that are too slow, for a given supply voltage', 'Bit errors in the memory, using a march pattern over the array'], 'IDDQ', 'A CMOS chip that is not switching draws almost no supply current. A defect such as a short between wires makes a path for current even at rest, so measuring the quiescent current (IDDQ) can reveal it even when the logic outputs are still right.', ['A healthy idle CMOS chip draws:', 'Almost no current', ['A lot of current', 'Random current']], 'Abnormal quiescent supply current that reveals shorts and leakage defects logic tests miss'],
@@ -764,8 +850,10 @@ export const testBoss = boss({
     { t: 'gen', make: () => ask('Test takes 2 s, tester time costs $0.04/s, 4 sites. Cost per die, in cents?', qty(2, '', 0.02, '2'), '2 × 0.04 / 4 = $0.02 = 2¢.') },
     { t: 'gen', make: () => ask('Moving to 8 sites (same 2 s), cost per die in cents?', qty(1, '', 0.02, '1'), '2 × 0.04 / 8 = 1¢: a 50% cut without touching quality.') },
     { t: 'gen', make: () => ask('Throughput at 8 sites with 2 s test and 0.4 s index, in units per hour?', qty((3600 * 8) / 2.4, '', 0.02, String((3600 * 8) / 2.4)), `3600 × 8 / 2.4 = ${(3600 * 8) / 2.4} UPH.`) },
+    { t: 'gen', make: () => { const af = Math.exp((0.7 / 8.617e-5) * (1 / 328.15 - 1 / 398.15)); return ask('Reliability plan: Ea = 0.7 eV, use at 55 °C, stress at 125 °C. Acceleration factor? (k = 8.617e-5 eV/K)', qty(af, '', 0.03, String(Math.round(af))), `exp[(0.7 / 8.617e-5) × (1/328.15 - 1/398.15)] = ${Math.round(af)}, about 78.`); } },
+    { t: 'gen', make: () => { const fit = (1.83 / (2 * 231 * 1000 * 78)) * 1e9; return ask('231 parts run 1000 h at AF 78 with zero failures. FIT at 60% confidence? (χ² ≈ 1.83)', qty(fit, '', 0.02, String(+fit.toPrecision(3))), `1.83 / (2 × 231 × 1000 × 78) × 10⁹ = ${+fit.toPrecision(3)} FIT.`); } },
   ],
-  recap: ['DPPM and coverage.', 'Temperature testing.', 'Multi-site cost and throughput.'],
+  recap: ['DPPM and coverage.', 'Temperature testing.', 'Multi-site cost and throughput.', 'Acceleration factor and zero-failure FIT.'],
 });
 
 // ------------------------------------------------------------------ FPGA prototyping & emulation

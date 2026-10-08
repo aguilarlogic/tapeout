@@ -1,6 +1,6 @@
 // Practice banks and bosses for the domain chips of Act 7: AI accelerators, hardware security, functional
 // safety, silicon photonics, qubits and quantum control electronics.
-import { num, qty } from '../lessons/answers';
+import { num, qty, words } from '../lessons/answers';
 import { calc, choice, count, sim, step, walk } from '../lessons/teach';
 import { art, ask, mc, pick, say } from '../lessons/types';
 import { boss, practice, tier } from './types';
@@ -206,7 +206,61 @@ export const hwsecPractice = practice('practice-hwsec', 'Security Drills', 'brut
       calc(`All ${n} must fail: (1 - p)^${n}:`, `${sig(1 - p, 5)}^${n}`, (1 - p) ** n, '', sig((1 - p) ** n, 4), 0.01),
       calc('At least one success = 1 minus that, as a %:', `(1 - ${sig((1 - p) ** n, 4)}) × 100`, pr, '%', sig(pr), 0.02));
   },
+  (r, d) => {
+    // Grover: a quadratic speed-up halves the exponent of the key space. The steps run in series, so it stays impractical.
+    const idea = 'Grover\'s algorithm searches N possibilities in about √N steps instead of N. A key of k bits has 2^k possibilities, so the search needs about √(2^k) = 2^(k/2) steps: the exponent is halved. Those steps must run one after another, which keeps it impractical, but long-term guidance still asks for AES-256.';
+    if (d < 3) {
+      const k = d === 1 ? 128 : pick(r, [192, 256]);
+      return walk(ask(`Grover's search is quadratically faster. In theory, about how many steps recover an AES-${k} key, as a power of 2? (give the exponent)`, num(k / 2), `√(2^${k}) = 2^${k / 2}. The serial depth makes it impractical, but guidance prefers AES-256 anyway.`, 'Halve the exponent.'),
+        'Grover on a symmetric key', idea,
+        choice('A quadratic speed-up takes the square root of the search space. The exponent of 2 is then:', 'Halved', ['Doubled', 'Unchanged']),
+        count(`Exponent for a ${k}-bit key:`, `${k} / 2`, k / 2));
+    }
+    const x = pick(r, [32, 40, 48, 56, 64, 72, 80, 96, 112, 128]);
+    return walk(ask(`A key search by Grover's algorithm needs about 2^${x} serial steps. How many bits long is the key?`, num(2 * x), `2^${x} = √(2^${2 * x}), so the key has ${2 * x} bits.`, 'Double the exponent.'),
+      'working Grover backwards', idea,
+      count(`The steps are the square root of the key space, so the key space is the square of 2^${x}: exponent`, `${x} × 2`, 2 * x));
+  },
+  (r, d) => {
+    // Welch's t for a fixed-versus-random leakage test, with equal counts and variances in the first two levels.
+    const idea = 'To test a design for leakage, collect traces for one fixed input and for random inputs and compare them at each time point with Welch\'s t: t = (mean_fixed - mean_random) / √(var_fixed/n_fixed + var_random/n_random). If |t| is above 4.5 the point leaks, but the result is only believed when the same point exceeds 4.5 with the same sign in two independent trace sets.';
+    if (d === 3) {
+      const t1 = pick(r, [5.1, 6.4, 9.8, 12.3]), kind = pick(r, ['same', 'low', 'flip']);
+      const t2 = kind === 'same' ? pick(r, [5.6, 7.2, 10.4]) : kind === 'low' ? pick(r, [1.2, 2.8, 3.9]) : -pick(r, [5.3, 6.9, 8.8]);
+      const ok = kind === 'same';
+      return walk(ask(`At one time point, the first trace set gives t = +${t1} and a second, independent set gives t = ${t2 > 0 ? '+' : '−'}${Math.abs(t2)}. Is leakage confirmed there? (yes or no)`, words(ok ? 'yes' : 'no'), `${ok ? 'Both exceed 4.5 with the same sign: confirmed.' : kind === 'low' ? 'The second set stays below 4.5, so the first was probably noise.' : 'The signs differ, so it is not a repeatable leak.'} One set alone is not enough: with thousands of points, a few cross the line by chance.`, 'Both sets must exceed 4.5, with the same sign.'),
+        'confirming a leakage result', idea,
+        choice('How many independent trace sets must agree?', 'Two', ['One', 'Three']),
+        step('Does the second set exceed 4.5 in the same direction as the first? (yes or no)', words(ok ? 'yes' : 'no')));
+    }
+    const n = pick(r, [1000, 5000, 20000, 50000]), v = pick(r, [1, 4, 9]);
+    let dm = pick(r, [0.02, 0.05, 0.1, 0.2, 0.5]), t = dm / Math.sqrt((2 * v) / n);
+    // keep clear of the threshold so a rounded answer still decides the same way
+    while (Math.abs(t - 4.5) < 0.6) { dm *= 2; t = dm / Math.sqrt((2 * v) / n); }
+    const se = Math.sqrt((2 * v) / n);
+    if (d === 1) return walk(ask(`Fixed-versus-random test at one point: the means differ by ${dm}, both variances are ${v} and each set has ${n} traces. What is Welch's t?`, qty(t, '', 0.03, sig(t)), `t = ${dm} / √(${v}/${n} + ${v}/${n}) = ${dm} / ${sig(se)} = ${sig(t)}.`, 'Difference of the means over √(var/n + var/n).'),
+      "Welch's t-test", idea,
+      calc('The denominator, √(var/n + var/n):', `sqrt(${v} / ${n} + ${v} / ${n})`, se, '', sig(se, 4), 0.01),
+      calc('t = difference ÷ denominator:', `${dm} / ${sig(se, 4)}`, t, '', sig(t), 0.03));
+    return walk(ask(`Fixed-versus-random test at one point: the means differ by ${dm}, both variances are ${v} and each set has ${n} traces. Is |t| above 4.5? (yes or no)`, words(Math.abs(t) > 4.5 ? 'yes' : 'no'), `t = ${dm} / ${sig(se)} = ${sig(t)}, which is ${t > 4.5 ? 'above' : 'below'} 4.5. A real assessment repeats it on a second, independent set before believing the result.`, 'Compute t, then compare with 4.5.'),
+      "Welch's t-test and the threshold", idea,
+      calc('The denominator, √(var/n + var/n):', `sqrt(${v} / ${n} + ${v} / ${n})`, se, '', sig(se, 4), 0.01),
+      calc('t = difference ÷ denominator:', `${dm} / ${sig(se, 4)}`, t, '', sig(t), 0.03),
+      step('Is |t| above 4.5? (yes or no)', words(Math.abs(t) > 4.5 ? 'yes' : 'no')));
+  },
   (r) => concept(r, [
+    ['Which post-quantum algorithm replaces ECDH key exchange?', 'ML-KEM', ['ML-DSA', 'SLH-DSA', 'AES-256'],
+      'post-quantum replacements', 'Shor\'s algorithm breaks RSA and elliptic-curve cryptography, so key exchange and signatures need new schemes. ML-KEM is the key-exchange one; ML-DSA and SLH-DSA are the signature ones. Symmetric ciphers survive with longer keys.',
+      ['A signature scheme proves who sent something. A key-exchange scheme:', 'Agrees a shared secret', ['Hashes a message', 'Encrypts bulk data']], 'ML-KEM is the key-encapsulation scheme that replaces elliptic-curve key exchange; ML-DSA and SLH-DSA replace signatures'],
+    ['Why must long-lived secrets move to post-quantum cryptography already?', 'Recorded data can be decrypted later', ['Quantum computers already break AES-256', 'Post-quantum schemes are always faster', 'Live connections are the only target'],
+      'harvest now, decrypt later', 'An attacker can record encrypted traffic today and wait. Once a large quantum computer exists, the recording gives up its secrets, so data that must stay secret for decades needs protection from the start.',
+      ['An attacker who records traffic today and decrypts it years later is:', 'Harvesting now and decrypting later', ['Using a side channel', 'Glitching the clock']], '"Harvest now, decrypt later": recorded traffic can be decrypted once a quantum computer exists, so long-lived data needs post-quantum protection today'],
+    ['A device derives its identity from the previous layer\'s secret plus a hash of the next layer\'s code. What happens when the firmware is modified?', 'The derived identity changes', ['The identity stays the same', 'The chip erases its fuses', 'The boot ROM rewrites the firmware'],
+      'layered device identity', 'Each layer\'s secret depends on the hash of the code that follows it. Different code gives a different hash, so a different secret: modified firmware can not pose as the original.',
+      ['Modified code has a different hash, so its derived secret is:', 'Different', ['The same', 'Zero']], 'The hash of the changed code goes into the derivation, so the identity is different and the original can not be impersonated'],
+    ['An attacker glitches the clock during the signature check. Best countermeasure?', 'Verify twice, with redundant comparison and glitch detectors', ['Use a longer signature', 'Hide the boot ROM contents', 'Raise the clock frequency'],
+      'fault-injection countermeasures', 'A single check is a single point of failure. Doing it twice and comparing in a redundant way, with sensors that notice glitches and reset the chip, forces the attacker to land several unlikely glitches at once.',
+      ['A glitch skips one instruction. Computing the check twice means the attacker must:', 'Skip both, in the same way', ['Skip only one', 'Skip neither']], 'Redundant checks plus glitch detectors, so one glitch is not enough'],
     ['What is a hardware root of trust?', 'An unchangeable first stage that verifies the first code', ['The first transistor placed in the layout of the chip, which boots', 'The operating system, once it has finished booting up for good', 'A password manager that holds the keys of every user'], 'the root of trust', 'Security starts from something that cannot be changed: a small first stage with code in ROM and keys in fuses. It checks the first piece of software before it runs, which then checks the next, forming a chain. That first stage is immutable; later root-of-trust firmware is measured or verified by it and can be updated.', ['The root of trust can be trusted because it:', 'Its first stage cannot be modified', ['Is the largest block', 'Runs the fastest']], 'A small, isolated block whose first stage (boot ROM, fused keys, crypto) is immutable and verifies the first code, which verifies the next'],
     ['How did Spectre leak secrets?', 'Cancelled speculative work left timing traces in the cache', ['It printed the memory of the other process on a console', 'It broke the AES algorithm itself, using a weak key schedule', 'It glitched the supply voltage to skip the access checks'], 'speculative execution attacks', 'A CPU guesses ahead and runs instructions speculatively; if the guess was wrong, it undoes their architectural effects. But the cache still holds data those instructions touched, and an attacker can time memory accesses to learn what was touched.', ['A cancelled speculative instruction can still leave a trace in:', 'The cache', ['The registers', 'The program counter']], 'Speculatively executed instructions that were later cancelled still left traces in the cache that could be timed'],
     ['What is a PUF?', 'A circuit that turns process variation into a device key', ['A cheap cipher that is used when AES is too large to fit', 'A fuse bank that stores the key bits, one bit per fuse', 'A random number taken from software, seeded at each boot'], 'physically unclonable functions', 'No two chips are exactly alike at the atomic scale. A PUF measures those tiny random differences (for example which of two identical circuits is faster) and turns them into a key that is unique to the chip. The key is re-derived at every power-up from the chip\'s physical randomness, using stored helper data that is not secret. No key is stored, so there is none to steal.', ['A PUF key comes from:', 'Random manufacturing variation', ['A stored fuse value', 'Software']], 'A circuit that turns random manufacturing variation into a device-unique key that is re-derived at power-up, not stored'],
@@ -245,8 +299,11 @@ pin_check:
     mc('Best hardening for the boot branch?', ['Redundant, complementary checks and glitch detectors that fail closed', 'A faster CPU, so that the check finishes before any glitch can land there', 'A longer key, so that the signature is harder to forge in the field', 'Obfuscating the boot ROM contents so that attackers cannot read it'], 0, 'Add random delays too, and make the glitch detectors reset the chip. One branch is one point of failure. One branch is one point of failure; make the attacker win several unlikely coin flips at once.'),
     { t: 'gen', make: () => ask('A DPA attack needs 2000 traces. Noise injection cuts the leaking signal to 1/20 of its amplitude (noise unchanged). Traces needed now?', qty(800000, '', 0.02, '800000'), 'The number of traces grows with 1/ρ², where ρ is the correlation, and ρ scales with signal amplitude: 2000 × 20² = 800,000. Hiding (noise, shuffling, balanced logic) slows an attack quadratically.') },
     { t: 'gen', make: () => { const h = 2 ** 64 / 1e12 / 3600; return ask('Brute force of the 64-bit key at 10¹² keys/s, worst case, in hours?', qty(h, 'h', 0.03, sig(h)), `2⁶⁴ / 1e12 = ${sig(2 ** 64 / 1e12)} s = ${sig(h)} h. Use 128-bit keys.`); } },
+    mc('Which post-quantum algorithm replaces the ECDH key exchange in the next generation of the lock?', ['ML-KEM', 'ML-DSA', 'SLH-DSA', 'AES-256'], 0, 'ML-KEM does key exchange. ML-DSA and SLH-DSA are signatures (they would protect the firmware image), and AES-256 is a symmetric cipher that stays.'),
+    { t: 'gen', make: () => ask('Grover\'s search is quadratically faster. In theory, about how many steps recover a 128-bit AES key, as a power of 2?', num(64), '√(2¹²⁸) = 2⁶⁴. The steps must run in series, so it is impractical, but guidance asks for AES-256 anyway.') },
+    { t: 'gen', make: () => { const t = 0.1 / Math.sqrt((2 * 4) / 20000); return ask('Leakage test of the crypto engine: fixed-versus-random means differ by 0.1, both variances are 4 and each set has 20000 traces. Welch\'s t?', qty(t, '', 0.03, sig(t)), `t = 0.1 / √(4/20000 + 4/20000) = 0.1 / ${sig(Math.sqrt(8 / 20000))} = ${sig(t)}. Above 4.5, so the point leaks, once a second independent set agrees.`); } },
   ],
-  recap: ['Timing leaks.', 'Fault-injection odds.', 'DPA scaling.', 'Key lengths.'],
+  recap: ['Timing leaks.', 'Fault-injection odds.', 'DPA scaling.', 'Key lengths.', 'Post-quantum schemes and Grover.', 'Leakage testing.'],
 });
 
 // ------------------------------------------------------------------ functional safety
@@ -321,7 +378,65 @@ export const fusaPractice = practice('practice-fusa', 'Functional Safety Drills'
       calc('The undetected fraction, 1 - coverage:', `1 - ${dc}`, 1 - dc, '', sig(1 - dc, 4), 0.002),
       calc('Residual FIT = total × undetected fraction:', `${total} × ${sig(1 - dc, 4)}`, res, '', sig(res), 0.02));
   },
+  (r, d) => {
+    const idea = 'Each hazardous event is rated on three scales: severity S (0 to 3), exposure E (0 to 4) and controllability C (0 to 3). If any of them is class 0 the event is QM and needs no safety goal. Otherwise add the three class numbers: 10 is ASIL D, 9 is C, 8 is B, 7 is A, and 6 or less is QM.';
+    let sec: number[];
+    if (d === 1) sec = pick(r, [[3, 4, 3], [1, 1, 1], [3, 4, 1], [1, 4, 3], [3, 1, 1], [2, 2, 2]]);
+    else if (d === 2) sec = [pick(r, [1, 2, 3]), pick(r, [1, 2, 3, 4]), pick(r, [1, 2, 3])];
+    else { sec = [pick(r, [1, 2, 3]), pick(r, [1, 2, 3, 4]), pick(r, [1, 2, 3])]; sec[pick(r, [0, 1, 2])] = 0; }
+    const [s, e, c] = sec, t = s + e + c, zero = sec.includes(0);
+    const a = zero ? 'QM' : t >= 10 ? 'D' : t === 9 ? 'C' : t === 8 ? 'B' : t === 7 ? 'A' : 'QM';
+    return walk(ask(`A hazardous event is rated severity S${s}, exposure E${e}, controllability C${c}. Which ASIL is it? (A, B, C, D or QM)`, words(a, `ASIL ${a}`), zero ? `A class 0 makes it QM, whatever the other two say (the sum would have been ${t}).` : `${s} + ${e} + ${c} = ${t}, so ${a === 'QM' ? 'QM' : `ASIL ${a}`}.`, 'Add the class numbers, unless one is 0.'),
+      'looking up an ASIL', idea,
+      ...(zero ? [choice('A class 0 anywhere means the event is:', 'QM', ['ASIL A', 'ASIL D'])] : [count('S + E + C:', `${s} + ${e} + ${c}`, t)]),
+      step('Which ASIL is that? (A, B, C, D or QM)', words(a, `ASIL ${a}`)));
+  },
+  (r, d) => {
+    const idea = 'A fault can cause harm if it lasts longer than the fault-tolerant time interval (FTTI) of the safety goal. The system has to detect the fault and then reach the safe state inside that interval, so detection time plus reaction time must fit. The margin is what is left over.';
+    const ftti = pick(r, [15, 20, 30, 50]), rea = pick(r, [3, 5, 6, 10]), det = pick(r, [2, 4, 5, 8]);
+    if (d === 1) return walk(ask(`The FTTI is ${ftti} ms. A fault is detected in ${det} ms and the reaction takes ${rea} ms. How many ms of margin are left?`, qty(ftti - det - rea, 'ms', 0.001, String(ftti - det - rea)), `${ftti} - ${det} - ${rea} = ${ftti - det - rea} ms.`, 'FTTI minus detection minus reaction.'),
+      'the FTTI budget', idea,
+      calc('Time used = detection + reaction, in ms:', `${det} + ${rea}`, det + rea, 'ms', String(det + rea), 0.001),
+      calc('Margin = FTTI - time used, in ms:', `${ftti} - ${det + rea}`, ftti - det - rea, 'ms', String(ftti - det - rea), 0.001));
+    const per = pick(r, [1, 2, 3]);
+    if (d === 2) return walk(ask(`The FTTI is ${ftti + 5} ms. The self-test runs every ${per} ms (a fault can wait that long for the next run), evaluating takes ${det} ms and the reaction takes ${rea} ms. Margin, in ms?`, qty(ftti + 5 - per - det - rea, 'ms', 0.001, String(ftti + 5 - per - det - rea)), `${ftti + 5} - ${per} - ${det} - ${rea} = ${ftti + 5 - per - det - rea} ms. The test interval counts as detection time.`, 'Wait for the test + evaluate + react.'),
+      'the FTTI budget with a test interval', `${idea} If detection is a periodic test, a fault may appear just after a run and wait a whole interval before the next one.`,
+      calc('Detection time = wait + evaluation, in ms:', `${per} + ${det}`, per + det, 'ms', String(per + det), 0.001),
+      calc('Margin = FTTI - detection - reaction, in ms:', `${ftti + 5} - ${per + det} - ${rea}`, ftti + 5 - per - det - rea, 'ms', String(ftti + 5 - per - det - rea), 0.001));
+    const f2 = pick(r, [20, 30, 40, 50]), det2 = pick(r, [2, 4, 6]), allowed = 0.8 * f2 - det2;
+    return walk(ask(`Design rule: detection plus reaction may use at most 80% of the ${f2} ms FTTI. Detection takes ${det2} ms. What is the longest reaction time allowed, in ms?`, qty(allowed, 'ms', 0.01, sig(allowed)), `0.8 × ${f2} = ${sig(0.8 * f2)} ms in all; minus ${det2} ms for detection leaves ${sig(allowed)} ms.`, 'Take 80% of the FTTI, then subtract the detection time.'),
+      'the reaction time that fits', idea,
+      calc('The time budget, 80% of the FTTI, in ms:', `0.8 × ${f2}`, 0.8 * f2, 'ms', sig(0.8 * f2, 4), 0.005),
+      calc('Reaction allowed = budget - detection, in ms:', `${sig(0.8 * f2, 4)} - ${det2}`, allowed, 'ms', sig(allowed), 0.01));
+  },
+  (r, d) => {
+    const T = { B: [90, 60, 100], C: [97, 80, 100], D: [99, 90, 10] } as const;
+    const idea = 'Hardware metrics have targets for each ASIL. Single-point fault metric (SPFM): 90% for B, 97% for C, 99% for D. Latent fault metric (LFM): 60%, 80%, 90%. Random-failure budget (PMHF): under 100, 100 and 10 FIT. A design reaches an ASIL only if it meets every target of that level. For ASIL B they are recommended; for C and D they are required.';
+    if (d === 1) {
+      const lv = pick(r, ['B', 'C', 'D'] as const), m = pick(r, [['SPFM', 0], ['LFM', 1]] as const);
+      return walk(ask(`What minimum ${m[0]} does ASIL ${lv} aim for, in %?`, qty(T[lv][m[1]], '%', 0.001, String(T[lv][m[1]])), `${m[0]} for ASIL ${lv}: ${T[lv][m[1]]}%.`, 'B, C, D: SPFM 90, 97, 99; LFM 60, 80, 90.'),
+        'the metric targets', idea,
+        choice(`${m[0]} targets rise with the level:`, 'Yes: D is the strictest', ['No: they are the same for B, C and D', 'No: D is the most relaxed']),
+        step(`The ${m[0]} target for ASIL ${lv}, in %:`, qty(T[lv][m[1]], '%', 0.001, String(T[lv][m[1]]))));
+    }
+    const spfm = pick(r, [88, 91, 96, 97.5, 98.5, 99.4]), lfm = pick(r, [55, 62, 78, 85, 92]), pm = d === 3 ? pick(r, [8, 40, 150]) : 0;
+    const meets = (lv: 'B' | 'C' | 'D') => spfm >= T[lv][0] && lfm >= T[lv][1] && (d < 3 || pm < T[lv][2]);
+    const best = meets('D') ? 'D' : meets('C') ? 'C' : meets('B') ? 'B' : 'none';
+    return walk(ask(`A design has SPFM ${spfm}%, LFM ${lfm}%${d === 3 ? ` and PMHF ${pm} FIT` : ''}. What is the highest ASIL whose targets it meets? (B, C, D or none)`, words(best, `ASIL ${best}`), `${best === 'none' ? 'Not even ASIL B: SPFM needs 90% and LFM 60%' + (d === 3 ? ', PMHF under 100 FIT' : '') + '.' : `It meets ASIL ${best}.`} Every target of the level has to be met, not just one.`, 'Check each level from D down; all targets must pass.'),
+      'matching metrics to an ASIL', idea,
+      choice('To reach a level, the design must meet:', 'Every target of that level', ['Any one target of that level', 'Only the SPFM target']),
+      step('Highest ASIL met (B, C, D or none):', words(best, `ASIL ${best}`)));
+  },
   (r) => concept(r, [
+    ['Which decomposition of an ASIL D requirement is valid?', 'B(D) + B(D)', ['A(D) + A(D)', 'A(D) + B(D)', 'B(D) + QM(D)'],
+      'ASIL decomposition', 'A requirement can be split between two independent elements, each built to a lower level. The valid splits of D are C(D) + A(D), B(D) + B(D) and D(D) + QM(D). The two elements must be truly independent, which dependent-failure analysis checks.',
+      ['Decomposition only works if the two elements are:', 'Independent', ['Identical', 'Faster']], 'The valid splits of D are C(D) + A(D), B(D) + B(D) and D(D) + QM(D), and only for independent elements'],
+    ['For which ASIL are the numeric hardware metric targets only recommended, not required?', 'ASIL B', ['ASIL C', 'ASIL D', 'ASIL C and D'],
+      'which targets are mandatory', 'The SPFM, LFM and PMHF targets are recommended for ASIL B and required for C and D. Decomposing a requirement does not relax them, and they apply per item and per safety goal.',
+      ['At ASIL D the metric targets are:', 'Required', ['Optional', 'Waived by decomposition']], 'Recommended for B, required for C and D'],
+    ['Two channels take their clock from the same oscillator. What does the shared clock threaten?', 'Independence: one common cause can fail both', ['Speed: the channels run too slowly together', 'Area: the oscillator takes room on the die', 'Nothing, as long as both channels agree'],
+      'dependent failures', 'Redundancy only helps if one fault can not take out both copies. A shared clock, supply or layout region is a common cause, and dependent-failure analysis looks for exactly these.',
+      ['A fault in a shared clock can hit:', 'Both channels at once', ['Only one channel', 'Neither channel']], 'A common-cause failure: one fault in the shared clock defeats the redundancy'],
     ['Automotive safety grades risk ASIL A to D. Which needs the most rigor?', 'ASIL D: the hazard is severe, the situation common and the driver unable to control it', ['ASIL A: the hazard is mild, the situation rare and the driver is in control', 'QM, since quality management already covers every other grade as well', 'All of them are equal, since each grade needs the same level of rigor'], 'ASIL levels', 'The automotive safety integrity level is set by three things: how severe the harm would be, how often the situation occurs, and how controllable it is for the driver. An ASIL belongs to a hazardous event (and the safety goal that covers it). A brake failure that is severe, common and out of the driver\'s control reaches ASIL D, the strictest grade; not every braking function is ASIL D.', ['A severe, common, uncontrollable hazard is graded:', 'ASIL D, the highest', ['ASIL A', 'No rating']]],
     ['Which is a random hardware fault rather than a systematic one?', 'An alpha particle flips a bit in SRAM', ['A bug in the RTL that was found in the design review', 'A wrong requirement that was copied into the specification', 'A missing timing constraint in the synthesis script of the block'], 'random versus systematic faults', 'Random faults come from physics and happen by chance in working hardware (a particle, wear); safety mechanisms handle them. Systematic faults come from mistakes in the design or the requirements, which are built into every unit and are prevented by a good process.', ['A bug in the RTL is:', 'A systematic fault', ['A random fault', 'A particle']]],
     ['Two identical cores run a couple of cycles apart and compare outputs every cycle. What is it?', 'Dual-core lockstep, which catches random faults in either core', ['Hyperthreading, which shares one core between two threads', 'Speculation, which runs instructions before their result is needed', 'Cache coherence, which keeps the lines of both cores in agreement'], 'lockstep cores', 'Two cores run the same program and a checker compares their outputs. If a random fault upsets only one, the outputs differ and the fault is caught. A small delay between them makes it unlikely that one event corrupts both the same way.', ['A mismatch between the two cores means:', 'A fault happened in one of them', ['Everything is fine', 'The program is long']], 'Dual-core lockstep: it detects random faults in either core'],
@@ -346,8 +461,11 @@ export const fusaBoss = boss({
     { t: 'gen', make: () => { const res = 200 * 0.01 + 300 * 0.001 + 50 * 0.02; return ask('Now CPU 99% (lockstep), SRAM 99.9% (ECC), interconnect still 98%. Residual FIT?', qty(res, '', 0.02, sig(res)), `200 × 0.01 + 300 × 0.001 + 50 × 0.02 = ${sig(res)} FIT: under the chip\'s 5 FIT budget.`); } },
     { t: 'gen', make: () => ask('SECDED on 64-bit SRAM words: how many check bits?', num(8), 'SEC needs 7 (2⁷ = 128 ≥ 64 + 7 + 1), plus 1 for double detection: 8. The classic 72-bit ECC word.') },
     { t: 'gen', make: () => { const f = (3.3 * 5e6 * 500) / 1e9; return ask('At 3.3 FIT residual, a fleet of 5 million cars running 500 hours a year. Expected dangerous failures per year?', qty(f, '', 0.02, sig(f)), `3.3 × 5e6 × 500 / 1e9 = ${sig(f)}. That is why the target is so strict.`); } },
+    { t: 'gen', make: () => ask('The hazard analysis rates unintended full braking at speed S3, E3, C3. Which ASIL? (A, B, C, D or QM)', words('C', 'ASIL C'), '3 + 3 + 3 = 9, which is ASIL C. Only S3 + E4 + C3 = 10 reaches D.') },
+    mc('The team wants to split an ASIL D requirement across two independent channels. Which split is valid?', ['A(D) + A(D)', 'B(D) + B(D)', 'A(D) + B(D)', 'B(D) + QM(D)'], 1, 'The valid splits are C(D) + A(D), B(D) + B(D) and D(D) + QM(D). The channels must be independent, and the metric targets do not get easier.'),
+    { t: 'gen', make: () => ask('The FTTI is 20 ms. Detection takes 4 ms and the reaction 6 ms. Margin, in ms?', qty(10, 'ms', 0.001, '10'), '20 - 4 - 6 = 10 ms of margin.') },
   ],
-  recap: ['ASIL D targets.', 'Residual FIT.', 'ECC and lockstep.', 'Fleet-scale failures.'],
+  recap: ['ASIL D targets.', 'Residual FIT.', 'ECC and lockstep.', 'Fleet-scale failures.', 'S + E + C lookup.', 'Decomposition and FTTI.'],
 });
 
 // ------------------------------------------------------------------ silicon photonics
