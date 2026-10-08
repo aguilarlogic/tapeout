@@ -8,7 +8,7 @@ export interface CodeLevel {
   xp: number;
   /** guided: hints and a story; debug: fix a crashing program; boss: randomized, no hints. */
   tier: 'guided' | 'debug' | 'boss';
-  lang: 'py' | 'c';
+  lang: 'py' | 'c' | 'tcl';
   /** One line shown above the brief: who is asking. */
   ticket: string;
   build: (r: Rng) => CodeInstance;

@@ -92,7 +92,7 @@ export const SKILLS: Skill[] = [
   S('shell', 'Tooling', 'Linux shell, pipes and regular expressions', 'all', ['shell'], ['practice-shell', 'sh-nav', 'sh-grep', 'sh-pipes', 'sh-find', 'sh-awk', 'sh-sed', 'sh-perm', 'sh-loop', 'sh-script'], ['boss-shell', 'sh-boss-triage']),
   S('git', 'Tooling', 'Version control with git', 'all', ['git'], ['practice-git', 'git-first', 'git-branch', 'git-undo', 'git-conflict', 'git-stash', 'git-bisect'], ['boss-git', 'git-boss-merge', 'git-boss-bisect']),
   S('python', 'Tooling', 'Python scripting', 'all', ['python'], ['practice-python', 'code-py-parse', 'code-py-hist', 'code-py-regfield'], ['boss-python', 'code-boss-py-log']),
-  S('flows', 'Tooling', 'TCL, Make and EDA flow scripting', ['pd', 'dv', 'rtl', 'eda', 'dft', 'soc', 'libchar'], ['flows'], ['practice-flows', 'code-py-triage', 'sh-make', 'sh-make-hdr', 'sh-python'], ['boss-flows', 'sh-boss-make']),
+  S('flows', 'Tooling', 'TCL, Make and EDA flow scripting', ['pd', 'dv', 'rtl', 'eda', 'dft', 'soc', 'libchar'], ['flows'], ['practice-flows', 'code-py-triage', 'code-tcl-subst', 'code-tcl-dict', 'code-tcl-regexp', 'code-tcl-netlist', 'code-tcl-catch', 'sh-make', 'sh-make-hdr', 'sh-python'], ['boss-flows', 'code-tcl-boss', 'sh-boss-make']),
 
   // ------------------------------------------------ design verification
   S('tb-arch', 'Verification', 'Testbench architecture, scoreboards, reference models', ['dv'], ['dv'], ['practice-dv', 'tb-layered', 'tb-fifo'], ['boss-tb', 'tb-boss-env']),

@@ -141,8 +141,8 @@ export class TclInterp {
     try { this.evalScript(src); } catch (e) { if (!(e instanceof Ret)) throw e; }
   }
   /** Evaluate a script as the top level and give back its result (used for test calls). */
-  evalTop(src: string): string {
-    try { return this.evalScript(src); } catch (e) { if (e instanceof Ret) return e.value; throw e; }
+  evalTop(src: string, base = 0): string {
+    try { return this.evalScript(src, base); } catch (e) { if (e instanceof Ret) return e.value; throw e; }
   }
 
   static run(src: string, opts: TclOptions = {}): { stdout: string; error?: string; line?: number; interp: TclInterp } {
