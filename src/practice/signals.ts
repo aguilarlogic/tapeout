@@ -3,6 +3,7 @@ import { num, qty } from '../lessons/answers';
 import { calc, choice, count, walk } from '../lessons/teach';
 import { art, ask, between, mc, pick, say } from '../lessons/types';
 import { boss, practice, tier } from './types';
+import { CONTROL_MARGINS } from './g-analog';
 import { atLevel, concept, eng, mcs, sig } from './util';
 
 const deg = (rad: number) => (rad * 180) / Math.PI;
@@ -299,6 +300,7 @@ export const controlPractice = practice('practice-control', 'Loop Drills', 'loop
       'divide ratio', idea,
       calc('N = f_out / f_ref:', `${fo} / ${ref}`, Nf, '', sig(Nf, 5), 0.001));
   },
+  ...CONTROL_MARGINS,
 ]);
 
 function solveCrossover(A0: number, p1: number, p2: number) {
@@ -445,6 +447,8 @@ export const controlBoss = boss({
     { t: 'gen', make: (r) => { const pm = pick(r, [35, 40]); const z = pm / 100; return ask(`With ${pm}° of margin, ζ ≈ ${z}. Predicted overshoot, in %?`, qty(Math.exp((-Math.PI * z) / Math.sqrt(1 - z * z)) * 100, '%', 0.05, sig(Math.exp((-Math.PI * z) / Math.sqrt(1 - z * z)) * 100)), `e^(-π·${z}/√(1 - ${z}²)) = ${sig(Math.exp((-Math.PI * z) / Math.sqrt(1 - z * z)) * 100)}%, which matches the scope within the approximation.`); } },
     { t: 'gen', make: (r) => { const p2 = pick(r, [3e6, 4e6, 5e6]); const target = p2 / 2; const p1new = target / 1000; return ask(`Compensation plan: move p1 down so the loop crosses unity at p2/2 = ${eng(target, 'Hz')} (≈ 63° margin). New p1, in kHz? (A0 × p1 = crossover)`, qty(p1new / 1e3, 'kHz', 0.01), `p1 = ${eng(target, 'Hz')}/1000 = ${eng(p1new, 'Hz')}. The cost: a slower loop, so worse transient response. That is the classic LDO trade.`); } },
     { t: 'gen', make: (r) => { const K = pick(r, [1000, 500]); return ask(`What DC line/load regulation error does a loop gain of ${K} leave, in %?`, qty(100 / (1 + K), '%', 0.02, sig(100 / (1 + K))), `1/(1 + ${K}) = ${sig(100 / (1 + K))}%. High DC gain for accuracy; a well-placed pole for stability.`); } },
+    { t: 'gen', make: (r) => { const g = pick(r, [6, 8, 10, 12]); return ask(`A third pole (the pass transistor's gate) appears. On the Bode plot the loop gain is −${g} dB where the phase crosses −180°. What is the gain margin, in dB?`, qty(g, 'dB', 0.02, String(g)), `GM = −(−${g} dB) = ${g} dB: the loop gain could rise ${sig(10 ** (g / 20))}× before it oscillates. Phase margin and gain margin are two readings of how close the Nyquist plot comes to −1.`, 'GM = −|L| in dB at the −180° frequency.'); } },
+    mc('After compensation the loop has 60° of phase margin. About what step overshoot should the scope now show?', ['9%', '40%', '23%', '0%'], 0, 'PM ≈ 100·ζ gives ζ ≈ 0.6, and a second-order response with ζ = 0.6 overshoots by about 9%. 45° would give about 23%, and the 40% on the scope matches a margin nearer 30°.'),
     mc('The customer insists on a tiny ceramic output cap with almost no ESR. Which compensation style suits that?', ['Internal dominant-pole or Miller', 'Rely on the cap\'s ESR zero', 'Raise the error-amp gain A0 to 10⁶', 'Make the output pole dominant'], 0, 'Internal (dominant-pole or Miller) compensation keeps the loop stable regardless of the output cap. Older LDOs needed the output cap\'s ESR zero for phase margin. Modern "cap-less" LDOs compensate internally.'),
   ],
   recap: ['Crossover ≈ A0·p1 for a dominant-pole loop.', 'PM from pole phase lags at crossover; ζ ≈ PM/100.', 'Dominant-pole compensation trades speed for stability.'],

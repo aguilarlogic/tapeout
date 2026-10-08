@@ -4,7 +4,7 @@ import { qty } from '../lessons/answers';
 import { calc, choice, walk } from '../lessons/teach';
 import { ask, mc, pick, say } from '../lessons/types';
 import { boss, practice } from './types';
-import { ANALOG_NOISE } from './g-analog';
+import { ANALOG_MARGINS, ANALOG_NOISE } from './g-analog';
 import { atLevel, concept, sci, sig } from './util';
 
 const kT = 1.38e-23 * 300;
@@ -134,6 +134,7 @@ export const analogPractice = practice('practice-analog', 'Analog Drills', 'op-a
     ...atLevel(3, [['Why does a current mirror need matched devices?', 'Mismatch sets the error in the copied current', ['Matching makes the mirror faster than a single device', 'It lets the mirror run without any supply', 'Matched devices never need a bias voltage at all'], 'current mirror matching', 'A current mirror copies a reference current into another branch. Threshold and geometry mismatch between the two transistors show up directly as a current error, so layout matching (common centroid) matters.', ['A current mirror copies a current by:', 'Matching two transistors', ['Amplifying the reference', 'Sharing a bias node only']]]]),
   ], (why) => `${why}.`, d),
   ...ANALOG_NOISE,
+  ...ANALOG_MARGINS,
 ]);
 
 export const analogBoss = boss({
