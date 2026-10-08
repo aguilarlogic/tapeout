@@ -396,8 +396,16 @@ export const ate: Lesson = {
     }),
     mc('Some chips from the same wafer run at 3.6 GHz and some only at 3.0 GHz. What does product engineering do?', ['Scrap the slow ones, because only the fastest parts can be sold', 'Speed binning: test each part\'s top frequency, sell as SKUs', 'Overclock them all, so that every part is rated at the top speed', 'Reduce the fab\'s yield target, so that fewer parts come out slow'], 1, 'Binning turns process variation into a product line. Parts can also be binned by leakage and power, or have defective cores fused off and be sold as lower core-count models.'),
     mc('Why do some chips get **burn-in** (running hot and at high voltage for hours before shipping)?', ['To make them faster, by ageing the transistors before they ship', 'To trigger infant-mortality failures in the factory', 'To test the package colour, which can fade under a high heat load', 'To measure yield, by counting how many parts survive the oven'], 1, 'This is the left side of the "bathtub curve". Failure rate over life looks like a bathtub: high early (weak parts), low in the middle, rising at wear-out. Burn-in removes the weak parts. It is expensive, so it is used mainly for high-reliability markets.'),
+    say('Three habits of a production test floor: **guard bands** are test limits set tighter than the datasheet, so a part that passes has margin for tester error and ageing. **part-average testing** is outlier screening: parts more than 6σ from the mean of their lot are rejected even when they are inside the limits, because a part far from its siblings often hides a defect. And **system-level test** (SLT) boots the real software on the part in a board-like socket, to catch what structural patterns cannot.'),
+    gen((r) => {
+      const mu = pick(r, [8, 12, 20]);
+      const sg = pick(r, [0.25, 0.5, 1]);
+      const hi = mu + 6 * sg;
+      return ask(`A lot of parts has a mean supply current of ${mu} mA with σ = ${sg} mA. Part-average testing rejects parts outside 6σ of their lot, even if they are within the datasheet limits. What is the upper reject limit, in mA?`, qty(hi, 'mA', 0.001, String(hi)), `Mean + 6σ = ${mu} + 6 × ${sg} = ${hi} mA. A part at ${hi + sg} mA may still meet the datasheet, but it sits far from every other part in its lot, so it is screened out.`, 'Mean plus six standard deviations.');
+    }),
+    say('Everything the tester measures is logged in a standard test-data log format (**STDF**, used here only as vocabulary), so yield and parametric data can be analysed across lots. Results decide each part\'s **bin**: a pass bin per speed grade, and fail bins that say which test failed. A **shmoo plot** (pass or fail over voltage and frequency) shows how much margin a bin really has.'),
   ],
-  recap: ['Wafer sort before packaging, final test after.', 'Test cost = time × rate / sites.', 'DL = 1 - Y^(1-FC); quality in DPPM.', 'Speed binning makes SKUs from variation.', 'Burn-in removes infant mortality (bathtub curve).'],
+  recap: ['Wafer sort before packaging, final test after.', 'Test cost = time × rate / sites.', 'DL = 1 - Y^(1-FC); quality in DPPM.', 'Guard bands, part-average testing (6σ of the lot) and system-level test.', 'Speed binning makes SKUs from variation.', 'Burn-in removes infant mortality (bathtub curve).'],
 };
 
 export const emu: Lesson = {
