@@ -4,7 +4,10 @@ import { qty } from '../lessons/answers';
 import { calc, choice, count, walk } from '../lessons/teach';
 import { ask, gen, mc, pick, say } from '../lessons/types';
 import { boss, practice, tier, type PracticeSet } from './types';
-import { sig } from './util';
+import { concept, sig } from './util';
+
+/** A six-row concept pool: d1 draws from the first four (easier) rows, d2 and d3 from all six. */
+const easyFirst = <T,>(d: number, rows: T[]): T[] => (d === 1 ? rows.slice(0, 4) : rows);
 
 const hard = (set: PracticeSet, i: number) => gen((r) => ({ ...set.gens[i](r, 3), teach: undefined }));
 const bossOf = (set: PracticeSet, id: string, title: string, concept: string, xp: number, intro: string, picks: number[], extra: ReturnType<typeof mc>[]) =>
@@ -68,6 +71,36 @@ export const sensorsPractice = practice('practice-sensors', 'Image Sensor Drills
       calc('Total bit rate in Gb/s = Gpix/s × bits:', `${sig(gp)} × ${bits}`, gp * bits, 'Gb/s', sig(gp * bits), 0.02),
       calc('Per lane:', `${sig(gp * bits)} / ${ch}`, rate, 'Gb/s', sig(rate), 0.03));
   },
+  (r, d) => {
+    // G2.6: PRNU grows with the signal, shot noise only as its square root: they cross at S = (1/PRNU)².
+    const prnu = pick(r, [0.25, 0.4, 0.5, 0.8, 1, 1.25, 2, 2.5]), s = (100 / prnu) ** 2;
+    const idea = 'Photo-response non-uniformity (PRNU) is a gain error between pixels, so the fixed-pattern noise it makes is a fixed fraction of the signal: PRNU × S. Shot noise is only √S. They are equal when PRNU × S = √S, so S = (1 ÷ PRNU)², with PRNU as a fraction. Above that signal, gain differences dominate over photon noise.';
+    if (d === 1) return walk(ask(`A pixel holds ${s} electrons. Its shot noise is √N. What is that, in electrons?`, qty(Math.sqrt(s), '', 0.01, sig(Math.sqrt(s))), `√${s} = ${sig(Math.sqrt(s))} e⁻.`, 'Square root.'),
+      'shot noise', 'Shot noise is the square root of the number of electrons collected.',
+      calc('Noise = √N:', `√${s}`, Math.sqrt(s), '', sig(Math.sqrt(s)), 0.01));
+    if (d === 2) return walk(ask(`A sensor has a PRNU of ${prnu}%. At a signal of ${s} e⁻, what is the fixed-pattern noise (PRNU × signal), in electrons?`, qty((prnu / 100) * s, '', 0.02, sig((prnu / 100) * s)), `${prnu / 100} × ${s} = ${sig((prnu / 100) * s)} e⁻, equal to the shot noise √${s} = ${sig(Math.sqrt(s))} e⁻.`, 'PRNU as a fraction, times the signal.'),
+      'fixed-pattern noise from PRNU', idea,
+      calc('PRNU as a fraction:', `${prnu} / 100`, prnu / 100, '', String(prnu / 100), 0.005),
+      calc('FPN = fraction × signal, in e⁻:', `${prnu / 100} × ${s}`, (prnu / 100) * s, '', sig((prnu / 100) * s), 0.02));
+    return walk(ask(`A sensor has a PRNU of ${prnu}%. At what signal does its fixed-pattern noise equal its shot noise, in electrons? (PRNU × S = √S)`, qty(s, '', 0.02, String(s)), `S = (1 / ${prnu / 100})² = ${s.toLocaleString('en-US')} e⁻. Beyond that, the picture is limited by gain differences, so flat-field correction matters.`, 'S = (1 / PRNU)².'),
+      'where gain error overtakes shot noise', idea,
+      calc('1 ÷ PRNU (PRNU as a fraction):', `1 / ${prnu / 100}`, 100 / prnu, '', sig(100 / prnu), 0.005),
+      calc('S = (1 ÷ PRNU)², in e⁻:', `${sig(100 / prnu)}²`, s, '', String(s), 0.02));
+  },
+  (r, d) => concept(r, easyFirst(d, [
+    ['What does correlated double sampling remove in a pinned-photodiode pixel?', 'Reset (kT/C) noise and the pixel offset', ['Photon shot noise from the scene', 'Gain differences between pixels, as a fixed pattern', 'Rolling-shutter skew in fast-moving scenes'], 'correlated double sampling', 'The reset level is read first, then the charge is transferred and the signal level is read. Both samples carry the same reset noise and offset, so subtracting them cancels both. It needs a pixel with a transfer gate (a 4-transistor pinned-photodiode pixel).',
+      ['The two samples are taken from the:', 'Same pixel', ['Same row of the chip only', 'Same column of the chip only']]],
+    ['Which fixed-pattern noise is an offset that shows even in the dark?', 'DSNU, the dark-signal non-uniformity', ['Photo-response non-uniformity, the gain error', 'Shot noise', 'Quantisation noise from the converter'], 'DSNU versus PRNU', 'Fixed-pattern noise has two parts. DSNU is the offset difference between pixels and shows in the dark; a dark frame removes it. PRNU is the gain difference, quoted in % of the signal, and a flat-field frame removes it.',
+      ['An offset shows even in the:', 'Dark frame', ['Bright', 'Red channel only']]],
+    ['What does PRNU, quoted in %, describe?', 'A gain difference between pixels, growing with signal', ['An offset difference between pixels, seen in the dark', 'Photon noise, which grows as the root of the signal', 'Read noise added by the column amplifier'], 'PRNU', 'Photo-response non-uniformity is a gain error, so its fixed-pattern noise is a fixed fraction of the signal. Shot noise grows only as the square root, so at high signal the gain error dominates.',
+      ['A gain error scales with the:', 'Signal', ['Temperature only', 'Frame number']]],
+    ['Why can saturation capacity be lower than the full well?', 'The readout chain can clip before the well is full', ['Some photons are reflected before reaching the well', 'Shot noise removes part of the stored charge', 'Reset drains a little charge at random'], 'saturation versus full well', 'The full well is what the photodiode can hold; the saturation capacity is the signal at which the output clips. If the amplifier or converter runs out of range first, saturation is the lower number, and it is the one that sets dynamic range.',
+      ['Dynamic range is quoted at:', 'Saturation', ['Zero signal', 'The dark frame']]],
+    ['Which shutter exposes every row at the same instant?', 'Global shutter, at some cost in pixel area', ['Rolling shutter, which exposes and reads rows one after another', 'Both, since exposure time is the same for each', 'Neither; row timing is set by the lens'], 'rolling versus global shutter', 'A rolling shutter reads rows in turn, so a fast-moving object skews. A global shutter exposes all rows together and stores the charge in each pixel until readout, which costs area.',
+      ['Skew in fast video comes from the:', 'Rolling shutter', ['Global shutter', 'Lens cap']]],
+    ['Why can a 4T pinned-photodiode pixel do CDS when a 3T hard-reset pixel cannot?', 'A transfer gate lets it read the reset level first', ['It has a bigger photodiode', 'It uses a rolling shutter instead of a global one', 'It resets more slowly, which averages out the noise'], 'why 4T pixels allow CDS', 'The transfer gate keeps the charge on the photodiode while the floating node is reset and read. Then the charge is moved and read again, so the reset noise in both samples is the same. A hard-reset 3T pixel has no such separation.',
+      ['The transfer gate separates the:', 'Photodiode from the sense node', ['Chip from the package', 'Lens from the sensor']]],
+  ]), (why) => `${why}.`),
 ]);
 
 export const sensorsBoss = bossOf(sensorsPractice, 'boss-sensors', 'The Camera Spec Review', 'collected charge, SNR, dynamic range and readout rate', 200,
@@ -124,6 +157,36 @@ export const memsPractice = practice('practice-mems', 'MEMS Drills', 'resonance,
       calc('π × f:', `π × ${f}`, Math.PI * f, 'rad/s', sig(Math.PI * f), 0.01),
       calc('τ = Q ÷ (π f), in ms:', `${q} / ${sig(Math.PI * f)} × 1000`, tau, 'ms', sig(tau), 0.03));
   },
+  (r, d) => {
+    // G2.6: angle random walk (°/√h) = rate noise density (°/s/√Hz) × 60.
+    const dens = pick(r, [0.005, 0.01, 0.02, 0.05]), arw = dens * 60;
+    const idea = 'A gyro\'s white rate noise, in °/s per √Hz, integrates into an angle error that grows as the square root of time: the angle random walk. One hour is 3600 s and √3600 = 60, so ARW in °/√h is the noise density times 60.';
+    if (d === 1) return walk(ask(`A gyro has a rate noise density of ${dens} °/s/√Hz. What is its angle random walk, in °/√h? (multiply by 60)`, qty(arw, '', 0.02, sig(arw)), `${dens} × 60 = ${sig(arw)} °/√h.`, 'Times 60.'),
+      'angle random walk', idea,
+      calc('ARW = density × 60:', `${dens} × 60`, arw, '', sig(arw), 0.02));
+    if (d === 2) return walk(ask(`A gyro data sheet gives an angle random walk of ${sig(arw)} °/√h. What is the rate noise density, in °/s/√Hz?`, qty(dens, '', 0.03, String(dens)), `${sig(arw)} / 60 = ${dens} °/s/√Hz.`, 'Divide by 60.'),
+      'angle random walk', idea,
+      calc('Density = ARW ÷ 60:', `${sig(arw)} / 60`, dens, '', String(dens), 0.03));
+    const hrs = pick(r, [1, 4, 9, 16]), err = arw * Math.sqrt(hrs);
+    return walk(ask(`A gyro with an angle random walk of ${sig(arw)} °/√h integrates for ${hrs} hours with no other correction. What is the typical (1σ) angle error from white noise alone, in degrees? (ARW × √hours)`, qty(err, '', 0.03, sig(err)), `${sig(arw)} × √${hrs} = ${sig(err)}°. The error grows with the square root of time, which is why a gyro alone cannot hold a heading and is combined with other sensors.`, 'ARW times the square root of the hours.'),
+      'drift from angle random walk', idea,
+      calc('√hours:', `√${hrs}`, Math.sqrt(hrs), '', sig(Math.sqrt(hrs)), 0.01),
+      calc('Error = ARW × √hours, in degrees:', `${sig(arw)} × ${sig(Math.sqrt(hrs))}`, err, '', sig(err), 0.03));
+  },
+  (r, d) => concept(r, easyFirst(d, [
+    ['On an Allan deviation plot, what does the flat bottom of the curve show?', 'Bias instability, the sensor\'s best stability', ['White noise, which keeps averaging away with longer τ', 'Rate random walk, which grows with τ', 'The resonant frequency of the proof mass'], 'reading an Allan plot', 'The plot shows how the noise averages as the averaging time τ grows. A slope of -1/2 is white noise (angle random walk, read at τ = 1 s). The curve then flattens where slow drift takes over: that floor is the bias instability. At long τ a slope of +1/2 is rate random walk.',
+      ['The flat floor is the sensor\'s:', 'Best stability', ['Resonance', 'Supply voltage']]],
+    ['What does a -1/2 slope on an Allan plot mean?', 'White noise, which averages down as τ grows', ['Bias instability, the flat floor of the curve', 'Rate random walk, which grows with τ', 'A resonance in the proof mass'], 'Allan slopes', 'White noise averages away as 1/√τ, which is a slope of -1/2 on a log-log plot. Bias instability is the flat bottom, and rate random walk is the +1/2 slope at long τ.',
+      ['White noise averages away with longer:', 'Averaging time', ['Cables', 'Mass']]],
+    ['What makes a MEMS accelerometer\'s Brownian noise floor lower?', 'A heavier proof mass and a higher Q', ['A lighter proof mass and a lower Q', 'A higher operating temperature', 'A lower resonant frequency alone, with no other change'], 'Brownian noise', 'The thermal-mechanical noise floor is a_n = √(4kTω₀ ÷ (mQ)): it falls with a larger mass and a higher Q, and rises with temperature and with resonant frequency.',
+      ['In a_n, the mass m sits:', 'Under the root, in the denominator', ['In the numerator', 'Nowhere']]],
+    ['Why is the angle random walk conversion "density × 60"?', 'Because an hour is 3600 s and its square root is 60', ['Because a minute has 60 seconds in it, and ARW is per minute', 'Because most gyros are sampled at 60 Hz in their readout ASIC', 'Because 60 is a constant of the Allan plot'], 'angle random walk units', 'The noise density is per √Hz and per second. Integrating white rate noise gives an angle error growing as √time. Expressed per √hour, the √3600 s = 60 factor converts the units.',
+      ['The square root of 3600 is:', '60', ['36', '600']]],
+    ['Why does a MEMS gyroscope want a vacuum package?', 'Less gas damping means a higher Q', ['To keep the device cool in operation', 'To make the proof mass lighter', 'To stop the capacitive plates from touching'], 'vacuum for gyros', 'Gas damping lowers Q and adds noise. A vacuum cavity raises Q, so the drive mode moves more for the same drive power.',
+      ['A higher Q means:', 'Less damping', ['More gas', 'Lower mass']]],
+    ['Why do accelerometers trap gas on purpose?', 'To damp the ringing after a shock', ['To raise the quality factor for sensitivity', 'To keep the proof mass heavier in use', 'To cool the readout ASIC down'], 'damping in accelerometers', 'An accelerometer that rings after a shock reads wrongly for a while, so its gas damping is set near critical. Gyros want the opposite: a high Q.',
+      ['Near-critical damping stops:', 'Ringing', ['Gravity', 'Capacitance']]],
+  ]), (why) => `${why}.`),
 ]);
 
 export const memsBoss = bossOf(memsPractice, 'boss-mems', 'The Sensor Teardown', 'resonance, deflection, capacitive readout and Q', 200,
@@ -230,6 +293,36 @@ export const emergingPractice = practice('practice-emerging', 'Emerging Device D
       'exponential scaling', 'If a quantity doubles every T years, after Y years it has doubled Y/T times. Multiply the starting value by 2 to that power.',
       calc('Doublings = years ÷ period:', `${yrs} / ${t}`, yrs / t, '', sig(yrs / t), 0.01), calc('Count = start × 2^doublings:', `${n0} × 2^${sig(yrs / t)}`, n, 'B', sig(n), 0.03));
   },
+  (r, d) => {
+    // G2.9: cell height = tracks × metal pitch; node names are labels, so compare drawn dimensions.
+    const tracks = pick(r, [5, 6, 7]), mp = pick(r, [24, 28, 30, 32]);
+    const idea = 'A standard cell is a fixed number of metal tracks tall, so its height is the tracks times the metal pitch. Node names such as "2 nm" are labels, so cells and nodes are compared by drawn dimensions: contacted gate pitch, metal pitch, cell height in tracks and SRAM bit-cell area.';
+    if (d === 1) return walk(ask(`A standard cell is ${tracks} tracks tall with a ${mp} nm metal pitch. What is its height, in nm?`, qty(tracks * mp, 'nm', 0.01, String(tracks * mp)), `${tracks} × ${mp} = ${tracks * mp} nm.`, 'Tracks times pitch.'),
+      'cell height', idea,
+      count('Height in nm = tracks × pitch:', `${tracks} × ${mp}`, tracks * mp));
+    const h = tracks * mp;
+    if (d === 2) return walk(ask(`A cell is ${h} nm tall and the metal pitch is ${mp} nm. How many tracks tall is it?`, qty(tracks, '', 0.001, String(tracks)), `${h} / ${mp} = ${tracks} tracks.`, 'Height over pitch.'),
+      'cell height in tracks', idea,
+      count('Tracks = height ÷ pitch:', `${h} / ${mp}`, tracks));
+    const cpp = pick(r, [45, 48, 54]), w = pick(r, [2, 3, 4]), area = h * cpp * w;
+    return walk(ask(`A ${w}-CPP-wide cell (CPP = ${cpp} nm) is ${tracks} tracks tall at a ${mp} nm metal pitch. What is its area, in nm²?`, qty(area, 'nm²', 0.01, String(area)), `Height ${tracks} × ${mp} = ${h} nm; width ${w} × ${cpp} = ${w * cpp} nm; area ${area.toLocaleString('en-US')} nm². Compare nodes by this kind of number, not by their names.`, 'Height times width.'),
+      'cell area', idea,
+      count('Height in nm:', `${tracks} × ${mp}`, h), count('Width in nm:', `${w} × ${cpp}`, w * cpp), count('Area in nm²:', `${h} × ${w * cpp}`, area));
+  },
+  (r, d) => concept(r, easyFirst(d, [
+    ['Which metric would you compare across two foundries\' "2 nm" nodes?', 'Density, or the gate and metal pitches', ['The node name, since it is the gate length', 'The date each node was announced', 'The wafer diameter'], 'comparing nodes', 'Node names are labels and no longer measure any feature. What is physically drawn can be compared: contacted gate pitch, metal pitch, cell height in tracks, SRAM bit-cell area, and the transistor density they give.',
+      ['A node name such as "2 nm" is a:', 'Label', ['Gate length', 'Wire width']]],
+    ['What does the industry roadmap expect after gate-all-around?', 'Stacked CFETs, from about the early 2030s', ['2D channels in volume, within a few years', 'A return to planar transistors', 'Vacuum tubes on silicon'], 'the device roadmap', 'Gate-all-around nanosheets are expected to carry logic through the late 2020s. Stacked complementary FETs (N over P) follow from about the early 2030s. 2D-material channels are still in research.',
+      ['A CFET stacks N over:', 'P', ['N', 'Metal']]],
+    ['Where are 2D-material channels on the roadmap?', 'Still in research, with few products yet', ['In volume production at the latest nodes', 'Already replacing nanosheets entirely', 'Abandoned, since contacts cannot be made'], 'status of 2D channels', 'Two-dimensional channels give excellent gate control, but low-resistance contacts and large uniform films are unsolved, so they remain in research.',
+      ['The main obstacle is the:', 'Contacts', ['Gate oxide colour', 'Package']]],
+    ['How is standard-cell height found from its tracks?', 'Tracks multiplied by the metal pitch', ['Tracks multiplied by the contacted gate pitch', 'Tracks divided by the metal pitch', 'Metal pitch divided by the SRAM bit-cell area'], 'cell height', 'A cell is a fixed number of metal tracks tall, and each track is one metal pitch, so height = tracks × metal pitch.',
+      ['Each track is one:', 'Metal pitch', ['Gate pitch', 'Via']]],
+    ['What is the benefit of backside power delivery?', 'It frees the front metal for signal routing', ['It makes the package cheaper to assemble', 'It removes the need for power rails', 'It lowers the transistors\' threshold voltage'], 'backside power', 'Power rails move behind the transistors, so the front-side metal is left for signals. That cuts congestion and IR drop, at the cost of a harder thermal path and process.',
+      ['Rails move to the wafer\'s:', 'Back', ['Edge', 'Top']]],
+    ['Why is SRAM bit-cell area a useful metric?', 'It reflects the drawn pitches of the process', ['It is set directly by the marketing name of the node', 'It counts the metal layers the process has', 'It measures the standby leakage of each bit cell'], 'SRAM bit-cell area', 'The SRAM cell is drawn at the tightest pitches a process offers, so its area shows how dense the process really is, whatever it is called.',
+      ['SRAM is drawn at the process\'s:', 'Tightest pitches', ['Loosest pitches', 'Widest wires']]],
+  ]), (why) => `${why}.`),
 ]);
 
 export const emergingBoss = bossOf(emergingPractice, 'boss-emerging', 'The Roadmap Review', 'subthreshold leakage, MRAM margins, cell area and scaling', 200,

@@ -7,6 +7,7 @@ const r1 = (x: number) => Math.round(x * 10) / 10;
 const r2 = (x: number) => Math.round(x * 100) / 100;
 const r3 = (x: number) => +x.toPrecision(3);
 const log10 = Math.log10;
+const sig = (x: number, n = 3) => String(+x.toPrecision(n));
 
 // ------------------------------------------------------------------ circuits & signals
 
@@ -141,9 +142,10 @@ export const rf: Lesson = {
     }),
     say('Two more numbers judge the signal a transmitter makes. **EVM** (error vector magnitude) is how far the points of the received constellation land from their ideal positions, as a percentage or in dB. **ACLR** (adjacent-channel leakage ratio) is how much power spills into the neighbouring channel compared with the wanted one. Compression and IM3 raise both.'),
     mc('A transmitter\'s spectrum shows power spilling into the next channel. Which spec measures that?', ['ACLR', 'EVM', 'S11', 'P1dB'], 0, 'ACLR compares the neighbouring-channel power with the wanted channel. EVM measures how far the constellation points are from their ideal places; S11 is the input match; P1dB is where the gain has dropped 1 dB.'),
+    say('**Where it is used.** 5G is the cellular generation in service now, and 6G is in study. Wi-Fi 7 widens the channel to 320 MHz, packs 4096-QAM into it and can use several bands at once (multi-link operation); Wi-Fi 8 is in development. Bluetooth 6 adds channel sounding, which measures distance between two devices from the phase of tones across many channels. Every one of them is the same toolbox: matching, noise figure, linearity and phased arrays.'),
     mc('A 5G phone points its beam at the tower without moving anything. How?', ['A small motor tilts the antenna module toward the tower', 'A phased array: many antennas fed at different phases', 'It retunes the carrier frequency until the signal peaks', 'It transmits in all directions at full power'], 1, 'Beam steering by phase shift: each small antenna is fed with a slightly different phase, so the waves add up in one direction. Phased arrays are huge in 5G mmWave, radar and satellite internet, and their calibration and control logic is a big mixed-signal verification job.'),
   ],
-  recap: ['dBm = 10·log10(P / 1 mW); dBs add.', 'λ = c / f; antennas scale with λ.', 'Match to 50 Ω; Γ = (ZL - Z0)/(ZL + Z0).', 'S21 = gain, S11 = input match.', 'Friis: the first stage (the LNA) sets the noise figure.', 'P1dB, IM3 (3 dB per dB) and IIP3 = P_in + ΔP/2; cascade 1/IIP3 = 1/IIP3₁ + G₁/IIP3₂; EVM and ACLR judge a transmitter.', 'Phased arrays steer beams electronically.'],
+  recap: ['dBm = 10·log10(P / 1 mW); dBs add.', 'λ = c / f; antennas scale with λ.', 'Match to 50 Ω; Γ = (ZL - Z0)/(ZL + Z0).', 'S21 = gain, S11 = input match.', 'Friis: the first stage (the LNA) sets the noise figure.', 'P1dB, IM3 (3 dB per dB) and IIP3 = P_in + ΔP/2; cascade 1/IIP3 = 1/IIP3₁ + G₁/IIP3₂; EVM and ACLR judge a transmitter.', 'Phased arrays steer beams electronically.', 'Wi-Fi 7: 320 MHz channels, 4096-QAM, multi-link; Bluetooth 6 adds channel sounding.'],
 };
 
 export const pmic: Lesson = {
@@ -178,10 +180,30 @@ export const pmic: Lesson = {
       const di = ((vin - vout) * d) / (l * 1e-6 * f * 1e6);
       return ask(`A buck converter makes 1.2 V from 12 V with L = ${l} µH, switching at ${f} MHz. What is the peak-to-peak inductor ripple current, in A?`, qty(di, 'A', 0.03, String(+di.toPrecision(3))), `D = 0.1. ΔI = (12 - 1.2) × 0.1 / (${l} µH × ${f} MHz) = ${+di.toPrecision(3)} A. Switching faster, or a bigger inductor, cuts ripple. Faster switching means more switching loss, which is exactly the trade GaN transistors improve.`, 'ΔI = (Vin - Vout) × D / (L × f).');
     }),
+    say('The ripple formula assumes the inductor current never reaches zero: **continuous conduction (CCM)**. The current ramps up and down by ΔI around the load current, so it just touches zero when **I_load = ΔI/2**, with ΔI = (Vin - Vout)·D / (L·f). Below that load the converter drops into **discontinuous conduction (DCM)**: the current sits at zero for part of every cycle, Vout = D × Vin no longer holds (at a fixed duty the output rises), and the loop has to shrink D to compensate. Many controllers deliberately skip pulses or slow down at light load to save switching loss.'),
+    gen((r) => {
+      const [vin, vout] = pick(r, [[12, 5], [12, 1.2], [5, 1.2], [3.3, 1.0]] as const);
+      const l = pick(r, [2.2, 4.7, 10, 22]), f = pick(r, [0.5, 1, 2]);
+      const d = vout / vin, di = ((vin - vout) * d) / (l * f), ib = di / 2;
+      return ask(`A buck converter makes ${vout} V from ${vin} V with L = ${l} µH at ${f} MHz. Below what load current does it enter discontinuous conduction, in A? (I_load = ΔI/2, with ΔI = (Vin - Vout)·D / (L·f))`, qty(ib, 'A', 0.03, sig(ib)), `D = ${vout} / ${vin} = ${sig(d)}. ΔI = (${vin} - ${vout}) × ${sig(d)} / (${l} µH × ${f} MHz) = ${sig(di)} A, so the boundary is ΔI/2 = ${sig(ib)} A. To stay in CCM down to a lighter load, raise L or f.`, 'Half the peak-to-peak ripple current.');
+    }),
+    say('In a **synchronous** buck the diode is replaced by a second switch, which wastes far less voltage when it conducts. The two switches must never be on together, or they short the input to ground (**shoot-through**), so the controller leaves a short **dead time** with both off. During it the inductor current flows through the body diode of the low-side switch, which drops much more voltage than a conducting channel, so dead time is kept as short as is safe.'),
+    say('An LDO has its own figures. **Dropout** is the smallest Vin - Vout at which it still regulates (the pass transistor is fully on, so dropout ≈ I × its on-resistance). **PSRR** (power-supply rejection ratio) says how much input ripple reaches the output: good at low frequency, where the loop gain is high, and poor near the loop\'s crossover frequency, beyond which only the output capacitor helps. The **load-transient response** is the dip when the load steps: the output capacitor carries the step until the loop catches up. Because an LDO passes the whole load current from input to output, its efficiency is about Vout/Vin.'),
+    gen((r) => {
+      const [vin, vout] = pick(r, [[3.3, 1.8], [3.3, 1.2], [5, 3.3], [5, 1.2], [1.8, 1.2]] as const);
+      const eta = (vout / vin) * 100;
+      return ask(`An LDO makes ${vout} V from ${vin} V. Ignoring its small quiescent current, what is its efficiency, in %?`, qty(eta, '%', 0.02, r1(eta).toString()), `η ≈ Vout / Vin = ${vout} / ${vin} = ${r1(eta)}%. The same current flows in and out, so only the voltage ratio counts. That is fine for a small drop and wasteful for a big one.`, 'Vout divided by Vin.');
+    }),
+    mc('A receiver\'s RF supply must be very quiet, and the battery is 3.8 V. Which supply chain is the usual answer?', ['A buck converter for efficiency, then an LDO after it to clean up the ripple', 'A buck converter alone, because its ripple is below any LDO\'s noise', 'An LDO straight from the battery, because LDOs are the most efficient', 'A boost converter, whose output carries no ripple at all'], 0, 'The buck does the heavy voltage drop efficiently; the LDO that follows has good PSRR at the switching frequency and gives a low-noise rail. A buck alone puts its switching ripple and spurs on the RF supply.'),
+    say('Chargers set the power by setting the voltage, not the current. USB Power Delivery carries up to 100 W in the standard power range (20 V at 5 A) and up to 240 W in the extended power range (48 V at 5 A): the cable current stays at 5 A, so more power means a higher voltage.'),
+    gen((r) => {
+      const [p, v] = pick(r, [[100, 20], [240, 48]] as const);
+      return ask(`A USB Power Delivery contract is ${p} W at ${v} V. What current does the cable carry, in A?`, qty(p / v, 'A', 0.02, sig(p / v)), `I = P / V = ${p} / ${v} = ${sig(p / v)} A. Both power ranges stop at the same 5 A; the extended range gets its extra power from 48 V instead of 20 V.`, 'Power divided by voltage.');
+    }),
     mc('Why are **GaN** and **SiC** transistors taking over chargers, EVs and data-centre power supplies?', ['They are cheaper per wafer than silicon', 'A wide band gap: high voltage, low loss, fast switching', 'They need no gate drivers, which saves board area and cost', 'Their narrow band gap gives them very high electron mobility'], 1, 'A wide band gap (3.2 to 3.4 eV vs 1.12 eV for silicon) means a much higher breakdown field, so they block high voltage with thin, low-resistance layers. That gives higher voltage, lower on-resistance and faster switching with low loss: smaller magnetics, less heat, smaller and more efficient converters.'),
     mc('A CPU jumps from 10 A to 100 A in a few nanoseconds. The regulator\'s control loop takes microseconds to respond. What holds the voltage up in the meantime?', ['The regulator\'s output inductor, which stores the charge', 'Decoupling capacitors, from board to package to die', 'The battery, directly through the board\'s power planes', 'The on-die PLL\'s loop filter'], 1, 'Decoupling capacitors (board, package and on-die capacitance) supply the charge until the loop catches up; an inductor\'s current can not change that fast. This is the power delivery network. The voltage droop during load steps is why DVFS controllers add margin, and why the SI/PI lesson talks about target impedance.'),
   ],
-  recap: ['LDO: quiet and simple, but wastes (Vin - Vout) × I as heat.', 'Buck: Vout = D·Vin, high efficiency, ripple ΔI = (Vin - Vout)·D/(L·f).', 'Faster switching: smaller parts, more switching loss.', 'GaN/SiC: wide band gap, high voltage, fast and efficient.', 'Decaps carry fast load steps until the regulator responds.'],
+  recap: ['LDO: quiet and simple, but wastes (Vin - Vout) × I as heat; efficiency ≈ Vout/Vin; PSRR is good at low frequency and poor near the loop crossover.', 'Buck: Vout = D·Vin, high efficiency, ripple ΔI = (Vin - Vout)·D/(L·f).', 'CCM down to I_load = ΔI/2, then DCM; dead time prevents shoot-through.', 'USB Power Delivery: 100 W at 20 V and 5 A, 240 W at 48 V and 5 A.', 'A quiet RF rail: buck, then LDO.', 'Faster switching: smaller parts, more switching loss.', 'GaN/SiC: wide band gap, high voltage, fast and efficient.', 'Decaps carry fast load steps until the regulator responds.'],
 };
 
 export const sipi: Lesson = {
@@ -714,8 +736,36 @@ export const photonics: Lesson = {
       const rx = laser - 2 * cpl - mod - wg;
       return ask(`Link budget: the laser launches ${laser} dBm. Losses: two fibre couplers of ${cpl} dB each, a modulator of ${mod} dB, and ${wg} dB of waveguide loss. What power reaches the photodetector, in dBm?`, qty(rx, 'dBm', 0.03), `${laser} - 2×${cpl} - ${mod} - ${wg} = ${rx} dBm. In dB, a link budget is just subtraction. The receiver's sensitivity must sit comfortably below this number.`, 'Start at the laser power and subtract every loss.');
     }),
+    say('Wavelengths are not chosen freely: they sit on a **grid**. The **dense grid** (DWDM) is anchored at **193.1 THz** and spaced 100, 50, 25 or 12.5 GHz; channel n at 100 GHz spacing is at 193.1 THz + n × 0.1 THz. A 100 GHz spacing is about 0.8 nm at 1550 nm, from Δλ = λ²·Δf / c. The **coarse grid** (CWDM) is cheap and wide: 20 nm spacing from 1271 to 1611 nm, which is 18 channels, so the lasers need no precise temperature control.'),
+    gen((r) => {
+      const sp = pick(r, [100, 50, 25] as const), n = pick(r, [2, 5, 8, 12, 16]);
+      const f = 193.1 + (n * sp) / 1000;
+      return ask(`On the dense grid with ${sp} GHz spacing, what is the frequency of channel n = ${n}, counted up from the 193.1 THz anchor, in THz?`, qty(f, 'THz', 0.00003, String(+f.toFixed(3))), `193.1 + ${n} × ${sp / 1000} THz = ${+f.toFixed(3)} THz. (At 100 GHz, n = 12 gives 193.1 + 1.2 = 194.3 THz.) Frequency is the safe label: wavelength spacing is not constant across the band.`, 'Anchor plus n times the spacing.');
+    }),
+    gen((r) => {
+      const df = pick(r, [100, 50, 25, 12.5] as const);
+      const dl = ((1550e-9) ** 2 * df * 1e9) / 2.998e8 * 1e9;
+      return ask(`At 1550 nm, what wavelength spacing is a ${df} GHz channel spacing, in nm? (Δλ = λ²·Δf / c, c = 3×10⁸ m/s)`, qty(dl, 'nm', 0.03, sig(dl)), `Δλ = (1550 nm)² × ${df} GHz / c = ${sig(dl)} nm. 100 GHz is about 0.8 nm, and halving the spacing halves the nanometres.`, 'λ² times Δf over c.');
+    }),
+    gen((r) => {
+      const k = pick(r, [1, 4, 9, 14, 18]);
+      const w = 1271 + 20 * (k - 1);
+      return ask(`The coarse grid has 18 channels spaced 20 nm apart, starting at 1271 nm (channel 1). What is the wavelength of channel ${k}, in nm?`, num(w), `1271 + ${k - 1} × 20 = ${w} nm. Channel 18 is at 1611 nm, the top of the grid.`, 'Start plus (k - 1) times 20.');
+    }),
+    say('Data-centre links use **PAM4**: four amplitude levels carry two bits per symbol, so a lane runs at half the symbol rate of an on-off link at the same bit rate. Optical lanes run at 100 and 200 Gb/s. A port gets its speed from lanes: 800G is 8 × 100G or 4 × 200G, and 1.6T is 8 × 200G.'),
+    gen((r) => {
+      const [n, rate] = pick(r, [[8, 100], [4, 200], [8, 200]] as const);
+      const t = n * rate;
+      return ask(`A port uses ${n} PAM4 lanes at ${rate} Gb/s each. What is its total rate, in Gb/s?`, qty(t, 'Gb/s', 0.01, String(t)), `${n} × ${rate} = ${t} Gb/s${t === 800 ? ', an 800G port' : ', a 1.6T port'}. Fewer, faster lanes need fewer lasers and fibres but harder electronics.`, 'Lanes times rate per lane.');
+    }),
+    say('Two numbers describe a transmitter\'s "one" and "zero" light levels P1 and P0. The **extinction ratio** is P1 / P0 (often in dB), and the **optical modulation amplitude (OMA)** is P1 - P0, the swing the receiver actually sees. A weak extinction ratio wastes power in the zero level. Finally, **pluggable** modules sit at the faceplate, joined to the switch chip by long electrical traces. **Co-packaged optics** puts the optical engine on the package beside the chip, so the electrical path shrinks and so does the power per bit, at the cost of a harder repair story.'),
+    gen((r) => {
+      const p1 = pick(r, [1, 2, 0.8]), p0 = pick(r, [0.1, 0.2, 0.05]);
+      const er = 10 * Math.log10(p1 / p0), oma = p1 - p0;
+      return ask(`A modulator outputs P1 = ${p1} mW and P0 = ${p0} mW. What is its optical modulation amplitude, in mW? (Its extinction ratio is ${r1(er)} dB.)`, qty(oma, 'mW', 0.02, sig(oma)), `OMA = P1 - P0 = ${p1} - ${p0} = ${sig(oma)} mW. The extinction ratio is 10·log10(${p1} / ${p0}) = ${r1(er)} dB.`, 'P1 minus P0.');
+    }),
   ],
-  recap: ['λ(µm) ≈ 1.24 / Eg(eV): silicon is transparent at 1.31/1.55 µm.', 'Germanium detects; III-V materials make the lasers.', 'Ring modulators need thermal tuning.', 'WDM multiplies bandwidth per fibre.', 'I/O power = bandwidth × pJ/bit; co-packaged optics cuts it.', 'Link budgets are dB subtraction.'],
+  recap: ['λ(µm) ≈ 1.24 / Eg(eV): silicon is transparent at 1.31/1.55 µm.', 'Germanium detects; III-V materials make the lasers.', 'Ring modulators need thermal tuning.', 'WDM multiplies bandwidth per fibre.', 'I/O power = bandwidth × pJ/bit; co-packaged optics cuts it.', 'Link budgets are dB subtraction.', 'Dense grid: 193.1 THz anchor, 100/50/25/12.5 GHz spacing (100 GHz ≈ 0.8 nm). Coarse grid: 20 nm, 1271 to 1611 nm, 18 channels.', 'PAM4 lanes of 100 and 200 Gb/s: 800G = 8 × 100G or 4 × 200G, 1.6T = 8 × 200G.', 'Extinction ratio P1/P0, OMA = P1 - P0; co-packaged optics versus pluggables.'],
 };
 
 export const ROLE_LESSONS: Lesson[] = [analog, rf, pmic, sipi, pnr, sram, fab, pkg, postsi, ate, emu, npu, hwsec, fusa, photonics];
