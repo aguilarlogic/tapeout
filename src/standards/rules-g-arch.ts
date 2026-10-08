@@ -15,4 +15,14 @@ export const RULES_G_ARCH: Rule[] = [
   { id: 'G1.3-nvfp4', why: 'G1.3: blocks of 16 with an FP8 scale cost 4 + 8/16 = 4.5 bits', require: { file: /lessons\/roles/, re: /4 \+ 8\/16 = 4\.5 bits/ } },
   { id: 'G1.3-bf16-wrong', why: 'G1.3: BF16 has FP32\'s range, not more precision than FP16', files: /lessons|glossary/, ban: /BF16 (is|has) (more precise|a longer (mantissa|fraction))/ },
   { id: 'G1.3-fp8-glossary', why: 'G1.3: the glossary defines E4M3 and E5M2', require: { file: /glossary/, re: /E4M3 \(4 exponent, 3 fraction bits; largest 448/ } },
+
+  // G1.6: memory generations and Rowhammer
+  { id: 'G1.6-gddr7', why: 'G1.6: GDDR7 is 4 x 8-bit channels per device, PAM3, 32 Gb/s first parts and 48 Gb/s at most', require: { file: /lessons\/arch/, re: /GDDR7.*PAM3/ } },
+  { id: 'G1.6-lpddr6', why: 'G1.6: LPDDR6 has a 24-bit channel made of two 12-bit sub-channels', require: { file: /lessons\/arch/, re: /LPDDR6.*two 12-bit sub-channels/ } },
+  { id: 'G1.6-hbm4', why: 'G1.6: HBM4 doubles the stack interface to 2048 bits', require: { file: /lessons\/arch/, re: /HBM4.*2048-bit/ } },
+  { id: 'G1.6-trr', why: 'G1.6: target-row refresh alone fails because many-sided patterns overflow its small tracker', require: { file: /lessons\/arch/, re: /many-sided/ } },
+  { id: 'G1.6-rfm', why: 'G1.6: controller refresh management (RFM) and per-row activation counting (PRAC) are the fixes', require: { file: /lessons\/arch/, re: /per-row activation counting/ } },
+  { id: 'G1.6-on-die-ecc', why: 'G1.6: on-die ECC is invisible to the system, so system ECC is still needed', require: { file: /lessons\/arch/, re: /on-die ECC.*invisible/ } },
+  { id: 'G1.6-trr-only', why: 'G1.6: TRR alone is not the fix for Rowhammer', files: /incidents/, ban: /fix: 'Enable target-row refresh \(TRR\) and/ },
+  { id: 'G1.6-hbm-glossary', why: 'G1.6: HBM is 1024-bit through HBM3E and 2048-bit from HBM4; the glossary must not say 1024 only', files: /glossary/, ban: /HBM'?, '[^']*with a 1024-bit interface per stack\.'/ },
 ];
