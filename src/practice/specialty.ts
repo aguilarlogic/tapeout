@@ -4,6 +4,7 @@ import { qty } from '../lessons/answers';
 import { calc, choice, walk } from '../lessons/teach';
 import { ask, mc, pick, say } from '../lessons/types';
 import { boss, practice } from './types';
+import { ANALOG_NOISE } from './g-analog';
 import { concept, sci, sig } from './util';
 
 const kT = 1.38e-23 * 300;
@@ -129,6 +130,7 @@ export const analogPractice = practice('practice-analog', 'Analog Drills', 'op-a
     ['What does chopping do in a precision amplifier?', 'Modulates the input up in frequency so offset and 1/f noise can be filtered away', ['Cuts the supply to save power, whenever the input is small', 'Clips large signals, so that the output stays inside the rails', 'Adds hysteresis, so that the output stops jittering around'], 'chopping', 'An amplifier\'s offset and 1/f noise sit at very low frequency, right where slow signals are. Chopping swaps the signal polarity at a high rate so the wanted signal is moved to a high frequency while the offset stays at DC; a filter can then separate them.', ['Offset stays at DC while the signal is moved to:', 'A high frequency', ['DC', 'Zero']], 'Modulates the input up in frequency so offset and 1/f noise can be filtered away'],
     ['Why add a cascode transistor to a gain stage?', 'It raises output resistance, so the gain goes up', ['It raises gm, since the second device adds transconductance', 'It lowers the noise to zero', 'It removes the need for a bias, so the stage is self-biased'], 'cascodes', 'The gain of a stage is gm × (output resistance). A second transistor stacked on top of the first shields the first one from the output voltage, which multiplies the output resistance by about gm·ro. That is how gain comes back in short-channel devices.', ['Gain = gm × Rout, so a higher Rout means:', 'More gain', ['Less gain', 'The same gain']], 'It raises the output resistance, so gm·Rout (the gain) goes up'],
   ], (why) => `${why}.`),
+  ...ANALOG_NOISE,
 ]);
 
 export const analogBoss = boss({
