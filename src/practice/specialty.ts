@@ -4,7 +4,7 @@ import { qty } from '../lessons/answers';
 import { calc, choice, walk } from '../lessons/teach';
 import { ask, mc, pick, say } from '../lessons/types';
 import { boss, practice } from './types';
-import { ANALOG_NOISE } from './g-analog';
+import { ANALOG_MARGINS, ANALOG_NOISE } from './g-analog';
 import { concept, sci, sig } from './util';
 
 const kT = 1.38e-23 * 300;
@@ -131,6 +131,7 @@ export const analogPractice = practice('practice-analog', 'Analog Drills', 'op-a
     ['Why add a cascode transistor to a gain stage?', 'It raises output resistance, so the gain goes up', ['It raises gm, since the second device adds transconductance', 'It lowers the noise to zero', 'It removes the need for a bias, so the stage is self-biased'], 'cascodes', 'The gain of a stage is gm × (output resistance). A second transistor stacked on top of the first shields the first one from the output voltage, which multiplies the output resistance by about gm·ro. That is how gain comes back in short-channel devices.', ['Gain = gm × Rout, so a higher Rout means:', 'More gain', ['Less gain', 'The same gain']], 'It raises the output resistance, so gm·Rout (the gain) goes up'],
   ], (why) => `${why}.`),
   ...ANALOG_NOISE,
+  ...ANALOG_MARGINS,
 ]);
 
 export const analogBoss = boss({

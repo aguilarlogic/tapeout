@@ -4,7 +4,7 @@
 import { num, qty, type Answer } from '../lessons/answers';
 import { calc, choice, count, walk } from '../lessons/teach';
 import { ask, mc, pick } from '../lessons/types';
-import { tier, type Gen } from './types';
+import { type Gen } from './types';
 import { concept, eng, mcs, sci, sig } from './util';
 
 const KT = 1.38e-23 * 300; // J at 300 K
@@ -190,5 +190,89 @@ const inputReferred: Gen = (r, d) => {
 
 export const ANALOG_NOISE: Gen[] = [shotNoise, flickerCorner, inputReferred];
 
+// ------------------------------------------------------------------ G1.2 stability margins
+
+/** |L| and phase (degrees, negative) of A0 / Π(1 + jf/p) at f. */
+const loopAt = (a0: number, ps: number[], f: number) => ({
+  mag: a0 / Math.sqrt(ps.reduce((acc, p) => acc * (1 + (f / p) ** 2), 1)),
+  ph: -ps.reduce((acc, p) => acc + deg(Math.atan(f / p)), 0),
+});
+/** Bisection on a decreasing function of log f. */
+const bisect = (fn: (f: number) => number, lo: number, hi: number) => {
+  for (let i = 0; i < 200; i++) { const mid = Math.sqrt(lo * hi); if (fn(mid) > 0) lo = mid; else hi = mid; }
+  return Math.sqrt(lo * hi);
+};
+/** Unity-gain frequency and phase margin of the loop. */
+const crossover = (a0: number, ps: number[]) => { const fc = bisect((f) => loopAt(a0, ps, f).mag - 1, 1e-3, 1e12); return { fc, pm: 180 + loopAt(a0, ps, fc).ph }; };
+/** The -180° frequency and the gain margin in dB (null when the phase never gets there). */
+const phaseCross = (a0: number, ps: number[]) => {
+  if (ps.length < 3) return null;
+  const f180 = bisect((f) => 180 + loopAt(a0, ps, f).ph, 1e-3, 1e12);
+  return { f180, gm: -db20(loopAt(a0, ps, f180).mag) };
+};
+
+const MARGIN_IDEA = 'A Bode plot shows the loop gain L(f) in dB and its phase. The unity-gain (crossover) frequency is where |L| = 1; the PHASE MARGIN is 180° plus the phase of L there. With one dominant pole, |L| falls at 20 dB per decade, so it crosses 1 near A0 × p1 (the gain-bandwidth product), and every pole adds a lag of atan(f/p) at frequency f. The GAIN MARGIN is −|L| in dB where the phase reaches −180°.';
+
+/** Two- and three-pole loops: d1 crossover, d2 phase margin, d3 gain margin. */
+const loopMargins: Gen = (r, d) => {
+  const p1 = pick(r, [1e3, 10e3, 100e3]), a0 = pick(r, [100, 1000, 10000]), fu = a0 * p1;
+  if (d === 1) {
+    const p2m = pick(r, [20, 50, 100]), { fc } = crossover(a0, [p1, fu * p2m]);
+    return walk(ask(`A loop has a DC gain of ${a0} and a dominant pole at ${eng(p1, 'Hz')}. A second pole sits far above, at ${eng(fu * p2m, 'Hz')}. Roughly where does |L| cross 1, in Hz?`, qty(fc, 'Hz', 0.04, eng(fu, 'Hz')), `Past the dominant pole |L| falls at 20 dB per decade, so it reaches 1 near A0 × p1 = ${a0} × ${eng(p1, 'Hz')} = ${eng(fu, 'Hz')}. The far pole barely moves it.`, 'Crossover ≈ A0 × p1 when the other poles are far above.'),
+      'finding the crossover frequency', MARGIN_IDEA,
+      calc('Crossover ≈ A0 × p1, in Hz:', `${a0} × ${p1}`, fu, 'Hz', sig(fu), 0.04));
+  }
+  if (d === 2) {
+    const ps2 = [p1, fu * pick(r, [0.7, 1, 1.5, 2, 3])], { fc, pm } = crossover(a0, ps2), l1 = deg(Math.atan(fc / ps2[0])), l2 = deg(Math.atan(fc / ps2[1]));
+    return walk(ask(`A loop has a DC gain of ${a0} and poles at ${eng(ps2[0], 'Hz')} and ${eng(ps2[1], 'Hz')}. What is its phase margin, in degrees?`, qty(pm, '', 0.04, sig(pm)), `|L| = 1 at ${eng(fc, 'Hz')}. The poles lag the phase by ${sig(l1)}° and ${sig(l2)}°, so PM = 180 − ${sig(l1 + l2)} = ${sig(pm)}°.`, 'Find where |L| = 1, then PM = 180° minus both lags there.'),
+      'phase margin of a two-pole loop', MARGIN_IDEA,
+      `First the crossover. Solving |L(f)| = 1 numerically gives f ≈ ${eng(fc, 'Hz')} (the second pole pulls it below A0 × p1 = ${eng(fu, 'Hz')}).`,
+      calc('Lag of the first pole, atan(f/p1), in degrees:', `atan(${sig(fc)} / ${ps2[0]})`, l1, '', sig(l1, 4), 0.01),
+      calc('Lag of the second pole, atan(f/p2):', `atan(${sig(fc)} / ${sig(ps2[1])})`, l2, '', sig(l2, 4), 0.02),
+      calc('PM = 180 − both lags:', `180 − ${sig(l1, 4)} − ${sig(l2, 4)}`, pm, '', sig(pm), 0.04));
+  }
+  // d3: a third pole puts the -180° point within reach (every pair below keeps the loop stable, gain margin 8 to 17 dB).
+  const ps = [p1, fu * pick(r, [1, 1.5, 2]), fu * pick(r, [2, 3, 5])];
+  const pc = phaseCross(a0, ps)!, mag = loopAt(a0, ps, pc.f180).mag;
+  return walk(ask(`A loop has a DC gain of ${a0} and poles at ${eng(ps[0], 'Hz')}, ${eng(ps[1], 'Hz')} and ${eng(ps[2], 'Hz')}. What is its gain margin, in dB?`, qty(pc.gm, 'dB', 0.05, sig(pc.gm)), `The phase reaches −180° at about ${eng(pc.f180, 'Hz')}, where |L| = ${sig(mag, 3)}. GM = −20·log10(${sig(mag, 3)}) = ${sig(pc.gm)} dB.`, 'Find the −180° frequency, read |L| there, then −20·log10|L|.'),
+    'gain margin of a three-pole loop', MARGIN_IDEA,
+    `Find the frequency where the three lags add to 180°: atan(f/p1) + atan(f/p2) + atan(f/p3) = 180°. Numerically this is f ≈ ${eng(pc.f180, 'Hz')}.`,
+    calc('|L| at that frequency = A0 ÷ √((1 + (f/p1)²)(1 + (f/p2)²)(1 + (f/p3)²)):', `${a0} / sqrt((1+(${sig(pc.f180)}/${ps[0]})²)(1+(${sig(pc.f180)}/${sig(ps[1])})²)(1+(${sig(pc.f180)}/${sig(ps[2])})²))`, mag, '', sig(mag, 3), 0.04),
+    calc('GM = −20·log10|L|, in dB:', `−20 × log10(${sig(mag, 3)})`, pc.gm, 'dB', sig(pc.gm), 0.05));
+};
+
+/** Read the gain margin straight off a measurement. */
+const gainMarginRead: Gen = (r, d) => {
+  const idea = 'Gain margin is how much MORE loop gain the loop could take before it oscillates. Read |L| in dB at the frequency where the phase is −180°: the margin is its negative. A loop gain of −8 dB there means the gain could rise by 8 dB.';
+  const g = pick(r, [6, 8, 10, 12, 14, 18]);
+  if (d === 1) return walk(ask(`The loop gain is −${g} dB where the phase crosses −180°. What is the gain margin, in dB?`, qty(g, 'dB', 0.02, String(g)), `GM = −(−${g}) = ${g} dB.`, 'GM = −|L| in dB at the −180° point.'),
+    'reading the gain margin', idea, calc('GM = −(loop gain in dB):', `−(−${g})`, g, 'dB', String(g), 0.02));
+  const lm = 10 ** (-g / 20);
+  if (d === 2) return walk(ask(`At the frequency where its phase is −180°, a loop has |L| = ${sig(lm, 3)} (not in dB). What is the gain margin, in dB?`, qty(g, 'dB', 0.04, String(g)), `20·log10(${sig(lm, 3)}) = −${g} dB, so GM = ${g} dB.`, 'Convert |L| to dB with 20·log10, then flip the sign.'),
+    'gain margin from a ratio', idea,
+    calc('|L| in dB, 20·log10|L|:', `20 × log10(${sig(lm, 3)})`, -g, 'dB', String(-g), 0.04),
+    calc('GM = the negative of that, in dB:', `−(−${g})`, g, 'dB', String(g), 0.04));
+  const fac = 10 ** (g / 20);
+  return walk(ask(`The loop gain is −${g} dB at the −180° frequency. By what factor can the amplifier's gain rise before the loop oscillates?`, qty(fac, 'x', 0.04, sig(fac)), `10^(${g}/20) = ${sig(fac)}×. At exactly that gain the loop gain reaches 1 at −180°: a sustained oscillation.`, 'Convert the dB margin to a voltage ratio: 10^(dB/20).'),
+    'gain margin as a factor', idea,
+    calc('Gain margin in dB:', `−(−${g})`, g, 'dB', String(g), 0.02),
+    calc('As a ratio, 10^(dB/20):', `10^(${g}/20)`, fac, 'x', sig(fac), 0.04));
+};
+
+/** What a phase margin looks like on the scope. */
+const pmResponse: Gen = (r) => {
+  const bands: [number[], string][] = [
+    [[10, 15, 20, 25], 'Strong ringing, close to oscillating'],
+    [[40, 45, 50], 'About 20% overshoot with a few decaying rings'],
+    [[60, 65, 70], 'Under 10% overshoot and a quick, clean settle'],
+  ];
+  const [pms, right] = pick(r, bands);
+  const pm = pick(r, pms), wrong = bands.map(([, t]) => t).filter((t) => t !== right);
+  return concept(r, [[`A feedback loop has ${pm}° of phase margin. What does its step response look like?`, right, [...wrong, 'It never moves, because the loop is stable'], 'phase margin and ringing', 'Phase margin is how far the loop is from −180° at crossover, and it sets the damping: PM ≈ 100·ζ for ζ below about 0.7. Little margin means a lightly damped, ringing response; 60° gives under 10% overshoot, 45° about 20–23%.', ['A loop with very little phase margin is:', 'Close to oscillating', ['Safely overdamped', 'Unaffected by phase']], right]], (why) => `${why}. PM ≈ 100·ζ: low margin means low damping.`);
+};
+
+export const CONTROL_MARGINS: Gen[] = [loopMargins, pmResponse, gainMarginRead];
+export const ANALOG_MARGINS: Gen[] = [pmResponse, gainMarginRead];
+
 // keep the helpers used by later sections referenced (tier, choice, concept, mc, db10, lin, deg)
-void [tier, choice, concept, mc, db10, lin, deg, mcs];
+void [mc, db10, lin];

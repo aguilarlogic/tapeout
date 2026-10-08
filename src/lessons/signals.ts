@@ -100,7 +100,7 @@ export const dsp: Lesson = {
 export const control: Lesson = {
   id: 'control',
   title: 'Feedback and Control',
-  concept: 'closed-loop gain, loop gain, stability margins, PID, bandwidth',
+  concept: 'closed-loop gain, loop gain, Bode plots, stability margins, PID, bandwidth',
   xp: 100,
   steps: [
     say('**Feedback** is how engineers make precise systems out of imprecise parts. Measure the output, compare it with what you want, and correct the difference. Op-amps, voltage regulators, PLLs, DVFS governors, thermal throttling and qubit calibration loops all work this way.'),
@@ -130,6 +130,34 @@ export const control: Lesson = {
       const pm = pick(r, [10, 30, 45, 60, 75]);
       return mc(`A regulator loop has a phase margin of ${pm}°. How does it respond to a load step?`, ['Rings a lot, close to oscillating', 'Some overshoot, acceptable', 'Clean and well damped'], pm < 35 ? 0 : pm < 55 ? 1 : 2, `${pm}° is ${pm < 35 ? 'too little: expect heavy ringing, and a slow corner could make it oscillate' : pm < 55 ? 'acceptable: a little overshoot' : 'comfortable: well damped'}. Designers add compensation (a capacitor that moves a pole) to fix low margins.`);
     }),
+    say('To see margins, draw the loop gain on a **Bode plot**: magnitude in dB and phase in degrees against log frequency. You can sketch one from poles and zeros alone. Each **pole** bends the magnitude down to −20 dB per decade from its frequency, and its phase falls by 90° in total: −45° exactly at the pole, about −6° a decade below it and −84° a decade above. A **zero** does the opposite: +20 dB per decade and +90°.'),
+    art(`
+   gain (dB)                                phase
+     60 ─╮ p1                                0° ─╮
+          ╲  -20 dB/decade                       ╲   -45° at p1
+      0 ───╲──── crossover, |L| = 1       -90° ───╲____
+            ╲╲   -40 dB/decade after p2                 ╲   -135° at p2
+                                         -180° ─ ─ ─ ─ ─ ─╲─ ─ ─
+                log f →                              log f →
+   phase margin = 180° + the phase where the gain curve crosses 0 dB`),
+    gen((r) => {
+      const x = pick(r, [0.1, 1, 10]);
+      const ph = -(Math.atan(x) * 180) / Math.PI;
+      return ask(`A single-pole low-pass has its pole at p. What is its phase at f = ${x}·p, in degrees? (a lag is negative)`, qty(ph, '', 0.03, r3(ph).toString()), `phase = −atan(f/p) = −atan(${x}) = ${r3(ph)}°. The phase is −45° at the pole and tends to −90° well above it.`, 'phase = −atan(f/p).');
+    }),
+    say('Now the two margins, both read from the loop gain L = A·β. **Phase margin** is 180° plus the phase of L at the frequency where |L| = 1 (0 dB). **Gain margin** is −|L| in dB at the frequency where the phase of L is −180°: how much more gain you could add before the loop oscillates. A stable loop has both positive.'),
+    gen((r) => {
+      const ph = pick(r, [-100, -115, -125, -135, -150, -160]);
+      return ask(`A loop has a phase of ${ph}° where its gain crosses 0 dB. What is the phase margin, in degrees?`, qty(180 + ph, '', 0.02, String(180 + ph)), `PM = 180° + (${ph}°) = ${180 + ph}°. It is the phase you could still lose before reaching −180°.`, 'PM = 180° + phase at crossover.');
+    }),
+    gen((r) => {
+      const g = pick(r, [6, 8, 10, 12, 15, 20]);
+      return ask(`The loop gain is −${g} dB at the frequency where the phase crosses −180°. What is the gain margin, in dB?`, qty(g, 'dB', 0.02, String(g)), `GM = −(−${g} dB) = ${g} dB. The gain could rise by ${r3(10 ** (g / 20))}× before the loop oscillates.`, 'GM = −|L| in dB at the −180° point.');
+    }),
+    say('Rules of thumb. Designers aim for a phase margin of 45–60°. For loops that look like two poles, PM ≈ 100·ζ (PM in degrees, ζ the damping ratio, good for ζ below about 0.7). That puts 45° at roughly 23% step overshoot and 60° at roughly 9%. Below 30° or so the step response rings hard; at 0° it never settles.'),
+    mc('A feedback loop has only 20° of phase margin. What does its step response look like?', ['Strong ringing, with a large overshoot', 'A slow, smooth creep with no overshoot at all', 'A clean step with about 9% overshoot', 'It is perfectly flat, because the loop is stable'], 0, 'Phase margin maps to damping: ζ ≈ 0.2 rings for many cycles. 60° would give about 9%; 20° gives a large overshoot and a long ring-down.'),
+    say('Where does the stability test itself come from? From the **Nyquist criterion**. Plot L(jω) in the complex plane as ω runs from 0 to ∞ (and mirror it for negative ω). The closed loop is stable when that curve does not encircle the point −1. Phase and gain margin are the two ways of measuring how close the curve passes to −1: along the unit circle (phase) or along the negative real axis (gain).'),
+    mc('What does the Nyquist criterion look at?', ['How the plot of the loop gain circles the point −1', 'Whether the step response has any overshoot at all', 'The sampling rate of the loop, compared with its signal', 'Whether the DC gain of the loop is above 1'], 0, 'If the plot of L(jω) winds around −1, the closed loop is unstable. Gain and phase margin are distances to that point.'),
     say('For a single-pole amplifier, gain × bandwidth is constant: the **gain-bandwidth product** (GBW). Close the loop and the bandwidth becomes GBW / noise gain: GBW / G for a non-inverting amplifier, GBW / (1 + |G|) for an inverting one.'),
     gen((r) => {
       const gbw = pick(r, [1, 10, 100]);
@@ -142,7 +170,7 @@ export const control: Lesson = {
       return ask(`A digital control loop has a ${td} µs delay (ADC + compute + DAC). How much phase lag does that add at ${f} kHz, in degrees?`, qty(360 * f * 1e3 * td * 1e-6, '', 0.02, r3(360 * f * 1e3 * td * 1e-6).toString()), `φ = 360° × f × t_d = 360 × ${f} kHz × ${td} µs = ${r3(360 * f * 1e3 * td * 1e-6)}°. Delay eats phase margin, which is why fast loops (like qubit feedback) need very low latency.`, 'φ = 360 × f × delay.');
     }),
   ],
-  recap: ['Closed-loop gain A/(1 + Aβ) ≈ 1/β when the loop gain is large.', 'Feedback divides drift by (1 + T).', 'P leaves 1/(1 + K) error; I removes it; D adds damping.', 'Phase margin: 45° OK, 60° comfortable.', 'Bandwidth = GBW / noise gain.', 'Delay adds 360·f·t_d degrees of lag.'],
+  recap: ['Closed-loop gain A/(1 + Aβ) ≈ 1/β when the loop gain is large.', 'Feedback divides drift by (1 + T).', 'P leaves 1/(1 + K) error; I removes it; D adds damping.', 'Phase margin: 45° OK, 60° comfortable.', 'Bode: a pole is −20 dB/decade and −90° (−45° at the pole). PM = 180° + phase where |L| = 1; GM = −|L| dB where phase = −180°. PM ≈ 100·ζ.', 'Nyquist: stable if the plot of L does not encircle −1.', 'Bandwidth = GBW / noise gain.', 'Delay adds 360·f·t_d degrees of lag.'],
 };
 
 export const em: Lesson = {

@@ -35,4 +35,38 @@ export const RULES_G_ANALOG: Rule[] = [
     ban: /kT\/C[^\n]{0,60}(depends on|proportional to|scales with) (the )?(resistor|resistance|R\b)/i,
     unless: /independent|not depend|does not|doesn't/i,
   },
+
+  // ---- G1.2 stability margins and frequency response
+  {
+    id: 'G1.2-gain-margin',
+    why: 'G1.2: the control lesson defines gain margin as -|L| in dB where the phase is -180 degrees',
+    require: { file: /lessons\/signals/, re: /Gain margin\*\* is −\|L\| in dB at the frequency where the phase of L is −180°/ },
+  },
+  {
+    id: 'G1.2-phase-margin',
+    why: 'G1.2: phase margin = 180 degrees + the phase at |L| = 1',
+    require: { file: /lessons\/signals/, re: /180° plus the phase of L at the frequency where \|L\| = 1/ },
+  },
+  {
+    id: 'G1.2-pole-45',
+    why: 'G1.2: a pole gives -20 dB/decade, -90 degrees in total and -45 degrees at the pole',
+    require: { file: /lessons\/signals/, re: /−45° exactly at the pole/ },
+  },
+  {
+    id: 'G1.2-pm-zeta',
+    why: 'G1.2: PM ~ 100*zeta; 45 degrees is roughly 23% overshoot and 60 degrees roughly 9%',
+    require: { file: /lessons\/signals/, re: /PM ≈ 100·ζ[^\n]{0,160}23%[^\n]{0,40}9%/ },
+  },
+  {
+    id: 'G1.2-nyquist',
+    why: 'G1.2: Nyquist, qualitatively: stability depends on encirclements of -1',
+    require: { file: /lessons\/signals/, re: /Nyquist criterion[^\n]{0,400}encircle the point −1/ },
+  },
+  {
+    id: 'G1.2-gm-not-unity',
+    why: 'G1.2: gain margin is read at the -180 degree frequency, not at unity gain (that is phase margin)',
+    files: /lessons|practice|glossary/,
+    ban: /gain margin[^\n]{0,80}(unity[- ]gain|crossover) frequency/i,
+    unless: /phase margin/i,
+  },
 ];
