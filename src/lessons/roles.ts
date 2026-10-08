@@ -454,11 +454,35 @@ export const npu: Lesson = {
       return ask(`A ${n}×${n} systolic array of INT8 MACs runs at ${f} GHz. What is its peak throughput, in TOPS (tera-operations per second, 2 ops per MAC)?`, qty(tops, 'TOPS', 0.02, r1(tops).toString()), `2 × ${n * n} MACs × ${f} GHz = ${r1(tops)} TOPS. "Peak" assumes every MAC is busy every cycle; real utilization depends on whether data arrives fast enough.`, '2 × number of MACs × frequency.');
     }),
     mc('Why do systolic arrays (and GPUs\' tensor cores) beat CPUs so badly on matrix math?', ['A much higher clock frequency than CPU cores', 'Data reuse: each fetched operand feeds many MACs', 'They skip the additions by using lookup tables', 'Analog compute in memory, which avoids data movement'], 1, 'Massive data reuse: each operand fetched from memory feeds many MACs, so energy goes into arithmetic instead of moving data. Fetching a number from DRAM costs hundreds of times more energy than multiplying it. Accelerator design is mostly about reuse: dataflows (weight-stationary, output-stationary), big on-chip SRAMs, and tiling.'),
+    say('How an array reuses data is its **dataflow**, named for what stays put inside each processing element (PE):'),
+    art(`
+  weight stationary   weights stay in the PEs; inputs stream past and partial sums move on
+  input stationary    inputs (activations) stay; the weights stream past
+  output stationary   each PE owns one output and accumulates its partial sum in place
+  row stationary      each PE holds one row of the filter and one row of the input, so
+                      weights, inputs and partial sums all get reuse at once`, 'the choice depends on the layer shape and on which operand is most expensive to move'),
+    mc('Each PE keeps one output value and adds a new product to it every cycle, writing it out only when the sum is finished. Which dataflow is that?', ['Weight stationary', 'Input stationary', 'Output stationary', 'Row stationary'], 2, 'The partial sum stays put, so it never travels to memory and back. Weight stationary keeps the weights, input stationary the activations; row stationary mixes all three kinds of reuse by giving each PE a row of filter and a row of input.'),
     gen((r) => {
       const [b, bs] = pick(r, [[7, '7B'], [13, '13B'], [70, '70B']] as const);
       const [fmt, bytes] = pick(r, [['FP32', 4], ['FP16', 2], ['INT8', 1], ['INT4', 0.5]] as const);
       const gb = b * bytes;
-      return ask(`How much memory do the weights of a ${bs}-parameter model take in ${fmt}, in GB?`, qty(gb, 'GB', 0.02), `${b} × 10⁹ parameters × ${bytes} byte${bytes === 1 ? '' : 's'} = ${gb} GB. Quantizing to fewer bits shrinks memory and bandwidth needs, at some cost in accuracy, which is why new number formats (FP8, MX formats, INT4) appear in every new accelerator.`, 'parameters × bytes per parameter.');
+      return ask(`How much memory do the weights of a ${bs}-parameter model take in ${fmt}, in GB?`, qty(gb, 'GB', 0.02), `${b} × 10⁹ parameters × ${bytes} byte${bytes === 1 ? '' : 's'} = ${gb} GB. Quantizing to fewer bits shrinks memory and bandwidth needs, at some cost in accuracy, which is why narrow formats (FP8, block-scaled MX formats, INT4) appear in every new accelerator.`, 'parameters × bytes per parameter.');
+    }),
+    say('The **number format** is a design decision of its own. Fewer bits per number means less memory, less bandwidth and smaller multipliers, so accelerators keep adding narrower floating-point formats next to FP32.'),
+    art(`
+  format     bits   sign/exp/fraction   largest value      character
+  FP32         32       1 / 8 / 23      about 3.4 × 10³⁸   the reference
+  FP16         16       1 / 5 / 10      65,504             precise, but a small range
+  BF16         16       1 / 8 /  7      about 3.4 × 10³⁸   FP32's range at half the bytes
+  FP8 E4M3      8       1 / 4 /  3      448                no infinities: more precision
+  FP8 E5M2      8       1 / 5 /  2      57,344             keeps infinities: more range`, 'the exponent bits set the range, the fraction bits set the precision'),
+    mc('Which 16-bit format has the **largest range**?', ['FP16, with its 10 fraction bits', 'BF16, with 8 exponent bits like FP32', 'INT16, as it has no sign or exponent', 'Q1.15 fixed point, with its fine steps'], 1, 'Range comes from the exponent bits: BF16 has the same 8 as FP32, FP16 has only 5 (largest value 65,504). BF16 pays with a 7-bit fraction, so it is coarser than FP16.'),
+    mc('For the **activations** in a forward pass, which FP8 format fits better, E4M3 or E5M2?', ['E5M2, as its 5 exponent bits cover more range', 'E4M3, as its extra fraction bit buys more precision', 'Neither: FP8 cannot hold activations at all', 'Both are the same, as they have the same size'], 1, 'Activations sit in a fairly narrow range, so the extra fraction bit of E4M3 (maximum 448) is worth more. Gradients swing over many orders of magnitude, so E5M2 (maximum 57,344, with infinities) is the usual choice for them.'),
+    say('Below 8 bits one scale for a whole tensor is too coarse. **Block-scaled** (microscaling) formats give every small block its own scale: 32 elements share one 8-bit power-of-two scale, so a 4-bit element format (MXFP4) costs 4 + 8/32 = **4.25 bits per element**. Blocks of 16 that share an FP8 scale (NVFP4-style) cost 4 + 8/16 = 4.5 bits. One scale per block tracks the local magnitude, which a single per-tensor scale cannot: one outlier would otherwise force every other value into a few levels.'),
+    gen((r) => {
+      const [el, blk, sc] = pick(r, [[4, 32, 8], [4, 16, 8], [8, 32, 8], [6, 32, 8], [4, 64, 8]] as const);
+      const bits = el + sc / blk;
+      return ask(`A block-scaled format stores ${el}-bit elements, with one ${sc}-bit scale shared by every ${blk} elements. Bits per element, on average?`, qty(bits, '', 0.005, String(bits)), `${el} + ${sc}/${blk} = ${bits} bits per element. The scale is a small tax that buys a per-block dynamic range.`, 'Element width plus scale width divided by the block size.');
     }),
     gen((r) => {
       const [bw, bws] = pick(r, [[1, '1 TB/s'], [2, '2 TB/s'], [3.35, '3.35 TB/s']] as const);
@@ -467,7 +491,7 @@ export const npu: Lesson = {
       return ask(`Generating each token of an LLM (batch size 1) reads every weight once. With ${bws} of HBM bandwidth and a ${ms}, about how many tokens per second can it generate at most? (number only)`, qty(tps, '', 0.05, r1(tps).toString()), `${bw * 1000} GB/s ÷ ${gb} GB ≈ ${r1(tps)} tokens/s. At batch size 1 the compute units mostly wait on memory: it is memory-bound, a point on the left of the roofline. Batching, quantization and more HBM are the fixes.`, 'bandwidth ÷ bytes read per token.');
     }),
   ],
-  recap: ['Matmul = M·N·K MACs = 2·M·N·K FLOPs.', 'Peak TOPS = 2 × MACs × f.', 'Accelerators win by data reuse, not clock speed.', 'Weights = params × bytes; quantization shrinks them.', 'LLM decode is memory-bound: tokens/s ≈ bandwidth / model size.'],
+  recap: ['Matmul = M·N·K MACs = 2·M·N·K FLOPs.', 'Peak TOPS = 2 × MACs × f.', 'Accelerators win by data reuse, not clock speed. Dataflows: weight-, input-, output- and row-stationary.', 'Weights = params × bytes; quantization shrinks them.', 'Exponent bits set the range, fraction bits set the precision: BF16 = FP32 range at 16 bits; E4M3 (max 448) for activations, E5M2 (max 57,344) for gradients.', 'Block scaling: element bits + scale bits / block size (MXFP4 = 4.25).', 'LLM decode is memory-bound: tokens/s ≈ bandwidth / model size.'],
 };
 
 export const hwsec: Lesson = {

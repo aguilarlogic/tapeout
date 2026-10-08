@@ -1,7 +1,7 @@
 // Act I - more math: probability & statistics, and numerical methods. Both sit under yield, Monte Carlo,
 // random verification, reliability and every simulator a chip engineer uses.
 import { num, qty } from './answers';
-import { art, ask, gen, Lesson, mc, pick, say } from './types';
+import { art, ask, between, gen, Lesson, mc, pick, say } from './types';
 
 const pct = (x: number) => +(x * 100).toFixed(2);
 
@@ -78,7 +78,24 @@ export const numerics: Lesson = {
   xp: 100,
   steps: [
     say('Every simulator you will ever use (SPICE, timing engines, performance models, your own Python scripts) computes with approximate numbers and approximate methods. **Numerical methods** is the art of knowing when those approximations are fine, and when they quietly lie to you.'),
-    say('Computers store real numbers in **floating point**: a sign, an exponent and a fraction, like scientific notation in binary. A 32-bit float has 1 sign bit, 8 exponent bits and 23 fraction bits (24 bits of precision with the hidden leading 1).'),
+    say('Computers store real numbers in **floating point**: a sign, an exponent and a fraction, like scientific notation in binary. A 32-bit float (binary32) has 1 sign bit, 8 exponent bits and 23 fraction bits (24 bits of precision with the hidden leading 1), and the exponent is stored with a **bias** of 127.'),
+    art(`
+  binary32:   s | eeeeeeee | fffffffffffffffffffffff
+              1       8               23
+
+  e = 1..254   normal:    (-1)^s × 1.f × 2^(e - 127)     the leading 1 is implied
+  e = 0        f = 0: zero (+0 and -0).   f ≠ 0: SUBNORMAL, 0.f × 2^-126 (no implied 1)
+  e = 255      f = 0: infinity.           f ≠ 0: NaN (not a number)`, 'the special exponent fields are what make 0, ∞ and NaN possible'),
+    gen((r) => {
+      const s = r() < 0.3 ? 1 : 0, e = between(r, 124, 131), m = between(r, 1, 7);
+      const v = (s ? -1 : 1) * (1 + m / 8) * 2 ** (e - 127);
+      const h = (((s << 31) | (e << 23) | (m << 20)) >>> 0).toString(16).toUpperCase().padStart(8, '0');
+      return ask(`Decode the binary32 pattern \`0x${h}\`. What number is it? (decimal)`, qty(v, '', 0.001, String(v)), `Sign ${s}, exponent field ${e} (${e} - 127 = ${e - 127}), fraction ${m}/8: ${s ? '-' : ''}(1 + ${m}/8) × 2^${e - 127} = ${v}.`, 'Split it into 1, 8 and 23 bits. Subtract the bias from the exponent field and put the implied 1 in front of the fraction.');
+    }),
+    ask('What is the stored 8-bit exponent field of **1.0** in binary32? (decimal)', num(127), '1.0 = 1.0 × 2^0, so the field is 0 + the bias 127 (0x3F800000 as a whole word).', 'Add the bias to the real exponent.'),
+    say('The limits follow from the layout. Smallest normal number: 2⁻¹²⁶ ≈ 1.18 × 10⁻³⁸. Largest: about 3.4 × 10³⁸. Machine epsilon (the gap above 1.0): 2⁻²³ ≈ 1.19 × 10⁻⁷. **Subnormals** fill the gap between zero and the smallest normal number, so tiny results fade out gradually instead of snapping to zero. Results are rounded to the nearest representable number, and an exact tie goes to the one with an **even** last bit.'),
+    mc('A float `x` holds NaN. What does the comparison `x == x` give?', ['True: every value equals itself, NaN included', 'False: NaN compares unequal to everything, itself too', 'A trap: comparing a NaN raises a hardware exception', 'It depends on the bit pattern of the NaN payload'], 1, 'NaN is unordered, so even NaN == NaN is false. That is also the standard way to test for it (`x != x`). Likewise +0 == -0 is true, although their bit patterns differ in the sign bit.'),
+    mc('The exponent field is all ones and the fraction is zero. What is the value?', ['NaN, because all ones is the invalid pattern', 'A subnormal number just above zero', 'Infinity, with the sign given by the sign bit', 'The largest finite number of the format'], 2, 'All-ones exponent with a zero fraction is ±∞ (overflow, or 1/0). With a non-zero fraction it is NaN. All-zeros exponent is zero or a subnormal. The largest finite number uses exponent field 254.'),
     mc('In Python, `0.1 + 0.2 == 0.3` is `False`. Why?', ['Python floats keep only 6 digits', 'The values are rounded in binary', '== on floats compares object identity', 'The + operator is approximate on purpose'], 1, '0.1, 0.2 and 0.3 cannot be represented exactly in binary, so each is rounded, and the rounding errors do not cancel. 0.1 in binary is a repeating fraction, like 1/3 in decimal. Never compare floats with ==; compare with a tolerance: abs(a - b) < 1e-9.'),
     gen((r) => {
       const bits = pick(r, [24, 53]);
@@ -116,7 +133,7 @@ export const numerics: Lesson = {
       return ask(`A method has error proportional to h^${order}${order === 1 ? ' (like Euler)' : ' (like trapezoidal)'}. If you make the step ${k}× smaller, how many times smaller does the error get?`, num(k ** order), `Error ∝ h^${order}, so ${k}× smaller h gives ${k}^${order} = ${k ** order}× smaller error. Higher-order methods buy accuracy much more cheaply.`, 'Raise the step ratio to the method\'s order.');
     }),
   ],
-  recap: ['Floats round: never compare with ==, beware cancellation.', 'Fixed point Qm.n: LSB = 2^-n.', 'Bisection is safe, Newton is fast (SPICE uses Newton).', 'Forward Euler is stable only for h < 2τ; stiff circuits need implicit methods.', 'Error ∝ h^order.'],
+  recap: ['binary32 = 1 sign, 8 exponent (bias 127), 23 fraction bits; the implied 1 is not stored for normals.', 'Exponent field 0 is zero or a subnormal; all ones is infinity or NaN.', 'Floats round: never compare with ==, beware cancellation.', 'Fixed point Qm.n: LSB = 2^-n.', 'Bisection is safe, Newton is fast (SPICE uses Newton).', 'Forward Euler is stable only for h < 2τ; stiff circuits need implicit methods.', 'Error ∝ h^order.'],
 };
 
 export const STATS_LESSONS = [prob, numerics];
