@@ -360,6 +360,36 @@ const assume: SvaLevel = {
   }),
 };
 
+// ===================================================================== assume mode: liveness and fairness
+const GATE = `module gate(input clk, input rst, input req, input stall, output reg gnt);
+  reg pend;
+  always @(posedge clk) begin
+    if (rst) begin pend <= 1'b0; gnt <= 1'b0; end
+    else begin
+      gnt <= 1'b0;
+      if (req) pend <= 1'b1;
+      if ((pend || req) && !stall) begin gnt <= 1'b1; pend <= 1'b0; end
+    end
+  end
+endmodule
+`;
+const liveness: SvaLevel = {
+  id: 'sva-liveness', title: 'Eventually needs fairness', concept: 'liveness against safety, s_eventually, fairness assumptions, bounded response', xp: 130, tier: 'guided',
+  ticket: 'Formal says the gate can starve a request. It can, if the other side holds stall for ever. That is not a design bug: it is a missing fairness assumption.',
+  build: () => ({
+    mode: 'assume', depth: 6, env: ENV, design: GATE, bias: { stall: 0.4, req: 0.3 }, simLen: 14, minAsserts: 0,
+    covers: ['c_stall2', 'c_late'],
+    brief: `<p><code>gate</code> grants a request one cycle after it can: if <code>stall</code> is low in the cycle of <code>req</code> (or of any later cycle while the request is waiting), <code>gnt</code> follows in the next cycle. While <code>stall</code> is high the request just waits.</p>
+<p>The spec is a <b>liveness</b> wish: <code>req |-&gt; s_eventually gnt</code>, every request is granted <i>sometime</i>. Run the checks and look at <code>l_live</code>: it never fails, it just stays <b>pending</b>. A finite trace cannot refute "eventually", because the grant might arrive one cycle after the trace ends. That is why you cannot fully prove liveness with a bounded check.</p>
+<p>What you <i>can</i> check is the bounded form, <code>l_bound</code>: <code>req |-&gt; ##[1:3] gnt</code>. It fails, because the checker is free to hold <code>stall</code> high for ever. A real environment is <b>fair</b>: it does not stall for ever. Write the <b>fairness assumption</b> that stall never stays high for more than <b>2 cycles in a row</b>, so that the bound holds. Do not go further than that: the covers <code>c_stall2</code> (two stalled cycles in a row) and <code>c_late</code> (a grant three cycles after the request) must stay reachable.</p>`,
+    hints: ['"Not more than 2 in a row" means: after two stalled cycles in a row, the next cycle is not stalled.', '<code>assume property (@(posedge clk) stall[*2] |=&gt; !stall);</code>', 'If <code>c_stall2</code> goes unreachable you ruled out a legal stall; if <code>l_bound</code> still fails, your assumption lets stall run longer than 2 cycles.'],
+    given: `l_live: assert property (${C} req |-> s_eventually gnt);\nl_bound: assert property (${C} req |-> ##[1:3] gnt);\nc_stall2: cover property (${C} stall ##1 stall);\nc_late: cover property (${C} req ##3 gnt);\n`,
+    starter: '// the fairness assumption, as an assumption\n',
+    solution: `fair: assume property (${C} stall[*2] |=> !stall);\n`,
+    mutants: [],
+  }),
+};
+
 // ===================================================================== fix mode
 const wrapCounter = (m: number, bug: boolean) => `module dec(input clk, input rst, input en, output reg [3:0] q);
   always @(posedge clk) begin
@@ -473,5 +503,5 @@ const bossWrap: SvaLevel = {
   },
 };
 
-export const SVA_LEVELS: SvaLevel[] = [latency, reg, arbiter, fifoCount, handshakeProto, fsm, pulse, cover, gotoCount, withinWindow, assume, formalDepth, fixArb, bossBurst, bossWrap];
+export const SVA_LEVELS: SvaLevel[] = [latency, reg, arbiter, fifoCount, handshakeProto, fsm, pulse, cover, gotoCount, withinWindow, assume, liveness, formalDepth, fixArb, bossBurst, bossWrap];
 export const findSvaLevel = (id: string) => SVA_LEVELS.find((l) => l.id === id);
