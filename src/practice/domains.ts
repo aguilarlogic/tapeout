@@ -105,6 +105,26 @@ export const npuPractice = practice('practice-npu', 'AI Hardware Drills', 'MAC c
       calc('What memory can feed = bandwidth × intensity, in TFLOP/s:', `${bw} × ${i}`, bw * i, 'TFLOP/s', sig(bw * i, 4), 0.005),
       calc(`The attainable rate is the smaller of that and the peak ${peak}:`, `min(${sig(bw * i, 4)}, ${peak})`, att, 'TFLOP/s', sig(att), 0.02));
   },
+  (r, d) => {
+    // Block-scaled (microscaling) formats: element bits plus the shared scale spread over the block.
+    const [el, blk, sc, name] = pick(r, [[4, 32, 8, 'MXFP4'], [4, 16, 8, 'an NVFP4-style format'], [8, 32, 8, 'an 8-bit block-scaled format'], [6, 32, 8, 'a 6-bit block-scaled format']] as const);
+    const bits = el + sc / blk;
+    const idea = 'Below 8 bits, one scale for a whole tensor is too coarse, so block-scaled (microscaling) formats give each small block of elements its own shared scale. The scale is stored once per block, so each element pays only its share: element bits + scale bits ÷ block size.';
+    if (d === 1) return walk(ask(`${el}-bit elements share one ${sc}-bit scale per block of ${blk}. Average bits per element?`, qty(bits, '', 0.005, String(bits)), `${el} + ${sc}/${blk} = ${bits} bits per element.`, 'Element bits plus scale bits divided by the block size.'),
+      'bits per element of a block-scaled format', idea,
+      calc('Each element pays its share of the scale: scale bits ÷ block size =', `${sc} / ${blk}`, sc / blk, '', String(sc / blk), 0.005),
+      calc('Add the element width:', `${el} + ${sc / blk}`, bits, '', String(bits), 0.005));
+    const b = pick(r, [7, 13, 70]), gb = (b * bits) / 8;
+    if (d === 2) return walk(ask(`Blocks of ${blk} ${el}-bit elements share an ${sc}-bit scale. How many bytes does one block occupy?`, qty((blk * el + sc) / 8, '', 0.005, String((blk * el + sc) / 8)), `${blk} × ${el} + ${sc} = ${blk * el + sc} bits = ${(blk * el + sc) / 8} bytes.`, 'Bits of all elements plus one scale, divided by 8.'),
+      'storage of one scaled block', idea,
+      count('Bits taken by the elements:', `${blk} × ${el}`, blk * el),
+      count('Add the shared scale:', `${blk * el} + ${sc}`, blk * el + sc),
+      calc('Bytes = bits ÷ 8:', `${blk * el + sc} / 8`, (blk * el + sc) / 8, '', String((blk * el + sc) / 8), 0.005));
+    return walk(ask(`A ${b}B-parameter model is stored in ${name} (${el}-bit elements, ${sc}-bit scale per ${blk}). Memory for the weights, in GB?`, qty(gb, 'GB', 0.02, sig(gb)), `${b}e9 × ${bits} bits ÷ 8 = ${sig(gb)} GB. Plain FP16 would need ${b * 2} GB, so block scaling saves about ${sig((1 - bits / 16) * 100, 2)}%.`, 'Parameters × bits per element ÷ 8.'),
+      'memory in a block-scaled format', idea,
+      calc('Bits per element:', `${el} + ${sc}/${blk}`, bits, '', String(bits), 0.005),
+      calc('Memory in GB = billions of parameters × bits ÷ 8:', `${b} × ${bits} / 8`, gb, 'GB', sig(gb), 0.02));
+  },
   (r) => concept(r, [
     ['Why do systolic arrays beat CPUs on matrix math?', 'Heavy data reuse: each fetched operand feeds many MACs', ['A much higher clock frequency than any general-purpose CPU runs', 'Bigger caches, which hold the whole of the weight matrix', 'Better branch prediction, which keeps the multipliers fed'], 'data reuse in a systolic array', 'Moving a number from memory costs far more energy than multiplying it. In a systolic array each value passes from one MAC to the next, so a single fetch is used in many multiplications.', ['Reuse makes the chip efficient because fetching data costs:', 'More energy than the arithmetic', ['Less energy than the arithmetic', 'Nothing']], 'Massive data reuse: each operand fetched from memory feeds many MACs as it flows through the array'],
     ['What does "weight stationary" mean in a dataflow?', 'Weights are loaded into the PEs once and stay there', ['Weights never change during training', 'Weights are stored in flash', 'Activations stay fixed while the weights stream past them'], 'dataflows', 'A dataflow decides which operand stays put in each processing element (PE). Weight stationary loads the weights once and keeps them there, streaming the activations through, so the weights need no further memory traffic. Which operand to keep depends on the shape of the layer.', ['Weight stationary keeps which operand in place?', 'The weights', ['The activations', 'The outputs']], 'Weights are loaded into the PEs once and stay there while activations stream past'],
@@ -113,6 +133,12 @@ export const npuPractice = practice('practice-npu', 'AI Hardware Drills', 'MAC c
       ['Why do accelerators use INT8 for inference?', 'Narrow multipliers are far smaller and use far less energy', ['INT8 is more precise than FP32 for every layer', 'Memory cannot store wider numbers on a chip', 'Training needs it to converge faster'],
         'quantization', 'A multiplier shrinks roughly with the square of its width, and moving fewer bits costs less energy. Trained networks usually tolerate 8-bit weights with little loss of accuracy.',
         ['A smaller number format costs less:', 'Energy and area', ['Accuracy only', 'Nothing']]],
+      ['Which format has the largest range at 16 bits?', 'BF16: it keeps the 8 exponent bits of FP32', ['FP16: 10 fraction bits give it more range', 'INT16: it has no exponent to overflow', 'Q1.15 fixed point: its steps are the finest'],
+        'range versus precision', 'In a floating-point format the exponent bits set the range and the fraction bits set the precision. BF16 keeps the 8 exponent bits of FP32 and gives up fraction bits (7); FP16 has 5 exponent bits, so its largest value is only 65,504.',
+        ['More exponent bits give a format more:', 'Range', ['Precision', 'Sign bits']], 'BF16: it keeps the 8 exponent bits of FP32, so it has the range, at the cost of precision'],
+      ['FP8 E4M3 or E5M2 for the activations of a forward pass?', 'E4M3: the extra fraction bit buys precision', ['E5M2: the extra exponent bit is what activations need', 'Either, as the two formats are identical in range', 'Neither: activations need at least 16 bits'],
+        'choosing an FP8 format', 'E4M3 has 4 exponent and 3 fraction bits (largest value 448, no infinities); E5M2 has 5 and 2 (largest 57,344, keeps infinities). Activations sit in a narrow range, so precision matters more. Gradients span many orders of magnitude, so E5M2 is used for them.',
+        ['Gradients are usually kept in E5M2 because they need more:', 'Range', ['Precision', 'Sign bits']], 'E4M3: the extra fraction bit gives precision, and activations do not need E5M2\'s range'],
       ['What does the roofline model show?', 'Whether a kernel is limited by compute or by memory bandwidth', ['The clock frequency a chip can reach', 'The temperature of a die under load', 'How many cores fit on a die'],
         'roofline', 'Performance is capped by peak compute, or by bandwidth times arithmetic intensity (operations per byte). Whichever is lower is the roof, and it tells you what to optimize.',
         ['Low arithmetic intensity means the kernel is:', 'Memory bound', ['Compute bound', 'Power bound']]],
@@ -129,6 +155,8 @@ export const aiBoss = boss({
     { t: 'gen', make: () => ask('Weights in FP16, in GB?', qty(140, 'GB', 0.02, '140'), '70e9 × 2 = 140 GB: it does not fit in 80 GB.') },
     { t: 'gen', make: () => ask('Quantized to INT8, in GB?', qty(70, 'GB', 0.02, '70'), '70 GB fits, with 10 GB left for the KV cache.') },
     { t: 'gen', make: () => ask('Batch 1, INT8. Maximum tokens per second (every weight read once per token)?', qty(3350 / 70, '', 0.03, sig(3350 / 70)), `3350 / 70 = ${sig(3350 / 70)} tokens/s. It meets 30 tokens/s for one user.`) },
+    { t: 'gen', make: () => ask('Weights in a block-scaled 4-bit format (MXFP4: 32 elements share an 8-bit scale), in GB?', qty((70 * 4.25) / 8, 'GB', 0.02, sig((70 * 4.25) / 8)), `4 + 8/32 = 4.25 bits per element; 70e9 × 4.25 / 8 = ${sig((70 * 4.25) / 8)} GB. Half of INT8's footprint, at some accuracy risk.`) },
+    mc('Which FP8 format is the usual choice for the gradients in training?', ['E4M3, for its extra fraction bit', 'E5M2, for its larger range', 'Neither: gradients must stay FP32', 'Both, since they have equal range'], 1, 'Gradients span many orders of magnitude, so range matters more than precision: E5M2 (largest value 57,344, keeps infinities). E4M3 (largest value 448) suits activations and weights.'),
     { t: 'gen', make: () => { const kv = (2 * 80 * 1024 * 4096 * 1) / 1e9; return ask('KV cache: 80 layers, KV width 1024 (grouped-query attention), 4096 tokens, INT8 (1 byte). Size per user, in GB?', qty(kv, 'GB', 0.02, sig(kv)), `2 × 80 × 1024 × 4096 × 1 = ${sig(kv)} GB. Only ${Math.floor(10 / kv)} user${Math.floor(10 / kv) === 1 ? '' : 's'} fit in the remaining 10 GB.`); } },
     { t: 'gen', make: () => ask('Decode intensity at batch 1 is about 2 FLOP per byte of weights. Ridge point of this chip, in FLOP/byte?', qty(1000 / 3.35, '', 0.02, sig(1000 / 3.35)), `1000 / 3.35 = ${sig(1000 / 3.35)}. At 2 FLOP/byte, decode uses under 1% of peak compute.`) },
     mc('To serve many users at 30 tokens/s each, what matters most?', ['More memory capacity and bandwidth, and a smaller KV cache', 'More TFLOP/s, since decode is limited by how fast the matrix units run', 'A higher clock', 'Bigger on-chip caches only, with no change to the memory system itself'], 0, 'Add more HBM or split the model across cards. Grouped-query attention is already applied here, so the next levers on the cache are KV quantization, paging and a shorter context. LLM decode is memory-bound in both bandwidth and capacity. Compute is not the bottleneck.'),

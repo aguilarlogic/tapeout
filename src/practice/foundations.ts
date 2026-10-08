@@ -3,7 +3,7 @@ import { bin, expr, hexa, num, qty } from '../lessons/answers';
 import { calc, choice, count, show, sim, step, walk, type Part } from '../lessons/teach';
 import { ask, between, mc, pick } from '../lessons/types';
 import { boss, practice, tier } from './types';
-import { eng, hex, pow2, sig, toSigned } from './util';
+import { eng, hex, mcs, pow2, sig, toSigned } from './util';
 
 /** Binary digits grouped in fours, e.g. 1010_0011. */
 const nibbles = (n: number, bits?: number) => {
@@ -113,6 +113,49 @@ export const bitsPractice = practice('practice-bits', 'Bit Drills', 'binary, hex
       step(`1 << ${bit}: the ${bit === 0 ? '' : `${bit} zeros after a `}single 1, in hex:`, hexa(m)),
       act === 'clear' && `Now invert it within ${w} bits: every hex digit becomes F minus itself.`,
       act === 'clear' && step(`~(1 << ${bit}) as a ${w}-bit mask:`, hexa(2 ** w - 1 - m)));
+  },
+  (r, d) => {
+    // Decode a binary32 hex pattern: d1 a normal number, d2 a subnormal, d3 one of the special values.
+    const split = (h: number) => { const b = h.toString(2).padStart(32, '0'); return `${b[0]} ${b.slice(1, 9)} ${b.slice(9)}`; };
+    const idea = 'A 32-bit float is 1 sign bit, 8 exponent bits and 23 fraction bits. Write the hex pattern in binary and cut it 1 / 8 / 23. Exponent field 1 to 254: a normal number, (-1)^sign × 1.fraction × 2^(field - 127). Field 0: zero or a subnormal. Field 255: infinity or NaN.';
+    if (d === 1) {
+      const s = pick(r, [0, 1]), e = between(r, 125, 130), m = between(r, 1, 7);
+      const h = ((s << 31) | (e << 23) | (m << 20)) >>> 0, v = (s ? -1 : 1) * (1 + m / 8) * 2 ** (e - 127);
+      return walk(ask(`Decode the binary32 pattern ${hex(h, 8)}. What number is it? (decimal)`, qty(v, '', 0.001, String(v)), `Sign ${s}, exponent field ${e}, so 2^(${e} - 127) = 2^${e - 127}; fraction ${m}/8, so the mantissa is ${1 + m / 8}. Value ${v}.`, 'Cut the bits 1 / 8 / 23, subtract 127 from the exponent field, put the implied 1 in front of the fraction.'),
+        'decoding a normal binary32', idea,
+        show(split(h), 'sign | exponent | fraction'),
+        choice('The sign bit says the number is:', s ? 'Negative' : 'Positive', [s ? 'Positive' : 'Negative']),
+        count('The exponent field as a decimal number:', `${e.toString(2).padStart(8, '0')}₂`, e),
+        count('Subtract the bias:', `${e} - 127`, e - 127),
+        calc(`Value = ${s ? '-' : ''}(1 + ${m}/8) × 2^${e - 127}:`, `${s ? '-' : ''}${1 + m / 8} × 2^${e - 127}`, v, '', String(v), 0.001));
+    }
+    if (d === 2) {
+      const k = between(r, 0, 22), h = (1 << k) >>> 0, v = 2 ** (k - 149);
+      return walk(ask(`Decode the binary32 pattern ${hex(h, 8)}. What number is it? (decimal or scientific, 3 significant figures)`, qty(v, '', 0.02, v.toExponential(2)), `Exponent field 0 with a non-zero fraction is a subnormal: no implied 1, exponent fixed at -126. The fraction is 2^${k}/2^23, so the value is 2^${k - 23} × 2^-126 = 2^${k - 149} = ${v.toExponential(2)}.`, 'Exponent field 0 means no implied 1: value = fraction integer × 2^-149.'),
+        'decoding a subnormal binary32', `${idea} In a subnormal there is no implied 1 and the exponent is fixed at -126, so value = (fraction as an integer ÷ 2^23) × 2^-126 = fraction integer × 2^-149.`,
+        show(split(h), 'sign | exponent | fraction'),
+        count('The exponent field:', 'the 8 bits after the sign', 0),
+        choice('With the exponent field 0 and a non-zero fraction, this is a:', 'Subnormal: no implied 1', ['Normal number with a tiny exponent', 'NaN']),
+        count('The fraction as an integer (a single 1 bit at position k):', `2^${k}`, 2 ** k),
+        calc('Value = fraction integer × 2^-149:', `2^${k} × 2^-149 = 2^${k - 149}`, v, '', v.toExponential(2), 0.02));
+    }
+    const cases: [number, string, string][] = [
+      [0x7f800000, 'Positive infinity', 'exponent all ones, fraction zero, sign 0'],
+      [0xff800000, 'Negative infinity', 'exponent all ones, fraction zero, sign 1'],
+      [0x7fc00000, 'NaN, not a number', 'exponent all ones, fraction non-zero'],
+      [0x7f800001, 'NaN, not a number', 'exponent all ones, fraction non-zero'],
+      [0xffc00000, 'NaN, not a number', 'exponent all ones, fraction non-zero'],
+      [0x7fa00000, 'NaN, not a number', 'exponent all ones, fraction non-zero'],
+      [0x7fffffff, 'NaN, not a number', 'exponent all ones, fraction non-zero'],
+      [0x80000000, 'Negative zero', 'sign 1, exponent and fraction all zero'],
+    ];
+    const [h, ans, why] = pick(r, cases);
+    const allOnes = ((h >>> 23) & 0xff) === 255;
+    return walk(mcs(r, `What does the binary32 pattern ${hex(h, 8)} represent?`, ans, ['Positive infinity', 'Negative infinity', 'NaN, not a number', 'Negative zero'].filter((x) => x !== ans), `${why[0].toUpperCase()}${why.slice(1)}: ${ans === 'NaN, not a number' ? 'the result of 0/0 or ∞ - ∞' : ans === 'Negative zero' ? 'it compares equal to +0 but keeps its sign (1/-0 = -∞)' : 'what overflow and division by zero produce'}.`),
+      'special binary32 patterns', idea,
+      show(split(h), 'sign | exponent | fraction'),
+      choice('Is the 8-bit exponent field all ones (255)?', allOnes ? 'Yes' : 'No: it is all zeros', [allOnes ? 'No: it is all zeros' : 'Yes']),
+      choice('Looking at the fraction bits, the pattern is:', allOnes ? (ans === 'NaN, not a number' ? 'NaN: the fraction is non-zero' : 'An infinity: the fraction is zero') : 'Zero: exponent and fraction are both zero', allOnes ? (ans === 'NaN, not a number' ? ['An infinity: the fraction is zero'] : ['NaN: the fraction is non-zero']) : ['A subnormal: the fraction is non-zero']));
   },
 ]);
 

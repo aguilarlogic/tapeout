@@ -31,9 +31,27 @@ export const bits: Lesson = {
     }),
     mc('How many different values can **8 bits** represent?', ['8', '255', '256', '512'], 2, '2^8 = 256 values: 0 through 255. The max value is 255, but there are 256 of them, a classic off-by-one.'),
     ask('How many bits do you need to count from 0 to 1000?', num(10), '2^9 = 512 is too few, 2^10 = 1024 covers it. In Verilog you would write `$clog2(1001)`.', 'Find the smallest power of two that is bigger than 1000.'),
+    say('One more number format, because every GPU, DSP and Python script uses it: **floating point**, which is scientific notation in binary. A 32-bit float (binary32) has **1 sign bit, 8 exponent bits and 23 fraction bits**, and the exponent is stored with a **bias** of 127.'),
+    art(`
+  binary32:   s | eeeeeeee | fffffffffffffffffffffff
+              1       8               23
+
+  e = 1..254   normal:    (-1)^s × 1.f × 2^(e - 127)     the leading 1 is implied
+  e = 0        f = 0: zero (+0 and -0).   f ≠ 0: SUBNORMAL, 0.f × 2^-126 (no implied 1)
+  e = 255      f = 0: infinity.           f ≠ 0: NaN (not a number)`, 'the special exponent fields are what make 0, ∞ and NaN possible'),
+    gen((r) => {
+      const s = r() < 0.3 ? 1 : 0, e = between(r, 124, 131), m = between(r, 1, 7);
+      const v = (s ? -1 : 1) * (1 + m / 8) * 2 ** (e - 127);
+      const h = (((s << 31) | (e << 23) | (m << 20)) >>> 0).toString(16).toUpperCase().padStart(8, '0');
+      return ask(`Decode the binary32 pattern \`0x${h}\`. What number is it? (decimal)`, qty(v, '', 0.001, String(v)), `Sign ${s}, exponent field ${e} (${e} - 127 = ${e - 127}), fraction ${m}/8: ${s ? '-' : ''}(1 + ${m}/8) × 2^${e - 127} = ${v}.`, 'Split it into 1, 8 and 23 bits. Subtract the bias from the exponent field and put the implied 1 in front of the fraction.');
+    }),
+    ask('What is the stored 8-bit exponent field of **1.0** in binary32? (decimal)', num(127), '1.0 = 1.0 × 2^0, so the field is 0 + the bias 127 (0x3F800000 as a whole word).', 'Add the bias to the real exponent.'),
+    say('The limits follow from the layout. Smallest normal number: 2⁻¹²⁶ ≈ 1.18 × 10⁻³⁸. Largest: about 3.4 × 10³⁸. Machine epsilon (the gap above 1.0): 2⁻²³ ≈ 1.19 × 10⁻⁷. **Subnormals** fill the gap between zero and the smallest normal number, so tiny results fade out gradually instead of snapping to zero. Results are rounded to the nearest representable number, and an exact tie goes to the one with an **even** last bit.'),
+    mc('A float `x` holds NaN. What does the comparison `x == x` give?', ['True: every value equals itself, NaN included', 'False: NaN compares unequal to everything, itself too', 'A trap: comparing a NaN raises a hardware exception', 'It depends on the bit pattern of the NaN payload'], 1, 'NaN is unordered, so even NaN == NaN is false. That is also the standard way to test for it (`x != x`). Likewise +0 == -0 is true, although their bit patterns differ in the sign bit.'),
+    mc('The exponent field is all ones and the fraction is zero. What is the value?', ['NaN, because all ones is the invalid pattern', 'A subnormal number just above zero', 'Infinity, with the sign given by the sign bit', 'The largest finite number of the format'], 2, 'All-ones exponent with a zero fraction is ±∞ (overflow, or 1/0). With a non-zero fraction it is NaN. All-zeros exponent is zero or a subnormal. The largest finite number uses exponent field 254.'),
     say('Nice. You now speak the native language of every chip on Earth.', 'proud'),
   ],
-  recap: ['Each bit position is worth twice the one to its right.', 'One hex digit = 4 bits; two = one byte.', 'n bits hold 2^n values: 0 to 2^n - 1.', 'Bits needed for N values = ceil(log2 N).'],
+  recap: ['Each bit position is worth twice the one to its right.', 'One hex digit = 4 bits; two = one byte.', 'n bits hold 2^n values: 0 to 2^n - 1.', 'Bits needed for N values = ceil(log2 N).', 'binary32 = 1 sign, 8 exponent (bias 127), 23 fraction bits; the implied 1 is dropped for normals.', 'Exponent 0 = zero or subnormal; exponent all ones = infinity or NaN. NaN ≠ NaN, +0 == -0.'],
 };
 
 export const twos: Lesson = {
