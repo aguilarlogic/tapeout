@@ -572,6 +572,39 @@ export const photonicsPractice = practice('practice-photonics', 'Photonics Drill
         'wavelength multiplexing', 'Different wavelengths do not interfere, so each one is a separate channel in the same fibre. Rings or gratings split them again at the receiver, multiplying the bandwidth.',
         ['Each wavelength acts as a separate:', 'Channel', ['Clock', 'Fuse']]],
   ], (why) => `${why}.`),
+  (r, d) => {
+    // G2.7: dense wavelength grid anchored at 193.1 THz; spacing to wavelength by Δλ = λ²Δf/c.
+    const sp = pick(r, [100, 50, 25, 12.5] as const);
+    const idea = 'The dense wavelength grid is anchored at 193.1 THz, and channel n sits at 193.1 THz + n × spacing, with spacings of 100, 50, 25 or 12.5 GHz. To turn a frequency spacing into a wavelength spacing, use Δλ = λ² × Δf ÷ c (about 0.8 nm for 100 GHz at 1550 nm).';
+    if (d === 1) { const n = pick(r, [1, 2, 5, 12]), f = 193.1 + (n * 100) / 1000;
+      return walk(ask(`On the dense grid with 100 GHz spacing, what is the frequency of channel n = ${n}, counted up from the 193.1 THz anchor, in THz?`, qty(f, 'THz', 0.00003, String(+f.toFixed(3))), `193.1 + ${n} × 0.1 = ${+f.toFixed(3)} THz.`, 'Anchor plus n × 0.1 THz.'),
+        'the dense grid', idea,
+        calc('Offset = n × 0.1 THz:', `${n} × 0.1`, n * 0.1, 'THz', String(+(n * 0.1).toFixed(2)), 0.005),
+        calc('Frequency = 193.1 + offset, in THz:', `193.1 + ${+(n * 0.1).toFixed(2)}`, f, 'THz', String(+f.toFixed(3)), 0.00003)); }
+    if (d === 2) { const n = pick(r, [3, 6, 10, 16]), f = 193.1 + (n * sp) / 1000;
+      return walk(ask(`On the dense grid with ${sp} GHz spacing, what is the frequency of channel n = ${n}, in THz?`, qty(f, 'THz', 0.00003, String(+f.toFixed(4))), `193.1 + ${n} × ${sp / 1000} = ${+f.toFixed(4)} THz.`, 'Anchor plus n × spacing.'),
+        'the dense grid', idea,
+        calc('Offset = n × spacing, in THz:', `${n} × ${sp / 1000}`, (n * sp) / 1000, 'THz', String((n * sp) / 1000), 0.005),
+        calc('Frequency = 193.1 + offset, in THz:', `193.1 + ${(n * sp) / 1000}`, f, 'THz', String(+f.toFixed(4)), 0.00003)); }
+    const lam = pick(r, [1550, 1310]), dl = (lam ** 2 / 3e8) * sp;
+    return walk(ask(`At ${lam} nm, what wavelength spacing does a ${sp} GHz channel spacing correspond to, in nm? (Δλ = λ²·Δf / c, c = 3×10⁸ m/s)`, qty(dl, 'nm', 0.03, sig(dl)), `(${lam} nm)² × ${sp} GHz / c = ${sig(dl)} nm.`, 'λ² times Δf over c.'),
+      'frequency spacing to wavelength', idea,
+      calc('λ² ÷ c, which comes to this many nm per GHz when λ is in nm and c = 3×10⁸:', `${lam}² / 300000000`, (lam ** 2) / 3e8, '', sig((lam ** 2) / 3e8, 4), 0.03),
+      calc('Δλ = that × Δf, in nm:', `${sig((lam ** 2) / 3e8, 4)} × ${sp}`, dl, 'nm', sig(dl), 0.03));
+  },
+  (r, d) => {
+    // G2.7: lanes × rate for a port, and PAM4's two bits per symbol.
+    const [n, rate] = pick(r, [[8, 100], [4, 200], [8, 200], [4, 100], [2, 200], [2, 100]] as const), t = n * rate;
+    if (d === 1) return walk(ask(`A port has ${n} lanes at ${rate} Gb/s each. What is its total rate, in Gb/s?`, qty(t, 'Gb/s', 0.01, String(t)), `${n} × ${rate} = ${t} Gb/s.`, 'Lanes times rate.'),
+      'lanes times rate', 'A port\'s rate is its number of lanes times the rate of each lane: 800G is 8 × 100G or 4 × 200G, and 1.6T is 8 × 200G.',
+      count('Total in Gb/s = lanes × rate:', `${n} × ${rate}`, t));
+    if (d === 2) return walk(ask(`A PAM4 lane carries ${rate} Gb/s. PAM4 sends two bits per symbol. What is the symbol rate, in GBd (ignoring coding overhead)?`, qty(rate / 2, 'GBd', 0.02, String(rate / 2)), `${rate} / 2 = ${rate / 2} GBd.`, 'Bits per second over bits per symbol.'),
+      'PAM4 symbol rate', 'PAM4 has four amplitude levels, so each symbol carries two bits. The symbol rate is half the bit rate (before any coding overhead).',
+      calc('Symbol rate = bit rate ÷ 2, in GBd:', `${rate} / 2`, rate / 2, 'GBd', String(rate / 2), 0.02));
+    return walk(ask(`A switch port must carry ${t} Gb/s using PAM4 lanes of ${rate} Gb/s. How many lanes does it need?`, num(n), `${t} / ${rate} = ${n} lanes (each running at ${rate / 2} GBd of PAM4 symbols).`, 'Port rate over lane rate.'),
+      'lanes for a port', 'Divide the port rate by the lane rate to count lanes. Each PAM4 lane runs at half its bit rate in symbols per second.',
+      count('Lanes = port rate ÷ lane rate:', `${t} / ${rate}`, n));
+  },
 ]);
 
 export const photonicsBoss = boss({
@@ -690,6 +723,12 @@ export const qubitPractice = practice('practice-qubit', 'Qubit Drills', 'state s
   (r) => concept(r, [
     ['Why does a transmon need a Josephson junction?', 'It is a nonlinear inductor, so levels are unevenly spaced', ['To connect the qubit to ground through a normal resistor', 'To make it superconduct, since the film alone would not', 'To cool it, because the junction acts as a small heat pump'], 'the Josephson junction', 'A plain LC circuit has evenly spaced energy levels, so a pulse meant to drive 0↔1 would also drive 1↔2. A Josephson junction acts as a nonlinear inductor, making the spacing uneven so that the qubit\'s two lowest levels can be addressed on their own.', ['Unevenly spaced levels let a pulse drive:', 'Only the 0↔1 transition', ['Every transition equally', 'No transition']], 'It is a nonlinear inductor, so the energy levels are unevenly spaced and the lowest two can be addressed alone'],
     ['Trapped ions vs superconducting qubits: which pairing is right?', 'Ions: long coherence, slow gates; superconducting: the reverse', ['Ions have faster gates, but a much shorter coherence time', 'Superconducting qubits need no fridge, since they are on chips', 'The two kinds are identical in every figure that matters here'], 'qubit platforms', 'Each platform is a trade-off. Trapped ions are identical atoms isolated in vacuum: very long coherence and accurate gates, but slow. Superconducting circuits are made with chip technology and have fast gates, but the qubits decohere sooner.', ['Fast gates but shorter coherence describes:', 'Superconducting qubits', ['Trapped ions', 'Neither']], 'Ions: long coherence and high fidelity but slow gates; superconducting: fast gates but shorter coherence'],
+    ['How do T2* and T2 echo compare for one qubit?', 'T2* is the shorter, as an echo refocuses slow noise', ['They are always equal, both being dephasing times', 'T2* is the longer, because an echo pulse adds noise to it', 'T2 echo can exceed 2·T1 with a well-designed pulse train'], 'T2* versus T2 echo', 'A Ramsey experiment gives T2*, which includes slow drifts. An echo pulse cancels the slow part and gives the longer T2 echo. Neither can pass 2·T1, since energy relaxation also destroys phase: T2* ≤ T2 ≤ 2·T1.',
+      ['An echo pulse refocuses:', 'Slow noise', ['Energy relaxation', 'The readout']]],
+    ['Which of these is one of DiVincenzo\'s five criteria?', 'Coherence times much longer than the gate time', ['A dilution refrigerator colder than ten millikelvin', 'At least a million physical qubits in total', 'A control clock running above one gigahertz'], 'DiVincenzo\'s criteria', 'The five are: scalable well-characterised qubits, initialisation to a simple state, long coherence compared with gate time, a universal gate set, and qubit-specific measurement.',
+      ['Gates must be fast compared with:', 'Coherence time', ['The supply voltage', 'The cable length']]],
+    ['What does quantum volume report?', '2^n for the largest n-qubit, depth-n circuit that passes', ['The number of physical qubits fitted on the chip', 'The cooling power of the refrigerator at its coldest stage', 'The clock speed of the control electronics in GHz'], 'quantum volume', 'Quantum volume folds qubit count, gate fidelity and connectivity into one number: a machine that can pass an n-qubit, depth-n random circuit has quantum volume 2^n. Layer fidelity instead reports the error of a whole layer of two-qubit gates.',
+      ['A passing 6-qubit, depth-6 circuit gives a volume of:', '64', ['6', '36']]],
     ['What is the difference between T1 and T2?', 'T1 is energy relaxation; T2 is phase coherence loss, T2 ≤ 2·T1', ['They are the same number, measured in two slightly different ways', 'T2 is always longer than T1, since phase outlives the energy', 'T1 is the gate time, and T2 is the time of the readout pulse'], 'T1 and T2', 'T1 measures how fast the qubit loses energy (falls from |1⟩ to |0⟩). T2 measures how fast it loses the phase relationship of a superposition. Energy loss always destroys the phase too, so T2 can never be more than 2 × T1; other noise shortens it further.', ['Losing energy also destroys phase, so T2 is at most:', '2 × T1', ['T1 ÷ 2', '10 × T1']], 'T1 is energy relaxation (|1⟩ decays to |0⟩); T2 is loss of phase coherence, and T2 ≤ 2·T1'],
     ['Why can\'t you copy an unknown qubit to protect it?', 'The no-cloning theorem forbids it', ['Qubits are too small to be copied with present technology', 'It would be too slow, compared with how fast the qubit decays', 'Copying is allowed'], 'no cloning', 'A law of quantum mechanics (no-cloning) forbids making a perfect copy of an unknown quantum state, and measuring it destroys the superposition. So quantum error correction encodes the data across entangled qubits and uses parity checks that find errors without learning the data.', ['Quantum error correction spreads the information across:', 'Many entangled qubits', ['Copies of the qubit', 'Classical bits']], 'The no-cloning theorem forbids it, so error correction spreads information across entangled qubits instead'],
       ['Why do superconducting qubits run at about 10 mK?', 'Thermal energy must be far below the qubit energy, or it flips the state', ['Metals only conduct at that temperature', 'The fridge is cheaper to run when colder', 'The control electronics need it to function'],
@@ -699,6 +738,35 @@ export const qubitPractice = practice('practice-qubit', 'Qubit Drills', 'state s
         'entanglement', 'Single-qubit gates rotate each qubit by itself. A gate like CNOT makes the state of one depend on the other, and that correlation is what quantum algorithms use.',
         ['A CNOT can turn two separate qubits into an:', 'Entangled pair', ['Identical copy', 'Classical bit']]],
   ], (why) => `${why}.`),
+  (r, d) => {
+    // G2.8: below threshold, each step d -> d + 2 divides the logical error by Λ.
+    const lam = pick(r, [2, 3, 4]), e = pick(r, [0.4, 0.6, 1.2, 2.4, 4.8]);
+    const idea = 'Below the surface-code threshold (near 1% physical error), each step up in code distance, d to d + 2, divides the logical error rate by a factor Λ. A 2024 experiment measured Λ about 2.1. After k steps the error is the starting error divided by Λ to the power k.';
+    if (d === 1) return walk(ask(`A surface code has Λ = ${lam}. One step up in distance (d to d + 2) takes a logical error of ${e}% per cycle to what, in %?`, qty(e / lam, '%', 0.02, sig(e / lam)), `${e} / ${lam} = ${sig(e / lam)}%.`, 'Divide by Λ once.'),
+      'the error suppression factor', idea,
+      calc('New error = old ÷ Λ, in %:', `${e} / ${lam}`, e / lam, '%', sig(e / lam), 0.02));
+    const k = d === 2 ? 2 : pick(r, [2, 3]), d0 = pick(r, [3, 5]), d1 = d0 + 2 * k;
+    const out = e / lam ** k;
+    return walk(ask(`A surface code has Λ = ${lam}. At distance ${d0} its logical error is ${e}% per cycle. What is it at distance ${d1}, in %?`, qty(out, '%', 0.03, sig(out)), `From ${d0} to ${d1} is ${k} steps of +2: ${e} / ${lam}^${k} = ${sig(out)}%.`, 'Count the +2 steps, divide by Λ each time.'),
+      'the error suppression factor', idea,
+      count('Steps of +2 from the first distance to the second:', `(${d1} - ${d0}) / 2`, k),
+      calc('Error = start ÷ Λ^steps, in %:', `${e} / ${lam}^${k}`, out, '%', sig(out), 0.03));
+  },
+  (r, d) => {
+    // G2.8: randomized benchmarking, r = (1 - p)(dim - 1)/dim, with dim = 2^n qubits.
+    const p = pick(r, [0.99, 0.992, 0.995, 0.998, 0.999, 0.9995]);
+    const idea = 'Randomized benchmarking runs random gate sequences of growing length and fits how the fidelity decays, giving a decay parameter p. The average error per gate is r = (1 - p) × (dim - 1) ÷ dim, where dim = 2 for one qubit and 4 for two.';
+    if (d === 1) return walk(ask(`A single-qubit benchmarking decay has p = ${p}. What is the average error per gate r = (1 - p)/2, in %?`, qty(((1 - p) / 2) * 100, '%', 0.03, sig(((1 - p) / 2) * 100)), `(1 - ${p}) / 2 = ${sig((1 - p) / 2)}, which is ${sig(((1 - p) / 2) * 100)}%.`, 'Half of (1 - p).'),
+      'randomized benchmarking', idea,
+      calc('1 - p:', `1 - ${p}`, 1 - p, '', String(+(1 - p).toFixed(4)), 0.005),
+      calc('r = (1 - p) ÷ 2, in %:', `${+(1 - p).toFixed(4)} / 2 × 100`, ((1 - p) / 2) * 100, '%', sig(((1 - p) / 2) * 100), 0.03));
+    if (d === 2) return walk(ask(`A single-qubit benchmarking run decays with p = ${p}. What is the average error per gate, in %? (r = (1 - p)(d - 1)/d, d = 2)`, qty(((1 - p) / 2) * 100, '%', 0.03, sig(((1 - p) / 2) * 100)), `(1 - ${p}) × 1 / 2 = ${sig((1 - p) / 2)} = ${sig(((1 - p) / 2) * 100)}%.`, 'The factor (d - 1)/d is 1/2.'),
+      'randomized benchmarking', idea,
+      calc('r = (1 - p) × (2 - 1) ÷ 2, in %:', `${+(1 - p).toFixed(4)} × 1 / 2 × 100`, ((1 - p) / 2) * 100, '%', sig(((1 - p) / 2) * 100), 0.03));
+    return walk(ask(`A two-qubit benchmarking run decays with p = ${p}. What is the average error per gate, in %? (r = (1 - p)(d - 1)/d, with d = 4 for two qubits)`, qty(((1 - p) * 3 / 4) * 100, '%', 0.03, sig(((1 - p) * 3 / 4) * 100)), `(1 - ${p}) × 3 / 4 = ${sig((1 - p) * 0.75)} = ${sig(((1 - p) * 3 / 4) * 100)}%.`, 'The factor (d - 1)/d is 3/4.'),
+      'randomized benchmarking', idea,
+      calc('r = (1 - p) × (4 - 1) ÷ 4, in %:', `${+(1 - p).toFixed(4)} × 3 / 4 × 100`, ((1 - p) * 3 / 4) * 100, '%', sig(((1 - p) * 3 / 4) * 100), 0.03));
+  },
 ]);
 
 export const qubitBoss = boss({

@@ -131,7 +131,7 @@ export const SKILLS: Skill[] = [
   S('postsi', 'Test', 'Post-silicon validation and debug', ['postsi', 'dv'], ['postsi'], ['practice-postsi'], ['boss-postsi', 'inc-hang']),
   S('analog', 'Specialties', 'Analog and mixed-signal design', ['analog', 'clocking', 'sensors'], ['analog'], ['practice-analog', 'clab-inverting', 'clab-gbw', 'clab-csamp', 'clab-mirror'], ['boss-analog', 'clab-boss-amp']),
   S('rf', 'Specialties', 'RF design', ['rf'], ['rf'], ['practice-rf', 'clab-lcfilter', 'rf-smith', 'rf-match'], ['boss-rf', 'inc-radio']),
-  S('pmic', 'Specialties', 'Power electronics and PMICs', ['pmic'], ['pmic'], ['practice-pmic', 'clab-duty', 'clab-buck'], ['boss-pmic', 'inc-rail', 'clab-boss-buck']),
+  S('pmic', 'Specialties', 'Power electronics and PMICs', ['pmic'], ['pmic'], ['practice-pmic', 'clab-duty', 'clab-buck', 'clab-dcm'], ['boss-pmic', 'inc-rail', 'clab-boss-buck']),
   S('memory', 'Specialties', 'Memory design (SRAM, DRAM, flash)', ['memory'], ['sram'], ['practice-sram', 'mem-snm', 'mem-assist'], ['boss-memory', 'inc-bitflip']),
   S('process', 'Specialties', 'Process, devices and yield', ['process', 'emerging'], ['fab'], ['practice-fab', 'proc-yield'], ['boss-process', 'inc-wafer']),
   S('pkg', 'Specialties', 'Packaging, chiplets and thermals', ['pkg'], ['pkg'], ['practice-pkg', 'pkg-thermal'], ['boss-pkg', 'inc-package']),

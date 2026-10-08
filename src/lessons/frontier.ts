@@ -209,10 +209,24 @@ export const sensors: Lesson = {
       const n = pick(r, [100, 400, 2500, 10000, 40000]);
       return ask(`A pixel collects ${n} electrons. What is the shot-noise-limited SNR, in dB? (20 · log10(signal / noise))`, qty(20 * Math.log10(Math.sqrt(n)), 'dB', 0.03, r1(20 * Math.log10(Math.sqrt(n))).toString()), `Noise = √${n} = ${Math.sqrt(n)} e⁻, SNR = ${n} / ${Math.sqrt(n)} = ${Math.sqrt(n)}, which is ${r1(20 * Math.log10(Math.sqrt(n)))} dB. Bigger pixels hold more electrons, which is why large sensors win in low light.`, 'Signal divided by √signal, in dB.');
     }),
+    say('Two capacities are easy to confuse. The **full well** is how much charge the photodiode can hold; the **saturation capacity** is the signal at which the *output* clips, which can be lower if the readout chain runs out of range first. Dynamic range and the best SNR are both quoted at saturation: **DR = 20·log10(saturation / read noise)** and **SNR at saturation = √(saturation electrons)** (shot noise only). In the drills, the readout does not clip first, so the full well is the saturation capacity.'),
     gen((r) => {
       const fw = pick(r, [5000, 10000, 20000, 60000]), rn = pick(r, [2, 5, 10]);
       const dr = 20 * Math.log10(fw / rn);
-      return ask(`A pixel has a full well of ${fw} e⁻ and a read noise of ${rn} e⁻. What is its dynamic range, in dB?`, qty(dr, 'dB', 0.02, r1(dr).toString()), `DR = 20 · log10(${fw} / ${rn}) = ${r1(dr)} dB. HDR techniques (multiple exposures, dual conversion gain) extend it past what one well can hold.`, '20 log10(full well / read noise).');
+      return ask(`A pixel saturates at ${fw} e⁻ (its full well) and has a read noise of ${rn} e⁻. What is its dynamic range, in dB?`, qty(dr, 'dB', 0.02, r1(dr).toString()), `DR = 20 · log10(${fw} / ${rn}) = ${r1(dr)} dB. HDR techniques (multiple exposures, dual conversion gain) extend it past what one well can hold.`, '20 log10(saturation / read noise).');
+    }),
+    gen((r) => {
+      const sat = pick(r, [2500, 10000, 40000, 90000]);
+      const snr = 20 * Math.log10(Math.sqrt(sat));
+      return ask(`A pixel saturates at ${sat} e⁻. What is its SNR at saturation, in dB, if shot noise is the only noise?`, qty(snr, 'dB', 0.03, r1(snr).toString()), `SNR = √${sat} = ${Math.sqrt(sat)}, which is ${r1(snr)} dB. This is the best SNR the pixel will ever give: every darker scene has fewer electrons and a lower SNR.`, '√(saturation electrons), then 20·log10.');
+    }),
+    say('Resetting a pixel\'s floating diffusion freezes **reset (kT/C) noise** and an offset onto it. In a **4-transistor pinned-photodiode pixel** the reset level is sampled first, the charge is then transferred and the signal level sampled, and the difference is taken: **correlated double sampling (CDS)** removes the reset noise and the offset. A 3T pixel with a hard reset cannot do this, because the reset level it could subtract is not the one buried in the signal.'),
+    mc('Which of these does **correlated double sampling** remove in a 4T pinned-photodiode pixel?', ['Reset (kT/C) noise and the pixel offset, by subtracting the reset level', 'Photon shot noise, since it is common to both samples of the pixel', 'Differences in gain between pixels, which show up as a fixed pattern', 'Rolling-shutter skew, because both samples are taken at once for every row'], 0, 'Shot noise is random in every exposure and is not in the reset level, so CDS cannot touch it. Gain differences are a separate effect (PRNU). CDS needs the reset sample to be correlated with the reset noise in the signal, which is what the 4T pixel provides.'),
+    say('**Fixed-pattern noise (FPN)** is the same error in the same pixel every frame. The offset part, which is there in the dark, is **dark-signal non-uniformity (DSNU)** and can be subtracted with a dark frame. The gain part is **photo-response non-uniformity (PRNU)**, quoted in % of the signal, so it grows in proportion to the signal while shot noise grows only as its square root.'),
+    gen((r) => {
+      const prnu = pick(r, [0.25, 0.5, 1, 2]);
+      const s = (100 / prnu) ** 2;
+      return ask(`A sensor has a PRNU of ${prnu}%. At what signal does the fixed-pattern noise (PRNU × signal) equal the shot noise (√signal), in electrons?`, qty(s, '', 0.02, String(s)), `PRNU × S = √S gives S = (1 / PRNU)² = (1 / ${prnu / 100})² = ${s.toLocaleString('en-US')} e⁻. Above that signal the pixel-to-pixel gain error, not photon noise, limits the picture, so it is calibrated out with a flat-field correction.`, 'S = (1 / PRNU)², with PRNU as a fraction.');
     }),
     gen((r) => {
       const [w, hh, fps] = pick(r, [[1920, 1080, 60], [3840, 2160, 30], [4000, 3000, 30], [8000, 6000, 30]] as const);
@@ -221,7 +235,7 @@ export const sensors: Lesson = {
     }),
     mc('A **rolling shutter** exposes and reads rows one after another. What artifact does that cause for a fast-moving object?', ['None: rows are read out so fast that nothing can be seen at all', 'Skew and flicker bands, since each row sees a different time', 'Colour shifts, since each row is filtered by a different dye here', 'Higher noise in the middle of the frame, from the readout order'], 1, 'A global shutter exposes all rows at once, at the cost of pixel area. Rolling shutter is smaller and lower in noise per pixel. Global shutter is used in machine vision and automotive where timing matters.'),
   ],
-  recap: ['Photon → electron: QE; storage: full well.', 'Shot noise √N sets the best SNR.', 'Dynamic range = 20 log10(full well / read noise).', 'Readout rate = pixels × fps.', 'Rolling vs global shutter; BSI improves QE.'],
+  recap: ['Photon → electron: QE; storage: full well (the output clips at the saturation capacity).', 'Shot noise √N sets the best SNR; at saturation, SNR = √(saturation electrons).', 'Dynamic range = 20 log10(saturation / read noise).', 'CDS (in 4T pinned-photodiode pixels) removes reset noise and offset.', 'DSNU is offset non-uniformity; PRNU is gain non-uniformity, in %.', 'Readout rate = pixels × fps.', 'Rolling vs global shutter; BSI improves QE.'],
 };
 
 export const mems: Lesson = {
@@ -251,9 +265,37 @@ export const mems: Lesson = {
       const f = pick(r, [10, 20, 50]) * 1e3, q = pick(r, [5000, 20000, 100000]);
       return ask(`A MEMS gyroscope drive mode resonates at ${f / 1000} kHz with a quality factor Q = ${q}. What is its half-power bandwidth, in Hz? (BW = f / Q)`, qty(f / q, 'Hz', 0.03, sig(f / q)), `BW = ${f} / ${q} = ${sig(f / q)} Hz. High Q gives large motion for little drive power but a narrow bandwidth: gyros are packaged in vacuum for exactly this reason, and the ASIC must track the frequency as temperature drifts.`, 'Frequency divided by Q.');
     }),
+    say('A MEMS data sheet quotes noise as a **noise density**: µg/√Hz for an accelerometer, °/s/√Hz for a gyro. Multiply by √bandwidth to get the noise you see. For a gyro, white rate noise integrates into an **angle random walk (ARW)**, quoted in °/√h, and the conversion is ARW = density × 60 (because √3600 s = 60). The floor itself is physical: the proof mass is buffeted by gas and thermal motion, the **Brownian noise**, an acceleration noise density a_n = √(4·k·T·ω₀ / (m·Q)) in m/s²/√Hz. A heavier mass and a higher Q both lower it.'),
+    gen((r) => {
+      const dens = pick(r, [0.005, 0.01, 0.02, 0.05]);
+      const arw = dens * 60;
+      return ask(`A gyro has a rate noise density of ${dens} °/s/√Hz. What is its angle random walk, in °/√h? (ARW = density × 60)`, qty(arw, '', 0.02, sig(arw)), `${dens} × 60 = ${sig(arw)} °/√h. Integrating white rate noise gives an angle error that grows as the square root of time, which is why a gyro alone cannot hold a heading for long.`, 'Density times 60.');
+    }),
+    gen((r) => {
+      const m = pick(r, [1, 2, 5]), f = pick(r, [5, 10, 20]) * 1e3, q = pick(r, [1, 10, 100]);
+      const k = 1.380649e-23, t = 300;
+      const an = Math.sqrt((4 * k * t * 2 * Math.PI * f) / (m * 1e-9 * q));
+      const um = an * 1e6;
+      return ask(`A proof mass of ${m} µg resonates at ${f / 1000} kHz with Q = ${q}, at 300 K. What is its Brownian acceleration noise density a_n = √(4·k·T·ω₀ / (m·Q)), in µm/s²/√Hz? (k = 1.38×10⁻²³ J/K)`, qty(um, '', 0.04, sig(um)), `ω₀ = 2π × ${f} = ${sig(2 * Math.PI * f)} rad/s. a_n = √(4 × 1.38e-23 × 300 × ${sig(2 * Math.PI * f)} / (${m}e-9 kg × ${q})) = ${sig(an)} m/s²/√Hz, which is ${sig(um)} µm/s²/√Hz. Mass and Q are the levers: a heavier mass and a better vacuum (higher Q) both lower the floor.`, 'Work in SI (mass in kg), then scale to µm/s².');
+    }),
+    art(`
+   Allan deviation of a gyro, log-log (the same ideas apply to an accelerometer)
+
+   σ(τ)
+   (°/h)
+    100 ┤ ╲
+        │   ╲  slope −½: white noise
+     10 ┤     ╲   (angle random walk)         ╱  slope +½:
+        │       ╲                          ╱     rate random walk
+      1 ┤         ╲_____ ___ ___ ___ ___╱
+        │            flat bottom: bias instability
+    0.1 ┼────┬────┬────┬────┬────┬────┬────
+        0.1    1   10  100  1k  10k  100k   τ (s)`, 'τ is the averaging time; the dip is the sensor\'s best stability'),
+    mc('Reading the Allan plot above, the **bias instability** is:', ['The value at the flat bottom of the curve, about 1 °/h here', 'The value on the left where the slope is −½, about 100 °/h here', 'The slope of the curve on the right, where it climbs at +½', 'The value at the left end of the curve, at the shortest τ'], 0, 'The flat floor is the best the sensor can do: averaging longer no longer helps. A slope of −½ at short τ is white noise (angle random walk, read off at τ = 1 s), and a rising slope of +½ at long τ is rate random walk.'),
+    mc('Which Allan-deviation slope means plain **white noise**?', ['−½ on the log-log plot: it averages down as τ grows', '0, a flat line: it never changes with τ', '+½: it grows as the averaging time grows', '+1: it grows in direct proportion to τ'], 0, 'White noise averages away as 1/√τ, a slope of −½. The flat bottom is bias instability (flicker), and +½ is rate random walk, which grows with τ.'),
     mc('Why are many MEMS sensors packaged **in a vacuum** or low-pressure cavity?', ['To keep them cool', 'Gas damping lowers Q and adds noise, and a vacuum raises Q', 'The vacuum is a standard for all chips in the same package type', 'To make them magnetic, so that the proof mass is easier to drive'], 1, 'Accelerometers instead trap gas deliberately, to prevent ringing. Different sensors want different damping. Gyros want high Q; accelerometers want near-critical damping so they do not ring after a shock.'),
   ],
-  recap: ['Spring-mass: f = (1/2π)√(k/m); deflection a/ω².', 'Capacitive sensing: ΔC = C₀ Δx / gap, femtofarad-scale.', 'Q sets bandwidth f/Q and gain.', 'The readout ASIC (charge amp, chopping, trimming) is half the product.', 'Vacuum for gyros, controlled damping for accelerometers.'],
+  recap: ['Spring-mass: f = (1/2π)√(k/m); deflection a/ω².', 'Capacitive sensing: ΔC = C₀ Δx / gap, femtofarad-scale.', 'Q sets bandwidth f/Q and gain.', 'Noise density × √bandwidth; ARW (°/√h) = density (°/s/√Hz) × 60; Brownian a_n = √(4kTω₀/(mQ)).', 'Allan deviation: slope −½ white noise, flat bottom bias instability, slope +½ rate random walk.', 'The readout ASIC (charge amp, chopping, trimming) is half the product.', 'Vacuum for gyros, controlled damping for accelerometers.'],
 };
 
 export const neuro: Lesson = {
@@ -300,7 +342,7 @@ export const emerging: Lesson = {
   concept: 'subthreshold swing, nanosheets and CFETs, 2D materials, spintronics',
   xp: 100,
   steps: [
-    say('**The role.** Silicon scaling now leans on new device and wiring structures. Gate-all-around nanosheet transistors and backside power delivery are in volume production at the 2 nm class (one foundry pairs them in the same node, another adds backside power a node later). Next on the roadmap are stacked complementary FETs (CFETs, expected in the 2030s), 2D-material channels, and new memories (MRAM, RRAM, ferroelectric). Node names such as "2 nm", "18A" or "A16" are marketing labels: no feature on the chip is 2 nm long. Device engineers and researchers at imec, TSMC, Intel, Samsung, universities and national labs work on these; process-integration and TCAD roles are the entry points.'),
+    say('**The role.** Silicon scaling now leans on new device and wiring structures. Gate-all-around nanosheet transistors and backside power delivery are in volume production at the 2 nm class (one foundry pairs them in the same node, another adds backside power a node later). The industry roadmap expects gate-all-around to carry logic through the late 2020s, with stacked complementary FETs (CFETs) from about the early 2030s; 2D-material channels are still in research, as are new memories beyond MRAM, RRAM and ferroelectric. Node names such as "2 nm", "18A" or "A16" are marketing labels: no feature on the chip is 2 nm long. Device engineers and researchers at imec, TSMC, Intel, Samsung, universities and national labs work on these; process-integration and TCAD roles are the entry points.'),
     say('A transistor turns off as the gate voltage drops below threshold, and the current falls exponentially: the **subthreshold swing (SS)** is how many millivolts it takes to cut the current by 10×. Thermionic physics limits it to **60 mV per decade at room temperature**.'),
     gen((r) => {
       const vt = pick(r, [300, 400, 500]), ss = pick(r, [60, 70, 80]);
@@ -317,10 +359,17 @@ export const emerging: Lesson = {
       const rap = rp * (1 + tmr / 100);
       return ask(`An MRAM cell has a parallel resistance of ${rp} kΩ and a tunnel magnetoresistance (TMR) of ${tmr}%. What is its anti-parallel resistance, in kΩ? (TMR = (R_AP − R_P) / R_P)`, qty(rap, 'kΩ', 0.02, sig(rap)), `R_AP = R_P × (1 + TMR) = ${rp} × ${1 + tmr / 100} = ${sig(rap)} kΩ. The sense amplifier distinguishes ${rp} kΩ from ${sig(rap)} kΩ; a larger TMR means a wider margin.`, 'R_P times (1 + TMR).');
     }),
+    say('Since the names mean nothing, compare nodes by what is physically drawn: the **contacted gate pitch** (CPP), the **metal pitch**, the **cell height in tracks** (cell height = tracks × metal pitch) and the **SRAM bit-cell area**. Together they set the transistor density.'),
+    mc('Two foundries both sell a "2 nm" node. Which metric would you compare?', ['The node name, since the nanometre figure is the minimum feature size', 'Transistor density, or the gate and metal pitches behind it', 'The year each foundry announced it, as the newer node is smaller', 'The wafer diameter, since a bigger wafer means smaller features'], 1, 'The name is a label. Density, contacted gate pitch, metal pitch and SRAM bit-cell area are drawn dimensions, so they can be compared across foundries.'),
+    gen((r) => {
+      const tracks = pick(r, [5, 6, 7]), mp = pick(r, [24, 28, 30]);
+      const h = tracks * mp;
+      return ask(`A standard cell is ${tracks} tracks tall and the metal pitch is ${mp} nm. What is the cell height, in nm?`, qty(h, 'nm', 0.01, String(h)), `${tracks} × ${mp} nm = ${h} nm. Cutting a track (by buried rails or stacking devices) shrinks every cell in the library by 1/${tracks} of its height, without touching the pitches.`, 'Tracks times metal pitch.');
+    }),
     mc('Why are **2D semiconductors** (like MoS₂) interesting for the smallest transistors?', ['They are cheaper to grow than silicon wafers at any diameter', 'They are a few atoms thick, so the gate keeps control', 'They conduct better than copper, so wires could be made of them', 'They need no gate, since the channel is switched by its thickness'], 1, 'The gate keeps excellent electrostatic control even at tiny channel lengths. A thinner channel means better gate control and less short-channel effect. Making low-resistance contacts and large, uniform films is the main obstacle.'),
     mc('What is **backside power delivery**?', ['Powering the chip from the bottom of the PCB only, and not the top', 'Power rails on the wafer back, linked by nano-vias', 'A new package type in which the pins are all on the back of it', 'A battery on the die'], 1, 'That frees the front-side metal for signals, lowering IR drop and congestion. Power and signals compete for the same top metal. Moving power behind the transistors reduces congestion; it complicates thermal paths and manufacturing.'),
   ],
-  recap: ['SS ≥ 60 mV/decade at room temperature; leakage = Vt / SS decades.', 'Nanosheets (GAA) now; CFETs stack N over P to shrink cells.', 'MRAM: TMR = (R_AP − R_P)/R_P.', '2D channels: great control, hard contacts and growth.', 'Backside power frees signal routing.'],
+  recap: ['SS ≥ 60 mV/decade at room temperature; leakage = Vt / SS decades.', 'Nanosheets (GAA) now and through the late 2020s; CFETs stack N over P to shrink cells, from about the early 2030s.', 'Node names are labels: compare CPP, metal pitch, cell height (tracks × pitch) and SRAM bit-cell area.', 'MRAM: TMR = (R_AP − R_P)/R_P.', '2D channels: great control, hard contacts and growth, still in research.', 'Backside power frees signal routing.'],
 };
 
 export const aetpm: Lesson = {

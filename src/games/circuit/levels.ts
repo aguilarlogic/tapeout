@@ -441,6 +441,31 @@ const buck: CircuitLevel = {
   }),
 };
 
+const dcm: CircuitLevel = {
+  id: 'clab-dcm', title: 'Light Load', concept: 'continuous versus discontinuous conduction at light load', xp: 375, tier: 'guided',
+  ticket: 'The 5 V rail is right at full load, but when the board idles it drifts up past 7 V and the sleeping chips do not like it.',
+  build: () => ({
+    brief: `
+      <p>Run the starter and look at the inductor current, <b>i(L1)</b>. At a light load it falls to zero and stays there for part of
+      every cycle: the converter has entered <b>discontinuous conduction (DCM)</b>. The diode D1 will not let the current reverse,
+      so the energy stored each cycle is more than the load takes, and with a fixed pulse width the output climbs.</p>
+      <p>The edge between the two modes is where the load current equals half the peak-to-peak ripple:</p>
+      <pre>I<sub>boundary</sub> = ΔI / 2        ΔI = (V<sub>in</sub> - V<sub>out</sub>) × D × T / L</pre>
+      <p>This idle load is 100 mA (50 Ω at 5 V). Measure the ripple on the starter: with L = 47 µH it is about 0.65 A, so the
+      boundary is far above the load. Leave the pulse width alone and choose an inductor that keeps the converter in
+      <b>continuous conduction (CCM)</b> down to this load.</p>
+      <h4>Goals</h4><ul><li>Average output 5 V ± 3% at the 100 mA load.</li>
+      <li>The inductor current never falls to zero (it stays above 10 mA).</li></ul>`,
+    starter: `* Buck converter at an idle load: 12 V -> 5 V, 100 mA\nVin in 0 12\nVg g 0 PULSE(0 5 0 10n 10n 4.4u 10u)\nS1 in sw g 0 vt=2.5 ron=0.02\nD1 0 sw schottky\nL1 sw out 47u\nC1 out 0 10u\nRload out 0 50\n\n.tran 200n 3m\n`,
+    goals: [
+      goal('Average output is 5 V ± 3% at the light load', (l) => { const t = l.tran({ step: 200e-9, stop: 3e-3 }); const [a, b] = tail(t, 0.2); const m = stats(t.t, t.v.out, a, b).mean; return { ok: within(m, 5, 3), detail: `average ${f(m)} V` }; }),
+      goal('Inductor current stays above 10 mA (continuous conduction)', (l) => { const t = l.tran({ step: 200e-9, stop: 3e-3 }); const [a, b] = tail(t, 0.2); const s = stats(t.t, t.i.l1, a, b); return { ok: s.min >= 0.01, detail: `lowest current ${f(s.min)} A` }; }),
+    ],
+    hints: ['A 100 mA load stays in CCM while ΔI/2 is below 100 mA, so ΔI must be at most 0.2 A.', 'ΔI = (12 - 5) × 0.44 × 10 µs / L ≤ 0.2 A gives L ≥ 154 µH.', 'Try L1 = 220u, the next standard value up. The cost is a larger, slower inductor.'],
+    solution: 'Vin in 0 12\nVg g 0 PULSE(0 5 0 10n 10n 4.4u 10u)\nS1 in sw g 0 vt=2.5 ron=0.02\nD1 0 sw schottky\nL1 sw out 220u\nC1 out 0 10u\nRload out 0 50\n',
+  }),
+};
+
 const pdn: CircuitLevel = {
   id: 'clab-pdn', title: 'Decoupling Budget', concept: 'power delivery networks and decoupling capacitors', xp: 350, tier: 'guided',
   ticket: 'The CPU draws 0.5 A idle and jumps to 2.5 A in 10 ns. The rail sags and the chip resets.',
@@ -724,7 +749,7 @@ const bossPdn: CircuitLevel = {
 };
 
 export const CIRCUIT_LEVELS: CircuitLevel[] = [
-  divider, led, thevenin, bridge, lowpass, debounce, rlc, rectifier, inverting, gbw, bjt, csamp, mirror, duty, buck, pdn, lcfilter,
+  divider, led, thevenin, bridge, lowpass, debounce, rlc, rectifier, inverting, gbw, bjt, csamp, mirror, duty, buck, dcm, pdn, lcfilter,
   bossOhm, bossKcl, bossAc, bossOde, bossBjt, bossAmp, bossBuck, bossPdn,
 ];
 

@@ -402,6 +402,12 @@ export const pmicPractice = practice('practice-pmic', 'Power Drills', 'LDOs, buc
     ['Why use a multiphase buck for a 200 A CPU rail?', 'Phases share current and cancel ripple, so inductors shrink', ['One phase cannot make a low voltage', 'It lowers the output voltage', 'It removes the need for capacitors, since the ripple is zero'], 'multiphase converters', 'Several buck converters share the load, each staggered in time. Each carries a fraction of the current, so each inductor and switch is smaller, and their ripple currents partly cancel at the shared output, which also shrinks the capacitors needed.', ['With N phases sharing the load, each carries:', 'About 1/N of the current', ['All of the current', 'N times the current']], 'Phases share the current and their ripples cancel, so each inductor is smaller and the response is faster'],
     ['Why put an LDO after a switching regulator for a PLL supply?', 'The LDO rejects the switcher\'s ripple for a quiet rail', ['To raise the efficiency of the whole of the supply chain', 'To raise the voltage, from the low level of the switcher', 'LDOs are faster to design, so that a PLL can be done earlier'], 'LDO after a switcher', 'A switching regulator is efficient but its output has ripple and spikes at the switching frequency. An LDO has good power-supply rejection, so it removes most of that, at a small cost in efficiency. Noise-sensitive circuits like PLLs get a clean rail.', ['The LDO in this chain cleans up:', 'The switcher\'s ripple', ['The battery', 'The ground']], 'The LDO rejects the switcher\'s ripple, giving the sensitive circuit a quiet rail'],
     ['What does a PMIC\'s power sequencer do?', 'Turns rails on and off in the order the SoC needs', ['Measures the battery age', 'Sets the CPU frequency, based on the load that it sees', 'Encrypts the supply'], 'power sequencing', 'A chip can be damaged or latch up if one supply comes up before another it depends on (for example, I/O power before the core). The sequencer turns each rail on in the required order with the required delays and watches for faults.', ['If the I/O rail comes up before the core rail, the chip may:', 'Latch up or be damaged', ['Run faster', 'Save power']], 'Turns rails on and off in the order and timing the SoC requires, and monitors them for faults'],
+    ['Where is an LDO\'s power-supply rejection best?', 'At low frequency, falling near the loop crossover', ['At high frequency, where the output capacitor is weakest', 'Equally at every frequency, set by the pass device', 'Only at DC, and nowhere above it'], 'PSRR versus frequency', 'An LDO rejects input ripple through its feedback loop, so rejection is as good as the loop gain: high at low frequency, falling as the gain falls, and poor around and above the loop\'s crossover. There the output capacitor, not the loop, has to filter the ripple.',
+      ['PSRR follows the loop:', 'Gain', ['Dropout', 'Duty cycle']]],
+    ['What is an LDO\'s dropout voltage?', 'The smallest Vin - Vout it can still regulate at', ['The output dip when the load steps up', 'The ripple on its output at the switching frequency', 'The input voltage at which it switches off'], 'dropout', 'When the input is only just above the output, the pass transistor is fully on and has no room left to regulate. The dropout is the smallest input-to-output difference that still works, roughly the load current times the pass device\'s on-resistance.',
+      ['Dropout is set by the pass device\'s:', 'On-resistance', ['Gate length', 'Package']]],
+    ['How does USB Power Delivery reach 240 W?', 'By raising the voltage to 48 V at the same 5 A', ['By raising the cable current to well above 5 A', 'By using two cables in parallel at 20 V', 'By switching the cable to AC at the connector'], 'USB Power Delivery levels', 'The cable current stays at 5 A, so more power needs a higher voltage: 100 W is 20 V at 5 A in the standard power range, and 240 W is 48 V at 5 A in the extended range. P = V × I.',
+      ['At a fixed 5 A, power grows with:', 'Voltage', ['Cable length', 'Plug size']]],
       ['What does dead time protect against in a half-bridge?', 'Both switches conducting at once, shorting the supply (shoot-through)', ['The output voltage rising above the input', 'The inductor current going to zero', 'The gate driver losing its supply'],
         'dead time', 'The top and bottom switches take time to turn off. A short gap with both off makes sure they are never on together, which would pass a huge current straight through.',
         ['Shoot-through means both switches are:', 'On', ['Off', 'Floating']]],
@@ -409,6 +415,25 @@ export const pmicPractice = practice('practice-pmic', 'Power Drills', 'LDOs, buc
         'buck converters', 'The switch chops the input; the inductor and capacitor average it. The output equals the input times the duty cycle, so a 25% duty cycle gives a quarter of the input.',
         ['Output voltage is the input times the:', 'Duty cycle', ['Frequency', 'Inductance']]],
   ], (why) => `${why}.`),
+  (r, d) => {
+    // G2.5: the CCM/DCM boundary, I_load = dI / 2, with dI = (Vin - Vout) · D / (L · f).
+    const [vin, vout] = pick(r, [[12, 5], [12, 1.2], [5, 1.2], [3.3, 1.0]] as const), l = pick(r, [2.2, 4.7, 10, 22]), f = pick(r, [0.5, 1, 2]);
+    const dd = vout / vin, di = ((vin - vout) * dd) / (l * f), ib = di / 2;
+    const idea = 'A buck converter stays in continuous conduction (CCM) while the inductor current never reaches zero. The current ramps by the peak-to-peak ripple ΔI around the load current, so it just touches zero when the load current equals half the ripple: I_boundary = ΔI/2. Below that load the converter drops into discontinuous conduction (DCM). ΔI = (Vin - Vout) × D ÷ (L × f), with D = Vout ÷ Vin.';
+    if (d === 1) return walk(ask(`A buck converter has an inductor ripple current of ${sig(di)} A peak-to-peak. Below what load current does it enter discontinuous conduction, in A?`, qty(ib, 'A', 0.02, sig(ib)), `ΔI/2 = ${sig(di)} / 2 = ${sig(ib)} A.`, 'Half the ripple.'),
+      'the CCM boundary', idea,
+      calc('Boundary = ΔI ÷ 2, in A:', `${sig(di)} / 2`, ib, 'A', sig(ib), 0.02));
+    if (d === 2) return walk(ask(`A buck converter makes ${vout} V from ${vin} V with L = ${l} µH at ${f} MHz. Below what load current does it enter discontinuous conduction, in A?`, qty(ib, 'A', 0.03, sig(ib)), `D = ${sig(dd)}; ΔI = (${vin} - ${vout}) × ${sig(dd)} / (${l} × ${f}) = ${sig(di)} A; boundary ΔI/2 = ${sig(ib)} A.`, 'Ripple first, then half of it.'),
+      'the CCM boundary', idea,
+      calc('Duty cycle D = Vout ÷ Vin:', `${vout} / ${vin}`, dd, '', sig(dd, 4), 0.005),
+      calc('ΔI = (Vin - Vout) × D ÷ (L × f), in A (µH × MHz = 1):', `(${vin} - ${vout}) × ${sig(dd, 4)} / (${l} × ${f})`, di, 'A', sig(di), 0.02),
+      calc('Boundary = ΔI ÷ 2, in A:', `${sig(di)} / 2`, ib, 'A', sig(ib), 0.02));
+    const load = pick(r, [0.05, 0.1, 0.2]), lmin = ((vin - vout) * dd) / (2 * load * f);
+    return walk(ask(`A buck converter makes ${vout} V from ${vin} V at ${f} MHz. What is the smallest inductor, in µH, that keeps it in continuous conduction down to a ${load} A load?`, qty(lmin, 'uH', 0.03, sig(lmin)), `Need ΔI/2 ≤ ${load}, so L ≥ (${vin} - ${vout}) × ${sig(dd)} / (2 × ${load} × ${f}) = ${sig(lmin)} µH. Lighter loads need bigger inductors, or the converter must accept DCM.`, 'Solve ΔI/2 = load for L.'),
+      'sizing L for a light load', idea,
+      calc('D = Vout ÷ Vin:', `${vout} / ${vin}`, dd, '', sig(dd, 4), 0.005),
+      calc('L = (Vin - Vout) × D ÷ (2 × I_load × f), in µH (A × MHz):', `(${vin} - ${vout}) × ${sig(dd, 4)} / (2 × ${load} × ${f})`, lmin, 'uH', sig(lmin), 0.03));
+  },
 ]);
 
 export const pmicBoss = boss({
