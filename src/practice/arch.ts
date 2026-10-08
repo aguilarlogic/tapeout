@@ -414,10 +414,54 @@ export const dramPractice = practice('practice-dram', 'DRAM Drills', 'row hits a
       calc('First the fraction of each period that is blocked:', `${trfc} / ${trefi}`, trfc / trefi, '', sig(trfc / trefi, 3), 0.02),
       calc('As a percentage, multiply by 100:', `${sig(trfc / trefi, 3)} × 100`, f, '%', sig(f), 0.03));
   },
+  (r, d) => {
+    // Bandwidth of the memory generations: width x rate per pin / 8.
+    const mems = [['HBM3', 1024, 6.4], ['HBM4', 2048, 8], ['GDDR7', 32, 32], ['GDDR7', 32, 48], ['LPDDR5X', 16, 8.533], ['LPDDR6', 24, 10.7]] as const;
+    const idea = 'Peak bandwidth is the number of data pins times the rate per pin, divided by 8 to turn bits into bytes. Wide-and-slow (HBM) and narrow-and-fast (GDDR7) end up in different places: a GDDR7 device has 32 data pins (four 8-bit channels), an HBM3 stack 1024 and an HBM4 stack 2048.';
+    const [name, w, g] = pick(r, mems), bw = (w * g) / 8;
+    if (d === 1) return walk(ask(`One ${name} ${w === 32 ? 'device' : w === 16 || w === 24 ? 'channel' : 'stack'} has ${w} data pins at ${g} Gb/s each. Peak bandwidth, in GB/s?`, qty(bw, 'GB/s', 0.01, sig(bw)), `${w} × ${g} / 8 = ${sig(bw)} GB/s.`, 'Pins × Gb/s per pin ÷ 8.'),
+      'peak bandwidth from pins and rate', idea,
+      calc('Gigabits per second over all the pins:', `${w} × ${g}`, w * g, 'Gb/s', sig(w * g, 4), 0.005),
+      calc('Divide by 8 to get gigabytes:', `${sig(w * g, 4)} / 8`, bw, 'GB/s', sig(bw), 0.01));
+    const [n2, w2, g2] = pick(r, [['HBM3', 1024, 6.4], ['HBM4', 2048, 8]] as const), k = pick(r, [4, 6, 8]), per = (w2 * g2) / 8, tb = (k * per) / 1000;
+    if (d === 2) return walk(ask(`An accelerator carries ${k} ${n2} stacks (${w2} pins at ${g2} Gb/s each). Total peak bandwidth, in TB/s?`, qty(tb, 'TB/s', 0.01, sig(tb)), `${w2} × ${g2} / 8 = ${sig(per)} GB/s per stack; × ${k} = ${sig(k * per)} GB/s = ${sig(tb)} TB/s.`, 'Per-stack bandwidth times the number of stacks.'),
+      'bandwidth of several stacks', idea,
+      calc('One stack, in GB/s:', `${w2} × ${g2} / 8`, per, 'GB/s', sig(per), 0.01),
+      calc(`${k} stacks, in TB/s (÷ 1000):`, `${k} × ${sig(per)} / 1000`, tb, 'TB/s', sig(tb), 0.01));
+    const nG = pick(r, [8, 12, 16]), mH = pick(r, [4, 6, 8]), a = nG * 192, b = mH * (2048 * 8) / 8, ratio = b / a;
+    return walk(ask(`System A has ${nG} GDDR7 devices at 48 Gb/s (32 pins each). System B has ${mH} HBM4 stacks at 8 Gb/s (2048 pins each). How many times more peak bandwidth does B have than A?`, qty(ratio, 'x', 0.02, sig(ratio)), `A: ${nG} × 192 = ${a} GB/s. B: ${mH} × 2048 = ${b} GB/s. B / A = ${sig(ratio)}×. HBM wins on bandwidth per board area; GDDR7 wins on cost.`, 'Compute each system, then divide.'),
+      'comparing two memory systems', idea,
+      calc(`System A: ${nG} devices × (32 × 48 / 8) GB/s =`, `${nG} × 192`, a, 'GB/s', String(a), 0.005),
+      calc(`System B: ${mH} stacks × (2048 × 8 / 8) GB/s =`, `${mH} × 2048`, b, 'GB/s', String(b), 0.005),
+      calc('Ratio B ÷ A:', `${b} / ${a}`, ratio, 'x', sig(ratio), 0.02));
+  },
+  (r, d) => {
+    // How many activations fit in one refresh window, and how that compares with the Rowhammer flip threshold.
+    const trc = tier(d, pick(r, [40, 50, 100]), pick(r, [45, 48, 52]), pick(r, [45, 48, 52, 50])), n = 32e-3 / (trc * 1e-9);
+    const idea = 'Rowhammer hammers one row with back-to-back activations. A row can be activated once every tRC (the row cycle time), so in one refresh window the most activations is the window length divided by tRC. If that is far above the number of activations that flips a neighbouring bit, refresh alone cannot protect the data.';
+    if (d < 3) return walk(ask(`tRC = ${trc} ns. How many activations of a single row fit in a 32 ms refresh window?`, qty(n, '', 0.01, String(Math.round(n))), `32e-3 / ${trc}e-9 ≈ ${Math.round(n).toLocaleString('en-US')}.`, 'Window length divided by tRC.'),
+      'activation budget in a refresh window', idea,
+      calc('The window in nanoseconds, 32 ms × 10⁶:', '32 × 1000000', 32e6, 'ns', '32e6', 0.005),
+      calc('Divide by tRC:', `32e6 / ${trc}`, n, '', String(Math.round(n)), 0.01));
+    const th = pick(r, [4800, 9600, 2400]), x = n / th;
+    return walk(ask(`tRC = ${trc} ns and the flip threshold is ${th.toLocaleString('en-US')} activations. A 32 ms window allows how many times the threshold?`, qty(x, 'x', 0.02, sig(x)), `${Math.round(n).toLocaleString('en-US')} / ${th.toLocaleString('en-US')} ≈ ${sig(x)}×. Refresh every 32 ms leaves a huge margin for an attacker, so activations must be counted.`, 'Activations per window, divided by the threshold.'),
+      'activations versus the flip threshold', idea,
+      calc('Activations in the window = 32e6 ns ÷ tRC:', `32e6 / ${trc}`, n, '', String(Math.round(n)), 0.01),
+      calc('Times over the threshold:', `${Math.round(n)} / ${th}`, x, 'x', sig(x), 0.02));
+  },
   (r) => concept(r, [
     ['Why do memory controllers interleave consecutive cache lines across banks and channels?', 'So streams spread over many banks working in parallel', ['To save power, since fewer banks are active for each stream', 'For security, so an attacker cannot predict where lines live', 'To simplify refresh, since all banks share one refresh timer'], 'address interleaving', 'Each bank can only serve one row at a time and takes a long time to switch. If consecutive addresses went to the same bank, a streaming read would queue up there. Spreading them across banks and channels lets many work at the same time.', ['Consecutive lines placed in different banks can be:', 'Accessed in parallel', ['Accessed only one at a time', 'Never accessed']], 'So streaming accesses spread out and many banks work in parallel instead of conflicting in one'],
     ['What does an FR-FCFS scheduler prioritize?', 'Row hits first, then the oldest request', ['Only the oldest request', 'Writes before reads at all times', 'Random order, to spread the load evenly over all the banks'], 'memory scheduling', 'Row hits are much cheaper than conflicts, so the scheduler first picks requests that hit an already-open row (first-ready), and among those of equal standing takes the oldest (first-come, first-served). That raises throughput but can delay some requests, so controllers also limit starvation.', ['A request that hits an open row is preferred because it is:', 'Cheaper and faster to serve', ['Older', 'Always a write']], 'Row hits first (ready requests), then the oldest request'],
     ['Rowhammer is…', 'Repeated activation of one row flips bits in its neighbours', ['A refresh command that rewrites every single row in a given bank', 'A timing parameter that sets how soon the rows can be reopened again', 'A kind of ECC that detects and corrects multi-bit errors in the array'], 'Rowhammer', 'Each time a row is activated, it slightly disturbs the cells in rows next to it. If software activates the same row again and again between refreshes, the disturbance can flip bits in the neighbours, which can break memory isolation.', ['Hammering a row flips bits in:', 'Its neighbouring rows', ['The same row only', 'The cache']], 'Repeatedly activating one row flipping bits in neighboring rows through disturbance'],
+      ['Why did target-row refresh alone fail against Rowhammer?', 'It tracks few aggressor rows, so many-sided patterns overflow it', ['It refreshes every row so often that the bandwidth runs out', 'It only works when the DRAM is cold, below 85 °C', 'It refreshes the aggressor row itself, which then flips its neighbours'],
+        'Rowhammer defences', 'Target-row refresh keeps a small table of the rows that were activated most. A pattern that hammers more rows than the table holds makes it forget some, and their neighbours are never refreshed. Counting activations in the controller (refresh management) or in the DRAM on every row (per-row activation counting) removes that limit.',
+        ['A tracker with a few entries is overflowed by hammering:', 'More rows than it has entries', ['Only one row', 'Rows in another bank']], 'It tracks only a few aggressor rows, so many-sided patterns overflow the tracker'],
+      ['DDR5 has on-die ECC. Why does a server still need system ECC?', 'On-die ECC is invisible to the system and misses bus faults', ['On-die ECC is only used while the DIMM is being tested', 'System ECC is what corrects the data inside the array itself', 'On-die ECC works only on the commands, not on the data bits'],
+        'two levels of ECC', 'On-die ECC fixes a single-bit error inside the chip before the data leaves it, silently. The controller never learns of it, and it does not protect the bus or a whole failed chip. System ECC is end to end, and it reports what it corrects so errors can be logged and pages retired.',
+        ['A correction that the controller never sees is:', 'Invisible to the system', ['Logged by the operating system', 'Done by the controller']], 'On-die ECC is invisible to the system and misses bus and chip faults, so system ECC is still needed'],
+      ['A phone SoC needs DRAM. Which family fits best?', 'LPDDR: it is built for the lowest energy per bit', ['GDDR7: it gives the most bandwidth per dollar', 'HBM: it has the widest interface of all', 'DDR5 DIMMs: they are the standard part of every system'],
+        'matching memory to the product', 'Phones run on a battery, so energy per bit and standby power rule: LPDDR. Graphics cards want cheap bandwidth: GDDR. Training accelerators need the most bandwidth per watt and per board area: HBM on an interposer. Servers use DDR5 DIMMs for capacity.',
+        ['Which constraint decides memory in a phone?', 'Battery life', ['Board area', 'Capacity per DIMM slot']], 'LPDDR: low-power DRAM suits a battery-powered phone'],
       ['What is a DRAM row buffer for?', 'It holds one opened row', ['It stores the refresh counter for the whole bank', 'It buffers writes until the bus is free to take them', 'It holds the ECC bits for every cell in the bank'],
         'open rows', 'Reading DRAM copies a whole row into the row buffer. Further accesses to that row skip the slow activate step, so locality in a row means speed.',
         ['A second access to an open row is called a:', 'Row hit', ['Row miss', 'Refresh']], 'It holds one opened row, so later accesses to it are fast hits'],
@@ -724,8 +768,10 @@ export const memBoss = boss({
     mc('Two threads each write their own partial sum; sums[0] and sums[1] are adjacent doubles. Why did the second thread make things slower?', ['False sharing: both sums sit in one line that ping-pongs in M state', 'The two threads share one register file, and each write stalls the other', 'DRAM refresh is blocking every write while the rows are being rewritten', 'The OS scheduler moves the threads onto one core, so they take turns'], 0, 'The line ping-pongs between the cores. Pad the sums to separate lines.'),
     { t: 'gen', make: () => { const { wb } = mesi([[0, 'W'], [1, 'W'], [0, 'W'], [1, 'W'], [0, 'W'], [1, 'W']], 2); return ask('Under MESI, C0 and C1 alternately write that line 6 times (C0 first). How many times must a Modified copy be handed over?', num(wb), `Every write after the first finds the line Modified in the other core: ${wb} transfers.`); } },
     { t: 'gen', make: () => { const o = dramOpen([7, 7, 7, 12, 7, 12], 16, 16, 16); return ask('The DRAM bank (CL = tRCD = tRP = 16, open page, starts precharged) sees rows 7, 7, 7, 12, 7, 12. Total latency, in cycles?', num(o.t), `32 + 16 + 16 + 48 + 48 + 48 = ${o.t}. The alternating rows at the end each pay a full conflict.`); } },
+    { t: 'gen', make: () => { const n = 32e-3 / 48e-9; return ask('The bank above has tRC = 48 ns. A hostile thread activates one row back to back for a whole 32 ms refresh window, and the flip threshold is 4,800 activations. How many times over the threshold does it go?', qty(n / 4800, 'x', 0.02, sig(n / 4800)), `32e-3 / 48e-9 ≈ ${Math.round(n).toLocaleString('en-US')} activations; ÷ 4,800 ≈ ${sig(n / 4800)}×. Refresh alone cannot stop that.`); } },
+    mc('A many-sided Rowhammer pattern still flips bits although the DRAM has target-row refresh. What closes the hole?', ['Count activations in the controller or with a counter on every row', 'Double the refresh rate, since every row is then refreshed twice as often', 'Add more entries to the tracker, until it follows every row in the bank', 'Switch the page policy to close-page, so that no row stays open for long'], 0, 'The tracker holds a few rows and the attacker uses more, so counting must not depend on a small table. Doubling the refresh rate only halves the budget (still a huge multiple of the threshold), and close-page does not limit activations.'),
   ],
-  recap: ['Conflict misses and associativity.', 'AMAT.', 'False sharing.', 'Row-buffer locality.'],
+  recap: ['Conflict misses and associativity.', 'AMAT.', 'False sharing.', 'Row-buffer locality.', 'Activations per refresh window versus the flip threshold.'],
 });
 
 export const interconnectBoss = boss({
