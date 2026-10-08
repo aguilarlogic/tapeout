@@ -1,6 +1,6 @@
 // Practice banks and bosses for the frontier roles, part one: EDA, library characterization, I/O and ESD, SoC
 // integration, and clocking. Every number is generated and every explanation shows the arithmetic.
-import { hexa, qty } from '../lessons/answers';
+import { hexa, num, qty } from '../lessons/answers';
 import { calc, choice, count, show, walk } from '../lessons/teach';
 import { ask, gen, mc, pick, say, between } from '../lessons/types';
 import { boss, practice, tier, type PracticeSet } from './types';
@@ -60,6 +60,40 @@ export const edaPractice = practice('practice-eda', 'EDA Drills', 'wirelength, E
       calc(`Growth factor k^exponent = ${k}^${exp}:`, `${k}^${exp}`, k ** exp, '', sig(k ** exp), 0.02),
       calc('Runtime = base time × growth factor:', `${t0} × ${sig(k ** exp)}`, t, 'min', sig(t), 0.03));
   },
+  (r, d) => {
+    const idea = 'A multi-pin net needs a tree. A spanning tree uses pin-to-pin wires only (a minimum one picks the shortest set that connects everything). A rectilinear Steiner tree may add extra junction points so wires share segments, which is never longer and often shorter. For two or three pins the best Steiner tree has exactly the half-perimeter length (HPWL); for four or more pins it can be longer.';
+    if (d === 3) {
+      const sd = pick(r, [6, 8, 10, 12, 15, 20, 25, 40]);
+      return walk(ask(`Four pins sit at the corners of a ${sd} × ${sd} square. The HPWL says ${2 * sd}. The best rectilinear Steiner tree is ${3 * sd}. By how much does the HPWL underestimate it?`, qty(sd, '', 0.001, String(sd)), `${3 * sd} − ${2 * sd} = ${sd}. Joining four corners needs three sides' worth of wire; the bounding box's half-perimeter counts only two. HPWL is exact only for two- and three-pin nets.`, 'Steiner length minus HPWL.'),
+        'HPWL against a Steiner tree', idea,
+        count('The best Steiner tree minus the HPWL:', `${3 * sd} − ${2 * sd}`, sd));
+    }
+    const pts: [number, number][] = [];
+    while (pts.length < 3) { const q: [number, number] = [between(r, 0, 20), between(r, 0, 20)]; if (!pts.some((x) => x[0] === q[0] && x[1] === q[1])) pts.push(q); }
+    const dist = (a: [number, number], b: [number, number]) => Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]);
+    const ds = [dist(pts[0], pts[1]), dist(pts[0], pts[2]), dist(pts[1], pts[2])];
+    const mst = ds.reduce((a, x) => a + x, 0) - Math.max(...ds);
+    const xs = pts.map((x) => x[0]), ys = pts.map((x) => x[1]);
+    const hp = Math.max(...xs) - Math.min(...xs) + Math.max(...ys) - Math.min(...ys);
+    const list = pts.map((x) => `(${x[0]},${x[1]})`).join(' ');
+    if (d === 1) return walk(ask(`Three pins at ${list}. A minimum spanning tree joins them by the two shortest pin-to-pin Manhattan distances. Its total length?`, num(mst), `Pairwise distances ${ds.join(', ')}; drop the longest: ${mst}.`, 'Add all three pairwise distances, then drop the largest.'),
+      'minimum spanning tree of three pins', idea,
+      count('Sum of the three pairwise Manhattan distances:', ds.join(' + '), ds.reduce((a, x) => a + x, 0)),
+      count('Minus the longest, which the tree does not need:', `${ds.reduce((a, x) => a + x, 0)} − ${Math.max(...ds)}`, mst));
+    return walk(ask(`Three pins at ${list}. How much shorter is the best rectilinear Steiner tree than the minimum spanning tree? (For three pins the Steiner tree has exactly the HPWL length.)`, num(mst - hp), `Spanning tree ${mst}; Steiner tree = HPWL = ${hp}; saving ${mst - hp}.`, 'Spanning tree length minus HPWL.'),
+      'Steiner saving', idea,
+      count('Minimum spanning tree: sum of pairwise distances minus the longest:', `${ds.join(' + ')} − ${Math.max(...ds)}`, mst),
+      count('Steiner tree = HPWL = width + height of the bounding box:', `${Math.max(...xs) - Math.min(...xs)} + ${Math.max(...ys) - Math.min(...ys)}`, hp),
+      count('Saving = spanning − Steiner:', `${mst} − ${hp}`, mst - hp));
+  },
+  (r) => concept(r, [
+    ['A maze router uses A* instead of Lee\'s wave. What does it add?', 'An estimate of the distance left', ['A second wave from a random pin', 'A relaxed rule on cutting corners', 'A fixed order of nets for repeats'], 'A* against Lee', 'Lee expands a wave in every direction and finds the shortest path by visiting a great many cells. A* picks the next cell by cost so far plus an estimate of the distance still to go. If the estimate never overshoots, the path is still the shortest, but far fewer cells are visited.', ['An estimate that never overshoots the true distance keeps the path:', 'The shortest possible', ['Slightly longer', 'Random']], 'A heuristic estimate of the remaining distance steers the search toward the target'],
+    ['For which nets is the HPWL exactly the best routed length?', 'Nets of two or three pins', ['Nets of any number of pins', 'Nets of four or more pins', 'Clock nets only, routed first'], 'when HPWL is exact', 'The best tree for two or three pins has exactly the half-perimeter of the bounding box. For four or more pins a Steiner tree can need extra wire (four corners of a square need three sides, but the HPWL counts two), so the HPWL is only a lower bound.', ['Four pins at a square\'s corners need more wire than:', 'The half-perimeter of the square', ['The full perimeter', 'Nothing: they need none']], 'Two or three pins: more pins can need more wire than the bounding box suggests'],
+    ['Why can a rectilinear Steiner tree beat a spanning tree?', 'Extra junctions let wires share segments', ['It cuts across using diagonal wires, which are shorter', 'It leaves some pins unconnected', 'It routes on more layers at once'], 'Steiner trees', 'A spanning tree may only join pins to pins. A Steiner tree may place extra points, such as the corner where a long trunk meets a short stub, so one wire serves several pins. It is never longer than the spanning tree.', ['A Steiner point is:', 'An extra junction that is not a pin', ['A pin with extra drive', 'A via between two layers']], 'It may add junction points that are not pins, so wires share segments'],
+    ['Why is the HPWL so popular as a placement cost?', 'It is cheap to evaluate and tracks routed length well', ['It is exact for every net, whatever its pin count', 'It accounts for congestion on every layer', 'It includes the delay of every wire'], 'why placers use HPWL', 'A placer evaluates its cost millions of times, so the cost has to be a min and a max per axis. The half-perimeter is a lower bound on the routed length, exact for two- and three-pin nets and close for most others.', ['A placer needs a cost that is:', 'Very cheap to recompute', ['Exactly the routed length', 'Independent of the pin positions']], 'It is cheap to evaluate and tracks routed length well, though only two- and three-pin nets are exact'],
+    ['What does Lee\'s maze router guarantee that a greedy one does not?', 'The shortest path, if any path exists', ['The shortest total wirelength for every net at once', 'No congestion on any layer', 'A path that avoids every via'], 'Lee\'s guarantee', 'The wave expands one ring at a time, so the first ring to touch the target gives the shortest path around the blocked cells, and if no ring ever reaches it there is no path. It does this for one net at a time, not for the whole chip.', ['If the wave dies out before the target:', 'No path exists', ['The path is very long', 'The wave needs more layers']], 'The shortest path if any exists, for one net at a time'],
+    ['A router has a good estimate of the distance to the target. Which search uses it?', 'A*', ['Lee\'s wave', 'Simulated annealing', 'Breadth-first search with no ordering'], 'which search uses a distance estimate', 'A* orders its frontier by cost so far plus the estimate of the remaining distance. Lee\'s wave has no estimate and treats every direction alike.', ['Lee\'s wave treats every direction:', 'Alike', ['By the estimate', 'By the layer']], 'A* orders its frontier by cost so far plus the estimate of the remaining distance'],
+  ], (why) => `${why}.`),
 ]);
 
 export const edaBoss = bossOf(edaPractice, 'boss-eda', 'The Placer Review', 'wirelength, Elmore delay, arrival times and scaling', 200,
@@ -126,6 +160,14 @@ export const libcharPractice = practice('practice-libchar', 'Characterization Dr
       count('Times table points:', `${cells * arcs} × ${pts}`, cells * arcs * pts),
       calc('Times corners, in millions:', `${cells * arcs * pts} × ${corners} / 1e6`, n / 1e6, 'M', sig(n / 1e6), 0.02));
   },
+  (r) => concept(r, [
+    ['Which Liberty data lets statistical timing (POCV) use a sigma for each arc?', 'LVF, the variation format', ['NLDM, the delay tables', 'CCS, the current waveforms', 'The pin capacitance table'], 'what LVF adds', 'NLDM gives one nominal delay and slew per table point. LVF adds the standard deviation next to the mean, for each arc, so the timing tool can add independent arcs as a root-sum-square and check slack at a chosen sigma.', ['LVF stores, next to the mean delay:', 'A standard deviation', ['A current waveform', 'A leakage figure']], 'LVF stores a standard deviation next to the mean for each arc'],
+    ['What do CCS and ECSM have in common?', 'Both model the output as a current source', ['Both store only the setup and hold constraints', 'Both replace the supply corners with one typical corner', 'Both are formats for the layout abstract'], 'current-source models', 'NLDM tables lose accuracy when long resistive wires shape the waveform. The current-source models (CCS and ECSM) describe the cell output as a current source, so the load\'s effect on the waveform can be computed. NLDM stays as the compact default.', ['A current-source model is more accurate when the load is:', 'A long resistive wire', ['A single small gate', 'Nothing at all']], 'Both model the output as a current waveform, which stays accurate with resistive loads'],
+    ['Why does characterization use many table points per arc?', 'Delay depends non-linearly on slew and load', ['Each point is a separate supply voltage', 'The tables are checked against layout rules', 'Every point is a different cell'], 'why tables, not formulas', 'Delay is not a straight line in input slew or output load, so the library stores a grid of simulated points and lets the timing tool interpolate between them.', ['Between two table points the tool:', 'Interpolates', ['Rounds up', 'Re-simulates']], 'Delay depends non-linearly on slew and load, so a grid of points is stored'],
+    ['A signoff flow adds a fast corner for hold. What must the library provide?', 'Timing data characterized at that corner', ['The same tables, scaled by a fixed factor', 'Only the typical-corner tables', 'A separate layout for each corner'], 'a library per corner', 'Each corner is simulated on its own, because delay does not scale by a single factor across voltage, temperature and process. The library ships a Liberty file per corner.', ['Corners are characterized:', 'Each by its own simulations', ['By scaling the typical one', 'By layout rules']], 'Timing data characterized at that corner, by its own simulations'],
+    ['Which model suits a cell driving a long resistive wire?', 'A current-source model', ['A lumped-capacitor NLDM table only', 'A single fixed delay for all loads', 'A pure leakage table'], 'choosing a model', 'NLDM treats the load as a capacitor. A long resistive wire shields the far capacitance and bends the waveform, which a current-source model (CCS or ECSM) captures.', ['NLDM treats the load as:', 'A single capacitor', ['A resistor chain', 'A transmission line']], 'A current-source model captures resistive-load effects that NLDM tables miss'],
+    ['What does a setup time of a flop measure?', 'How long before the clock the data must be stable', ['How long after the clock the data must stay stable', 'The clock-to-Q delay at the typical corner', 'The delay of the clock buffer'], 'setup against hold', 'Setup is the stable time needed before the capturing edge; hold is the stable time needed after it. Both are found by moving the data edge until clock-to-Q degrades.', ['Hold is measured:', 'After the clock edge', ['Before the clock edge', 'At the data pin only']], 'How long before the clock edge the data must be stable'],
+  ], (why) => `${why}.`),
 ]);
 
 export const libcharBoss = bossOf(libcharPractice, 'boss-libchar', 'Signing Off a Library', 'interpolation, push-out criteria, power and workload', 200,

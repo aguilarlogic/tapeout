@@ -160,7 +160,7 @@ export const ACTS: Act[] = [
   {
     id: 'impl', n: 4, name: 'VLSI & Implementation', tagline: 'Timing, circuits, power and the board', region: 'CLOCKS · PHY',
     chapters: [
-      { name: 'Static timing', modules: [...drill('sta'), ...mods(TIMING_LEVELS, 'sta', 'sta'), ...sta2('sta-report', 'sta-ocv', 'sta-mcp'), bossMod('boss-sta'), ...sta2('sta-eco')] },
+      { name: 'Static timing', modules: [...drill('sta'), ...mods(TIMING_LEVELS, 'sta', 'sta'), ...sta2('sta-report', 'sta-ocv', 'sta-pocv', 'sta-mcp'), bossMod('boss-sta'), ...sta2('sta-eco')] },
       { name: 'Circuit design', modules: [...drill('vlsi'), bossMod('boss-circuit')] },
       { name: 'Layout', modules: [...layout('layout-drc', 'layout-inv', 'layout-lvs', 'layout-nand'), ...layout('layout-boss')] },
       { name: 'Physical design', modules: [...pd('pd-place', 'pd-congestion', 'pd-cts', 'pd-ir', 'pd-floorplan'), ...pd('pd-boss')] },
