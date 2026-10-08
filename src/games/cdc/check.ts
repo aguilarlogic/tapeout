@@ -29,8 +29,8 @@ export function evaluate(inst: CdcInstance, src: string): Evaluation {
     return ev;
   }
   const viol = rep.violations;
-  add('every clock-domain crossing is safe', viol.length === 0, viol.length ? `${viol[0].message}${viol[0].line ? ` (line ${viol[0].line})` : ''}${viol.length > 1 ? ` and ${viol.length - 1} more` : ''}` : undefined);
-  add('the design crosses a clock domain at all', rep.crossings.length > 0, rep.crossings.length ? undefined : 'no signal passes between the clocks, so there is nothing to verify');
+  add(inst.spec.resets ? 'every clock- and reset-domain crossing is safe' : 'every clock-domain crossing is safe', viol.length === 0, viol.length ? `${viol[0].message}${viol[0].line ? ` (line ${viol[0].line})` : ''}${viol.length > 1 ? ` and ${viol.length - 1} more` : ''}` : undefined);
+  if (!inst.spec.resets) add('the design crosses a clock domain at all', rep.crossings.length > 0, rep.crossings.length ? undefined : 'no signal passes between the clocks, so there is nothing to verify');
 
   let simFail: string | undefined;
   let simError: string | undefined;
