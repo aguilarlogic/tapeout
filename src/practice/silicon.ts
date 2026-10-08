@@ -126,6 +126,31 @@ export const pnrPractice = practice('practice-pnr', 'Physical Design Drills', 'f
       calc('Allowed drop in mV = budget × Vdd × 1000:', `${b} / 100 × ${vdd} × 1000`, (b / 100) * vdd * 1000, 'mV', sig((b / 100) * vdd * 1000, 4), 0.005),
       calc('Maximum R = allowed drop ÷ current, in mΩ (mV ÷ A):', `${sig((b / 100) * vdd * 1000, 4)} / ${i}`, res, 'mΩ', sig(res), 0.02));
   },
+  (r, d) => {
+    const idea = 'IR drop is V = I × R, so with the current unchanged the drop falls in proportion to the resistance. A model like this is how a lower-resistance supply path (more straps, or rails delivered from the back of the wafer) is judged: by how much R falls, and what the current then does.';
+    const p = pick(r, [20, 25, 30, 40]);
+    if (d < 3) return walk(ask(`A supply path's resistance falls by ${p}% and the current stays the same. By what percentage does the IR drop fall?`, qty(p, '%', 0.01, String(p)), `V = I·R: the drop scales with R, so it also falls by ${p}%.`, 'Same current: drop ∝ R.'),
+      'IR drop against resistance', idea,
+      calc('New drop as a fraction of the old one, 1 − the fall:', `1 − ${p}/100`, 1 - p / 100, '', String(1 - p / 100), 0.005),
+      calc('Fall in the drop, as a %:', `(1 − ${1 - p / 100}) × 100`, p, '%', String(p), 0.01));
+    const up = pick(r, [10, 20]), fall = (1 - (1 - p / 100) * (1 + up / 100)) * 100;
+    return walk(ask(`A supply path's resistance falls by ${p}%, but the block now draws ${up}% more current. By what percentage does the IR drop fall? (Negative means it rises.)`, qty(fall, '%', 0.02, sig(fall)), `New drop = (1 − ${p / 100}) × (1 + ${up / 100}) = ${sig((1 - p / 100) * (1 + up / 100), 4)} of the old: a fall of ${sig(fall)}%.`, 'Multiply the two factors.'),
+      'IR drop when both R and I change', idea,
+      calc('Resistance factor × current factor:', `${1 - p / 100} × ${1 + up / 100}`, (1 - p / 100) * (1 + up / 100), '', sig((1 - p / 100) * (1 + up / 100), 4), 0.005),
+      calc('Fall in the drop = (1 − that factor) × 100, in %:', `(1 − ${sig((1 - p / 100) * (1 + up / 100), 4)}) × 100`, fall, '%', sig(fall), 0.02));
+  },
+  (r, d) => {
+    const pitch = pick(r, [28, 30, 36, 42]), tracks = tier(d, pick(r, [5, 6, 7]), pick(r, [6, 7.5, 9]), pick(r, [6, 7.5, 9]));
+    const idea = 'A standard cell is as tall as its metal tracks: height = (number of tracks) × (metal pitch). Fewer tracks make smaller cells, which is one reason designers want power rails out of the way of the signal tracks.';
+    if (d < 3) return walk(ask(`Cells are ${tracks} metal tracks tall at a ${pitch} nm track pitch. Cell height, in nm?`, qty(tracks * pitch, 'nm', 0.01, String(tracks * pitch)), `${tracks} × ${pitch} = ${tracks * pitch} nm.`, 'Tracks × pitch.'),
+      'cell height from tracks', idea,
+      calc('Height = tracks × pitch, in nm:', `${tracks} × ${pitch}`, tracks * pitch, 'nm', String(tracks * pitch), 0.01));
+    const rows = pick(r, [100, 200, 400]), h = tracks * pitch;
+    return walk(ask(`A block is ${rows} rows of ${tracks}-track cells at a ${pitch} nm pitch. How tall is the cell area, in µm?`, qty((rows * h) / 1000, 'um', 0.01, sig((rows * h) / 1000)), `Each row is ${h} nm; ${rows} rows = ${rows * h} nm = ${sig((rows * h) / 1000)} µm.`, 'Rows × height, then nm to µm.'),
+      'height of a block of rows', idea,
+      calc('One row, tracks × pitch, in nm:', `${tracks} × ${pitch}`, h, 'nm', String(h), 0.01),
+      calc('All rows, in µm (÷ 1000):', `${rows} × ${h} / 1000`, (rows * h) / 1000, 'um', sig((rows * h) / 1000), 0.01));
+  },
   (r, d) => concept(r, [...atLevel(2, [
     ['DRC and LVS both pass. What did each check?', 'DRC: manufacturable shapes. LVS: layout matches the netlist', ['DRC: setup timing. LVS: hold timing on every path', 'DRC: logic function. LVS: the power grid\'s IR drop at each cell', 'DRC: scan chains. LVS: the memory BIST controllers'], 'DRC versus LVS', 'Design Rule Check (DRC) asks whether the drawn shapes obey the factory\'s spacing and width rules, so they can be manufactured. Layout Versus Schematic (LVS) extracts the circuit from the drawn shapes and compares it with the intended netlist. Neither looks at timing.', ['Checking that the layout is the circuit you intended is:', 'LVS', ['DRC', 'CTS']], 'DRC checks the shapes obey the fab\'s geometric rules; LVS checks the layout\'s transistors and connections match the netlist.'],
     ['Why does CTS run after placement and before routing?', 'It needs the flop locations; clocks then get the best tracks', ['Clock nets are not timed until routing is finished, so it waits', 'Routing tools cannot see clock nets at all', 'It is only a naming convention in the flow'], 'the order of the flow', 'The clock tree has to reach each flop, so it cannot be built before the flops have a place. And clock wires are the most timing-critical, so they get the best routing tracks first, before signal wires fill them.', ['A clock tree needs to know:', 'Where every flop is placed', ['The final routed clock wires', 'The test patterns']], 'The tree must know where every flop is, and clock nets need the best routing resources before signal nets take them.'],
@@ -135,6 +160,11 @@ export const pnrPractice = practice('practice-pnr', 'Physical Design Drills', 'f
   ]),
     ...atLevel(1, [['What does placement decide?', 'Where each cell sits on the die', ['How the clock tree is wired', 'Which metal layers the route uses', 'The fuse settings for the chip'], 'placement', 'Placement puts every standard cell and macro at a legal location. Routing comes after it and connects the cells; the quality of placement sets wire lengths and timing.', ['Routing happens:', 'After placement', ['Before floorplanning', 'Never']]]]),
     ...atLevel(3, [['Why keep spare ECO cells in a design?', 'So small late fixes avoid a full re-spin', ['They lower the power of the whole chip', 'They improve the yield of the wafer', 'Spare cells replace the scan chain entirely'], 'ECO spare cells', 'Late bugs are often small. Spare gates scattered in the layout can be rewired with only a few metal layers changed, instead of redoing every mask. That is far faster and cheaper than a full re-spin.', ['A metal-only ECO changes:', 'Only the upper metal masks', ['Every mask', 'The wafer']]]]),
+    ...atLevel(3, [
+    ['What is the main routing benefit of backside power delivery?', 'Front-side tracks freed from power straps', ['Signals can be sent over the back of the chip', 'Clock trees need no buffers any more', 'Vias between metal layers are no longer used'], 'backside power', 'The supply rails move under the transistors after the wafer is thinned. Power no longer competes with signals for the front-side metal, so signals get more tracks and cells can shrink. The costs are heat leaving through a thinned stack, harder backside debug and extra process steps.', ['Backside power moves the:', 'Power rails, off the front side', ['Signals, off the front side', 'Transistors, to the package']], 'Front-side tracks are freed from the power straps'],
+    ['Which physical-design file holds the extracted parasitics for timing?', 'The SPEF file', ['The LEF abstract file', 'The DEF file', 'The GDS mask file'], 'physical-design data formats', 'LEF holds cell and macro abstracts (outline, pins, blockages). DEF holds the placement and routing of a design. SPEF holds the extracted parasitic resistance and capacitance. GDS or OASIS holds the mask shapes for the fab.', ['The placement and routing of a design are stored in:', 'DEF', ['LEF', 'SPEF']], 'SPEF holds the extracted parasitics'],
+    ['Which file gives the placer the outline and pins of a library cell, without its internals?', 'The LEF abstract', ['The SPEF file', 'The GDS mask data', 'The DEF placement'], 'physical-design data formats', 'The placer and router only need each cell\'s outline, pin shapes and blockages, not its transistors. That abstract view is the LEF; the full shapes are in GDS or OASIS.', ['A cell\'s abstract view is called:', 'LEF', ['SPEF', 'DEF']], 'The LEF holds each cell\'s outline, pins and blockages'],
+    ]),
   ], (why) => `${why}.`, d),
 ]);
 
@@ -152,6 +182,7 @@ export const pdBoss = boss({
     { t: 'gen', make: () => { const t = 6 * wire(0.8, 0.2, 500) + 5 * 25; return ask('Split it into 6 segments with 5 repeaters of 25 ps each. New delay, in ps?', qty(t, 'ps', 0.02, sig(t)), `6 × ${sig(wire(0.8, 0.2, 500))} + 5 × 25 = ${sig(t)} ps.`); } },
     { t: 'gen', make: () => ask('The block draws 2 A through 25 mΩ of grid. IR drop, in mV?', qty(50, 'mV', 0.02, '50'), '2 × 25 = 50 mV: 6% of 0.8 V, over a 5% budget. Add straps or vias in the worst region.') },
     { t: 'gen', make: () => ask('The clock tree drives 4096 flops with fan-out 8. How many levels?', num(4), '8⁴ = 4096: 4 levels.') },
+    mc('The team proposes moving the power rails to the back of the wafer. What is the main routing benefit?', ['Front-side tracks freed from power straps', 'Clock trees no longer need any buffers at all', 'No vias are needed between the metal layers', 'Signals get routed on the back of the die'], 0, 'Power and signals no longer compete for the same front-side metal. The costs: heat leaves through a thinned stack, backside debug is harder, and there are extra process steps.'),
   ],
   recap: ['Utilization and congestion.', 'Wire delay and repeaters.', 'IR drop budgets.', 'Clock tree depth.'],
 });
@@ -416,6 +447,19 @@ export const fabPractice = practice('practice-fab', 'Fab & Yield Drills', 'litho
       calc('The half-width, (USL - LSL) ÷ 2:', `(${usl} - ${lsl}) / 2`, (usl - lsl) / 2, '', sig((usl - lsl) / 2, 4), 0.005),
       calc('σ = half-width ÷ (3 × 1.33):', `${sig((usl - lsl) / 2, 4)} / (3 × 1.33)`, sm, '', sig(sm), 0.02));
   },
+  (r, d) => {
+    const layers = tier(d, pick(r, [4, 6]), pick(r, [8, 10, 12]), pick(r, [14, 16, 18])), colours = pick(r, [2, 3, 4]);
+    const idea = 'When one exposure cannot print a layer, the shapes are split across several masks: each shape gets a colour, one colour per mask. A layer printed with k colours needs k masks (double patterning: 2, triple: 3). The more layers need it, the more masks the whole stack costs.';
+    const name = colours === 2 ? 'double patterning (2 colours)' : colours === 3 ? 'triple patterning (3 colours)' : 'quadruple patterning (4 colours)';
+    if (d < 3) return walk(ask(`${layers} layers are printed with ${name}. How many masks do those layers need?`, num(layers * colours), `${layers} layers × ${colours} masks each = ${layers * colours} masks.`, 'Layers × colours.'),
+      'masks from colours', idea,
+      count('Masks = layers × colours:', `${layers} × ${colours}`, layers * colours));
+    const single = pick(r, [2, 4, 6]);
+    return walk(ask(`${layers} layers use ${name}. A newer tool prints ${single} of them in a single exposure instead, one mask each. How many masks do the ${layers} layers need now?`, num((layers - single) * colours + single), `(${layers} − ${single}) × ${colours} + ${single} = ${(layers - single) * colours + single}. Single exposure removes the colouring and the extra masks for those layers.`, 'Multi-patterned layers cost colours each; single-exposure layers cost one.'),
+      'masks with single exposure', idea,
+      count('Layers still multi-patterned, times colours:', `(${layers} − ${single}) × ${colours}`, (layers - single) * colours),
+      count('Plus one mask for each single-exposure layer:', `${(layers - single) * colours} + ${single}`, (layers - single) * colours + single));
+  },
   (r, d) => concept(r, [...atLevel(2, [
     ['Designers sign off at TT, FF, SS, FS and SF. What do the letters mean?', 'NMOS and PMOS speed', ['Temperature and frequency', 'Test and functional mode', 'Film and substrate'], 'process corners', 'Manufacturing variation makes the N and P transistors on a chip each come out typical, fast or slow. The two letters name the NMOS and PMOS speeds: TT, FF, SS, and the skewed corners FS (fast N, slow P) and SF. Timing is checked at each.', ['In "FS", the F stands for the speed of:', 'The NMOS transistors', ['The PMOS transistors', 'The film thickness']], 'Each transistor type comes out typical, fast or slow.'],
     ['After years at high temperature a chip\'s paths are slower. Likely mechanism?', 'BTI and HCI raising thresholds', ['Poisson yield loss from defects', 'EMI from the board', 'Lithography blur in the metal layers'], 'transistor aging', 'Bias temperature instability (BTI) traps charge near the gate while a transistor is on, and hot-carrier injection (HCI) damages the oxide. Both raise the threshold voltage, which slows transistors down with age. Designs therefore add margin for aging.', ['A higher threshold voltage makes a transistor:', 'Slower', ['Faster', 'Unchanged']], 'Bias temperature instability and hot-carrier injection shift transistor thresholds over time.'],
@@ -425,6 +469,10 @@ export const fabPractice = practice('practice-fab', 'Fab & Yield Drills', 'litho
   ]),
     ...atLevel(1, [['What does a wafer yield of 80% mean?', 'Four in five good dies on the wafer', ['Eighty dies per wafer in total', 'Eighty percent of the wafer is silicon', 'Eighty wafers out of a hundred pass'], 'yield', 'Yield is the fraction of dies that pass test. A yield of 80% means about four of every five dies on the wafer work, which feeds straight into cost per good die.', ['If 80% of 500 dies are good, how many are good?', '400', ['80', '500']]]]),
     ...atLevel(3, [['What does optical proximity correction (OPC) do?', 'Pre-distorts mask shapes to print correctly', ['Corrects the wafer alignment before each exposure step', 'Adds extra metal to balance the density', 'Reduces the number of masks needed'], 'optical proximity correction', 'Light diffraction rounds corners and shifts line ends when a pattern is printed. OPC changes the drawn mask shapes in advance, adding serifs and bias, so the printed wafer shape matches the design.', ['OPC changes:', 'The mask shapes, in advance', ['The wafer after printing', 'The clock tree']]]]),
+    ...atLevel(3, [
+    ['Two wires on the same colour are too close. What is the fix?', 'Recolour one, or spread them apart', ['Merge them into one wire', 'Print them with a third mask over both', 'Waive it, as colours are only advisory'], 'colouring conflicts', 'In multi-patterning, shapes on the same mask blur together if they are too close, so the rules demand a larger spacing for the same colour. A conflict is solved by moving one shape to the other mask or by moving the shapes apart.', ['Same-colour shapes sit on:', 'The same mask', ['Different masks', 'No mask']], 'Recolour one, or spread them to legal spacing'],
+    ['A FinFET inverter needs 2.5 times the drive of a one-fin version. How is it sized?', 'Three fins, since widths come in whole fins', ['Two and a half fins, with a fractional fin', 'Two fins, rounding down to save area', 'One wider fin, drawn at any width'], 'quantized widths', 'Fins and nanosheets set the transistor width in discrete steps, so a designer picks the next step that meets the drive. Rounding down would miss the target; fractions are not available.', ['Transistor widths at advanced nodes come in:', 'Discrete steps', ['Any value', 'Multiples of the supply']], 'Three fins: widths come in whole fins'],
+    ]),
   ], (why) => `${why}.`, d),
 ]);
 
