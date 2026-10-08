@@ -71,7 +71,7 @@ export async function runIncident(t: Terminal, inc: Incident, hooks: IncidentHoo
     if (ins) {
       const a = await pickArg(t, ins, arg);
       if (a === undefined) continue;
-      const before = inv.consistent();
+      const before = inv.byEvidence();
       const m = inv.measure(ins, a);
       void t.art(m.text, m.repeat ? `${key(ins.cmd, a)} · from your notebook, no time spent` : `${key(ins.cmd, a)} · ${ins.cost} min · ${hm(inv.left)} left`);
       if (coach && !m.repeat) await coachReading(t, inv, before, struck, causeName);
@@ -154,7 +154,8 @@ async function pickArg(t: Terminal, ins: Instrument, arg: string): Promise<strin
 
 /** Training wheels for the first incident: say what the reading ruled out. */
 async function coachReading(t: Terminal, inv: Investigation, before: string[], struck: Set<string>, name: (id: string) => string) {
-  const now = inv.consistent();
+  // Readings only, the same rule `diagnose` judges by: a wrong call crosses a cause off but proves nothing.
+  const now = inv.byEvidence();
   const gone = before.filter((c) => !now.includes(c));
   gone.forEach((c) => struck.add(c));
   if (!gone.length) await t.say('That reading fits every cause still on the list, so it told us nothing new. Look for a reading where the causes would disagree.', 'thinking');
@@ -172,7 +173,7 @@ async function diagnose(t: Terminal, inv: Investigation, arg: string, struck: Se
   }
   // Committing while the readings still leave several causes standing is a guess, and a guess cannot close an incident.
   const live = inv.byEvidence();
-  if (live.length > 1 && !inv.guessed) {
+  if (live.length > 1) {
     const nm = (id: string) => `**${inc.causes.find((c) => c.id === id)!.name}**`;
     await t.say(live.length <= 3 ? `${live.length === 2 ? 'Two causes' : 'Three causes'} still fit everything you have seen: ${live.map(nm).join(' and ')}. Diagnose anyway?`
       : `${live.length} causes still fit everything you have seen. Diagnose anyway?`, 'concerned');

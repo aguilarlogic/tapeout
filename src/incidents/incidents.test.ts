@@ -175,4 +175,29 @@ describe('evidence before diagnosis', () => {
       expect(inv.stars(), inc.id).toBeLessThanOrEqual(2);
     }
   });
+  it('an early wrong guess does not stop a later proven diagnosis from scoring', () => {
+    for (const inc of INCIDENTS) for (let seed = 1; seed <= 15; seed++) {
+      const c = inc.causes[0];
+      const inv = new Investigation(inc, seed, c.id);
+      expect(inv.diagnose(inc.causes[1].id)).toBe(false);
+      expect(inv.guessed).toBe(false);
+      for (let g = 0; g < 50; g++) { const nx = inv.bestNext(inv.byEvidence()); if (!nx) break; inv.measure(nx.ins, nx.arg); }
+      expect(inv.diagnose(c.id)).toBe(true);
+      expect(inv.guessed, `${inc.id} seed ${seed}`).toBe(false);
+      inv.applyFix({ text: '', right: true, why: '' });
+      if (inv.left >= 0) expect(inv.stars(), `${inc.id} seed ${seed}`).toBeGreaterThanOrEqual(1);
+    }
+  });
+  it('crossing causes off with wrong calls is not evidence: the right call is still a guess', () => {
+    for (const inc of INCIDENTS) {
+      const c = inc.causes[0];
+      const inv = new Investigation(inc, 5, c.id);
+      for (const o of inc.causes.slice(1)) inv.diagnose(o.id);
+      expect(inv.consistent()).toEqual([c.id]);
+      expect(inv.byEvidence().length).toBeGreaterThan(1);
+      expect(inv.diagnose(c.id)).toBe(true);
+      expect(inv.guessed, inc.id).toBe(true);
+      expect(inv.guessHint, inc.id).toBeDefined();
+    }
+  });
 });
