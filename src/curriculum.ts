@@ -243,8 +243,8 @@ export const ACTS: Act[] = [
   {
     id: 'software', n: 10, kind: 'detour', name: 'Detours: software', tagline: 'The shell, git, Python, C, C++, algorithms and operating systems, called in when a lab needs them', region: 'FIRMWARE',
     chapters: [
-      { name: 'The shell', need: 'Microarchitecture', modules: [...drill('shell'), ...shell('sh-nav', 'sh-grep', 'sh-pipes', 'sh-find', 'sh-awk', 'sh-sed', 'sh-perm', 'sh-loop', 'sh-script'), bossMod('boss-shell'), ...shell('sh-boss-triage')] },
-      { name: 'Git', need: 'Microarchitecture', modules: [...drill('git'), ...shell('git-first', 'git-branch', 'git-undo', 'git-conflict', 'git-stash', 'git-bisect'), bossMod('boss-git'), ...shell('git-boss-merge', 'git-boss-bisect')] },
+      { name: 'The shell', need: 'Microarchitecture', modules: [...drill('shell'), ...shell('sh-nav', 'sh-grep', 'sh-pipes', 'sh-find', 'sh-awk', 'sh-sed', 'sh-perm', 'sh-loop', 'sh-script', 'sh-quoting'), bossMod('boss-shell'), ...shell('sh-boss-triage')] },
+      { name: 'Git', need: 'Microarchitecture', modules: [...drill('git'), ...shell('git-first', 'git-branch', 'git-undo', 'git-conflict', 'git-stash', 'git-bisect', 'git-remote', 'git-rebase-i'), bossMod('boss-git'), ...shell('git-boss-merge', 'git-boss-bisect')] },
       { name: 'C', need: 'Hardware/software interface', modules: [...drill('c'), ...code('code-c-swap', 'code-c-strings', 'code-c-array', 'code-c-bits', 'code-c-layout', 'code-c-list', 'code-c-vec', 'code-c-bug-overflow', 'code-c-bug-uaf', 'code-c-bug-leak', 'code-c-bug-dangling', 'code-c-bug-uninit'), bossMod('boss-c'), ...code('code-boss-c-ring', 'code-boss-c-split', 'code-boss-c-crc')] },
       { name: 'Algorithms', need: 'Pipelines', modules: [...drill('dsa'), ...code('code-py-fibmemo', 'code-py-bsearch', 'code-py-bfs', 'code-py-topo', 'code-py-lru'), bossMod('boss-dsa'), ...code('code-boss-py-graph')] },
       { name: 'Python', need: 'Static timing', modules: [...drill('python'), ...code('code-py-parse', 'code-py-hist', 'code-py-regfield'), bossMod('boss-python'), ...code('code-boss-py-log')] },
