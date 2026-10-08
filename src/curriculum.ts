@@ -138,7 +138,7 @@ export const ACTS: Act[] = [
       { name: 'The shell', modules: [...drill('shell'), ...shell('sh-nav', 'sh-grep', 'sh-pipes', 'sh-find', 'sh-awk', 'sh-sed', 'sh-perm', 'sh-loop', 'sh-script'), bossMod('boss-shell'), ...shell('sh-boss-triage')] },
       { name: 'Git', modules: [...drill('git'), ...shell('git-first', 'git-branch', 'git-undo', 'git-conflict', 'git-stash', 'git-bisect'), bossMod('boss-git'), ...shell('git-boss-merge', 'git-boss-bisect')] },
       { name: 'Python', modules: [...drill('python'), ...code('code-py-parse', 'code-py-hist', 'code-py-regfield'), bossMod('boss-python'), ...code('code-boss-py-log')] },
-      { name: 'Flows & scripting', modules: [...drill('flows'), ...code('code-py-triage'), ...shell('sh-make', 'sh-make-hdr', 'sh-python'), bossMod('boss-flows'), ...shell('sh-boss-make')] },
+      { name: 'Flows & scripting', modules: [...drill('flows'), ...code('code-py-triage', 'code-tcl-subst', 'code-tcl-dict', 'code-tcl-regexp', 'code-tcl-netlist', 'code-tcl-catch'), ...shell('sh-make', 'sh-make-hdr', 'sh-python'), bossMod('boss-flows'), ...code('code-tcl-boss'), ...shell('sh-boss-make')] },
       { name: 'C', modules: [...drill('c'), ...code('code-c-swap', 'code-c-strings', 'code-c-array', 'code-c-bits', 'code-c-layout', 'code-c-list', 'code-c-vec', 'code-c-bug-overflow', 'code-c-bug-uaf', 'code-c-bug-leak', 'code-c-bug-dangling', 'code-c-bug-uninit'), bossMod('boss-c'), ...code('code-boss-c-ring', 'code-boss-c-split', 'code-boss-c-crc')] },
       { name: 'C++', modules: [...drill('cpp'), bossMod('boss-cpp')] },
       { name: 'Algorithms', modules: [...drill('dsa'), ...code('code-py-fibmemo', 'code-py-bsearch', 'code-py-bfs', 'code-py-topo', 'code-py-lru'), bossMod('boss-dsa'), ...code('code-boss-py-graph')] },

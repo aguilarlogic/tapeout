@@ -2,10 +2,11 @@
 import { briefPanel, checkToolbar, draftEditor, finish, hintNote, labPage, loadSeed, newVariantButton, setStatus, useHints } from '../../ui/labkit';
 import { mentorSay } from '../../os/mentor';
 import { h } from '../../ui/dom';
-import { highlightC, highlightPy } from '../../ui/editor';
+import { highlightC, highlightPy, highlightTcl } from '../../ui/editor';
 import { findCodeLevel, instanceFor, starsFor } from './levels';
 import { runCode, type CodeReport } from './run';
 
+export const TCL_NOTE = 'A Tcl subset with a toy netlist; real EDA shells have far more commands.';
 export const MODEL_NOTE = 'C here behaves like 64-bit Linux with GCC: int is 32 bits, long is 64, char is signed. Undefined behaviour stops the program with a sanitizer-style error instead of doing something unpredictable.';
 
 export function codePage(id: string): HTMLElement {
@@ -16,17 +17,17 @@ export function codePage(id: string): HTMLElement {
   const seed = loadSeed(seedKey);
   const inst = instanceFor(level, seed);
   const draftKey = `code.${level.id}.${seed}`;
-  const langName = level.lang === 'py' ? 'Python' : 'C';
+  const langName = ({ py: 'Python', c: 'C', tcl: 'Tcl' })[level.lang];
 
   const ed = draftEditor(draftKey, inst.starter, () => run(false), {
-    highlight: level.lang === 'py' ? highlightPy : highlightC, label: `${langName} source`,
+    highlight: ({ py: highlightPy, c: highlightC, tcl: highlightTcl })[level.lang], label: `${langName} source`,
   });
 
   // --- brief and hints
   const { hintBox, usage } = useHints(inst.hints, `${draftKey}.usage`);
 
-  const tierNote = level.tier === 'debug' ? 'Bug hunt: run it, read the sanitizer report, find the root cause.' : boss ? 'Boss mission: no hints. Hidden cases run on Submit.' : '';
-  const brief = briefPanel({ tag: `${langName} · ${level.concept}`, ticket: level.ticket, model: MODEL_NOTE, html: inst.brief, note: tierNote, hintBox });
+  const tierNote = level.tier === 'debug' ? 'Bug hunt: run it, read the error report, find the root cause.' : boss ? 'Boss mission: no hints. Hidden cases run on Submit.' : '';
+  const brief = briefPanel({ tag: `${langName} · ${level.concept}`, ticket: level.ticket, model: level.lang === 'tcl' ? TCL_NOTE : MODEL_NOTE, html: inst.brief, note: tierNote, hintBox });
 
   // --- results
   const status = h('div', { class: 'status idle' }, 'Run (Ctrl+Enter) tries the example cases. Submit checks everything, including the hidden cases.');

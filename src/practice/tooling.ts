@@ -331,6 +331,26 @@ function rebuilt(touched: string) {
   return [...out];
 }
 
+/** Output-prediction scripts for the TCL drills: [difficulty, source, what it prints, a reasoning step]. The Code Lab interpreter tests run these too. */
+export interface TclScript { d: 1 | 2 | 3; src: string; out: string; method: string; idea: string; step: readonly [string, string, readonly string[]] }
+export const tclScripts = (a: number, b: number): TclScript[] => {
+  const sub = 'TCL reads each word once: $x gives the variable\'s value, [cmd] runs the command and gives its result, "..." allows both, {...} allows neither. Work through the script one line at a time, writing down each variable as it changes.';
+  return [
+    { d: 1, src: `set a ${a}\nset b ${b}\nputs [expr {$a + $b}]`, out: String(a + b), method: 'command substitution', idea: sub, step: ['What does [expr {$a + $b}] turn into?', 'The sum of the two values', ['The text "$a + $b"', 'An error, since a is not a number']] },
+    { d: 1, src: `set x ${a}\nset y $x\nset x ${b}\nputs $y`, out: String(a), method: 'variables hold values', idea: sub, step: ['After set y $x, changing x changes y?', 'No: y took a copy of the value at that moment', ['Yes, y follows x', 'Yes, but only inside braces']] },
+    { d: 2, src: `set l {u0 u1 u2}\nlappend l u${a}\nputs "[llength $l] [lindex $l end]"`, out: `4 u${a}`, method: 'lists', idea: `${sub} A list is words separated by spaces. lappend adds one at the end, llength counts them, and lindex picks one by position (end means the last).`, step: ['What does lindex $l end give?', 'The last element', ['The first element', 'The number of elements']] },
+    { d: 2, src: `set s 0\nforeach v {${a} ${b} ${a}} {\n  incr s $v\n}\nputs $s`, out: String(2 * a + b), method: 'foreach and incr', idea: `${sub} foreach runs its body once per list element, with the variable set to that element. incr s $v adds v to s.`, step: ['How many times does the body run?', 'Three: once for each list element', ['Once', `${a} times`]] },
+    { d: 2, src: `proc scale {x k} {\n  return [expr {$x * $k}]\n}\nputs [scale ${a} ${b}]`, out: String(a * b), method: 'procedures', idea: `${sub} proc name {arguments} {body} defines a new command. Calling it runs the body with the arguments bound, and return hands back the result, which the surrounding brackets substitute.`, step: [`What does the call scale ${a} ${b} pass to x and k?`, `x = ${a}, k = ${b}`, [`x = ${b}, k = ${a}`, 'Both get the first value']] },
+    { d: 2, src: `dict set d clk ${a}\ndict set d rst ${b}\nputs [dict get $d rst]-[dict size $d]`, out: `${b}-2`, method: 'dictionaries', idea: `${sub} A dict maps keys to values. dict set adds or replaces a pair, dict get reads one, dict size counts the pairs.`, step: ['How many pairs does d hold?', 'Two: clk and rst', ['One', 'None until it is printed']] },
+    { d: 2, src: `regexp {u_(\\w+)/(\\d+)} "u_alu/${b}" m name idx\nputs "$name:$idx"`, out: `alu:${b}`, method: 'regexp with capture variables', idea: `${sub} regexp pattern string whole group1 group2 matches and stores the whole match, then each parenthesised group, in the variables you name.`, step: ['Which variable receives the first group in parentheses?', 'name (the one after m)', ['m', 'idx']] },
+    { d: 3, src: `set clk_period ${a}\nset which clk\nputs [expr {[set \${which}_period] * ${b}}]`, out: String(a * b), method: 'nested substitution', idea: `${sub} Substitution works inside out: \${which}_period becomes clk_period first, then set with one argument reads that variable, then expr multiplies.`, step: ['What does \${which}_period become?', 'clk_period', ['clk', 'which_period']] },
+    { d: 3, src: `proc check {x} {\n  if {$x > ${b}} {error "too big: $x"}\n  return ok\n}\nset rc [catch {check ${a}} msg]\nputs "$rc $msg"`, out: a > b ? `1 too big: ${a}` : `0 ok`, method: 'catch and error', idea: `${sub} catch runs a script and returns 0 if it finished normally or 1 if it raised an error. The result, or the error message, is stored in the variable you name. Without catch, an error stops the whole script.`, step: [`Is ${a} greater than ${b}?`, a > b ? 'Yes, so error is called' : 'No, so check returns ok', [a > b ? 'No, so check returns ok' : 'Yes, so error is called']] },
+    { d: 3, src: `set x ${a}\nset y {$x}\nputs [expr $y + ${b}]`, out: String(a + b), method: 'substitution happens twice here', idea: `${sub} Braces keep $x as text, so y holds the two characters $x. But expr gets that text, joins its arguments and evaluates the string, and expr itself substitutes variables again.`, step: ['What does y hold after set y {$x}?', 'The text $x, not yet substituted', [`The number ${a}`, 'Nothing']] },
+    { d: 3, src: `puts "[catch {expr {${a} * ${b}}} res] $res"`, out: `0 ${a * b}`, method: 'catch inside a quoted string', idea: `${sub} Inside double quotes the substitutions happen left to right. [catch ...] runs first and stores the result in res, so by the time $res is read it holds the product. catch itself returns 0 for success.`, step: ['What does catch return when the script succeeds?', '0', ['1', 'The value of the expression']] },
+    { d: 3, src: `puts [lindex [lsort -integer {${a} ${b} ${a + b}}] 1]`, out: String(Math.max(a, b)), method: 'nested commands', idea: `${sub} Brackets nest: the innermost runs first. Here lsort -integer sorts the three numbers ascending, and lindex ... 1 takes the middle one (positions start at 0).`, step: ['What is the position of the middle element?', '1, since positions start at 0', ['2', '0']] },
+  ];
+};
+
 export const flowsPractice = practice('practice-flows', 'Flow Drills', 'Make dependencies, TCL, SDC basics, farm arithmetic', [
   (r) => {
     const touched = pick(r, [...new Set(MAKE_RULES.flatMap(([, deps]) => [...deps]))]);
@@ -362,6 +382,13 @@ export const flowsPractice = practice('practice-flows', 'Flow Drills', 'Make dep
       'TCL substitution rules', 'TCL treats everything as text and only substitutes when the syntax says so. $name is replaced by the variable\'s value. [command] runs the command and is replaced by its result. Double quotes "..." still allow both; curly braces {...} allow neither, so their contents stay exactly as typed. Go through the script a line at a time, tracking the variables.',
       choice(pq, pr, pw),
       step('What does the script print?', exact(out)));
+  },
+  (r, d) => {
+    const a = between(r, 2, 9), b = 2 + ((a - 2) + between(r, 1, 7)) % 8; // b differs from a, so swapped-argument distractors stay distinct
+    // check() compares against b: draw a from a wider range so both outcomes (ok / too big) occur
+    const s = pick(r, tclScripts(d === 3 ? between(r, 2, 12) : a, d === 3 ? between(r, 4, 9) : b).filter((t) => t.d === d));
+    return walk(ask(`${code(s.src)}What does this TCL print?`, exact(s.out), `It prints ${s.out}. The key idea: ${s.method}.`, 'Substitute word by word, inside out.'),
+      s.method, s.idea, choice(...s.step), step('What does the script print?', exact(s.out)));
   },
   (r, d) => {
     const p = pick(r, [0.5, 0.8, 1, 1.25, 2, 4]);
