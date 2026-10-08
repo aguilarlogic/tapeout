@@ -81,9 +81,12 @@ describe('weak or wrong answers are rejected', () => {
 });
 
 describe('STA missions reject wrong answers', () => {
-  it('report, ocv, mcp, eco', () => {
+  it('report, ocv, pocv, mcp, eco', () => {
     expect(ok(run('sta-report', 1, { ss: '0', hs: '0', fm: '0' }))).toBe(false);
     expect(ok(run('sta-ocv', 1, { nom: '0', ocv: '0', credit: '0', crpr: '0' }))).toBe(false);
+    expect(ok(run('sta-pocv', 1, { sg: '0', sl: '0', up: 'U1' }))).toBe(false);
+    // the period is set so that one upsized arc is never enough
+    for (let seed = 1; seed <= 6; seed++) for (const arc of ['U1', 'U2', 'U3', 'U4', 'U5', 'U6']) expect(run('sta-pocv', seed, { sg: '0', sl: '0', up: arc }).goals[2].ok, `${seed} ${arc}`).toBe(false);
     const inst = findArchLevel('sta-mcp')!.build(rng(1));
     const unsafe = inst.run({ cons: 'p1 4 3\np2 4 3\np3 4 3\np4 4 3\np5 4 3' });
     expect(unsafe.goals.some((g) => !g.ok && /unsafe/.test(g.note ?? ''))).toBe(true);
