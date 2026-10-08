@@ -493,4 +493,80 @@ uint8_t crc8(const uint8_t *data, size_t n, uint8_t poly) {
   },
 };
 
-export const C_LEVELS: CodeLevel[] = [swap, strings, array, bits, layout, list, vec, bugOverflow, bugUaf, bugLeak, bugDangling, bugUninit, bossRing, bossSplit, bossCrc];
+const isr: CodeLevel = {
+  id: 'code-c-isr', title: 'Sharing a counter with an interrupt', concept: 'volatile, torn reads and critical sections', xp: 120, tier: 'guided', lang: 'c',
+  ticket: 'The timer interrupt keeps seconds and milliseconds in two variables. Every so often the main loop reports a time that is a whole second out. Find the window and close it.',
+  build: () => ({
+    brief: `<p>A timer interrupt calls <code>tick_isr()</code> once a millisecond. It bumps <code>ms</code>, and when <code>ms</code> reaches 1000 it zeroes it and bumps <code>sec</code>. The main loop calls <code>read_time_ms()</code> to get <code>sec * 1000 + ms</code>.</p>
+<p>In this lab the interrupt can strike between any two statements. At the moment <code>read_time_ms()</code> reads <code>sec</code>, then <code>ms</code>, and the interrupt can land in between: it sees the old second with the new millisecond, or the reverse, and the answer is a whole second wrong.</p>
+<p>Fix <code>read_time_ms()</code> so the two reads are one indivisible step. The lab gives you <code>irq_disable()</code> and <code>irq_enable()</code>, which mask and unmask the interrupt; a request that arrives while masked is held and runs as soon as you unmask. Keep the interrupt masked for as little time as you can, and keep both variables <code>volatile</code>.</p>`,
+    starter: `volatile unsigned sec, ms;
+
+void tick_isr(void) {
+    ms++;
+    if (ms == 1000) { ms = 0; sec++; }
+}
+
+unsigned read_time_ms(void) {
+    unsigned s = sec;
+    unsigned m = ms;
+    return s * 1000 + m;
+}
+`,
+    hints: [
+      'Run it and look at which case fails: the interrupt fires between your two reads, so s and m belong to different instants.',
+      'Mask the interrupt, copy both variables into locals, unmask. The arithmetic can happen after you unmask.',
+      'irq_disable(); unsigned s = sec; unsigned m = ms; irq_enable(); return s * 1000 + m;',
+    ],
+    rules: [
+      { label: 'Masks and unmasks the interrupt', ok: (s) => /irq_disable\s*\(/.test(s) && /irq_enable\s*\(/.test(s) },
+      { label: 'Shared variables stay volatile', ok: (s) => /volatile[^;]*\bsec\b/.test(s) && /volatile[^;]*\bms\b/.test(s) },
+    ],
+    isr: { fn: 'tick_isr', every: 7 },
+    harness: `static void preset(unsigned s0, unsigned m0) {
+    irq_disable();
+    sec = s0; ms = m0;
+    irq_enable();
+}
+
+/* The interrupt fires before every 7th statement. Four fillers put the strike between the two reads. */
+static int check(unsigned s0, unsigned m0, int pad) {
+    unsigned base = s0 * 1000 + m0, v;
+    int d = 0;
+    preset(s0, m0);
+    if (pad > 0) d = 1;
+    if (pad > 1) d = 2;
+    if (pad > 2) d = 3;
+    if (pad > 3) d = 4;
+    if (pad > 4) d = 5;
+    v = read_time_ms();
+    return v >= base && v - base <= 1;
+}
+`,
+    solution: `volatile unsigned sec, ms;
+
+void tick_isr(void) {
+    ms++;
+    if (ms == 1000) { ms = 0; sec++; }
+}
+
+unsigned read_time_ms(void) {
+    irq_disable();
+    unsigned s = sec;
+    unsigned m = ms;
+    irq_enable();
+    return s * 1000 + m;
+}
+`,
+    cases: [
+      { call: 'check(0, 999, 4)' },
+      { call: 'check(5, 999, 4)' },
+      { call: 'check(41, 999, 4)', hidden: true },
+      { call: 'check(0, 999, 3)', hidden: true },
+      { call: 'check(7, 999, 5)', hidden: true },
+      { call: 'check(3, 250, 4)', hidden: true },
+    ],
+  }),
+};
+
+export const C_LEVELS: CodeLevel[] = [swap, strings, array, bits, layout, list, vec, isr, bugOverflow, bugUaf, bugLeak, bugDangling, bugUninit, bossRing, bossSplit, bossCrc];

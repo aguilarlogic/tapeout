@@ -27,7 +27,8 @@ const isPtr = (t: CType): t is Extract<CType, { k: 'ptr' }> => t.k === 'ptr';
 const ptrTo = (to: CType): CType => ({ k: 'ptr', to });
 const hex = (n: number | bigint) => '0x' + n.toString(16);
 
-export interface COptions { stdin?: string; maxSteps?: number; seed?: number; maxOutput?: number; leaks?: boolean }
+/** A simulated interrupt: `fn` runs before every `every`-th statement executed with interrupts enabled (counting restarts at irq_enable()). */
+export interface COptions { stdin?: string; maxSteps?: number; seed?: number; maxOutput?: number; leaks?: boolean; isr?: { fn: string; every: number } }
 
 export class CInterp {
   buf = new ArrayBuffer(MEM);
@@ -58,6 +59,11 @@ export class CInterp {
   seed: number;
   depth = 0;
   private maxOutput: number;
+  private isr?: { fn: string; every: number };
+  private irqOn = true;
+  private inIsr = false;
+  private isrCount = 0;
+  private irqPending = false;
   private builtins = new Map<string, Builtin>();
   private inits: { addr: number; ty: CType; init: CNode | null }[] = [];
 
@@ -66,6 +72,7 @@ export class CInterp {
     this.stdin = opts.stdin ?? '';
     this.seed = (opts.seed ?? 1) >>> 0;
     this.maxOutput = opts.maxOutput ?? 100_000;
+    this.isr = opts.isr;
     this.installBuiltins();
     this.prog = parseC(src);
     this.link();
@@ -485,9 +492,21 @@ export class CInterp {
     try { return fn(); } finally { this.scopes.pop(); if (this.sp < sp0) this.releaseStack(sp0); }
   }
 
+  /** The interrupt controller: between statements, never inside the handler, never while irq_disable() is in force. */
+  private isrPoint() {
+    if (!this.isr || this.inIsr) return;
+    if (++this.isrCount % this.isr.every === 0) this.irqPending = true;
+    if (!this.irqOn || !this.irqPending) return; // masked: the request is latched and fires on irq_enable()
+    this.irqPending = false;
+    this.inIsr = true;
+    const line = this.line;
+    try { this.callByName(this.isr.fn, []); } finally { this.inIsr = false; this.line = line; }
+  }
+
   exec(n: CNode): Signal {
     this.tick();
     this.line = n.line;
+    if (this.isr && (n.t === 'expr' || n.t === 'decl' || n.t === 'return')) this.isrPoint();
     switch (n.t) {
       case 'block': return this.scoped(() => this.execBlockBody(n.body));
       case 'decl': this.declare(n.items); return;
@@ -953,6 +972,8 @@ export class CInterp {
       if (p) { this.u8.copyWithin(p, old, old + Math.min(n, blk.size)); this.free(old); }
       return rptr(p);
     });
+    b('irq_disable', () => { this.irqOn = false; return undefined; });
+    b('irq_enable', () => { this.irqOn = true; this.isrCount = 0; return undefined; });
     b('free', (a) => { this.free(ptr(a[0])); return undefined; });
     b('memcpy', (a) => { const d = ptr(a[0]), s = ptr(a[1]), n = sz(a[2]); if (n) { this.check(s, n, false); this.check(d, n, true); this.u8.copyWithin(d, s, s + n); } return a[0]; });
     b('memmove', (a) => { const d = ptr(a[0]), s = ptr(a[1]), n = sz(a[2]); if (n) { this.check(s, n, false); this.check(d, n, true); this.u8.copyWithin(d, s, s + n); } return a[0]; });

@@ -32,6 +32,8 @@ export interface CodeInstance {
   rules?: Rule[];
   /** C only: fail if the program leaves heap blocks unfreed. */
   leaks?: boolean;
+  /** C only: a simulated interrupt handler (see COptions.isr). */
+  isr?: { fn: string; every: number };
   /** Step budget for each case. */
   maxSteps?: number;
 }
@@ -87,10 +89,10 @@ function cProgram(inst: CodeInstance, src: string, c: CodeCase, solution = false
 
 function cCase(inst: CodeInstance, src: string, c: CodeCase): CaseResult & { out: string } {
   const base = { call: c.call, pre: c.pre, hidden: !!c.hidden, out: '' };
-  const ref = CInterp.run(cProgram(inst, src, c, true), { maxSteps: 4_000_000, leaks: inst.leaks });
+  const ref = CInterp.run(cProgram(inst, src, c, true), { maxSteps: 4_000_000, leaks: inst.leaks, isr: inst.isr });
   if (ref.error) return { ...base, ok: false, error: `reference solution failed: ${ref.error}` };
   const userLines = src.split('\n').length;
-  const r = CInterp.run(cProgram(inst, src, c), { maxSteps: inst.maxSteps ?? 3_000_000, leaks: inst.leaks });
+  const r = CInterp.run(cProgram(inst, src, c), { maxSteps: inst.maxSteps ?? 3_000_000, leaks: inst.leaks, isr: inst.isr });
   base.out = r.stdout;
   const expected = ref.stdout.replace(/\n$/, '');
   if (r.error) {
