@@ -1,5 +1,5 @@
 // Act VI - Advanced computer architecture & simulation.
-import { num, qty } from './answers';
+import { hexa, num, qty } from './answers';
 import { app, art, ask, between, gen, Lesson, mc, pick, say } from './types';
 
 export const pipe: Lesson = {
@@ -227,7 +227,9 @@ export const bus: Lesson = {
   xp: 100,
   steps: [
     say('Blocks on a chip talk through **interconnects**. The simplest is a **shared bus** (one talker at a time, arbitrated). A **crossbar** connects every master to every slave in parallel but grows as N×M. Rings and meshes sit in between.'),
-    say('Most SoCs use ARM\'s **AMBA** family: **APB** for slow peripherals, **AXI** for high performance. AXI splits a transaction into five independent **channels**, each with its own handshake:'),
+    say('Most SoCs use Arm\'s **AMBA** family, a ladder of protocols for different jobs. **APB** is simple and unpipelined, for control registers. **AHB** is single-channel and pipelined, the microcontroller-class bus. **AXI4/AXI5** has five channels and allows outstanding and out-of-order transactions. **AXI-Stream** carries data streams with no addresses at all. **ACE** and **ACE-Lite** extend AXI with coherency. **CHI** is the packetised coherent interconnect for many-core designs.'),
+    mc('A video pipeline passes pixels from one block to the next. The data only flows in one direction and nothing needs an address. Which AMBA protocol fits?', ['APB, since it is the simplest protocol of them all', 'AXI-Stream, because it carries data with no addresses', 'AHB, since it is pipelined and carries the pixel data', 'CHI, because it is the high-performance coherent protocol'], 1, 'AXI-Stream has only a data channel with VALID/READY, so there is no address or burst machinery to pay for. APB is for registers, AHB for small microcontroller-class systems, CHI for coherent many-core fabrics.'),
+    say('AXI itself splits a transaction into five independent **channels**, each with its own handshake:'),
     art(`
    write address  AW   master ─► slave
    write data     W    master ─► slave
@@ -244,6 +246,15 @@ export const bus: Lesson = {
       const rtt = pick(r, [4, 6, 8, 12]);
       return ask(`A link has a credit round-trip time of ${rtt} cycles (send a flit, receiver frees the slot, credit comes back). How many buffer slots (credits) are needed to send one flit **every** cycle?`, num(rtt), `You need to cover the round trip: ${rtt} credits. With fewer, the sender runs out and stalls while credits are in flight.`, 'Credits must cover the time until the first one comes back.');
     }),
+    say('An AXI burst has a type. **FIXED**: the same address every beat, for a FIFO port. **INCR**: the address steps up by the beat size. **WRAP**: lengths 2, 4, 8 or 16, and the address wraps inside an aligned window of beat size × length, which is how a cache-line fill gets the missing word first. Whatever the type, a burst must never cross a 4 KB boundary.'),
+    gen((r) => {
+      const size = pick(r, [4, 8]), len = pick(r, [4, 8]);
+      const span = size * len, start = 0x1000 + size * between(r, 1, len - 1);
+      const k = between(r, 1, len - 1);
+      const base = Math.floor(start / span) * span;
+      const a = base + ((start - base + k * size) % span);
+      return ask(`A WRAP burst starts at 0x${start.toString(16).toUpperCase()} with ${len} beats of ${size} bytes. What is the address of beat ${k} (the first beat is beat 0), in hex?`, hexa(a, 4), `The window is ${size} × ${len} = ${span} bytes, 0x${base.toString(16).toUpperCase()} to 0x${(base + span - 1).toString(16).toUpperCase()}. Beats climb from the start and wrap back to 0x${base.toString(16).toUpperCase()} at the top: beat ${k} = 0x${a.toString(16).toUpperCase()}.`, 'Add k × size, and wrap inside the aligned window.');
+    }),
     gen((r) => {
       const w = pick(r, [64, 128, 256, 512]);
       const f = pick(r, [0.5, 1, 1.5, 2]);
@@ -251,7 +262,7 @@ export const bus: Lesson = {
       return ask(`A ${w}-bit AXI data channel at ${f} GHz, one beat per cycle. Peak bandwidth in **GB/s**?`, qty(bw, 'GB/s', 0.01), `${w}/8 = ${w / 8} bytes × ${f} GHz = ${bw} GB/s.`, 'Bytes per beat × beats per second.');
     }),
   ],
-  recap: ['Shared bus, crossbar, ring, mesh.', 'AXI: 5 channels (AW, W, B, AR, R), each VALID/READY.', 'Transfer when VALID && READY on a clock edge; VALID must not wait for READY.', 'Credit flow control: credits ≥ round-trip cycles for full throughput.'],
+  recap: ['Shared bus, crossbar, ring, mesh.', 'AMBA: APB (registers), AHB (microcontrollers), AXI (five channels), AXI-Stream (no addresses), ACE (coherency), CHI (packetised, many-core).', 'AXI bursts: FIXED, INCR, WRAP (2/4/8/16, aligned window); never cross 4 KB.', 'AXI: 5 channels (AW, W, B, AR, R), each VALID/READY.', 'Transfer when VALID && READY on a clock edge; VALID must not wait for READY.', 'Credit flow control: credits ≥ round-trip cycles for full throughput.'],
 };
 
 export const noc: Lesson = {
@@ -317,9 +328,14 @@ export const serdes: Lesson = {
     mc('A TLP arrives with a bad LCRC. What happens?', ['The data is used anyway, and an error flag is set for software', 'The link layer NAKs it, and the sender replays it from its buffer', 'The link goes down at once, and has to be retrained from scratch', 'Software must resend the packet, after an interrupt from the port'], 1, 'Link-level retry makes PCIe reliable without involving software. (Flit-mode PCIe 6 adds FEC on top.)'),
     say('**CXL** (Compute Express Link) reuses the PCIe physical layer but adds **coherent** protocols: CXL.io (PCIe-like), **CXL.cache** (a device caches host memory coherently) and **CXL.mem** (the host uses device memory as normal memory).'),
     mc('What is a common use of **CXL.mem**?', ['Replacing Ethernet between the servers of a data centre rack', 'Memory expansion and pooling, through a CXL device', 'Encrypting disks, using the keys stored in the memory device', 'Driving displays, from the frame buffer of the host processor'], 1, 'DRAM is added to a server and accessed with ordinary loads and stores. Data centres use CXL to add capacity and bandwidth beyond the DIMM slots, and to pool memory between servers.'),
+    say('Between accelerators there are two kinds of network. **Scale-up** fabrics (NVLink-class, UALink) join the accelerators of one node or rack as a shared pool of memory with loads, stores and tight latency. **Scale-out** networks join racks and use Ethernet with RDMA over Ethernet. Ethernet now runs **200 Gb/s per lane**, so 4 lanes make an 800G port and 8 lanes a 1.6T port.'),
+    gen((r) => {
+      const lanes = pick(r, [2, 4, 8]);
+      return ask(`An Ethernet port uses ${lanes} lanes at 200 Gb/s each. What is the port speed, in Gb/s?`, qty(lanes * 200, 'Gb/s', 0.005, String(lanes * 200)), `${lanes} × 200 = ${lanes * 200} Gb/s${lanes === 4 ? ' (an 800G port)' : lanes === 8 ? ' (a 1.6T port)' : ''}.`, 'Lanes × rate per lane.');
+    }),
     mc('At 32 GT/s the channel loses most of the signal. Which receiver block cancels inter-symbol interference using decisions about previous bits?', ['CDR, the loop that recovers the clock from the data stream', 'DFE (decision feedback equalizer)', 'PLL, which cleans up the clock of the receiver in the lane', '8b/10b decoder, which maps ten-bit symbols back to bytes'], 1, 'The DFE subtracts the known tail of previous bits from the current sample. With CTLE and TX FFE, equalization opens an eye that would otherwise be closed.'),
   ],
-  recap: ['SerDes: serial differential lanes with embedded clocks (CDR).', '8b/10b = 20% overhead; 128b/130b ≈ 1.5%; PCIe 6 uses PAM4 + FEC.', 'PCIe BW ≈ GT/s × efficiency × lanes ÷ 8 per direction.', 'Layers: transaction (TLP), data link (CRC, replay), physical.', 'CXL: .io, .cache, .mem on the PCIe PHY; equalization with CTLE/FFE/DFE.'],
+  recap: ['SerDes: serial differential lanes with embedded clocks (CDR).', '8b/10b = 20% overhead; 128b/130b ≈ 1.5%; PCIe 6 uses PAM4 + FEC.', 'PCIe BW ≈ GT/s × efficiency × lanes ÷ 8 per direction.', 'Layers: transaction (TLP), data link (CRC, replay), physical.', 'CXL: .io, .cache, .mem on the PCIe PHY; equalization with CTLE/FFE/DFE.', 'Scale-up (NVLink-class, UALink) inside a rack; scale-out Ethernet at 200 Gb/s per lane: 4 lanes = 800G, 8 lanes = 1.6T.'],
 };
 
 export const perf: Lesson = {

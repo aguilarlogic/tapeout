@@ -25,4 +25,14 @@ export const RULES_G_ARCH: Rule[] = [
   { id: 'G1.6-on-die-ecc', why: 'G1.6: on-die ECC is invisible to the system, so system ECC is still needed', require: { file: /lessons\/arch/, re: /on-die ECC.*invisible/ } },
   { id: 'G1.6-trr-only', why: 'G1.6: TRR alone is not the fix for Rowhammer', files: /incidents/, ban: /fix: 'Enable target-row refresh \(TRR\) and/ },
   { id: 'G1.6-hbm-glossary', why: 'G1.6: HBM is 1024-bit through HBM3E and 2048-bit from HBM4; the glossary must not say 1024 only', files: /glossary/, ban: /HBM'?, '[^']*with a 1024-bit interface per stack\.'/ },
+
+  // G1.7: interconnect families and scale-out
+  { id: 'G1.7-amba-family', why: 'G1.7: the AMBA family is APB, AHB, AXI, AXI-Stream, ACE and CHI', require: { file: /lessons\/arch/, re: /\*\*AXI-Stream\*\*/ } },
+  { id: 'G1.7-chi', why: 'G1.7: CHI is the packetised coherent interconnect for many-core designs', require: { file: /lessons\/arch/, re: /\*\*CHI\*\*.*packet/ } },
+  { id: 'G1.7-burst-types', why: 'G1.7: FIXED / INCR / WRAP burst types', require: { file: /lessons\/arch/, re: /\*\*FIXED\*\*/ } },
+  { id: 'G1.7-scale-out', why: 'G1.7: scale-out Ethernet at 200 Gb/s per lane gives 800G and 1.6T ports', require: { file: /lessons\/arch/, re: /200 Gb\/s per lane/ } },
+  { id: 'G1.7-scale-up', why: 'G1.7: scale-up fabrics (NVLink-class, UALink) versus scale-out networks', require: { file: /lessons\/arch/, re: /UALink/ } },
+  { id: 'G1.7-msi', why: 'G1.7: a PCIe device signals an interrupt with a message (MSI / MSI-X), not a wire', require: { file: /lessons\/frontier/, re: /MSI-X/ } },
+  { id: 'G1.7-gic', why: 'G1.7: the Arm GIC classes are SPI, PPI, SGI and LPI', require: { file: /lessons\/frontier/, re: /GIC.*shared peripheral/ } },
+  { id: 'G1.7-aia', why: 'G1.7: RISC-V PLIC and its replacement, APLIC (wires) and IMSIC (messages)', require: { file: /lessons\/frontier/, re: /APLIC.*IMSIC/ } },
 ];

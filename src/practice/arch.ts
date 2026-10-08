@@ -1,6 +1,6 @@
 // Practice banks and bosses for computer architecture: pipelines, out-of-order cores, caches, coherence,
 // DRAM, buses, NoCs, SerDes and performance modeling. Most questions come from small simulators.
-import { hexa, num, qty } from '../lessons/answers';
+import { hexa, num, parseInteger, qty, type Answer } from '../lessons/answers';
 import { calc, choice, count, sim, step, walk } from '../lessons/teach';
 import { art, ask, between, mc, pick, say, type Beat, type Rng } from '../lessons/types';
 import { boss, practice, tier } from './types';
@@ -483,6 +483,12 @@ export function axiBeat(start: number, size: number, len: number, kind: 'INCR' |
   return base + ((start - base + k * size) % span);
 }
 
+/** A comma- or space-separated list of hex addresses, in order. */
+const hexList = (vals: number[], w: number): Answer => ({
+  canonical: vals.map((v) => hex(v, w)).join(', '),
+  check: (s) => { const t = s.trim().split(/[\s,]+/).filter(Boolean); return t.length === vals.length && t.every((x, i) => parseInteger(x, 16) === vals[i]); },
+});
+
 export const busPractice = practice('practice-bus', 'Bus & Protocol Drills', 'VALID/READY handshakes, AXI bursts, 4 KB rule, credits', [
   (r, d) => {
     const n = tier(d, 8, 10, 12);
@@ -537,6 +543,48 @@ export const busPractice = practice('practice-bus', 'Bus & Protocol Drills', 'VA
       choice(`With only ${have} credits, how many flits can be sent per round trip of ${rtt} cycles?`, `${have}: one per credit`, [`${rtt}`, '1']),
       calc('Throughput in flits per cycle = credits ÷ round trip:', `${have} / ${rtt}`, have / rtt, '', sig(have / rtt), 0.02));
   },
+  (r, d) => {
+    // Pick the AMBA protocol that fits a use case.
+    const cases: [string, string, string][] = [
+      ['Reading and writing a UART\'s handful of control registers', 'APB', 'it is simple and unpipelined, which is all a register block needs'],
+      ['The bus joining a small microcontroller\'s CPU, flash and peripherals', 'AHB', 'it is a single-channel pipelined bus, the microcontroller-class choice'],
+      ['A DMA engine bursting data to a DRAM controller with several requests in flight', 'AXI', 'five channels with outstanding, out-of-order transactions give it the throughput'],
+      ['Passing video pixels from one block to the next, with no addresses at all', 'AXI-Stream', 'it carries a data stream with VALID/READY and no address channel'],
+      ['Keeping the caches of dozens of cores coherent over a packet network', 'CHI', 'it is the packetised coherent interconnect built for many-core designs'],
+      ['Configuring a timer block through its memory-mapped control registers', 'APB', 'a register block needs no pipelining or bursts, so the smallest protocol wins'],
+      ['Connecting the CPU of a small microcontroller to its on-chip SRAM and peripherals', 'AHB', 'a single pipelined channel is enough for a small, single-master system'],
+    ];
+    const [use, right, why] = pick(r, cases);
+    const names = [...new Set(cases.map((c) => c[1]))];
+    const wrong = names.filter((n) => n !== right);
+    return walk(mcs(r, `Which AMBA protocol fits best: ${use.charAt(0).toLowerCase()}${use.slice(1)}?`, right, d === 3 ? [...wrong, 'ACE-Lite'] : wrong, `${right}: ${why}.`),
+      'picking a bus protocol', 'The AMBA family is a ladder. APB is simple and unpipelined, for registers. AHB is single-channel and pipelined, for microcontrollers. AXI has five channels with outstanding and out-of-order transactions, for high throughput. AXI-Stream carries data with no addresses. CHI is a packetised coherent interconnect for many cores (ACE and ACE-Lite extend AXI with coherency).',
+      choice('Does this use case need addresses and random access?', right === 'AXI-Stream' ? 'No: it is a one-way data stream' : 'Yes: it reads and writes locations', [right === 'AXI-Stream' ? 'Yes: it reads and writes locations' : 'No: it is a one-way data stream']),
+      choice('Which feature of the protocol decides it?', why.slice(0, 1).toUpperCase() + why.slice(1), cases.filter((c) => c[1] !== right).slice(0, 2).map((c) => c[2].slice(0, 1).toUpperCase() + c[2].slice(1))));
+  },
+  (r, d) => {
+    // WRAP bursts: the window, the list of beat addresses, and the wrap boundary.
+    const size = pick(r, [4, 8]), len = pick(r, [4, 8, 16]), span = size * len;
+    const start = 0x1000 + span * between(r, 0, 3) + size * between(r, 1, len - 1), base = Math.floor(start / span) * span;
+    const idea = `A WRAP burst of ${len} beats of ${size} bytes covers an aligned window of beat size × length bytes. It starts anywhere inside the window, climbs by the beat size, and when it reaches the top of the window it wraps to the bottom, so every byte of the window is read once.`;
+    if (d === 1) return walk(ask(`A WRAP burst has ${len} beats of ${size} bytes. How big is its aligned window, in bytes?`, num(span), `${len} × ${size} = ${span} bytes.`, 'Beats × bytes per beat.'),
+      'the WRAP window', idea,
+      count('Window = beats × bytes per beat:', `${len} × ${size}`, span));
+    if (d === 2) {
+      const addrs = Array.from({ length: 4 }, (_, k) => axiBeat(start, size, len, 'WRAP', k));
+      return walk(ask(`A WRAP burst starts at ${hex(start, 4)} with ${len} beats of ${size} bytes. List the first four beat addresses, in hex, separated by commas.`, hexList(addrs, 4), `Window ${hex(base, 4)}-${hex(base + span - 1, 4)}; the beats are ${addrs.map((a) => hex(a, 4)).join(', ')}${addrs.some((a, i) => i > 0 && a < addrs[i - 1]) ? ', wrapping back to the bottom of the window' : ''}.`, `Add ${size} each time and wrap at ${hex(base + span, 4)}.`),
+        'listing a WRAP burst', idea,
+        count('The window size in bytes:', `${len} × ${size}`, span),
+        step(`The window containing ${hex(start, 4)} starts at (hex):`, hexa(base, 4)),
+        step('The four beat addresses, in hex:', hexList(addrs, 4)));
+    }
+    const top = base + span;
+    return walk(ask(`A WRAP burst starts at ${hex(start, 4)} with ${len} beats of ${size} bytes. The burst climbs until it reaches the top of its window and wraps. At which address does it wrap (the first address past the top of the window), in hex?`, hexa(top, 4), `The window is ${span} bytes starting at ${hex(base, 4)}, so it wraps at ${hex(base, 4)} + ${hex(span, 1)} = ${hex(top, 4)}.`, 'Round the start down to a multiple of the window size, then add the size.'),
+      'the wrap boundary', idea,
+      count('The window size in bytes:', `${len} × ${size}`, span),
+      step(`Round ${hex(start, 4)} down to a multiple of ${span} (hex):`, hexa(base, 4)),
+      step(`Add the window size to get the wrap boundary (hex):`, hexa(top, 4)));
+  },
   (r) => concept(r, [
     ['Why may an AXI source not wait for READY before raising VALID?', 'If both sides wait for each other, neither moves', ['It is only a style rule', 'To save power, since VALID toggles less if it is held back', 'READY is optional'], 'handshake deadlock', 'If the sender waits for READY before raising VALID, and the receiver waits for VALID before raising READY, both wait forever. So the rule is that the sender must never wait for READY; the receiver may choose to wait for VALID.', ['If both sides wait for the other before acting:', 'Neither ever moves: deadlock', ['It works faster', 'They take turns']], 'If both sides wait for each other, neither moves: deadlock'],
     ['What are AXI IDs for?', 'Outstanding transactions that may finish out of order across IDs', ['Addressing the slaves on the bus, with one fixed ID for each slave', 'Error correction codes carried on the data and address channels', 'The burst length of each transfer, which is given on the read channel'], 'AXI IDs', 'A master can send many requests before the first reply arrives. The ID tags each one so replies can come back in a different order (a fast slave can answer before a slow one), but replies with the SAME ID stay in order.', ['Replies with different IDs:', 'May arrive out of order', ['Must arrive in order', 'Are dropped']], 'Letting a master have several outstanding transactions that may complete out of order across IDs (in order within one ID)'],
@@ -544,6 +592,9 @@ export const busPractice = practice('practice-bus', 'Bus & Protocol Drills', 'VA
       ['What does the AXI write response channel tell the master?', 'Whether the write finished OK', ['The address that the next write should use', 'The number of beats left in the current burst', 'Which master may use the bus after this one'],
         'AXI channels', 'AXI splits a write into address, data and response channels. The response (B channel) comes back after the data, so the master knows the write is done and whether it hit an error.',
         ['The write response arrives:', 'After the write data', ['Before the address', 'Instead of the data']], 'Whether the write finished OK, once all of its data has been taken'],
+      ['A DMA streams data into a hardware FIFO that has a single address. Which AXI burst type?', 'FIXED: every beat goes to the same address', ['INCR: the address steps up with every beat', 'WRAP: the address wraps inside an aligned window', 'None: a FIFO port cannot take bursts at all'],
+        'burst types', 'A FIXED burst keeps the same address for every beat, which is what a FIFO port wants: each beat pushes the next word. INCR moves through memory, and WRAP is for filling a cache line starting at the missing word.',
+        ['A FIFO port has how many addresses?', 'One', ['As many as it has entries', 'None']], 'FIXED: every beat goes to the same address, as a FIFO port needs'],
       ['What is a WRAP burst typically used for?', 'Cache-line fills that start at the missing word and wrap around', ['Writing to a FIFO at a fixed address', 'Moving a block across a 4 KB boundary', 'Reading each register of a peripheral in turn'],
         'burst types', 'A wrapping burst starts at the requested word, runs to the end of an aligned block, then wraps to its start. It lets a cache get the critical word first and still fill the whole line.',
         ['A WRAP burst stays inside one:', 'Aligned block', ['4 KB boundary only', 'Peripheral']]],
@@ -649,6 +700,19 @@ export const serdesPractice = practice('practice-serdes', 'SerDes Drills', 'line
       calc('Efficiency of the line code:', g === 2 ? '8 / 10' : '128 / 130', eff, '', sig(eff, 4), 0.005),
       calc(`Usable Gb/s on all ${lanes} lane${lanes > 1 ? 's' : ''}:`, `${gt} × ${sig(eff, 4)} × ${lanes}`, gt * eff * lanes, '', sig(gt * eff * lanes, 4), 0.01),
       calc('Divide by 8 to get GB/s:', `${sig(gt * eff * lanes, 4)} / 8`, bw, 'GB/s', sig(bw), 0.02));
+  },
+  (r, d) => {
+    // Ethernet port speed from lanes x 200 Gb/s per lane.
+    const idea = 'Ethernet ports are built from lanes, and today a lane runs 200 Gb/s. The port speed is the number of lanes times the rate per lane: 4 lanes make an 800G port and 8 lanes a 1.6T port.';
+    if (d === 1) { const l = pick(r, [2, 4, 8]); return walk(ask(`An Ethernet port uses ${l} lanes at 200 Gb/s each. Port speed, in Gb/s?`, qty(l * 200, 'Gb/s', 0.005, String(l * 200)), `${l} × 200 = ${l * 200} Gb/s.`, 'Lanes × rate per lane.'),
+      'port speed from lanes', idea, count('Lanes × rate per lane, in Gb/s:', `${l} × 200`, l * 200)); }
+    if (d === 2) { const l = pick(r, [4, 8]); return walk(ask(`A switch port must run ${l * 200} Gb/s using 200 Gb/s lanes. How many lanes does it need?`, num(l), `${l * 200} / 200 = ${l} lanes.`, 'Port speed ÷ lane rate.'),
+      'lanes for a port', idea, count('Port speed ÷ rate per lane:', `${l * 200} / 200`, l)); }
+    const tb = pick(r, [3.2, 4, 4.8, 5.6, 6.4, 9.6, 12.8]), lanes = Math.round((tb * 1000) / 200), ports = Math.ceil(lanes / 8);
+    return walk(ask(`An accelerator needs ${tb} Tb/s of scale-out bandwidth. How many 1.6T ports (8 lanes of 200 Gb/s each) does that take?`, num(ports), `${tb} Tb/s = ${tb * 1000} Gb/s = ${lanes} lanes of 200 Gb/s; 8 lanes per port gives ${lanes / 8} → ${ports} ports.`, 'Total ÷ 1.6 Tb/s, rounded up.'),
+      'sizing the scale-out ports', `${idea} A 1.6T port is therefore 8 × 200 Gb/s = 1,600 Gb/s. To cover a bandwidth target, divide it by the port speed and round up to whole ports.`,
+      count('Lanes needed at 200 Gb/s each:', `${tb * 1000} / 200`, lanes),
+      count('Ports at 8 lanes each, rounded up:', `ceil(${lanes} / 8)`, ports));
   },
   (r) => concept(r, [
     ['What does a CTLE do?', 'Boosts high frequencies to undo the channel\'s loss', ['Recovers the clock from the transitions in the data stream', 'Encodes each data byte into ten bits, for DC balance', 'Adds jitter on purpose, to make the eye diagram look wider'], 'CTLE', 'A long channel loses high frequencies more than low ones, which smears each bit into the next. A continuous-time linear equalizer (CTLE) is a filter that boosts the high frequencies back up, which undoes some of the smearing. It also boosts high-frequency noise.', ['A CTLE works by:', 'Boosting high frequencies', ['Boosting low frequencies', 'Recovering the clock']], 'Boosts high frequencies to undo the channel\'s low-pass loss (linear equalization)'],
@@ -786,9 +850,10 @@ export const interconnectBoss = boss({
     { t: 'gen', make: () => ask('Links are 64 GB/s per direction. Bisection bandwidth of the 8×8 mesh in one direction, in GB/s?', qty(512, 'GB/s', 0.01, '512'), '8 links cross the middle: 512 GB/s.') },
     { t: 'gen', make: () => ask('The router-to-router credit round trip is 6 cycles, but each input buffer holds 4 flits. Max throughput per link, in flits/cycle?', qty(4 / 6, '', 0.02, sig(4 / 6)), '4/6 = 0.667: buffers are too shallow. Need 6 to run at full rate.') },
     mc('Under heavy load, requests and responses share one virtual channel and the chip hangs. Why?', ['Protocol deadlock: responses cannot drain; split the virtual networks', 'The mesh has a routing cycle, so the packets chase each other forever', 'XY routing is not deadlock-free, so some turns should be allowed more', 'The links are clocked too fast, so flits are dropped and never retried'], 0, 'Requests fill every buffer. Routing deadlock and protocol deadlock are different; this is protocol deadlock.'),
+    { t: 'gen', make: () => ask('Between racks the chip scales out over Ethernet: 8 lanes at 200 Gb/s each. Port speed, in Gb/s?', qty(1600, 'Gb/s', 0.005, '1600'), '8 × 200 = 1,600 Gb/s, a 1.6T port. Inside a rack the accelerators use a scale-up fabric instead (NVLink-class, UALink).') },
     { t: 'gen', make: () => ask('Host link: PCIe Gen5 x16 (32 GT/s, 128b/130b). Usable bandwidth per direction, in GB/s?', qty((32 * (128 / 130) * 16) / 8, 'GB/s', 0.02), `${sig((32 * (128 / 130) * 16) / 8)} GB/s: 1/8 of the on-chip bisection. Keep weights on chip.`) },
   ],
-  recap: ['Mesh diameter and wormhole latency.', 'Bisection bandwidth.', 'Credits vs buffer depth.', 'Protocol deadlock.'],
+  recap: ['Mesh diameter and wormhole latency.', 'Bisection bandwidth.', 'Credits vs buffer depth.', 'Protocol deadlock.', 'Scale-up fabrics versus scale-out Ethernet (200 Gb/s per lane).'],
 });
 
 export const perfBoss = boss({
@@ -825,9 +890,11 @@ Interconnect: waits for ARVALID before asserting ARREADY`),
     mc('Another INCR burst starts at 0x2FC0 with 16 beats of 8 bytes. Problem?', ['It ends at 0x303F, crossing the 4 KB boundary at 0x3000: split it', 'None: an INCR burst of this length is always legal on an AXI bus', 'Beats must be 4 bytes wide, so a sixteen-beat burst is not allowed', 'INCR bursts cannot exceed eight beats, so the length itself is the problem'], 0, '0x2FC0 + 128 - 1 = 0x303F.'),
     { t: 'gen', make: () => ask('The trace shows VALID high in 10 cycles and READY high in 6 of those same cycles. How many beats transferred?', num(6), 'A beat moves only when both are high: 6.') },
     mc('The PCIe link to the boot flash sees a TLP with a bad LCRC. What does the data link layer do?', ['NAKs it; the sender replays from its replay buffer', 'Drops the link and retrains it from the detect state again', 'Uses the data anyway, since the payload has its own checksum', 'Asks software to resend, using a driver-level retry of the TLP'], 0, 'Link-level retry makes PCIe reliable without software.'),
+    mc('The boot flash controller sits behind the PCIe link and must interrupt a core when its DMA finishes. How does it signal?', ['By writing an MSI or MSI-X message, since a link carries packets and not wires', 'By driving a dedicated wire to the interrupt controller of the SoC, as on-chip blocks do', 'By raising VALID on the AXI read channel until a core notices the request there', 'By polling only: PCIe devices cannot signal an interrupt to a core at all'], 0, 'A link has no spare wires, so the device writes a message that the interrupt controller turns into an interrupt.'),
+    mc('The DMA also streams pixels to a display block with no addresses involved. Which AMBA protocol carries that?', ['APB, the simple protocol for registers', 'AXI-Stream, which has no address channel', 'AHB, the pipelined microcontroller bus', 'CHI, the packetised coherent interconnect'], 1, 'AXI-Stream is a one-way data stream with VALID/READY. APB is for registers, AHB for microcontroller-class buses and CHI for coherent many-core fabrics.'),
     { t: 'gen', make: () => { const s = 1 / (32e9 * 1e-12); return ask('That link runs 32 Gb/s at BER 1e-12. Average seconds between bit errors?', qty(s, 's', 0.02, sig(s)), `1/(32e9 × 1e-12) = ${sig(s)} s: errors every half-minute, handled silently by replay.`); } },
   ],
-  recap: ['VALID never waits for READY.', 'WRAP bursts and the 4 KB rule.', 'Transfers need both.', 'PCIe replay and BER.'],
+  recap: ['VALID never waits for READY.', 'WRAP bursts and the 4 KB rule.', 'Transfers need both.', 'PCIe replay and BER.', 'MSI over a link; AXI-Stream for address-less data.'],
 });
 
 export const ARCH_BOSSES = [cpuBoss, memBoss, interconnectBoss, perfBoss, protocolBoss];
