@@ -19,6 +19,34 @@ The plan has seven parts, done in this order:
 | **G** | New material for coverage gaps, in three tiers | G1 (must), G2 (should), G3 (nice) | large |
 | **V** | Final verification, then the maintenance schedule | V1–V4, M1–M3 | small |
 
+## Status
+
+All items are implemented on `claude/loving-allen-pvuv7h`. The content lint (`src/standards/`) keeps the wrong
+statements out; every item has at least one rule or regression test.
+
+| Part | Items | Status |
+|---|---|---|
+| 0 | S0.1–S0.4 | done (baseline doc, lint, model notes, standard names removed from player text) |
+| E | E1–E12 | done |
+| C | C1–C16 | done (C8 alternative fix, C10 option b, C16 uses a 5 FIT chip allocation) |
+| U | U1–U16 | done (U12 is covered by G1.8) |
+| W | W1–W7 | done |
+| G1 | G1.1–G1.13 | done |
+| G2 | G2.1–G2.9 | done |
+| G3 | G3.1–G3.8 | done |
+| V | V1–V4 | done: full suite, consistency greps (HBM width, DDR refresh, PCIe, manager/subordinate, UVM phases, `[->n]`, kT/C, thermal terms), browser smoke, this table |
+| M | M1–M3 | open: maintenance schedule, see `docs/STANDARDS-BASELINE.md` review triggers |
+
+Known deviations and open follow-ups:
+
+- The SV testbench lab's `$isunknown` still returns 0; only the SVA lab rejects it (E8 asked for the SVA error only).
+- The Bluetooth incident antenna branch quotes S11 −1 dB now; the Wallace-tree "off by one at 32 rows" drill has an approximation note only.
+- `practice-fab` yield item at A·D₀ = 1, α = 2 (36.8% vs 44.4%) is a generator over several values, not a fixed item.
+- The `fusa-hara` event ratings and the soft-error FIT inputs are illustrative and not taken from the plan.
+- PM-to-overshoot: the lesson says about 23% at 45°; one practice item uses the ζ ≈ PM/100 rule (about 20%).
+- The CTE of an organic substrate is quoted as about 15 ppm/°C in the `pkg` lesson and 17 in one warpage generator.
+- The Allan plot and a few scenario inputs (Λ, metal pitch) are illustrative.
+
 The report also gives each finding an ID (4.1, F1, S3.1, V3.2, A3.1, R3.4, X3.2 …). This plan quotes those IDs, so you
 can look up the source and the researcher's reasoning.
 
