@@ -208,12 +208,15 @@ function parseSed(script: string, ere: boolean): SedCmd[] {
 }
 
 function sed(ctx: Ctx, args: string[]): number {
+  // every -e adds a script (parse() keeps only the last value of an option)
+  const eScripts: string[] = [];
+  for (let i = 0; i < args.length; i++) if (/^-[A-Za-z]*e$/.test(args[i]) && args[i + 1] !== undefined) eScripts.push(args[i + 1]);
   const { flags, vals, rest } = parse(args, ['e', 'f']);
   const quiet = flags.has('n') || flags.has('quiet') || flags.has('silent');
   const inPlace = flags.has('i');
   const scripts: string[] = [];
   const operands = [...rest];
-  if (vals.e !== undefined) scripts.push(vals.e);
+  if (eScripts.length) scripts.push(...eScripts); else if (vals.e !== undefined) scripts.push(vals.e);
   if (vals.f !== undefined) { try { scripts.push(ctx.fs.readFile(ctx.sh.abs(vals.f))); } catch (e) { ctx.err(`sed: couldn't open file ${vals.f}: ${(e as Error).message}\n`); return 1; } }
   if (!scripts.length) { const s = operands.shift(); if (s === undefined) { ctx.err('Usage: sed [OPTION]... {script-only-if-no-other-script} [input-file]...\n'); return 1; } scripts.push(s); }
   let cmds: SedCmd[];
@@ -708,9 +711,11 @@ export const UTILS: Record<string, Utility> = {
     ctx.out(`${a}\n`);
     return 0;
   },
-  xargs: (ctx, args) => {
-    const { flags, vals, rest } = parse(args, ['n', 'I']);
-    const items = ctx.in.rest().split(/\s+/).filter(Boolean);
+  xargs: (ctx, args0) => {
+    const zero = args0.includes('-0'); // parse() would read -0 as a count
+    const { flags, vals, rest } = parse(args0.filter((a) => a !== '-0'), ['n', 'I']);
+    // -0 reads NUL-separated names (from find -print0), so spaces and newlines inside a name are safe; the default splits on any white space
+    const items = ctx.in.rest().split(zero ? '\0' : /\s+/).filter(Boolean);
     const cmd = rest.length ? rest : ['echo'];
     if (!items.length && !flags.has('r')) return ctx.sh.invoke(cmd[0], cmd.slice(1), new StdIn(''), ctx.out, ctx.err);
     let st = 0;

@@ -12,9 +12,32 @@ interface Repo {
   tags: Map<string, string>;
   stash: { tree: Record<string, string>; index: Record<string, string>; msg: string; base: string }[];
   merging?: { other: string; msg: string };
-  counter: number;
+  /** commit sequence shared by every repository in the shell, so history stays in order across clones */
+  seq: { n: number };
   bisect?: { good: string[]; bad: string[]; log: string[] };
   user: { name: string; email: string };
+  /** remote name -> absolute path of the repository it points at (a remote is another repository in the same virtual disk) */
+  remotes: Map<string, string>;
+  /** remote-tracking refs: 'origin/main' -> commit id, moved only by fetch, pull and push */
+  tracking: Map<string, string>;
+  /** local branch -> the tracking ref it follows, for the ahead/behind line in status */
+  upstream: Map<string, string>;
+  rebase?: RebaseState;
+}
+type RebaseCmd = 'pick' | 'reword' | 'squash' | 'fixup' | 'drop';
+interface RebaseStep { cmd: RebaseCmd; id: string; text: string }
+interface RebaseState {
+  branch: string | null;
+  origHead: string;
+  onto: string;
+  /** the newest commit of the rebuilt history */
+  tip: string;
+  /** steps still to do; while stopped on a conflict, the first one is the step in progress */
+  todo: RebaseStep[];
+  interactive: boolean;
+  phase: 'edit-todo' | 'conflict';
+  /** files left with conflict markers by the step in progress */
+  conflicts?: string[];
 }
 
 const KEY = 'git';
@@ -40,6 +63,280 @@ const headId = (r: Repo): string | undefined => ('branch' in r.head ? r.branches
 const headTree = (r: Repo): Record<string, string> => { const id = headId(r); return id ? r.commits.get(id)!.tree : {}; };
 const short = (id: string) => id.slice(0, 7);
 const branchName = (r: Repo) => ('branch' in r.head ? r.head.branch : null);
+
+
+const seqOf = (ctx: Ctx): { n: number } => { const st = ctx.sh.state as Record<string, unknown>; return (st.gitSeq ??= { n: 0 }) as { n: number }; };
+function newRepo(ctx: Ctx, root: string): Repo {
+  return { root, commits: new Map(), branches: new Map(), head: { branch: 'main' }, index: {}, tags: new Map(), stash: [], seq: seqOf(ctx), user: { name: 'User', email: 'user@fab' }, remotes: new Map(), tracking: new Map(), upstream: new Map() };
+}
+const subject = (m: string) => m.split('\n')[0];
+
+// ---- remotes: a remote is another repository on the same virtual disk, so fetch and push move real commit objects between them
+function remoteOf(ctx: Ctx, r: Repo, name: string): Repo | null { const path = r.remotes.get(name); return path ? repos(ctx).get(path) ?? null : null; }
+function copyCommits(from: Repo, to: Repo, id: string) {
+  const q = [id];
+  while (q.length) { const x = q.pop()!; if (to.commits.has(x)) continue; const c = from.commits.get(x)!; to.commits.set(x, c); q.push(...c.parents); }
+}
+/** a is an ancestor of b, or the same commit */
+const isAncestor = (r: Repo, a: string, b: string) => ancestors(r, b).includes(a);
+function aheadBehind(r: Repo, local: string, up: string) {
+  const la = new Set(ancestors(r, local)), ua = new Set(ancestors(r, up));
+  return { ahead: [...la].filter((x) => !ua.has(x)).length, behind: [...ua].filter((x) => !la.has(x)).length };
+}
+const notARepo = (ctx: Ctx, r: Repo, name: string): number => {
+  const url = r.remotes.get(name);
+  ctx.err(url === undefined ? `fatal: '${name}' does not appear to be a git repository\nfatal: Could not read from remote repository.\n` : `fatal: '${url}' does not appear to be a git repository\nfatal: Could not read from remote repository.\n`);
+  return 128;
+};
+function fetchFrom(ctx: Ctx, r: Repo, name: string, only?: string): number {
+  const rr = remoteOf(ctx, r, name);
+  if (!rr) return notARepo(ctx, r, name);
+  const rows: string[] = [];
+  for (const [b, id] of [...rr.branches].sort()) {
+    if (only && b !== only) continue;
+    const ref = `${name}/${b}`, old = r.tracking.get(ref);
+    if (old === id) continue;
+    copyCommits(rr, r, id);
+    r.tracking.set(ref, id);
+    rows.push(old === undefined ? ` * [new branch]      ${b.padEnd(10)} -> ${ref}\n` : isAncestor(r, old, id) ? `   ${short(old)}..${short(id)}  ${b.padEnd(10)} -> ${ref}\n` : ` + ${short(old)}...${short(id)} ${b.padEnd(10)} -> ${ref}  (forced update)\n`);
+  }
+  if (rows.length) ctx.err(`From ${r.remotes.get(name)}\n${rows.join('')}`);
+  return 0;
+}
+/** The remote a bare `git fetch`, `pull` or `push` talks to: the current branch's upstream, else origin. */
+function defaultRemote(r: Repo): string {
+  const up = 'branch' in r.head ? r.upstream.get(r.head.branch) : undefined;
+  return up ? up.slice(0, up.indexOf('/')) : 'origin';
+}
+function pushTo(ctx: Ctx, r: Repo, rest: string[]): number {
+  const flags = rest.filter((a) => a.startsWith('-')), operands = rest.filter((a) => !a.startsWith('-'));
+  const force = flags.includes('-f') || flags.includes('--force');
+  const setUp = flags.includes('-u') || flags.includes('--set-upstream');
+  const remote = operands[0] ?? defaultRemote(r);
+  const rr = remoteOf(ctx, r, remote);
+  if (!rr) return notARepo(ctx, r, remote);
+  const cur = branchName(r);
+  const spec = operands[1] ?? cur;
+  if (!spec) { ctx.err('fatal: You are not currently on a branch.\n'); return 128; }
+  const [src, dst] = spec.includes(':') ? spec.split(':') : [spec, spec];
+  const id = resolve(r, src);
+  if (!id) { ctx.err(`error: src refspec ${src} does not match any\nerror: failed to push some refs to '${r.remotes.get(remote)}'\n`); return 1; }
+  const old = rr.branches.get(dst);
+  const url = r.remotes.get(remote);
+  if (old === id) { ctx.err('Everything up-to-date\n'); }
+  else {
+    if (old && !force && !(r.commits.has(old) && isAncestor(r, old, id))) {
+      ctx.err(`To ${url}\n ! [rejected]        ${src} -> ${dst} (${r.commits.has(old) ? 'non-fast-forward' : 'fetch first'})\nerror: failed to push some refs to '${url}'\nhint: Updates were rejected because the remote contains work that you do not\nhint: have locally. Integrate the remote changes (for example with 'git pull')\nhint: before pushing again.\n`);
+      return 1;
+    }
+    copyCommits(r, rr, id);
+    rr.branches.set(dst, id);
+    // the remote's own checked-out branch moves with it (as if it accepted pushes into a working tree)
+    if ('branch' in rr.head && rr.head.branch === dst) { const t = rr.commits.get(id)!.tree; restoreTree(ctx, rr, t, rr.commits.get(old ?? '')?.tree ?? {}); rr.index = { ...t }; }
+    ctx.err(`To ${url}\n${old === undefined ? ` * [new branch]      ${src} -> ${dst}\n` : `   ${short(old)}..${short(id)}  ${src} -> ${dst}\n`}`);
+  }
+  r.tracking.set(`${remote}/${dst}`, id);
+  if (setUp && cur && src === cur) { r.upstream.set(cur, `${remote}/${dst}`); ctx.out(`branch '${cur}' set up to track '${remote}/${dst}'.\n`); }
+  return 0;
+}
+function cloneRepo(ctx: Ctx, rest: string[]): number {
+  const operands = rest.filter((a) => !a.startsWith('-'));
+  const [src, dirArg] = operands;
+  if (!src) { ctx.err('fatal: You must specify a repository to clone.\n'); return 128; }
+  const srcAbs = ctx.sh.abs(src);
+  const rr = repos(ctx).get(srcAbs) ?? repos(ctx).get(srcAbs.replace(/\.git$/, ''));
+  if (!rr) { ctx.err(`fatal: repository '${src}' does not exist\n`); return 128; }
+  const name = dirArg ?? srcAbs.split('/').pop()!.replace(/\.git$/, '');
+  const dir = ctx.sh.abs(name);
+  if (ctx.fs.exists(dir) && (!ctx.fs.isDir(dir) || ctx.fs.list(dir).length)) { ctx.err(`fatal: destination path '${name}' already exists and is not an empty directory.\n`); return 128; }
+  ctx.err(`Cloning into '${name}'...\n`);
+  ctx.fs.mkdir(`${dir}/.git`, true);
+  const r = newRepo(ctx, dir);
+  r.user = { ...rr.user };
+  r.remotes.set('origin', rr.root);
+  for (const [b, id] of rr.branches) { copyCommits(rr, r, id); r.tracking.set(`origin/${b}`, id); }
+  const def = 'branch' in rr.head && rr.branches.has(rr.head.branch) ? rr.head.branch : [...rr.branches.keys()][0];
+  if (def) {
+    const id = rr.branches.get(def)!;
+    r.branches.set(def, id); r.head = { branch: def }; r.upstream.set(def, `origin/${def}`);
+    const t = r.commits.get(id)!.tree;
+    restoreTree(ctx, r, t, {});
+    r.index = { ...t };
+  } else ctx.err('warning: You appear to have cloned an empty repository.\n');
+  repos(ctx).set(dir, r);
+  return 0;
+}
+function isDirty(ctx: Ctx, r: Repo): boolean {
+  const head = headTree(r), wt = workTree(ctx, r);
+  if (changes(head, r.index).length) return true;
+  const tracked = new Set([...Object.keys(head), ...Object.keys(r.index)]);
+  return changes(r.index, Object.fromEntries(Object.entries(wt).filter(([p]) => tracked.has(p)))).some(([t]) => t !== 'A');
+}
+
+// ---- rebase: replay commits one by one onto a new base; interactive mode adds a todo list (pick, reword, squash, fixup, drop)
+const TODO = (r: Repo) => `${r.root}/.git/rebase-merge/git-rebase-todo`;
+const CMD_NAMES: Record<string, RebaseCmd> = { p: 'pick', pick: 'pick', r: 'reword', reword: 'reword', s: 'squash', squash: 'squash', f: 'fixup', fixup: 'fixup', d: 'drop', drop: 'drop' };
+function replayPlan(r: Repo, base: string | null, head: string): string[] | null {
+  const out: string[] = [];
+  let id: string | undefined = head;
+  while (id && id !== base) { const c: Commit = r.commits.get(id)!; if (c.parents.length > 1) return null; out.push(id); id = c.parents[0]; }
+  return id === base || base === null ? out.reverse() : null;
+}
+function stepTree(r: Repo, st: RebaseState, step: RebaseStep): { tree: Record<string, string>; conflicts: string[] } {
+  const c = r.commits.get(step.id)!;
+  const parent = c.parents[0] ? r.commits.get(c.parents[0])!.tree : {};
+  const cur = r.commits.get(st.tip)!.tree;
+  const merged = { ...cur };
+  const conflicts: string[] = [];
+  for (const p of new Set([...Object.keys(c.tree), ...Object.keys(parent)])) {
+    if (c.tree[p] === parent[p]) continue;
+    if (c.tree[p] === undefined) { delete merged[p]; continue; }
+    const res = merge3(parent[p] ?? '', cur[p] ?? '', c.tree[p], 'HEAD', `${short(c.id)} ${subject(c.msg)}`);
+    merged[p] = res.text;
+    if (res.conflict) conflicts.push(p);
+  }
+  return { tree: merged, conflicts };
+}
+function commitStep(r: Repo, st: RebaseState, step: RebaseStep, tree: Record<string, string>) {
+  const c = r.commits.get(step.id)!;
+  if (step.cmd === 'squash' || step.cmd === 'fixup') {
+    const prev = r.commits.get(st.tip)!;
+    st.tip = makeCommit(r, step.cmd === 'squash' ? `${prev.msg}\n\n${c.msg}` : prev.msg, prev.parents, tree).id;
+    return;
+  }
+  // in this lab there is no message editor: the text on a reword line is the new message
+  st.tip = makeCommit(r, step.cmd === 'reword' && step.text ? step.text : c.msg, [st.tip], tree).id;
+}
+function clearRebase(ctx: Ctx, r: Repo) {
+  r.rebase = undefined;
+  try { ctx.fs.remove(`${r.root}/.git/rebase-merge`, true); } catch { /* nothing to clean */ }
+}
+function abortRebase(ctx: Ctx, r: Repo) {
+  const st = r.rebase!;
+  const orig = r.commits.get(st.origHead)!.tree;
+  const from: Record<string, string> = { ...r.commits.get(st.tip)!.tree, ...r.index };
+  for (const p of st.conflicts ?? []) from[p] ??= '';
+  restoreTree(ctx, r, orig, from);
+  r.index = { ...orig };
+  clearRebase(ctx, r);
+}
+function runSteps(ctx: Ctx, r: Repo): number {
+  const st = r.rebase!;
+  while (st.todo.length) {
+    const step = st.todo[0];
+    if (step.cmd === 'drop') { st.todo.shift(); continue; }
+    if ((step.cmd === 'squash' || step.cmd === 'fixup') && st.tip === st.onto) { ctx.err(`error: cannot '${step.cmd}' without a previous commit\n`); abortRebase(ctx, r); return 1; }
+    const { tree, conflicts } = stepTree(r, st, step);
+    if (conflicts.length) {
+      const cur = r.commits.get(st.tip)!.tree;
+      restoreTree(ctx, r, tree, cur);
+      r.index = { ...tree };
+      for (const p of conflicts) r.index[p] = cur[p] ?? '';
+      if (conflicts.some((p) => !(p in cur))) for (const p of conflicts) if (!(p in cur)) delete r.index[p];
+      st.phase = 'conflict';
+      st.conflicts = conflicts;
+      for (const p of conflicts) ctx.out(`Auto-merging ${p}\nCONFLICT (content): Merge conflict in ${p}\n`);
+      const c = r.commits.get(step.id)!;
+      ctx.err(`error: could not apply ${short(c.id)}... ${subject(c.msg)}\nhint: Resolve all conflicts manually, mark them as resolved with\nhint: "git add/rm <conflicted_files>", then run "git rebase --continue".\nhint: You can instead skip this commit: run "git rebase --skip".\nhint: To abort and get back to the state before "git rebase", run "git rebase --abort".\n`);
+      return 1;
+    }
+    commitStep(r, st, step, tree);
+    st.todo.shift();
+  }
+  const tree = r.commits.get(st.tip)!.tree;
+  restoreTree(ctx, r, tree, { ...r.commits.get(st.origHead)!.tree, ...r.index });
+  r.index = { ...tree };
+  if (st.branch) { r.branches.set(st.branch, st.tip); r.head = { branch: st.branch }; } else r.head = { detached: st.tip };
+  const where = st.branch ? `refs/heads/${st.branch}` : 'HEAD';
+  clearRebase(ctx, r);
+  ctx.err(`Successfully rebased and updated ${where}.\n`);
+  return 0;
+}
+function readTodo(ctx: Ctx, r: Repo): number {
+  const st = r.rebase!;
+  const plan = new Map(st.todo.map((x) => [x.id, x]));
+  const steps: RebaseStep[] = [];
+  let bad = 0;
+  ctx.fs.readFile(TODO(r)).split('\n').forEach((line, i) => {
+    const t = line.trim();
+    if (!t || t.startsWith('#')) return;
+    const m = /^(\S+)\s+(\S+)\s*(.*)$/.exec(t);
+    const cmd = m ? CMD_NAMES[m[1]] : undefined;
+    const id = m ? [...plan.keys()].find((k) => k.startsWith(m[2])) : undefined;
+    if (!m || !cmd || !id) {
+      ctx.err(cmd === undefined && m && ['e', 'edit', 'x', 'exec', 'b', 'break', 'l', 'label', 't', 'reset', 'm', 'merge'].includes(m[1])
+        ? `error: '${m[1]}' is not supported by this lab's rebase (use pick, reword, squash, fixup or drop)\n` : `error: invalid line ${i + 1}: ${t}\n`);
+      bad++;
+      return;
+    }
+    steps.push({ cmd, id, text: m[3].trim() });
+  });
+  if (bad) { ctx.err('You can fix this with \'git rebase --edit-todo\' and then run \'git rebase --continue\'.\nOr you can abort the rebase with \'git rebase --abort\'.\n'); return 1; }
+  st.todo = steps;
+  try { ctx.fs.remove(TODO(r)); } catch { /* already gone */ }
+  return runSteps(ctx, r);
+}
+function rebaseCmd(ctx: Ctx, r: Repo, rest: string[]): number {
+  const has = (f: string) => rest.includes(f);
+  const st0 = r.rebase;
+  if (has('--abort')) { if (!st0) { ctx.err('fatal: No rebase in progress?\n'); return 128; } abortRebase(ctx, r); return 0; }
+  if (has('--continue') || has('--skip') || has('--edit-todo')) {
+    if (!st0) { ctx.err('fatal: No rebase in progress?\n'); return 128; }
+    if (has('--edit-todo')) { ctx.out(`${TODO(r).slice(r.root.length + 1)}\n`); return 0; }
+    if (st0.phase === 'edit-todo') return has('--skip') ? 128 : readTodo(ctx, r);
+    if (has('--skip')) {
+      const cur = r.commits.get(st0.tip)!.tree;
+      restoreTree(ctx, r, cur, { ...r.index, ...workTree(ctx, r) });
+      r.index = { ...cur };
+      st0.todo.shift();
+      return runSteps(ctx, r);
+    }
+    const wt = workTree(ctx, r);
+    if ((st0.conflicts ?? []).some((p) => /^<<<<<<< /m.test(wt[p] ?? '') || r.index[p] !== wt[p])) { ctx.err('error: you must edit all merge conflicts and then\nmark them as resolved using git add\n'); return 1; }
+    commitStep(r, st0, st0.todo[0], { ...r.index });
+    st0.todo.shift();
+    return runSteps(ctx, r);
+  }
+  if (st0) { ctx.err('fatal: It seems that there is already a rebase in progress.\nUse "git rebase --continue", "git rebase --skip" or "git rebase --abort".\n'); return 128; }
+  const interactive = has('-i') || has('--interactive');
+  const spec = rest.filter((a) => !a.startsWith('-'))[0] ?? (branchName(r) ? r.upstream.get(branchName(r)!) : undefined);
+  const head = headId(r);
+  if (!head) { ctx.err('fatal: Needed a single revision\ninvalid upstream\n'); return 128; }
+  if (!spec) { ctx.err('There is no tracking information for the current branch.\nPlease specify which branch you want to rebase against.\n'); return 1; }
+  const up = resolve(r, spec);
+  if (!up) { ctx.err(`fatal: invalid upstream '${spec}'\n`); return 128; }
+  if (isDirty(ctx, r)) { ctx.err('error: cannot rebase: You have unstaged changes.\nerror: Please commit or stash them.\n'); return 1; }
+  const branch = branchName(r);
+  const base = mergeBase(r, head, up);
+  if (!interactive) {
+    if (base === up) { ctx.out(`Current branch ${branch ?? 'HEAD'} is up to date.\n`); return 0; }
+    if (base === head) {
+      const t = r.commits.get(up)!.tree;
+      restoreTree(ctx, r, t, headTree(r));
+      r.index = { ...t };
+      if (branch) r.branches.set(branch, up); else r.head = { detached: up };
+      ctx.err(`Successfully rebased and updated ${branch ? `refs/heads/${branch}` : 'HEAD'}.\n`);
+      return 0;
+    }
+  }
+  const plan = replayPlan(r, base, head);
+  if (!plan) { ctx.err('error: this lab\'s rebase does not replay merge commits\n'); return 1; }
+  if (!plan.length) { ctx.out(interactive ? 'Nothing to do\n' : `Current branch ${branch ?? 'HEAD'} is up to date.\n`); return 0; }
+  const todo: RebaseStep[] = plan.map((id) => ({ cmd: 'pick', id, text: subject(r.commits.get(id)!.msg) }));
+  r.rebase = { branch, origHead: head, onto: up, tip: up, todo, interactive, phase: 'edit-todo' };
+  if (!interactive) return runSteps(ctx, r);
+  ctx.fs.mkdir(`${r.root}/.git/rebase-merge`, true);
+  ctx.fs.writeFile(TODO(r), `${todo.map((x) => `pick ${short(x.id)} ${x.text}`).join('\n')}\n\n# Rebase ${short(up)}..${short(head)} onto ${short(up)} (${todo.length} command${todo.length === 1 ? '' : 's'})\n#\n# Commands:\n# p, pick <commit> = use commit\n# r, reword <commit> = use commit; in this lab the text after the hash is the new message (there is no editor)\n# s, squash <commit> = use commit, but meld into previous commit\n# f, fixup <commit> = like "squash", but discard this commit's message\n# d, drop <commit> = remove commit\n#\n# These lines can be re-ordered; they are executed from top to bottom.\n# If you remove a line here THAT COMMIT WILL BE LOST.\n`);
+  const editor = ctx.sh.env.get('GIT_SEQUENCE_EDITOR') ?? ctx.sh.env.get('GIT_EDITOR');
+  if (!editor) {
+    ctx.err(`hint: this lab has no text editor. The todo list is in .git/rebase-merge/git-rebase-todo.\nhint: Change the word at the start of a line (pick, reword, squash, fixup, drop) with sed, then run "git rebase --continue".\nhint: Or run the command again with GIT_SEQUENCE_EDITOR set to a command that edits the file.\n`);
+    return 0;
+  }
+  const res = ctx.sh.run(`${editor} ${TODO(r)}`);
+  for (const ch of res.chunks) (ch.err ? ctx.err : ctx.out)(ch.text);
+  if (res.status !== 0) { ctx.err('error: There was a problem with the editor.\n'); clearRebase(ctx, r); return 1; }
+  return readTodo(ctx, r);
+}
 
 /** The working tree: every file under the repo root except .git. */
 function workTree(ctx: Ctx, r: Repo): Record<string, string> {
@@ -74,6 +371,7 @@ function resolve(r: Repo, spec: string): string | null {
   if (rel2) { const id = resolve(r, rel2[1]); return id ? r.commits.get(id)!.parents[0] ?? null : null; }
   if (r.branches.has(spec)) return r.branches.get(spec)!;
   if (r.tags.has(spec)) return r.tags.get(spec)!;
+  if (r.tracking.has(spec)) return r.tracking.get(spec)!;
   const m = [...r.commits.keys()].filter((id) => id.startsWith(spec));
   return spec.length >= 4 && m.length === 1 ? m[0] : null;
 }
@@ -89,10 +387,10 @@ function mergeBase(r: Repo, a: string, b: string): string | null {
   return ancestors(r, b).find((x) => aa.has(x)) ?? null;
 }
 
-function makeCommit(r: Repo, msg: string, parents: string[]): Commit {
-  const tree = { ...r.index };
-  const id = hash(JSON.stringify([parents, msg, tree, ++r.counter]));
-  const c: Commit = { id, parents, msg, tree, n: r.counter };
+function makeCommit(r: Repo, msg: string, parents: string[], treeOverride?: Record<string, string>): Commit {
+  const tree = { ...(treeOverride ?? r.index) };
+  const id = hash(JSON.stringify([parents, msg, tree, ++r.seq.n]));
+  const c: Commit = { id, parents, msg, tree, n: r.seq.n };
   r.commits.set(id, c);
   return c;
 }
@@ -174,7 +472,7 @@ function status(ctx: Ctx, r: Repo, shortFmt: boolean) {
   const deleted = [...Object.keys(r.index)].filter((p) => !(p in wt)).map((p): [string, string] => ['D', p]);
   const un = [...unstaged.filter(([t]) => t !== 'A'), ...deleted.filter(([, p]) => !unstaged.some(([, q]) => q === p))];
   const untracked = Object.keys(wt).filter((p) => !tracked.has(p)).sort();
-  const unmerged = r.merging ? conflicted(ctx, r) : [];
+  const unmerged = r.merging || r.rebase?.phase === 'conflict' ? conflicted(ctx, r) : [];
   if (shortFmt) {
     const rows = new Map<string, string>();
     for (const [t, p] of staged) rows.set(p, t + ' ');
@@ -185,6 +483,17 @@ function status(ctx: Ctx, r: Repo, shortFmt: boolean) {
     return;
   }
   ctx.out('branch' in r.head ? `On branch ${r.head.branch}\n` : `HEAD detached at ${short(r.head.detached)}\n`);
+  const up = 'branch' in r.head ? r.upstream.get(r.head.branch) : undefined;
+  const upId = up ? r.tracking.get(up) : undefined;
+  if (up && upId && headId(r)) {
+    const { ahead, behind } = aheadBehind(r, headId(r)!, upId);
+    const n = (k: number) => `${k} commit${k === 1 ? '' : 's'}`;
+    if (!ahead && !behind) ctx.out(`Your branch is up to date with '${up}'.\n`);
+    else if (!behind) ctx.out(`Your branch is ahead of '${up}' by ${n(ahead)}.\n  (use "git push" to publish your local commits)\n`);
+    else if (!ahead) ctx.out(`Your branch is behind '${up}' by ${n(behind)}, and can be fast-forwarded.\n  (use "git pull" to update your local branch)\n`);
+    else ctx.out(`Your branch and '${up}' have diverged,\nand have ${ahead} and ${behind} different commits each, respectively.\n  (use "git pull" if you want to integrate the remote branch with yours)\n`);
+  }
+  if (r.rebase) ctx.out(`\n${r.rebase.interactive ? 'interactive rebase' : 'rebase'} in progress; onto ${short(r.rebase.onto)}\n${r.rebase.phase === 'edit-todo' ? '  (edit .git/rebase-merge/git-rebase-todo, then run "git rebase --continue")\n' : '  (fix conflicts and then run "git rebase --continue")\n  (use "git rebase --skip" to skip this patch)\n'}  (use "git rebase --abort" to check out the original branch)\n`);
   if (!headId(r) && 'branch' in r.head) ctx.out('\nNo commits yet\n');
   if (r.merging) ctx.out(unmerged.length ? '\nYou have unmerged paths.\n  (fix conflicts and run "git commit")\n  (use "git merge --abort" to abort the merge)\n' : '\nAll conflicts fixed but you are still merging.\n  (use "git commit" to conclude merge)\n');
   const name = (t: string) => (t === 'A' ? 'new file:   ' : t === 'D' ? 'deleted:    ' : 'modified:   ');
@@ -238,6 +547,7 @@ function decorate(r: Repo, id: string): string {
   const names: string[] = [];
   if (headId(r) === id) names.push('branch' in r.head ? `HEAD -> ${r.head.branch}` : 'HEAD');
   for (const [b, bid] of r.branches) if (bid === id && !('branch' in r.head && r.head.branch === b)) names.push(b);
+  for (const [t, tid] of r.tracking) if (tid === id) names.push(t);
   for (const [t, tid] of r.tags) if (tid === id) names.push(`tag: ${t}`);
   return names.length ? ` (${names.join(', ')})` : '';
 }
@@ -250,11 +560,12 @@ export const git: Utility = (ctx, args) => {
     ctx.fs.mkdir(dir, true);
     ctx.fs.mkdir(`${dir}/.git`, true);
     // Newer Git setups name the first branch `main` (init.defaultBranch); older ones said `master`. The lab uses `main`.
-    repos(ctx).set(dir, { root: dir, commits: new Map(), branches: new Map(), head: { branch: 'main' }, index: {}, tags: new Map(), stash: [], counter: 0, user: { name: 'User', email: 'user@fab' } });
+    repos(ctx).set(dir, newRepo(ctx, dir));
     ctx.err("hint: Newer Git setups name the first branch 'main' (init.defaultBranch).\n");
     ctx.out(`Initialized empty Git repository in ${dir}/.git/\n`);
     return 0;
   }
+  if (sub === 'clone') return cloneRepo(ctx, rest);
   if (sub === 'config') {
     const r = findRepo(ctx);
     if (r && rest[0] === 'user.name' && rest[1]) r.user.name = rest[1];
@@ -320,6 +631,48 @@ export const git: Utility = (ctx, args) => {
       return 0;
     }
     case 'status': status(ctx, r, has('-s') || has('--short')); return 0;
+    case 'remote': {
+      const act = operands[0];
+      if (!act || act === 'show') { for (const n of [...r.remotes.keys()].sort()) { const url = r.remotes.get(n)!; if (has('-v')) ctx.out(`${n}\t${url} (fetch)\n${n}\t${url} (push)\n`); else ctx.out(`${n}\n`); } return 0; }
+      if (act === 'add') {
+        const [, name, url] = operands;
+        if (!name || !url) { ctx.err('usage: git remote add <name> <url>\n'); return 129; }
+        if (r.remotes.has(name)) { ctx.err(`error: remote ${name} already exists.\n`); return 3; }
+        r.remotes.set(name, ctx.sh.abs(url));
+        return 0;
+      }
+      if (act === 'remove' || act === 'rm') {
+        if (!r.remotes.has(operands[1])) { ctx.err(`error: No such remote: '${operands[1]}'\n`); return 2; }
+        r.remotes.delete(operands[1]);
+        for (const k of [...r.tracking.keys()]) if (k.startsWith(`${operands[1]}/`)) r.tracking.delete(k);
+        return 0;
+      }
+      if (act === 'get-url') { const u = r.remotes.get(operands[1]); if (!u) { ctx.err(`error: No such remote '${operands[1]}'\n`); return 2; } ctx.out(`${u}\n`); return 0; }
+      ctx.err(`error: unknown subcommand: ${act}\n`);
+      return 129;
+    }
+    case 'fetch': {
+      const names = has('--all') ? [...r.remotes.keys()] : [operands[0] ?? defaultRemote(r)];
+      for (const n of names) { const st = fetchFrom(ctx, r, n, has('--all') ? undefined : operands[1]); if (st) return st; }
+      return 0;
+    }
+    case 'pull': {
+      const rem = operands[0] ?? defaultRemote(r);
+      const cur = branchName(r);
+      const rb = operands[1] ?? (cur ? r.upstream.get(cur)?.slice(rem.length + 1) ?? cur : undefined);
+      if (!rb) { ctx.err('You are not currently on a branch.\nPlease specify which branch you want to merge with.\n'); return 1; }
+      if (!operands[1] && cur && !r.upstream.has(cur)) { ctx.err(`There is no tracking information for the current branch.\nPlease specify which branch you want to merge with.\n    git pull <remote> <branch>\n\nIf you wish to set tracking information for this branch you can do so with:\n    git branch --set-upstream-to=${rem}/<branch> ${cur}\n`); return 1; }
+      const fst = fetchFrom(ctx, r, rem, rb);
+      if (fst) return fst;
+      const target = r.tracking.get(`${rem}/${rb}`);
+      if (!target) { ctx.err(`fatal: couldn't find remote ref ${rb}\n`); return 128; }
+      const here = headId(r);
+      if (has('--rebase') || has('-r')) return rebaseCmd(ctx, r, [`${rem}/${rb}`]);
+      if (has('--ff-only') && here && !isAncestor(r, here, target) && !isAncestor(r, target, here)) { ctx.err('fatal: Not possible to fast-forward, aborting.\n'); return 128; }
+      return git(ctx, ['merge', `${rem}/${rb}`]);
+    }
+    case 'push': return pushTo(ctx, r, rest);
+    case 'rebase': return rebaseCmd(ctx, r, rest);
     case 'log': {
       const start = operands.find((o) => !o.includes('..')) ?? 'HEAD';
       let id = resolve(r, start);
@@ -382,6 +735,13 @@ export const git: Utility = (ctx, args) => {
         const from = operands[1] ? resolve(r, operands[1]) : headId(r);
         if (!from) { ctx.err(`fatal: not a valid object name: '${operands[1]}'\n`); return 128; }
         r.branches.set(operands[0], from);
+        return 0;
+      }
+      const upArg = rest.find((a) => a.startsWith('--set-upstream-to='))?.slice(18) ?? (has('-u') ? operands[0] : undefined);
+      if (upArg) { const cur = branchName(r); if (!cur || !r.tracking.has(upArg)) { ctx.err(`fatal: the requested upstream branch '${upArg}' does not exist\n`); return 128; } r.upstream.set(cur, upArg); ctx.out(`branch '${cur}' set up to track '${upArg}'.\n`); return 0; }
+      if (has('-r') || has('-a')) {
+        if (has('-a')) for (const b of [...r.branches.keys()].sort()) ctx.out(`${branchName(r) === b ? '* ' : '  '}${b}\n`);
+        for (const t of [...r.tracking.keys()].sort()) ctx.out(`  ${has('-a') ? 'remotes/' : ''}${t}\n`);
         return 0;
       }
       for (const b of [...r.branches.keys()].sort()) ctx.out(`${branchName(r) === b ? '* ' : '  '}${b}${has('-v') ? ` ${short(r.branches.get(b)!)} ${r.commits.get(r.branches.get(b)!)!.msg.split('\n')[0]}` : ''}\n`);

@@ -10,7 +10,7 @@ REG_NAMES.forEach((n, i) => { REG_MAP.set(n, i); REG_MAP.set(`x${i}`, i); });
 REG_MAP.set('fp', 8);
 export const regNum = (s: string): number | undefined => REG_MAP.get(s.toLowerCase());
 
-type Fmt = 'R' | 'I' | 'S' | 'B' | 'U' | 'J' | 'L' | 'SH' | 'SYS';
+type Fmt = 'R' | 'I' | 'S' | 'B' | 'U' | 'J' | 'L' | 'SH' | 'SYS' | 'CSR' | 'FENCE';
 interface Op { fmt: Fmt; opcode: number; f3: number; f7: number }
 const OPS: Record<string, Op> = {
   lui: { fmt: 'U', opcode: 0x37, f3: 0, f7: 0 }, auipc: { fmt: 'U', opcode: 0x17, f3: 0, f7: 0 },
@@ -29,7 +29,20 @@ const OPS: Record<string, Op> = {
   mul: { fmt: 'R', opcode: 0x33, f3: 0, f7: 1 }, mulh: { fmt: 'R', opcode: 0x33, f3: 1, f7: 1 }, mulhsu: { fmt: 'R', opcode: 0x33, f3: 2, f7: 1 }, mulhu: { fmt: 'R', opcode: 0x33, f3: 3, f7: 1 },
   div: { fmt: 'R', opcode: 0x33, f3: 4, f7: 1 }, divu: { fmt: 'R', opcode: 0x33, f3: 5, f7: 1 }, rem: { fmt: 'R', opcode: 0x33, f3: 6, f7: 1 }, remu: { fmt: 'R', opcode: 0x33, f3: 7, f7: 1 },
   ecall: { fmt: 'SYS', opcode: 0x73, f3: 0, f7: 0 }, ebreak: { fmt: 'SYS', opcode: 0x73, f3: 0, f7: 0 },
+  mret: { fmt: 'SYS', opcode: 0x73, f3: 0, f7: 0 }, wfi: { fmt: 'SYS', opcode: 0x73, f3: 0, f7: 0 },
+  // Zicsr: the CSR number is the 12-bit immediate; the "i" forms put a 5-bit constant where rs1 would be
+  csrrw: { fmt: 'CSR', opcode: 0x73, f3: 1, f7: 0 }, csrrs: { fmt: 'CSR', opcode: 0x73, f3: 2, f7: 0 }, csrrc: { fmt: 'CSR', opcode: 0x73, f3: 3, f7: 0 },
+  csrrwi: { fmt: 'CSR', opcode: 0x73, f3: 5, f7: 0 }, csrrsi: { fmt: 'CSR', opcode: 0x73, f3: 6, f7: 0 }, csrrci: { fmt: 'CSR', opcode: 0x73, f3: 7, f7: 0 },
+  fence: { fmt: 'FENCE', opcode: 0x0f, f3: 0, f7: 0 },
 };
+
+/** CSR names the assembler and disassembler know. Only machine mode exists in this lab. */
+export const CSR_NAMES: Record<string, number> = {
+  mstatus: 0x300, misa: 0x301, mie: 0x304, mtvec: 0x305, mscratch: 0x340, mepc: 0x341, mcause: 0x342, mtval: 0x343, mip: 0x344,
+  mcycle: 0xb00, minstret: 0xb02, mcycleh: 0xb80, minstreth: 0xb82, cycle: 0xc00, time: 0xc01, instret: 0xc02,
+  mvendorid: 0xf11, marchid: 0xf12, mimpid: 0xf13, mhartid: 0xf14,
+};
+const CSR_BY_NUM = new Map(Object.entries(CSR_NAMES).map(([k, v]) => [v, k]));
 export const MNEMONICS = Object.keys(OPS);
 
 export interface Listing { addr: number; word: number; line: number; text: string }
@@ -110,6 +123,15 @@ function expandPseudo(m: string, a: string[], line: number): string[] | null {
     // call/tail/la are simplified to one instruction here; real toolchains emit auipc+jalr, auipc+jr and auipc+addi (the lesson says so)
     case 'call': need(1); return [`jal ra, ${a[0]}`];
     case 'tail': need(1); return [`jal x0, ${a[0]}`];
+    case 'csrr': need(2); return [`csrrs ${a[0]}, ${a[1]}, x0`];
+    case 'csrw': need(2); return [`csrrw x0, ${a[0]}, ${a[1]}`];
+    case 'csrs': need(2); return [`csrrs x0, ${a[0]}, ${a[1]}`];
+    case 'csrc': need(2); return [`csrrc x0, ${a[0]}, ${a[1]}`];
+    case 'csrwi': need(2); return [`csrrwi x0, ${a[0]}, ${a[1]}`];
+    case 'csrsi': need(2); return [`csrrsi x0, ${a[0]}, ${a[1]}`];
+    case 'csrci': need(2); return [`csrrci x0, ${a[0]}, ${a[1]}`];
+    // the canonical "trap here" instruction: a write to a read-only CSR is always illegal
+    case 'unimp': need(0); return ['csrrw x0, cycle, x0'];
     default: return null;
   }
 }
@@ -295,7 +317,22 @@ export function assemble(src: string): Program {
         if (!fits(off, 21)) throw new AsmError('jump target is too far', line);
         return (((off >> 20) & 1) << 31) | (((off >> 1) & 0x3ff) << 21) | (((off >> 11) & 1) << 20) | (((off >> 12) & 0xff) << 12) | (rd << 7) | op.opcode;
       }
-      case 'SYS': n(0); return m === 'ebreak' ? 0x00100073 : 0x00000073;
+      case 'SYS': n(0); return m === 'ebreak' ? 0x00100073 : m === 'mret' ? 0x30200073 : m === 'wfi' ? 0x10500073 : 0x00000073;
+      case 'CSR': {
+        n(3);
+        const csr = CSR_NAMES[ops[1].trim().toLowerCase()] ?? sym(ops[1], line);
+        if (csr < 0 || csr > 0xfff) throw new AsmError(`CSR number ${csr} must be 0..4095 (or a name such as mstatus)`, line);
+        let src: number;
+        if (op.f3 >= 5) { src = sym(ops[2], line); if (src < 0 || src > 31) throw new AsmError(`${m} takes a constant 0..31`, line); } else src = reg(ops[2], line);
+        return (csr << 20) | (src << 15) | (op.f3 << 12) | (reg(ops[0], line) << 7) | op.opcode;
+      }
+      case 'FENCE': {
+        // fence [pred, succ]: i, o, r, w in each set; plain `fence` orders everything
+        const set = (s: string) => { let v = 0; for (const c of s.trim().toLowerCase()) { const b = { i: 8, o: 4, r: 2, w: 1 }[c as 'i']; if (!b) throw new AsmError(`fence sets use the letters i, o, r, w, not '${s.trim()}'`, line); v |= b; } return v; };
+        const pred = ops.length ? set(ops[0]) : 15, succ = ops.length > 1 ? set(ops[1]) : 15;
+        if (ops.length === 1 || ops.length > 2) throw new AsmError('fence takes no operands or two sets (for example fence rw, rw)', line);
+        return (pred << 24) | (succ << 20) | op.opcode;
+      }
     }
   };
   for (const it of items) {
@@ -361,7 +398,17 @@ export function disasm(w: number, pc = 0): string {
       return m ? `${m} ${R(rd)}, ${R(rs1)}, ${immI}` : '???';
     }
     case 0x33: { const m = find('R', (o) => o.f3 === f3 && o.f7 === f7); return m ? `${m} ${R(rd)}, ${R(rs1)}, ${R(rs2)}` : '???'; }
-    case 0x73: return w === 0x00100073 ? 'ebreak' : w === 0x73 ? 'ecall' : '???';
+    case 0x0f: {
+      const set = (v: number) => (v === 15 ? 'iorw' : ['i', 'o', 'r', 'w'].filter((_, k) => v & (8 >> k)).join('') || '0');
+      return f3 === 0 ? ((w >>> 20) === 0x0ff ? 'fence' : `fence ${set((w >>> 24) & 15)}, ${set((w >>> 20) & 15)}`) : '???';
+    }
+    case 0x73: {
+      if (f3 === 0) return w === 0x00100073 ? 'ebreak' : w === 0x73 ? 'ecall' : w === 0x30200073 ? 'mret' : w === 0x10500073 ? 'wfi' : '???';
+      if (f3 === 4) return '???';
+      const csr = w >>> 20;
+      const m = ['', 'csrrw', 'csrrs', 'csrrc', '', 'csrrwi', 'csrrsi', 'csrrci'][f3];
+      return `${m} ${R(rd)}, ${CSR_BY_NUM.get(csr) ?? `0x${csr.toString(16)}`}, ${f3 >= 5 ? rs1 : R(rs1)}`;
+    }
     default: return '???';
   }
 }
