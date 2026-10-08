@@ -556,7 +556,7 @@ export const busPractice = practice('practice-bus', 'Bus & Protocol Drills', 'VA
       ['Passing video pixels from one block to the next, with no addresses at all', 'AXI-Stream', 'it carries a data stream with VALID/READY and no address channel'],
       ['Keeping the caches of dozens of cores coherent over a packet network', 'CHI', 'it is the packetised coherent interconnect built for many-core designs'],
       ['Configuring a timer block through its memory-mapped control registers', 'APB', 'a register block needs no pipelining or bursts, so the smallest protocol wins'],
-      ['Connecting the CPU of a small microcontroller to its on-chip SRAM and peripherals', 'AHB', 'a single pipelined channel is enough for a small, single-master system'],
+      ['Connecting the CPU of a small microcontroller to its on-chip SRAM and peripherals', 'AHB', 'a single pipelined channel is enough for a small, single-manager system'],
     ];
     const [use, right, why] = pick(r, cases);
     const names = [...new Set(cases.map((c) => c[1]))];
