@@ -413,7 +413,7 @@ export const emu: Lesson = {
       const k = pick(r, [4, 5, 6]);
       return ask(`How many configuration bits does a ${k}-input LUT hold?`, num(2 ** k), `One bit per row of the truth table: 2^${k} = ${2 ** k}. Any ${k}-input function fits in one LUT, whether it is an AND, an XOR or something odd.`, 'One bit per truth-table row.');
     }),
-    mc('Rank by speed: RTL simulation, hardware emulation, FPGA prototype.', ['Simulation > emulation > FPGA prototype', 'FPGA prototype > emulation > simulation', 'Emulation > FPGA prototype > simulation', 'Emulation > simulation > FPGA prototype'], 1, 'FPGA prototypes run at about 10-100 MHz, emulators at about 1-5 MHz, and a full-SoC simulation at about 10 Hz-1 kHz. Simulation has full visibility but is slow. Emulators are fast and still offer good debug visibility. FPGA prototypes are fastest but hardest to debug and slow to compile. Teams use all three.'),
+    mc('Rank by speed: RTL simulation, hardware emulation, FPGA prototype.', ['Simulation > emulation > FPGA prototype', 'FPGA prototype > emulation > simulation', 'Emulation > FPGA prototype > simulation', 'Emulation > simulation > FPGA prototype'], 1, 'For a full SoC, FPGA prototypes run at roughly 10-50 MHz or more with limited visibility, hardware emulators at roughly 1-5 MHz with full visibility, and RTL simulation at about 10 Hz-1 kHz. Prototypes are the hardest to debug and slow to compile. Teams use all three.'),
     gen((r) => {
       const cyc = pick(r, [2, 5, 10]);
       const f = pick(r, [1, 2]);

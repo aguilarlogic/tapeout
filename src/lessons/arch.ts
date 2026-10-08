@@ -309,7 +309,8 @@ export const perf: Lesson = {
    cycle-approximate          ~1-10 MIPS    good-enough timing
    cycle-accurate             ~0.1-1 MIPS   every pipeline stage every cycle
    RTL simulation             ~1-100 KIPS   the real design
-   emulation / FPGA prototype ~1-10 MHz     real design, real speed-ish`),
+   hardware emulation         ~1-5 MHz      real design, full visibility
+   FPGA prototype             ~10-50 MHz+   real design, limited visibility`),
     mc('Most architecture simulators are **discrete-event** simulators. What does that mean?', ['They model only discrete digital parts, not analog ones', 'They jump from one timestamped event to the next, skipping idle time', 'They replay a recorded trace of events from real hardware', 'They step every component forward one fixed tick at a time, busy or not'], 1, 'They keep a queue of future events ordered by time and do no work in between. Verilog simulators are discrete-event too: an event wheel of signal changes. The same core idea scales from gates to data centres.'),
     say('The best-known academic simulator is **gem5**. It has fast functional CPU models (Atomic), timing models (TimingSimple, in-order Minor, out-of-order O3), a detailed memory system (Ruby, where you can write coherence protocols), and two modes: **SE** (syscall emulation, run one program) and **FS** (full system, boot Linux).'),
     mc('You want to study a new L2 replacement policy in gem5 on a real Linux workload. Which setup?', ['SE mode with the Atomic CPU, for the fastest runs', 'FS mode, a timing CPU (O3 or Minor), detailed caches', 'FS mode with the Atomic CPU and a detailed cache model', 'RTL simulation of the full SoC with the new policy'], 1, 'Atomic CPUs do not model timing, so cache effects would not show up in performance. FS mode captures OS effects too.'),
