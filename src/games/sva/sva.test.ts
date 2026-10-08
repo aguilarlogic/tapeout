@@ -94,3 +94,53 @@ describe('sva: goto [->n] and nonconsecutive [=n] can fail (E7)', () => {
     expect(r.pending).toBe(1);
   });
 });
+
+describe('sva: within, intersect, first_match, s_eventually (G1.4)', () => {
+  const wi = 'a: assert property (@(posedge clk) go |=> x[*2] within busy[*5]);';
+  it('within: the inner match must sit inside the outer one', () => {
+    const base = { go: '1000000', busy: '0111110' };
+    expect(run(wi, { ...base, x: '0001100' }).fails).toEqual([]); // x at 3,4: inside 1..5
+    expect(run(wi, { ...base, x: '0110000' }).fails).toEqual([]); // may start with the outer match
+    expect(run(wi, { ...base, x: '0000011' }).fails.map((f) => f.start)).toEqual([0]); // x at 5,6 spills past the end
+    expect(run(wi, { ...base, x: '0001000' }).fails.map((f) => f.start)).toEqual([0]); // only one x
+  });
+  const is = 'a: assert property (@(posedge clk) go |-> (a ##[1:3] b) intersect (##2 c));';
+  it('intersect: both sequences start together and end together', () => {
+    expect(run(is, { go: '1000000', a: '1000000', b: '0010000', c: '0010000' }).fails).toEqual([]);
+    // a ##[1:3] b ends at 3 but the c-sequence ends at 2: the lengths differ, so there is no common match
+    expect(run(is, { go: '1000000', a: '1000000', b: '0001000', c: '0010000' }).fails.map((f) => f.start)).toEqual([0]);
+    expect(run(is, { go: '1000000', a: '1000000', b: '0010000', c: '0000000' }).fails.map((f) => f.start)).toEqual([0]);
+  });
+  it('first_match keeps only the earliest end of a range', () => {
+    const plain = 'a: assert property (@(posedge clk) go |-> ##[1:3] b ##1 c);';
+    const fm = 'a: assert property (@(posedge clk) go |-> first_match(##[1:3] b) ##1 c);';
+    const t = { go: '1000000', b: '0110000', c: '0001000' }; // b at 1 and 2, c only at 3
+    expect(run(plain, t).fails).toEqual([]); // the match that ends at 2 is followed by c at 3
+    expect(run(fm, t).fails.map((f) => f.start)).toEqual([0]); // the earliest match ends at 1, so c was needed at 2
+  });
+  const ev = 'a: assert property (@(posedge clk) req |-> s_eventually gnt);';
+  it('s_eventually is never refuted by a finite trace, only satisfied or left pending', () => {
+    const none = run(ev, { req: '100000', gnt: '000000' });
+    expect(none.fails).toEqual([]);
+    expect(none.pending).toBe(1);
+    const got = run(ev, { req: '100000', gnt: '000100' });
+    expect(got.fails).toEqual([]);
+    expect(got.pending).toBe(0);
+    expect(got.passes).toBe(1);
+    // the bounded version of the same wish is a safety property and does fail on the same trace
+    expect(run('a: assert property (@(posedge clk) req |-> ##[1:3] gnt);', { req: '100000', gnt: '000000' }).fails.length).toBe(1);
+  });
+});
+
+describe('sva: the lesson trace for goto against non-consecutive (G1.4)', () => {
+  const sigs = { go: '10000000', b: '00101000', c: '00000010' };
+  it('b[->2] ##1 c fails and b[=2] ##1 c passes on the lesson trace', () => {
+    expect(run('a: assert property (@(posedge clk) go |-> ##1 b[->2] ##1 c);', sigs).fails.map((f) => f.start)).toEqual([0]);
+    expect(run('a: assert property (@(posedge clk) go |-> ##1 b[=2] ##1 c);', sigs).fails).toEqual([]);
+  });
+  it('an unbounded window is undecided on a finite trace', () => {
+    const r = run('a: assert property (@(posedge clk) req |-> ##[1:$] gnt);', { req: '1000', gnt: '0000' });
+    expect(r.fails).toEqual([]);
+    expect(r.pending).toBe(1);
+  });
+});
