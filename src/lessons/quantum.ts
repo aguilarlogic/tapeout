@@ -21,7 +21,7 @@ export const qubit: Lesson = {
    q0 ──[H]──●──     a Bell pair: H then CNOT.
              │       measuring q0 and q1 always gives the same answer,
    q1 ───────⊕──     00 or 11 (50/50), never 01 or 10: entanglement`),
-    say('The enemy is **decoherence**: the environment slowly disturbs the qubit. **T1** is how long an excited |1⟩ takes to decay to |0⟩ (energy relaxation). **T2** is how long the phase between |0⟩ and |1⟩ survives (dephasing). Physics limits T2 ≤ 2·T1. Every gate is a race against these clocks.'),
+    say('The enemy is **decoherence**: the environment slowly disturbs the qubit. **T1** is how long an excited |1⟩ takes to decay to |0⟩ (energy relaxation). **T2** is how long the phase between |0⟩ and |1⟩ survives (dephasing). A Ramsey measurement gives the shorter T2*; an echo sequence cancels slow drifts and gives T2. Physics limits T2 ≤ 2·T1. Every gate is a race against these clocks.'),
     gen((r) => {
       const [f, n] = pick(r, [[0.99, 100], [0.999, 1000], [0.999, 100], [0.9999, 1000], [0.99, 50]] as const);
       const p = f ** n * 100;
@@ -34,7 +34,7 @@ export const qubit: Lesson = {
       return ask(`A ${f} GHz qubit must be much colder than the temperature T = h·f / k at which thermal energy matches one photon. What is that temperature, in mK?`, qty(t, 'mK', 0.03, Math.round(t).toString()), `T = (6.63e-34 × ${f}e9) / 1.38e-23 = ${Math.round(t)} mK. To keep thermal excitations rare, the chip sits in a dilution refrigerator at about 10 to 20 mK, colder than deep space.`, 'T = h·f / k. h = 6.63e-34, k = 1.38e-23.');
     }),
     mc('Which pairing of qubit platform and trade-off is right?', ['Trapped ions: fast gates and short coherence, in the same circuits', 'Ions: long coherence, slow gates; superconducting: the reverse', 'Spin qubits: need no cooling', 'Photonic qubits: need 10 mK'], 1, 'Ions have very long coherence and high fidelity but slower gates; superconducting gates take tens of ns and are made in chip fabs. Trapped ions and neutral atoms are controlled with lasers. Superconducting and silicon spin qubits are made in fabs (spin qubits in near-CMOS processes, a big draw for semiconductor companies). Photonic qubits run near room temperature but need extremely good single-photon sources and detectors.'),
-    say('The way out is **quantum error correction**: spread one **logical** qubit across many **physical** ones and measure parity checks continuously, without measuring the data itself. The leading scheme is the **surface code**. A distance-d surface code uses d² data qubits plus d² - 1 measurement qubits, and corrects up to ⌊(d-1)/2⌋ errors.'),
+    say('The way out is **quantum error correction**: spread one **logical** qubit across many **physical** ones and measure parity checks continuously, without measuring the data itself. The leading scheme is the **surface code**. A distance-d surface code uses d² data qubits plus d² - 1 measurement qubits, and corrects up to ⌊(d-1)/2⌋ errors, provided the physical error rates are below the code threshold (about 1% for the surface code).'),
     gen((r) => {
       const d = pick(r, [3, 5, 7, 11, 17, 25]);
       return ask(`How many physical qubits does one distance-${d} surface-code logical qubit need (2d² - 1)?`, num(2 * d * d - 1), `2 × ${d}² - 1 = ${2 * d * d - 1}. Algorithms like factoring need thousands of logical qubits, so millions of physical ones. That scale is an engineering problem more than a physics one: wiring, power, control electronics and fast decoding.`, '2 × d² - 1.');
