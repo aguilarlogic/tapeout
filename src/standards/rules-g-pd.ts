@@ -49,4 +49,40 @@ export const RULES_G_PD: Rule[] = [
     files: /lessons|practice|glossary/,
     ban: /HPWL (is|equals) (exact|the exact)(?![^\n]*(two|three|2|3))/,
   },
+  {
+    id: 'G1.9-backside-numbers',
+    why: 'G1.9: backside power figures are vendor claims for a first production node (about 10x droop, 11% routing area, 6% Fmax); the 30% IR-drop cut was a 2023 test chip',
+    files: /lessons|practice|glossary/,
+    ban: /backside[^\n]{0,100}\b30 ?% (IR|droop|less IR|lower IR)|\b30 ?% (IR|droop)[^\n]{0,60}backside/i,
+  },
+  {
+    id: 'G1.9-backside-vendor',
+    why: 'G1.9: teach the backside-power numbers as about / up to, and as vendor claims',
+    require: { file: /lessons\/roles/, re: /vendor claims/ },
+  },
+  {
+    id: 'G1.9-backside-routing',
+    why: 'G1.9: the main routing benefit is front-side tracks freed from power straps',
+    require: { file: /lessons\/roles/, re: /front-side/ },
+  },
+  {
+    id: 'G1.9-multipatterning-colour',
+    why: 'G1.9: multi-patterning means colouring, with same-colour spacing rules',
+    require: { file: /lessons\/roles/, re: /same-colour spacing/ },
+  },
+  {
+    id: 'G1.9-quantized-widths',
+    why: 'G1.9: fins and nanosheets give discrete transistor widths',
+    require: { file: /lessons\/roles/, re: /discrete steps/ },
+  },
+  {
+    id: 'G1.9-pd-data-formats',
+    why: 'G1.9: LEF abstracts, DEF placement and routing, SPEF parasitics, GDS/OASIS masks',
+    require: { file: /lessons\/roles/, re: /LEF[^\n]*DEF[^\n]*SPEF[^\n]*OASIS/ },
+  },
+  {
+    id: 'G1.9-glossary',
+    why: 'G1.9: glossary entries for backside power, multi-patterning and the PD data formats',
+    require: { file: /glossary/, re: /'backside power\|/ },
+  },
 ];
