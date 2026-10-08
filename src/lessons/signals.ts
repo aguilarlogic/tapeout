@@ -45,6 +45,17 @@ export const signals: Lesson = {
       return ask(`Where is the pole of an RC low-pass with R = ${rr} kΩ and C = ${c} nF? Give its magnitude in rad/s.`, qty(p, '', 0.01, r3(p).toString()), `s = -1/RC = -1/(${rr} kΩ × ${c} nF) = -${r3(p)} rad/s (or ${r3(p / (2 * Math.PI))} Hz).`, 'Pole at s = -1/(RC).');
     }),
     mc('A system\'s poles are at s = -2, and s = +1 ± 3j. Is it stable?', ['Yes, the pole at s = -2 keeps it stable', 'No, a pole pair is in the right half-plane', 'Only for low-frequency inputs', 'Yes, complex poles only ring, they never grow'], 1, 'Poles with a positive real part mean responses that grow forever. Every pole must be in the left half-plane. A pair with positive real part is an oscillation that grows: the math of a feedback loop gone wrong.'),
+    say('To get back to the time domain, use the **inverse Laplace transform**. The pairs to know: 1/(s + a) ↔ e^(−at), and a step through 1/(1 + sτ) gives 1 − e^(−t/τ), which reaches 63.2% at t = τ. The **final-value theorem** gives where a response ends up without finding the whole waveform: y(∞) = lim s→0 of s·Y(s). It only works if all the poles of s·Y(s) lie in the left half-plane; for a stable H(s) with a step input, y(∞) = H(0).'),
+    gen((r) => {
+      const k = pick(r, [2, 5, 10, 100]);
+      const tau = pick(r, [1, 10, 100]);
+      return ask(`A system H(s) = ${k} / (1 + s/${1000 / tau}) is driven by a unit step. Using the final-value theorem, where does the output settle?`, qty(k, '', 0.01, String(k)), `Y(s) = H(s)/s, so y(∞) = lim s→0 of s·Y(s) = H(0) = ${k}. The pole is in the left half-plane, so the theorem applies.`, 'Set s = 0 in H(s).');
+    }),
+    gen((r) => {
+      const m = pick(r, [1, 2, 3]);
+      const v = (1 - Math.exp(-m)) * 100;
+      return ask(`A unit step goes through 1/(1 + sτ). How far has the output got at t = ${m}τ, in % of its final value?`, qty(v, '%', 0.02, r3(v).toString()), `y(t) = 1 − e^(−t/τ) = 1 − e^(−${m}) = ${r3(v / 100)}, so ${r3(v)}%.`, '1 − e^(−t/τ).');
+    }),
     say('Finally, **sampling**. To capture a signal digitally you need to sample faster than twice its highest frequency (the **Nyquist** rate). Anything above fs/2 does not disappear; it **aliases**, folding down to a false frequency.'),
     gen((r) => {
       const fs = pick(r, [10, 44.1, 100]);
@@ -54,7 +65,7 @@ export const signals: Lesson = {
       return ask(`A ${f} kHz tone is sampled at ${fs} kHz with no anti-alias filter. At what frequency does it appear in the samples, in kHz?`, qty(a, 'kHz', 0.02, r3(a).toString()), `It folds around multiples of fs: |${f} - ${fs}| → ${r3(a)} kHz. That is why every ADC has an analog anti-alias filter in front of it.`, 'Subtract the nearest multiple of fs and take the absolute value.');
     }),
   ],
-  recap: ['LTI systems are fully described by their impulse response; output = convolution.', 'Square waves: odd harmonics at 1/n amplitude.', 'Bandwidth ≈ 0.35 / rise time.', 'Laplace: poles decide behaviour; all poles in the left half-plane = stable.', 'Sample above 2·f_max or it aliases.'],
+  recap: ['LTI systems are fully described by their impulse response; output = convolution.', 'Square waves: odd harmonics at 1/n amplitude.', 'Bandwidth ≈ 0.35 / rise time.', 'Laplace: poles decide behaviour; all poles in the left half-plane = stable. 1/(s+a) ↔ e^(−at); final value = lim s·Y(s) when stable.', 'Sample above 2·f_max or it aliases.'],
 };
 
 export const dsp: Lesson = {

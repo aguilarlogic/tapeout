@@ -129,4 +129,36 @@ export const RULES_G_ANALOG: Rule[] = [
     ban: /(random jitter|\bRJ) (is|are) bounded/i,
     unless: /un-?bounded|not bounded/i,
   },
+
+  // ---- G3.4 foundations extras
+  {
+    id: 'G3.4-einstein',
+    why: 'G3.4: drift and diffusion currents tied by the Einstein relation D = mu*kT/q',
+    require: { file: /lessons\/physics/, re: /Einstein relation\*\*: D = µ·kT\/q/ },
+  },
+  {
+    id: 'G3.4-passive-sign',
+    why: 'G3.4: conventional current and the passive sign convention, in one sentence',
+    require: { file: /lessons\/physics/, re: /passive sign convention/ },
+  },
+  {
+    id: 'G3.4-miller',
+    why: 'G3.4: Miller effect, C_gd*(1 + gain)',
+    require: { file: /lessons\/physics/, re: /Miller effect\*\*[^\n]{0,200}C_gd·\(1 \+ A_v\)/ },
+  },
+  {
+    id: 'G3.4-fourier-series',
+    why: 'G3.4: Fourier series with the square-wave coefficients 4A/(n pi)',
+    require: { file: /lessons\/theory/, re: /amplitude 4A\/\(nπ\)/ }, // main teaches Fourier series in its own theory lesson
+  },
+  {
+    id: 'G3.4-final-value',
+    why: 'G3.4: final-value theorem, valid only for left-half-plane poles',
+    require: { file: /lessons\/signals/, re: /final-value theorem\*\*[^\n]{0,250}left half-plane/ },
+  },
+  {
+    id: 'G3.4-complex-mechanics',
+    why: 'G3.4: e^(j theta) and multiplying phasors (multiply magnitudes, add angles)',
+    require: { file: /lessons\/theory/, re: /e\^\(jθ\) = cos θ \+ j[· ]sin θ[^\n]{0,300}adds angles/ }, // main's complex-number lessons
+  },
 ];

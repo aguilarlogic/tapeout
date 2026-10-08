@@ -42,8 +42,14 @@ export const semi: Lesson = {
       return ask(`A forward-biased diode's voltage rises by ${n * 60} mV. By what factor does its current increase?`, num(10 ** n), `Every 60 mV is one decade: ${n} decade${n > 1 ? 's' : ''} = ${10 ** n}×. Exponentials like this are why leakage and temperature matter so much in chips.`, 'One decade per ~60 mV at room temperature.');
     }),
     mc('Electrons in silicon are about 2 to 3× more **mobile** than holes. What does that mean for CMOS design?', ['NMOS and PMOS are always drawn the same size', 'PMOS is made wider to match NMOS drive', 'PMOS is faster, so it is used for critical paths', 'It only matters in analog circuits'], 1, 'Lower hole mobility means a PMOS of the same size conducts less. Designers widen PMOS (classically about 2×) to get balanced rise and fall times.'),
+    say('Carriers move in two ways. In an electric field they **drift**: the current density is J = q·n·µ·E, where the mobility µ is how fast carriers move per unit field. Where their concentration is uneven they **diffuse** from high to low, with a current set by the diffusion constant D. The two are tied by the **Einstein relation**: D = µ·kT/q = µ·V_T. Note that current is, by convention, the flow of positive charge, so it points opposite to electron motion; and under the passive sign convention, current enters a component at its + terminal, so P = V·I > 0 means the component absorbs power.'),
+    gen((r) => {
+      const mu = pick(r, [100, 200, 450, 1000, 1400]);
+      const d = mu * 0.02585;
+      return ask(`A carrier has a mobility of ${mu} cm²/V·s. What is its diffusion constant at room temperature, in cm²/s? (V_T = 25.85 mV)`, qty(d, '', 0.03, String(+d.toPrecision(3))), `D = µ·V_T = ${mu} × 0.02585 = ${+d.toPrecision(3)} cm²/s. The same thermal energy that sets the diode's 60 mV per decade sets how fast carriers spread.`, 'D = µ × kT/q.');
+    }),
   ],
-  recap: ['Band gap separates insulators, semiconductors and metals (Si: 1.12 eV).', 'Donors (P, As) make n-type; acceptors (B) make p-type.', 'Mass action: n·p = n_i².', 'PN junction: depletion region, exponential forward current, ~60 mV per decade.', 'Electrons are more mobile than holes, so PMOS is sized wider.'],
+  recap: ['Drift J = q·n·µ·E; diffusion follows the concentration gradient; Einstein: D = µ·kT/q. Current is positive-charge flow; P = V·I > 0 absorbs (passive sign convention).', 'Band gap separates insulators, semiconductors and metals (Si: 1.12 eV).', 'Donors (P, As) make n-type; acceptors (B) make p-type.', 'Mass action: n·p = n_i².', 'PN junction: depletion region, exponential forward current, ~60 mV per decade.', 'Electrons are more mobile than holes, so PMOS is sized wider.'],
 };
 
 export const mosphys: Lesson = {
@@ -94,6 +100,12 @@ export const mosphys: Lesson = {
     }),
     mc('Leakage gets **worse** at high temperature. Why does that matter?', ['It only matters at cold corners', 'It can feed back into thermal runaway', 'It makes the chip cool itself down', 'It only matters when idle'], 1, 'More leakage heats the chip, which increases leakage again. Subthreshold leakage grows roughly exponentially with temperature. Power and thermal signoff happen at hot corners for that reason.'),
     mc('Why did the industry move from planar transistors to **FinFETs** and now **gate-all-around** nanosheets?', ['They are cheaper to make per transistor', 'The wrapped gate controls the channel better', 'They raise carrier mobility far above planar silicon', 'They switch without needing a gate oxide'], 1, 'Wrapping the gate around the channel gives better electrostatic control: less DIBL, steeper swing, lower leakage. The more of the channel the gate surrounds, the more it dominates over the drain. Short-channel effects shrink and the transistor turns off properly again.'),
+    say('The gate and its neighbours form **capacitances**, and they set the speed. The gate-to-channel capacitance (split between C_gs and C_gd) is about W·L·Cox in total, with C_gs the larger part in saturation; the overlap of the gate over the source and drain adds C_gs and C_gd of its own; and the reverse-biased source and drain junctions add C_sb and C_db. Between gate and drain, C_gd matters most in an amplifier, because of the **Miller effect**: with an inverting stage of gain −A_v, the voltage across C_gd changes by (1 + A_v) times the input swing, so the input sees C_gd·(1 + A_v).'),
+    gen((r) => {
+      const cgd = pick(r, [0.5, 1, 2, 5]);
+      const av = pick(r, [5, 10, 20, 50]);
+      return ask(`A common-source stage has C_gd = ${cgd} fF and a gain of −${av}. What input capacitance does C_gd add through the Miller effect, in fF?`, qty(cgd * (1 + av), '', 0.02, String(cgd * (1 + av))), `C_Miller = C_gd·(1 + A_v) = ${cgd} × ${1 + av} = ${cgd * (1 + av)} fF. Gain multiplies a small capacitor into a big one, which is why high-gain stages are slow at their input.`, 'C_gd × (1 + gain).');
+    }),
     ask('Room-temperature thermal voltage kT/q is about how many **mV**?', qty(26, 'mV', 0.08), 'kT/q ≈ 25.9 mV at 300 K. It sets the 60 mV/decade limits for both diodes and subthreshold swing (26 mV × ln 10 ≈ 60 mV).', 'About a quarter of a tenth of a volt.'),
   ],
   recap: ['Vt: the gate voltage that forms the channel (inversion).', 'Long channel: Id ∝ (W/L)·Vov² in saturation; short channel: closer to linear.', 'Short-channel effects: velocity saturation, DIBL, Vt roll-off, CLM.', 'Leakage: subthreshold (≥60 mV/decade), gate tunneling, GIDL, junction; worse when hot.', 'FinFET/GAA restore gate control.'],
