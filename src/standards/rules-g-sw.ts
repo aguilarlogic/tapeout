@@ -8,4 +8,12 @@ export const RULES_G_SW: Rule[] = [
   { id: 'G2.2d', why: 'G2.2: mission isa-trap exists', require: { file: /games\/isa\/levels/, re: /id: 'isa-trap'/ } },
   { id: 'G2.2e', why: 'G2.2: mission isa-timer exists', require: { file: /games\/isa\/levels/, re: /id: 'isa-timer'/ } },
   { id: 'G2.2f', why: 'G2.2: mission isa-crt0 exists', require: { file: /games\/isa\/levels/, re: /id: 'isa-crt0'/ } },
+  { id: 'G2.3a', why: 'G2.3: the git lesson teaches fetch versus pull, submodules, LFS and interactive rebase', require: { file: /lessons\/tooling/, re: /\*\*interactive rebase\*\*/ } },
+  { id: 'G2.3b', why: 'G2.3: the git lesson teaches submodules and LFS', require: { file: /lessons\/tooling/, re: /\*\*Git LFS\*\*/ } },
+  { id: 'G2.3c', why: 'G2.3: the shell lesson teaches set -euo pipefail', require: { file: /lessons\/tooling/, re: /set -euo pipefail/ } },
+  { id: 'G2.3d', why: 'G2.3: the shell lesson teaches find -print0 | xargs -0', require: { file: /lessons\/tooling/, re: /-print0 \| xargs -0/ } },
+  { id: 'G2.3e', why: 'G2.3: the shell lesson teaches environment modules and csh setenv', require: { file: /lessons\/tooling/, re: /setenv NAME value/ } },
+  { id: 'G2.3f', why: 'G2.3: mission git-remote exists', require: { file: /games\/shell\/levels-git/, re: /id: 'git-remote'/ } },
+  { id: 'G2.3g', why: 'G2.3: mission git-rebase-i exists', require: { file: /games\/shell\/levels-git/, re: /id: 'git-rebase-i'/ } },
+  { id: 'G2.3h', why: 'G2.3: mission sh-quoting exists', require: { file: /games\/shell\/levels-sh/, re: /id: 'sh-quoting'/ } },
 ];
