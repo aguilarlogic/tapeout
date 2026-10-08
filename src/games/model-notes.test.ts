@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { MODEL_NOTE as RTL } from './rtl/page';
 import { MODEL_NOTE as SV } from './sv/page';
 import { MODEL_NOTE as SVA } from './sva/page';
-import { MODEL_NOTE as CODE } from './code/page';
+import { MODEL_NOTE as CODE, TCL_NOTE } from './code/page';
 import { MODEL_NOTE as ISA } from './isa/page';
 import { MODEL_NOTE as SHELL } from './shell/page';
 import { findArchLevel } from './arch/levels';
@@ -22,6 +22,9 @@ describe('lab model notes (S0.3)', () => {
   });
   it('Shell lab describes the POSIX-style model', () => {
     expect(SHELL).toBe('A POSIX-style shell with GNU tools. Bash-only and GNU-only features are marked where they appear.');
+  });
+  it('Code lab describes the Tcl subset', () => {
+    expect(TCL_NOTE).toBe('A Tcl subset with a toy netlist; real EDA shells have far more commands.');
   });
   it('arch-page levels carry their model note', () => {
     const note = (id: string) => findArchLevel(id)?.model;

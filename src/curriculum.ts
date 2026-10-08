@@ -248,7 +248,7 @@ export const ACTS: Act[] = [
       { name: 'C', need: 'Hardware/software interface', modules: [...drill('c'), ...code('code-c-swap', 'code-c-strings', 'code-c-array', 'code-c-bits', 'code-c-layout', 'code-c-list', 'code-c-vec', 'code-c-bug-overflow', 'code-c-bug-uaf', 'code-c-bug-leak', 'code-c-bug-dangling', 'code-c-bug-uninit'), bossMod('boss-c'), ...code('code-boss-c-ring', 'code-boss-c-split', 'code-boss-c-crc')] },
       { name: 'Algorithms', need: 'Pipelines', modules: [...drill('dsa'), ...code('code-py-fibmemo', 'code-py-bsearch', 'code-py-bfs', 'code-py-topo', 'code-py-lru'), bossMod('boss-dsa'), ...code('code-boss-py-graph')] },
       { name: 'Python', need: 'Static timing', modules: [...drill('python'), ...code('code-py-parse', 'code-py-hist', 'code-py-regfield'), bossMod('boss-python'), ...code('code-boss-py-log')] },
-      { name: 'Flows & scripting', need: 'Static timing', modules: [...drill('flows'), ...code('code-py-triage'), ...shell('sh-make', 'sh-make-hdr', 'sh-python'), bossMod('boss-flows'), ...shell('sh-boss-make')] },
+      { name: 'Flows & scripting', need: 'Static timing', modules: [...drill('flows'), ...code('code-py-triage', 'code-tcl-subst', 'code-tcl-dict', 'code-tcl-regexp', 'code-tcl-netlist', 'code-tcl-catch'), ...shell('sh-make', 'sh-make-hdr', 'sh-python'), bossMod('boss-flows'), ...code('code-tcl-boss'), ...shell('sh-boss-make')] },
       { name: 'C++', need: 'Testbenches & debug', modules: [...drill('cpp'), bossMod('boss-cpp')] },
       { name: 'Operating systems', need: 'Memory hierarchy', modules: [...drill('os'), ...code('code-os-rr', 'code-os-paging', 'code-os-deadlock', 'code-os-alloc'), bossMod('boss-os'), ...code('code-os-boss-sched')] },
     ],
