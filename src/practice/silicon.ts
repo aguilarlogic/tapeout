@@ -445,7 +445,7 @@ export const fabPractice = practice('practice-fab', 'Fab & Yield Drills', 'litho
     const layers = tier(d, pick(r, [4, 6]), pick(r, [8, 10, 12]), pick(r, [14, 16, 18])), colours = pick(r, [2, 3, 4]);
     const idea = 'When one exposure cannot print a layer, the shapes are split across several masks: each shape gets a colour, one colour per mask. A layer printed with k colours needs k masks (double patterning: 2, triple: 3). The more layers need it, the more masks the whole stack costs.';
     const name = colours === 2 ? 'double patterning (2 colours)' : colours === 3 ? 'triple patterning (3 colours)' : 'quadruple patterning (4 colours)';
-    if (d < 3) return walk(ask(`${layers} layers are printed with ${name}. How many masks do those layers need?`, num(layers * colours), `${layers} × ${colours} = ${layers * colours}.`, 'Layers × colours.'),
+    if (d < 3) return walk(ask(`${layers} layers are printed with ${name}. How many masks do those layers need?`, num(layers * colours), `${layers} layers × ${colours} masks each = ${layers * colours} masks.`, 'Layers × colours.'),
       'masks from colours', idea,
       count('Masks = layers × colours:', `${layers} × ${colours}`, layers * colours));
     const single = pick(r, [2, 4, 6]);
@@ -591,6 +591,20 @@ export const pkgPractice = practice('practice-pkg', 'Packaging Drills', 'chiplet
       calc('The difference in expansion rates, in ppm/K:', `17 - ${ca}`, 17 - ca, '', sig(17 - ca, 4), 0.005),
       calc('Extra growth = Δα × 1e-6 × ΔT × length, length in µm (mm × 1000):', `${sig(17 - ca, 4)}e-6 × ${dt} × ${l} × 1000`, dl, 'um', sig(dl), 0.03));
   },
+  (r, d) => {
+    const tb = pick(r, [60, 70, 80]), psi = pick(r, [0.2, 0.3, 0.4]), p = pick(r, [10, 20, 30]), tt = pick(r, [85, 90, 95]), pj = pick(r, [0.1, 0.15, 0.2]);
+    const idea = 'Datasheet thermal resistances describe one heat path each, so they compare packages but do not predict a product. The characterisation parameters Ψ tie the junction to a temperature you can measure in the real system, while heat flows by all routes at once: Tj ≈ T_board + Ψ_JB × P from the board side, Tj ≈ T_top + Ψ_JT × P from the top of the package.';
+    if (d === 1) return walk(ask(`The board next to a package reads ${tb} °C, psi_JB = ${psi} °C/W, power ${p} W. Junction temperature, in °C?`, qty(tb + psi * p, '°C', 0.02, sig(tb + psi * p)), `${tb} + ${psi} × ${p} = ${sig(tb + psi * p)} °C.`, 'Tj = T_board + psi_JB × P.'),
+      'the board-side Ψ estimate', idea,
+      calc('The rise above the board, Ψ_JB × P, in °C:', `${psi} × ${p}`, psi * p, '°C', sig(psi * p, 4), 0.01),
+      calc('Add the board temperature:', `${tb} + ${sig(psi * p, 4)}`, tb + psi * p, '°C', sig(tb + psi * p), 0.02));
+    const a1 = tt + pj * p, a2 = tb + psi * p;
+    return walk(ask(`Two sensors, one per side: the top of the package reads ${tt} °C (psi_JT = ${pj} °C/W) and the board reads ${tb} °C (psi_JB = ${psi} °C/W) at ${p} W. Which gives the higher junction estimate, and what is that estimate, in °C? (Answer the higher value.)`, qty(Math.max(a1, a2), '°C', 0.02, sig(Math.max(a1, a2))), `Top: ${tt} + ${pj} × ${p} = ${sig(a1)} °C; board: ${tb} + ${psi} × ${p} = ${sig(a2)} °C. A cautious engineer takes the higher estimate: ${sig(Math.max(a1, a2))} °C.`, 'Compute both, keep the larger.'),
+      'two Ψ estimates', idea,
+      calc('From the top, T_top + Ψ_JT × P, in °C:', `${tt} + ${pj} × ${p}`, a1, '°C', sig(a1), 0.02),
+      calc('From the board, T_board + Ψ_JB × P, in °C:', `${tb} + ${psi} × ${p}`, a2, '°C', sig(a2), 0.02),
+      calc('Design to the higher of the two, in °C:', `max(${sig(a1)}, ${sig(a2)})`, Math.max(a1, a2), '°C', sig(Math.max(a1, a2)), 0.02));
+  },
   (r) => concept(r, [
     ['Why does HBM sit on an interposer next to the GPU instead of on the board?', 'Its wide interface needs thousands of short, fine wires', ['It is cheaper to mount than DRAM on the board, at each size', 'Boards are too slow for DRAM, which needs a silicon carrier', 'It needs no power, so it can be placed far from the cooling'], 'why HBM needs an interposer', 'HBM gets its bandwidth from being very wide, with over a thousand data wires per stack. A circuit board can route only hundreds of wires along a package edge, and they are long. A silicon interposer has much finer, shorter wires, thousands of them.', ['Many fine, short wires between chips need:', 'A silicon interposer', ['A circuit board', 'A longer cable']], 'Its 1024-bit interface needs thousands of short, fine wires that only silicon interposers or bridges provide'],
     ['What does UCIe standardize?', 'A die-to-die interface for chiplets from different vendors', ['A DRAM protocol for the stacks that sit next to the logic', 'A PCB material for high-speed boards with a low loss tangent', 'A cooling standard for the lids that sit on top of a package'], 'chiplet interfaces', 'To mix chiplets from different makers in one package they must all speak the same language over the short wires between them. UCIe is a standard die-to-die interface, like PCIe is for boards.', ['A standard interface lets chiplets from different vendors:', 'Work together in one package', ['Share a wafer', 'Use one supply']], 'A die-to-die interface so chiplets from different vendors can connect in one package'],
@@ -602,6 +616,9 @@ export const pkgPractice = practice('practice-pkg', 'Packaging Drills', 'chiplet
       ['Why does a chiplet design help yield?', 'Small dies fail less often', ['Small dies run at a higher clock', 'Chiplets need no packaging', 'Chiplets avoid all defects in the wafer'],
         'chiplet yield', 'Defects land at random on a wafer. A small die has a smaller chance of containing one, so more good dies per wafer, and known-good dies can be combined into a big system.',
         ['A bigger die is more likely to contain a:', 'Defect', ['Via', 'Clock']], 'Small dies fail less often, and bad ones are thrown away before assembly'],
+    ['A fine-pitch link is needed only where two chiplets meet. Which technology fits best?', 'An embedded silicon bridge in the substrate', ['A full silicon interposer under all the dies', 'Longer wire bonds between the dies', 'A thicker organic substrate'], 'bridge versus interposer', 'A full interposer pays for silicon under the whole package. A bridge is a small chip embedded in the substrate under just the die edges, so the fine wiring exists only where it is needed.', ['A bridge sits:', 'Under the edges where two dies meet', ['Under every die', 'On top of the lid']], 'An embedded silicon bridge, so fine wiring exists only where dies meet'],
+    ['What distinguishes hybrid bonding from micro-bump stacking?', 'Face-to-face copper bonding, with no solder', ['It uses a thicker solder ball under each die', 'It joins dies with wire bonds at the edges', 'It only works for a die on a substrate'], 'hybrid bonding', 'Hybrid bonding joins the dielectric and the copper pads of two dies directly, at micron pitch, so there are far more connections per area than with solder micro-bumps. The price is cleanliness, flatness and test.', ['Hybrid bonding has no:', 'Solder', ['Copper', 'Silicon']], 'Face to face, copper to copper, with no solder'],
+    ['Which path does junction-to-board thermal resistance describe?', 'Heat flowing down through the balls to the board', ['Heat flowing up through the lid into the heatsink', 'Heat flowing sideways along the die edge', 'Heat radiated from the package to the room'], 'thermal paths', 'Junction-to-case is the path up to the heatsink, junction-to-board is the path down into the board. Real products lose heat both ways at once, which is why the Ψ parameters and a measured temperature are used in a real system.', ['Junction-to-case describes heat going:', 'Up through the lid', ['Down into the board', 'Out of the sides']], 'Heat flowing down through the balls into the board'],
   ], (why) => `${why}.`),
 ]);
 

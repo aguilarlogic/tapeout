@@ -85,4 +85,14 @@ export const RULES_G_PD: Rule[] = [
     why: 'G1.9: glossary entries for backside power, multi-patterning and the PD data formats',
     require: { file: /glossary/, re: /'backside power\|/ },
   },
+  {
+    id: 'G3.6-thermal-paths',
+    why: 'G3.6: junction-to-board and junction-to-case paths',
+    require: { file: /lessons\/roles/, re: /[Jj]unction-to-board/ },
+  },
+  {
+    id: 'G3.6-stack-classes',
+    why: 'G3.6: interposer versus bridge versus hybrid-bonded stacks',
+    require: { file: /lessons\/roles/, re: /bridge[^\n]*hybrid-bonded|hybrid-bonded[^\n]*bridge/ },
+  },
 ];
