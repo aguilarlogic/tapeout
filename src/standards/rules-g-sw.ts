@@ -16,4 +16,13 @@ export const RULES_G_SW: Rule[] = [
   { id: 'G2.3f', why: 'G2.3: mission git-remote exists', require: { file: /games\/shell\/levels-git/, re: /id: 'git-remote'/ } },
   { id: 'G2.3g', why: 'G2.3: mission git-rebase-i exists', require: { file: /games\/shell\/levels-git/, re: /id: 'git-rebase-i'/ } },
   { id: 'G2.3h', why: 'G2.3: mission sh-quoting exists', require: { file: /games\/shell\/levels-sh/, re: /id: 'sh-quoting'/ } },
+  { id: 'G2.4a', why: 'G2.4: the C lesson teaches ISR-shared variables and why volatile is not atomic', require: { file: /lessons\/systems/, re: /\*\*ISR\*\*/ } },
+  { id: 'G2.4b', why: 'G2.4: the C lesson teaches strict aliasing', require: { file: /lessons\/systems/, re: /\*\*strict aliasing\*\*/ } },
+  { id: 'G2.4c', why: 'G2.4: the C lesson names static_assert and offsetof for register maps', require: { file: /lessons\/systems/, re: /static_assert\(sizeof/ } },
+  { id: 'G2.4d', why: 'G2.4: the C lesson names the sanitizers', require: { file: /lessons\/systems/, re: /\*\*AddressSanitizer\*\*/ } },
+  { id: 'G2.4e', why: 'G2.4: the C++ lesson teaches the rule of zero, three and five', require: { file: /lessons\/systems/, re: /\*\*rule of zero, three and five\*\*/ } },
+  { id: 'G2.4f', why: 'G2.4: the C++ lesson teaches std::atomic and memory order', require: { file: /lessons\/systems/, re: /\*\*memory order\*\*/ } },
+  { id: 'G2.4g', why: 'G2.4: mission code-c-isr exists', require: { file: /games\/code\/levels-c/, re: /id: 'code-c-isr'/ } },
+  { id: 'G2.4h', why: 'G2.4: the C practice set covers the embedded topics (aliasing, sanitizers)', require: { file: /practice\/systems/, re: /strict aliasing/ } },
+  { id: 'G2.4i', why: 'G2.4: the C++ practice set covers the rule of zero and memory order', require: { file: /practice\/systems/, re: /'memory order'/ } },
 ];

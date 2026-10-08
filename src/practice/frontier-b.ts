@@ -4,10 +4,7 @@ import { qty } from '../lessons/answers';
 import { calc, choice, count, walk } from '../lessons/teach';
 import { ask, gen, mc, pick, say } from '../lessons/types';
 import { boss, practice, tier, type PracticeSet } from './types';
-import { concept, sig } from './util';
-
-/** A six-row concept pool: d1 draws from the first four (easier) rows, d2 and d3 from all six. */
-const easyFirst = <T,>(d: number, rows: T[]): T[] => (d === 1 ? rows.slice(0, 4) : rows);
+import { concept, easyFirst, sig } from './util';
 
 const hard = (set: PracticeSet, i: number) => gen((r) => ({ ...set.gens[i](r, 3), teach: undefined }));
 const bossOf = (set: PracticeSet, id: string, title: string, concept: string, xp: number, intro: string, picks: number[], extra: ReturnType<typeof mc>[]) =>
