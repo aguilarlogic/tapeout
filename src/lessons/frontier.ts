@@ -191,10 +191,17 @@ export const clocking: Lesson = {
       const s = Math.sqrt(2 * 10 ** (l / 10) * b) / (2 * Math.PI * f0) * 1e15;
       return ask(`Flat phase noise of ${l} dBc/Hz over ${b / 1e6} MHz on a ${f0 / 1e9} GHz clock. What is the RMS jitter, in fs?`, qty(s, 'fs', 0.03, sig(s)), `σ_t = √(2 × 10^(${l / 10}) × ${b / 1e6}e6) / (2π × ${f0 / 1e9}e9) = ${sig(s)} fs. Better by 20 dB means ten times less jitter.`, 'Integrate, take the square root, divide by 2πf.');
     }),
+    say('Jitter is quoted in more than one way. **Period jitter** is how far one period is from the ideal period. **Cycle-to-cycle jitter** is the difference between two adjacent periods. **Time-interval error (TIE)**, the phase jitter, is how far each edge lands from where an ideal clock would have put it, and unlike the other two it accumulates. Serial links care about TIE.'),
+    say('Split jitter by cause, too. **Random jitter (RJ)** is Gaussian and unbounded, quoted as an rms value. **Deterministic jitter (DJ)** is bounded, with a hard peak-to-peak limit: data-dependent, periodic or duty-cycle. Because RJ has no limit, a link quotes **total jitter** only at a bit-error rate: TJ = DJ + 2·Q·RJ, with Q = 7.03 at a BER of 10⁻¹².'),
+    gen((r) => {
+      const dj = pick(r, [10, 15, 20, 30]), rj = pick(r, [0.5, 1, 1.5, 2]);
+      const tj = dj + 2 * 7.03 * rj;
+      return ask(`A link has DJ = ${dj} ps peak-to-peak and RJ = ${rj} ps rms. What is its total jitter at a BER of 10⁻¹², in ps? (Q = 7.03)`, qty(tj, 'ps', 0.02, sig(tj)), `TJ = DJ + 2·Q·RJ = ${dj} + 2 × 7.03 × ${rj} = ${sig(tj)} ps. The random part is multiplied by 14: that is the price of asking for 1 error in 10¹² bits.`, 'TJ = DJ + 2 × 7.03 × RJ.');
+    }),
     mc('A **DLL** (delay-locked loop) differs from a PLL in that it:', ['Is a PLL built with a digital loop filter', 'Delays the reference instead of making a new frequency', 'Generates higher frequencies with less jitter', 'Multiplies the reference like a PLL, but with an LC oscillator'], 1, 'It delays the reference by a controlled amount, so it does not accumulate jitter; it is used for phase alignment (memory interfaces, clock deskew). A DLL has no oscillator, so the delay line cannot drift with accumulating phase error. A basic DLL aligns edges but cannot multiply the frequency (edge-combining DLLs can).'),
     mc('Why does a PLL\'s supply noise matter so much?', ['The loop tracks out all supply noise, so only the crystal matters', 'The VCO turns supply noise into frequency, and so phase, error', 'Only the charge pump is sensitive to the supply', 'Supply noise mainly changes the divider ratio N'], 1, 'The VCO converts any noise on its supply or control line into frequency, hence phase: PLLs use dedicated clean regulators, heavy decoupling and isolation from digital switching. The control voltage sets the frequency; anything that changes it modulates the output. This is where analog, power and package engineers meet.'),
   ],
-  recap: ['PLL: PFD + charge pump + loop filter + VCO + ÷N; f_out = N · f_ref.', 'Loop bandwidth ≲ f_ref/10, balancing reference and VCO noise.', 'Ring oscillator: f = 1/(2 · stages · delay).', 'Jitter = integrated phase noise over 2π f₀.', 'A DLL aligns, a PLL synthesises.'],
+  recap: ['PLL: PFD + charge pump + loop filter + VCO + ÷N; f_out = N · f_ref.', 'Loop bandwidth ≲ f_ref/10, balancing reference and VCO noise.', 'Ring oscillator: f = 1/(2 · stages · delay).', 'Jitter = integrated phase noise over 2π f₀.', 'Period, cycle-to-cycle and TIE (phase) jitter; RJ is Gaussian and unbounded, DJ is bounded; TJ = DJ + 2·Q·RJ with Q = 7.03 at 1e-12.', 'A DLL aligns, a PLL synthesises.'],
 };
 
 export const sensors: Lesson = {

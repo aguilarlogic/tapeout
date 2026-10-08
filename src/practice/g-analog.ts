@@ -5,7 +5,7 @@ import { num, qty, type Answer } from '../lessons/answers';
 import { calc, choice, count, walk } from '../lessons/teach';
 import { ask, mc, pick } from '../lessons/types';
 import { type Gen } from './types';
-import { concept, eng, mcs, sci, sig } from './util';
+import { atLevel, concept, eng, mcs, sci, sig } from './util';
 
 const KT = 1.38e-23 * 300; // J at 300 K
 const Q_E = 1.602e-19; // C
@@ -156,7 +156,7 @@ const flickerCorner: Gen = (r, d) => {
     'the flicker corner', idea,
     calc('√f_c = A ÷ floor:', `${w * m} / ${w}`, m, '', String(m), 0.01), count('f_c = that squared, in Hz:', `${m}²`, m * m));
   const f1 = pick(r, [10, 100, 1000]), a = (w * m) / Math.sqrt(f1);
-  if (d === 2) return walk(ask(`An amplifier's white floor is ${w} nV/√Hz. Its noise density is measured as ${sig(a)} nV/√Hz at ${f1} Hz, where it is still falling as 1/√f. What is the corner frequency, in Hz?`, qty(m * m, 'Hz', 0.04, String(m * m)), `At 1 Hz the 1/f density would be ${sig(a)} × √${f1} = ${w * m} nV/√Hz, so f_c = (${w * m}/${w})² = ${m * m} Hz.`, 'Scale the measurement back to 1 Hz with √f, then find the crossing.'),
+  if (d === 2) return walk(ask(`An amplifier's white floor is ${w} nV/√Hz. The 1/f part of its noise alone measures ${sig(a)} nV/√Hz at ${f1} Hz, and falls as 1/√f. What is the corner frequency, in Hz?`, qty(m * m, 'Hz', 0.04, String(m * m)), `At 1 Hz the 1/f density would be ${sig(a)} × √${f1} = ${w * m} nV/√Hz, so f_c = (${w * m}/${w})² = ${m * m} Hz.`, 'Scale the measurement back to 1 Hz with √f, then find the crossing.'),
     'the flicker corner from a measurement', idea,
     calc('Density at 1 Hz = measured × √f:', `${sig(a)} × sqrt(${f1})`, w * m, 'nV', String(w * m), 0.03),
     calc('f_c = (density at 1 Hz ÷ floor)², in Hz:', `(${w * m} / ${w})^2`, m * m, 'Hz', String(m * m), 0.03));
@@ -179,7 +179,7 @@ const inputReferred: Gen = (r, d) => {
     'input-referred noise of two stages', idea,
     calc('Second stage referred to the first input, in nV/√Hz:', `${e2} / ${g1}`, e2 / g1, 'nV', sig(e2 / g1), 0.02),
     calc('In quadrature with the first stage:', `sqrt(${e1}² + ${sig(e2 / g1)}²)`, t, 'nV', sig(t), 0.03));
-  const gdb = pick(r, [14, 20, 26]), gl = 10 ** (gdb / 20), t3 = Math.hypot(e1, e2 / gl), sig_in = pick(r, [1, 2, 5]), b = pick(r, [1e4, 1e5]), snr = db20(sig_in * 1e-6 / (t3 * 1e-9 * Math.sqrt(b)));
+  const gdb = pick(r, [14, 20, 26]), gl = 10 ** (gdb / 20), t3 = Math.hypot(e1, e2 / gl), sig_in = pick(r, [20, 50, 100, 200]), b = pick(r, [1e4, 1e5]), snr = db20(sig_in * 1e-6 / (t3 * 1e-9 * Math.sqrt(b)));
   return walk(ask(`A first stage with ${gdb} dB of gain and ${e1} nV/√Hz of input noise feeds a second stage with ${e2} nV/√Hz referred to its own input. A ${sig_in} µV rms signal is measured over ${eng(b, 'Hz')}. What SNR results, in dB?`, qty(snr, 'dB', 0.04, sig(snr)), `Gain = ${sig(gl)}×. Total input noise = √(${e1}² + (${e2}/${sig(gl)})²) = ${sig(t3)} nV/√Hz, or ${sig(t3 * Math.sqrt(b) / 1000)} µV over the band. SNR = 20·log10(${sig_in} / ${sig(t3 * Math.sqrt(b) / 1000)}) = ${sig(snr)} dB.`, 'Refer both stages to the input, integrate over the band, then 20·log10.'),
     'SNR from input-referred noise', idea,
     calc('Gain as a ratio (20 dB per 10×):', `10^(${gdb}/20)`, gl, '', sig(gl), 0.02),
@@ -276,5 +276,183 @@ const pmResponse: Gen = (r, d) => {
 export const CONTROL_MARGINS: Gen[] = [loopMargins, pmResponse, gainMarginRead];
 export const ANALOG_MARGINS: Gen[] = [pmResponse, gainMarginRead];
 
+// ------------------------------------------------------------------ G1.13 converter, RF and clock specs
+
+/** ENOB: d1 from SINAD, d2 from SNR and THD, d3 from a spur-limited SINAD (SFDR). */
+const enobGen: Gen = (r, d) => {
+  const idea = 'Effective number of bits asks: what ideal converter would give the SINAD I measured? An ideal N-bit ADC has SINAD = 6.02·N + 1.76 dB, so ENOB = (SINAD − 1.76) / 6.02. SINAD counts noise AND distortion; SFDR is the gap to the single largest spur, and if that spur dominates, SINAD cannot be much better than the SFDR.';
+  if (d === 1) {
+    const sinad = pick(r, [50, 56, 62, 68, 74, 80]), e = (sinad - 1.76) / 6.02;
+    return walk(ask(`An ADC measures a SINAD of ${sinad} dB. What is its ENOB, in bits?`, qty(e, 'bits', 0.02, sig(e)), `(${sinad} − 1.76) / 6.02 = ${sig(e)} bits.`, 'ENOB = (SINAD − 1.76) / 6.02.'),
+      'effective number of bits', idea, calc('Subtract 1.76:', `${sinad} − 1.76`, sinad - 1.76, '', sig(sinad - 1.76, 4), 0.005), calc('Divide by 6.02:', `${sig(sinad - 1.76, 4)} / 6.02`, e, 'bits', sig(e), 0.02));
+  }
+  if (d === 2) {
+    const snr = pick(r, [68, 70, 72, 74]), thd = pick(r, [66, 70, 74, 78]), sinad = -db10(10 ** (-snr / 10) + 10 ** (-thd / 10)), e = (sinad - 1.76) / 6.02;
+    return walk(ask(`An ADC has an SNR of ${snr} dB and a THD of −${thd} dB (relative to the carrier). Noise and distortion add in power. What is its ENOB, in bits?`, qty(e, 'bits', 0.03, sig(e)), `Noise and distortion powers: 10^(−${snr}/10) + 10^(−${thd}/10) = ${sci(10 ** (-snr / 10) + 10 ** (-thd / 10), 2)}, so SINAD = ${sig(sinad)} dB and ENOB = (${sig(sinad)} − 1.76)/6.02 = ${sig(e)} bits.`, 'Add the noise and distortion powers, convert to SINAD, then to bits.'),
+      'ENOB from SNR and THD', idea,
+      calc('Total unwanted power relative to the carrier:', `10^(−${snr}/10) + 10^(−${thd}/10)`, 10 ** (-snr / 10) + 10 ** (-thd / 10), '', sci(10 ** (-snr / 10) + 10 ** (-thd / 10), 2), 0.02),
+      calc('SINAD = −10·log10 of that, in dB:', `−10 × log10(${sci(10 ** (-snr / 10) + 10 ** (-thd / 10), 2)})`, sinad, 'dB', sig(sinad), 0.01),
+      calc('ENOB = (SINAD − 1.76) / 6.02:', `(${sig(sinad)} − 1.76) / 6.02`, e, 'bits', sig(e), 0.03));
+  }
+  const sfdr = pick(r, [54, 58, 60, 64, 66, 70, 72, 76, 82]), e = (sfdr - 1.76) / 6.02;
+  return walk(ask(`An ADC's noise floor is far below its largest spur, which sits ${sfdr} dBc under the carrier. Taking SINAD ≈ SFDR, what is its ENOB, in bits?`, qty(e, 'bits', 0.03, sig(e)), `(${sfdr} − 1.76) / 6.02 = ${sig(e)} bits. The spur, not the noise, sets the resolution.`, 'SINAD ≈ SFDR when one spur dominates.'),
+    'ENOB when a spur dominates', idea, calc('Subtract 1.76 from the SFDR:', `${sfdr} − 1.76`, sfdr - 1.76, '', sig(sfdr - 1.76, 4), 0.005), calc('Divide by 6.02:', `${sig(sfdr - 1.76, 4)} / 6.02`, e, 'bits', sig(e), 0.03));
+};
+
+/** DNL: d1 one step, d2 the worst of a list, d3 find the missing code. */
+const dnlGen: Gen = (r, d) => {
+  const idea = 'DNL (differential non-linearity) compares each code\'s step with the ideal one LSB: DNL = (step width ÷ 1 LSB) − 1. A step of 1.5 LSB has DNL = +0.5; a step of 0.5 LSB has −0.5. A step of ZERO width never produces its code: that is DNL = −1, a missing code.';
+  const fmt = (x: number) => String(+x.toFixed(2));
+  if (d === 1) {
+    const w = pick(r, [0.5, 0.6, 0.75, 1.25, 1.4, 1.5, 1.8, 2]);
+    return walk(ask(`One code of an ADC spans ${w} LSB. What is its DNL, in LSB?`, qty(w - 1, '', 0.02, fmt(w - 1)), `DNL = ${w} / 1 − 1 = ${fmt(w - 1)} LSB.`, 'DNL = width ÷ 1 LSB − 1.'),
+      'differential non-linearity', idea, calc('DNL = width − 1, in LSB:', `${w} / 1 − 1`, w - 1, '', fmt(w - 1), 0.02));
+  }
+  const dev = [0, 0, 0, 0, 0].map(() => pick(r, [-0.2, -0.1, 0.1, 0.2]));
+  const k = Math.floor(r() * 5), big = pick(r, [-0.5, -0.4, 0.4, 0.5, 0.6]);
+  dev[k] = big;
+  const widths = dev.map((x) => fmt(1 + x));
+  if (d === 2) {
+    return walk(ask(`Five consecutive codes of an ADC have step widths of ${widths.join(', ')} LSB. What is the worst-case DNL (largest in size, keep the sign), in LSB?`, qty(big, '', 0.02, fmt(big)), `DNL per code = width − 1 = ${dev.map(fmt).join(', ')}. The largest in size is ${fmt(big)} LSB.`, 'Subtract 1 from each width, then pick the biggest magnitude.'),
+      'worst-case DNL', idea,
+      calc(`DNL of the code that is ${widths[k]} LSB wide:`, `${widths[k]} − 1`, big, '', fmt(big), 0.02),
+      `The other four codes deviate by at most 0.2 LSB, so ${fmt(big)} is the worst.`,
+      calc('So the worst-case DNL, in LSB:', `${fmt(big)}`, big, '', fmt(big), 0.02));
+  }
+  const first = 20 + Math.floor(r() * 80), m = Math.floor(r() * 5);
+  const ws = [0, 1, 2, 3, 4].map((_, i) => (i === m ? 0 : pick(r, [0.9, 1, 1.1, 1.2])));
+  const rows = ws.map((w, i) => `code ${first + i}: ${w} LSB`).join(', ');
+  const codes = [0, 1, 2, 3, 4].map((i) => `code ${first + i}`);
+  return walk(mcs(r, `An ADC's steps are: ${rows}. Which code is missing?`, `code ${first + m}`, codes.filter((_, i) => i !== m).slice(0, 3), `A step of 0 LSB has DNL = −1, so code ${first + m} can never be output.`),
+    'finding a missing code', idea,
+    choice('A step of zero width has a DNL of:', '−1 (the code is missing)', ['0 (perfect)', '+1']),
+    choice('So the missing code is the one whose step is:', '0 LSB wide', ['The widest', 'Exactly 1 LSB wide']));
+};
+
+/** Slew rate and full-power bandwidth. */
+const fpbwGen: Gen = (r, d) => {
+  const idea = 'An op-amp output cannot change faster than its slew rate SR. A sine of peak Vpk and frequency f has a maximum slope of 2π·f·Vpk, so to stay undistorted that slope must not exceed SR. The highest full-amplitude frequency, the full-power bandwidth, is f = SR / (2π·Vpk). (1 V/µs = 10⁶ V/s.)';
+  const sr = pick(r, [1, 2, 5, 10, 20]), vp = pick(r, [1, 2, 2.5, 5, 10]);
+  if (d === 1) {
+    const f = (sr * 1e6) / (2 * Math.PI * vp);
+    return walk(ask(`An op-amp slews at ${sr} V/µs. What is its full-power bandwidth for a ${vp} V peak sine, in kHz?`, qty(f / 1e3, 'kHz', 0.02, sig(f / 1e3)), `f = SR / (2π·Vpk) = ${sr}e6 / (2π × ${vp}) = ${sig(f / 1e3)} kHz.`, 'f = SR / (2π × Vpeak).'),
+      'full-power bandwidth', idea, calc('f = SR ÷ (2π × Vpk), in kHz:', `${sr}e6 / (2π × ${vp}) / 1000`, f / 1e3, 'kHz', sig(f / 1e3), 0.02));
+  }
+  if (d === 2) {
+    const vpp = vp * 2, f = (sr * 1e6) / (2 * Math.PI * vp);
+    return walk(ask(`An op-amp with a slew rate of ${sr} V/µs drives a ${vpp} V peak-to-peak sine. What is the highest frequency it can deliver undistorted, in kHz?`, qty(f / 1e3, 'kHz', 0.02, sig(f / 1e3)), `Vpk = ${vpp}/2 = ${vp} V; f = ${sr}e6 / (2π × ${vp}) = ${sig(f / 1e3)} kHz.`, 'Halve the peak-to-peak first.'),
+      'full-power bandwidth from peak-to-peak', idea, calc('Peak voltage = Vpp ÷ 2:', `${vpp} / 2`, vp, 'V', String(vp), 0.01), calc('f = SR ÷ (2π × Vpk), in kHz:', `${sr}e6 / (2π × ${vp}) / 1000`, f / 1e3, 'kHz', sig(f / 1e3), 0.02));
+  }
+  const f = pick(r, [0.5, 1, 2, 5]), req = 2 * Math.PI * f * 1e6 * vp / 1e6;
+  return walk(ask(`An amplifier must deliver a ${vp} V peak sine at ${f} MHz without slew limiting. What slew rate does it need, in V/µs?`, qty(req, '', 0.02, sig(req)), `SR ≥ 2π·f·Vpk = 2π × ${f}e6 × ${vp} = ${sig(req * 1e6)} V/s = ${sig(req)} V/µs.`, 'SR = 2π × f × Vpeak.'),
+    'slew rate needed', idea, calc('SR = 2π × f × Vpk, in V/s:', `2π × ${f}e6 × ${vp}`, req * 1e6, '', sci(req * 1e6, 2), 0.02), calc('In V/µs (÷ 1e6):', `${sci(req * 1e6, 2)} / 1e6`, req, '', sig(req), 0.02));
+};
+
+export const ANALOG_CONVERTER: Gen[] = [enobGen, dnlGen, fpbwGen];
+
+/** Two-tone IIP3, P1dB, and cascades. */
+const iip3Gen: Gen = (r, d) => {
+  const idea = 'Two strong tones make third-order intermodulation (IM3) products. IM3 rises 3 dB per dB of input while the tones rise 1 dB per dB, so extended lines meet at the third-order intercept. From a two-tone test with ΔP = (tone level − IM3 level) in dB, IIP3 = P_in + ΔP/2. For a pure third-order nonlinearity IIP3 ≈ P1dB + 9.6 dB (real amplifiers often show 10 to 12 dB).';
+  if (d === 1) {
+    const pin = pick(r, [-30, -25, -20, -15, -10]), dp = pick(r, [30, 40, 50, 60]), v = pin + dp / 2;
+    return walk(ask(`A two-tone test at ${pin} dBm per tone shows IM3 products ${dp} dB below the tones. What is the input IP3, in dBm?`, qty(v, 'dBm', 0.03, String(v)), `IIP3 = ${pin} + ${dp}/2 = ${v} dBm.`, 'IIP3 = P_in + ΔP/2.'),
+      'IIP3 from a two-tone test', idea, calc('Half the gap, ΔP/2, in dB:', `${dp} / 2`, dp / 2, 'dB', String(dp / 2), 0.01), calc('IIP3 = P_in + ΔP/2, in dBm:', `${pin} + ${dp / 2}`, v, 'dBm', String(v), 0.03));
+  }
+  if (d === 2) {
+    const p1 = pick(r, [-25, -20, -15, -5, 0, 5]), v = p1 + 9.6;
+    return walk(ask(`An amplifier with a pure third-order nonlinearity has a P1dB of ${p1} dBm at its input. Estimate its input IP3, in dBm.`, qty(v, 'dBm', 0.03, sig(v)), `IIP3 ≈ P1dB + 9.6 dB = ${p1} + 9.6 = ${sig(v)} dBm. Real amplifiers often land 10 to 12 dB above P1dB.`, 'IIP3 ≈ P1dB + 9.6 dB.'),
+      'IIP3 from P1dB', idea, calc('IIP3 = P1dB + 9.6, in dBm:', `${p1} + 9.6`, v, 'dBm', sig(v), 0.03));
+  }
+  const g = pick(r, [10, 15, 20]), i1 = pick(r, [-10, -5, 0]), i2 = pick(r, [0, 5, 10]);
+  const l1 = lin(i1), l2 = lin(i2), gl = lin(g), inv = 1 / l1 + gl / l2, tot = 1 / inv, v = db10(tot);
+  return walk(ask(`An LNA (gain ${g} dB, IIP3 = ${i1} dBm) feeds a mixer with IIP3 = ${i2} dBm. What is the cascaded input IP3, in dBm?`, qty(v, 'dBm', 0.04, sig(v)), `In mW: 1/IIP3 = 1/${sig(l1)} + ${sig(gl)}/${sig(l2)} = ${sig(inv)}, so IIP3 = ${sig(tot)} mW = ${sig(v)} dBm. The mixer, seen through the LNA's gain, dominates.`, 'Work in linear power (mW): 1/IIP3 = 1/IIP3₁ + G₁/IIP3₂.'),
+    'cascaded IIP3', `${idea} In a chain, a later stage sees the gain of the stages before it, so it overloads sooner: 1/IIP3_total = 1/IIP3₁ + G₁/IIP3₂ + …, in LINEAR power (mW), with G₁ the linear gain in front of stage 2.`,
+    calc('IIP3₁ in mW, 10^(dBm/10):', `10^(${i1}/10)`, l1, 'mW', sig(l1, 4), 0.01),
+    calc('IIP3₂ in mW, and G₁ = 10^(dB/10):', `10^(${i2}/10)  (G₁ = ${sig(gl)})`, l2, 'mW', sig(l2, 4), 0.01),
+    calc('1/IIP3 = 1/IIP3₁ + G₁/IIP3₂, in 1/mW:', `1/${sig(l1, 4)} + ${sig(gl, 4)}/${sig(l2, 4)}`, inv, '', sig(inv, 4), 0.01),
+    calc('IIP3 = 1 ÷ that, then 10·log10, in dBm:', `10 × log10(1 / ${sig(inv, 4)})`, v, 'dBm', sig(v), 0.04));
+};
+
+/** How IM3 moves with the input level. */
+const im3Slope: Gen = (r, d) => {
+  const idea = 'In the nonlinearity, the wanted tones follow the input dB for dB, but the third-order products follow it 3 dB for every 1 dB. So raising the input by x dB lifts the tones by x and the IM3 products by 3x, and the gap ΔP between them shrinks by 2x.';
+  const x = pick(r, [1, 2, 3, 4, 5]);
+  if (d === 1) return walk(ask(`The input to an amplifier rises by ${x} dB. By how many dB do its IM3 products rise?`, qty(3 * x, 'dB', 0.02, String(3 * x)), `IM3 rises 3 dB per dB: 3 × ${x} = ${3 * x} dB.`, 'Three times the input change.'),
+    'the 3:1 slope of IM3', idea, count('IM3 rise = 3 × input rise, in dB:', `3 × ${x}`, 3 * x));
+  const dp = pick(r, [40, 50, 60, 70]);
+  if (d === 2) return walk(ask(`At some input level the IM3 products sit ${dp} dB below the tones. The input then rises by ${x} dB. How far below the tones are the IM3 products now, in dB?`, qty(dp - 2 * x, 'dB', 0.02, String(dp - 2 * x)), `The gap closes by 2 dB per dB: ${dp} − 2 × ${x} = ${dp - 2 * x} dB.`, 'The gap shrinks by 2 dB for every dB of input.'),
+    'how the IM3 gap closes', idea, count('Gap lost = 2 × input rise, in dB:', `2 × ${x}`, 2 * x), count('New gap, in dB:', `${dp} − ${2 * x}`, dp - 2 * x));
+  const up = pick(r, [10, 15, 20]), dp3 = pick(r, [60, 70, 80]);
+  return walk(ask(`A two-tone test at -30 dBm per tone has IM3 ${dp3} dB below the tones. Raise the power to ${-30 + up} dBm per tone. How far below the tones is the IM3 now, in dB?`, qty(dp3 - 2 * up, 'dB', 0.02, String(dp3 - 2 * up)), `The input rose ${up} dB, so the gap closed by ${2 * up} dB: ${dp3} − ${2 * up} = ${dp3 - 2 * up} dB. (The IIP3 is the same, ${-30 + dp3 / 2} dBm.)`, 'Gap − 2 × (input rise).'),
+    'IM3 at a higher drive level', idea, count('Gap lost, 2 × the rise in dB:', `2 × ${up}`, 2 * up), count('New gap, in dB:', `${dp3} − ${2 * up}`, dp3 - 2 * up));
+};
+
+const rfQuality: Gen = (r, d) => concept(r, [
+  ...atLevel(1, [
+    ['Which spec measures how far a received constellation point lands from its ideal position?', 'EVM (error vector magnitude)', ['ACLR (adjacent-channel leakage ratio)', 'VSWR (voltage standing wave ratio)', 'P1dB (compression)'], 'signal quality specs', 'EVM (error vector magnitude) is the length of the error vector between the received and ideal constellation point, as a percentage or in dB of the signal. ACLR (adjacent-channel leakage ratio) looks at the spectrum instead: how much power spills into the next channel.', ['An error vector is the gap between:', 'The received and the ideal constellation point', ['Two channels', 'Two supplies']]],
+    ['Which spec compares the power leaking into the neighbouring channel with the wanted channel?', 'ACLR, read from the spectrum beside the wanted channel', ['EVM, read from the constellation of received points', 'S21, which is the forward gain of the whole transmit chain', 'Noise figure, which is the SNR lost in the receiver chain'], 'signal quality specs', 'ACLR (adjacent-channel leakage ratio) is read from the spectrum: the power in the next channel, relative to the power in the wanted one. Compression and IM3 in the power amplifier spread the spectrum and raise it. EVM is read from the constellation instead.', ['ACLR is read from:', 'The spectrum, beside the channel', ['The constellation of received points', 'The supply current']]],
+    ['What is the 1 dB compression point (P1dB)?', 'The input power where the gain is 1 dB below normal', ['The input power at which the output of the amplifier reaches 1 dBm', 'The input power at which the noise figure has risen by 1 dB', 'The output power at 1 dBm'], 'compression', 'As the input grows, the output cannot grow without limit: the gain rolls off. P1dB marks where it has dropped by 1 dB from its small-signal value. It is the usual headline measure of how big a signal an amplifier can handle.', ['Compression means the gain, as the input rises:', 'Falls', ['Rises', 'Is unchanged']]],
+  ]),
+  ...atLevel(2, [
+    ['Two tones at f1 and f2 hit a nonlinear amplifier. Where do the third-order products land?', 'At 2f1 − f2 and 2f2 − f1, beside the tones', ['At f1 + f2 only, far above the tones, where a filter removes them', 'At 3f1 and 3f2 only, far above the tones, since those are the harmonics', 'Exactly on f1 and f2'], 'third-order intermodulation', 'A cubic term mixes the two tones: 2f1 − f2 and 2f2 − f1 fall right next to f1 and f2, so a filter cannot remove them without also removing the wanted signal. (3f1 and 3f2 are harmonics and are far away.)', ['A filter cannot remove products that fall:', 'Right beside the wanted tones', ['At a harmonic', 'At DC']]],
+    ['How fast do IM3 products rise with the input level of the two tones?', '3 dB for every 1 dB', ['1 dB for every 1 dB, the same as the tones themselves', '2 dB for every 1 dB, one more than the tones', '6 dB per dB'], 'the 3:1 slope', 'IM3 comes from a cubic term, so it follows the input level cubed: 3 dB per dB, against 1 dB per dB for the tones. The gap between them therefore closes by 2 dB per dB.', ['A cubic term turns 1 dB of input into:', '3 dB', ['1 dB', '2 dB']]],
+    ['Why does a two-tone test, rather than one tone, reveal IM3?', 'Its third-order products land right beside the tones', ['A single tone cannot be amplified by a nonlinear stage', 'Two tones double the gain of the amplifier under test', 'Only two tones can be shown on a spectrum analyzer'], 'two-tone testing', 'One tone makes harmonics at 2f and 3f, far away, where a filter removes them. Two close tones make products at 2f1 − f2 and 2f2 − f1, right beside the tones and inside the band, where no filter helps. That is why linearity is quoted with two tones.', ['IM3 products from two close tones land:', 'Inside the band', ['Far above the band', 'At DC']], 'Its third-order products land beside the tones, inside the band'],
+  ]),
+  ...atLevel(3, [
+    ['For a pure third-order nonlinearity, how far above P1dB is the input IP3?', 'About 9.6 dB', ['About 1 dB, because the two points nearly coincide on the plot', 'About 20 dB, since the intercept lies far out on the extended lines', 'Zero dB'], 'IP3 versus P1dB', 'For a pure cubic, the 1 dB compression point sits about 9.6 dB below the intercept. Real amplifiers often show 10 to 12 dB, so the rule is an estimate. The intercept itself is never reached: the amplifier compresses first.', ['The intercept is found by:', 'Extending the two lines, since you cannot reach it', ['Measuring it directly', 'Reading the datasheet gain']]],
+    ['In a receiver chain, which stage usually sets the linearity of the whole cascade?', 'A late stage, because it sees the gain in front of it', ['The first stage, because it sees the weakest signal', 'The antenna, since it is the largest part of the whole chain', 'Whichever stage has the lowest noise figure in the chain'], 'cascaded linearity', 'Each stage sees the signal after the gain of all stages before it, so a late stage overloads first: 1/IIP3_total = 1/IIP3₁ + G₁/IIP3₂ + …. Gain early in the chain buys noise performance but costs linearity.', ['A later stage sees a signal that is:', 'Bigger, after the gain before it', ['Smaller', 'The same']]],
+    ['IIP3 rises by 10 dB. At the same input level, how much further below the tones do the IM3 products sit?', '20 dB', ['10 dB', '30 dB', '3 dB'], 'IM3 against IIP3', 'IM3 rises 3 dB per dB of input while the tones rise 1 dB, so the gap between the tones and IM3 is 2 × (IIP3 − P_in). Raising IIP3 by 10 dB widens the gap by 20 dB at the same input.', ['The gap between the tones and IM3 is:', '2 × (IIP3 − P_in)', ['IIP3 − P_in', '3 × P_in']], 'The gap is 2 × (IIP3 − P_in), so 10 dB more IIP3 gives 20 dB less IM3'],
+  ]),
+], (why) => `${why}.`, d);
+
+export const RF_LINEARITY: Gen[] = [iip3Gen, im3Slope, rfQuality];
+
+// ------------------------------------------------------------------ G1.13 jitter
+
+const tjIdea = 'Random jitter (RJ) is Gaussian and unbounded, quoted as an rms value; deterministic jitter (DJ) is bounded, quoted as a peak-to-peak value. A link needs total jitter at a bit-error rate. At a BER of 1e-12, the random part counts 2 × Q × RJ with Q = 7.03 (the Gaussian tail on both sides): TJ = DJ + 2·Q·RJ.';
+
+/** Total jitter at a BER of 1e-12: d1 from DJ and RJ, d2 as a fraction of the UI, d3 the RJ a budget allows. */
+const tjGen: Gen = (r, d) => {
+  if (d === 1) {
+    const dj = pick(r, [10, 15, 20, 30]), rj = pick(r, [0.5, 1, 1.5, 2]), tj = dj + 2 * 7.03 * rj;
+    return walk(ask(`A link has DJ = ${dj} ps peak-to-peak and RJ = ${rj} ps rms. What is its total jitter at a BER of 1e-12, in ps? (Q = 7.03)`, qty(tj, 'ps', 0.02, sig(tj)), `TJ = ${dj} + 2 × 7.03 × ${rj} = ${sig(tj)} ps.`, 'TJ = DJ + 2·Q·RJ.'),
+      'total jitter at a BER', tjIdea, calc('The random part, 2 × Q × RJ, in ps:', `2 × 7.03 × ${rj}`, 2 * 7.03 * rj, 'ps', sig(2 * 7.03 * rj), 0.01), calc('Add the deterministic part:', `${dj} + ${sig(2 * 7.03 * rj)}`, tj, 'ps', sig(tj), 0.02));
+  }
+  const rate = pick(r, [5, 10, 16, 25]), ui = 1000 / rate;
+  if (d === 2) {
+    const dj = pick(r, [0.05, 0.1, 0.15]) * ui, rj = pick(r, [0.01, 0.015, 0.02]) * ui, tj = dj + 2 * 7.03 * rj;
+    return walk(ask(`A ${rate} Gb/s link (unit interval ${ui} ps) has DJ = ${sig(dj)} ps and RJ = ${sig(rj)} ps rms. What fraction of the unit interval is the total jitter at 1e-12, in %? (Q = 7.03)`, qty((tj / ui) * 100, '%', 0.03, sig((tj / ui) * 100)), `TJ = ${sig(dj)} + 2 × 7.03 × ${sig(rj)} = ${sig(tj)} ps = ${sig((tj / ui) * 100)}% of ${ui} ps.`, 'TJ first, then divide by the unit interval.'),
+      'jitter as a fraction of the unit interval', tjIdea,
+      calc('TJ = DJ + 2·Q·RJ, in ps:', `${sig(dj)} + 2 × 7.03 × ${sig(rj)}`, tj, 'ps', sig(tj), 0.02),
+      calc('As a % of the unit interval:', `${sig(tj)} / ${ui} × 100`, (tj / ui) * 100, '%', sig((tj / ui) * 100), 0.03));
+  }
+  const frac = pick(r, [0.25, 0.3]), dfrac = pick(r, [0.08, 0.1, 0.12]), budget = frac * ui, dj = dfrac * ui, rj = (budget - dj) / (2 * 7.03);
+  return walk(ask(`A ${rate} Gb/s link (unit interval ${ui} ps) may use ${frac * 100}% of the interval as total jitter at 1e-12. Its deterministic jitter is ${sig(dj)} ps. How much rms random jitter can it tolerate, in ps? (Q = 7.03)`, qty(rj, 'ps', 0.04, sig(rj)), `Budget = ${frac} × ${ui} = ${sig(budget)} ps. RJ = (TJ − DJ) / (2Q) = (${sig(budget)} − ${sig(dj)}) / 14.06 = ${sig(rj)} ps rms.`, 'Solve TJ = DJ + 2·Q·RJ for RJ.'),
+    'a random-jitter budget', tjIdea,
+    calc('The total budget, in ps:', `${frac} × ${ui}`, budget, 'ps', sig(budget), 0.01),
+    calc('What is left after DJ, in ps:', `${sig(budget)} − ${sig(dj)}`, budget - dj, 'ps', sig(budget - dj), 0.02),
+    calc('RJ = that ÷ (2 × 7.03), in ps rms:', `${sig(budget - dj)} / 14.06`, rj, 'ps', sig(rj), 0.04));
+};
+
+const jitterKinds: Gen = (r, d) => concept(r, [
+  ...atLevel(1, [
+    ['Which jitter measure is the difference between two adjacent clock periods?', 'Cycle-to-cycle jitter', ['Period jitter, the error of one period against the ideal', 'Time-interval error, the position error of each edge', 'Duty-cycle distortion, the high time against the low time'], 'kinds of jitter', 'Period jitter compares one period with the ideal period. Cycle-to-cycle jitter compares each period with the one before it. Time-interval error (TIE) compares each edge with where an ideal clock would have put it, and so it accumulates.', ['Comparing each period with the one just before it gives:', 'Cycle-to-cycle jitter', ['Time-interval error', 'Period jitter']]],
+    ['Which of random jitter (RJ) and deterministic jitter (DJ) is bounded?', 'DJ: it has a hard peak-to-peak limit', ['RJ: Gaussian noise stops at about three standard deviations', 'Both are bounded, but RJ has the larger limit', 'Neither is bounded, because both come from noise'], 'random and deterministic jitter', 'Deterministic jitter comes from identifiable causes (data patterns, periodic coupling, duty-cycle distortion) and has a limit. Random jitter is Gaussian: there is always some chance of a larger error, so it is quoted in rms.', ['A distribution with no hard limit is:', 'Gaussian, as random jitter is', ['Bounded, as deterministic jitter is', 'Always zero']]],
+    ['How is random jitter quoted?', 'As an rms value', ['As a peak-to-peak value, taken over a long test of the clock', 'As a fraction of the supply voltage, on the scope trace', 'As a phase in degrees at the output pin of the buffer'], 'random jitter', 'Random jitter is Gaussian, so it has no peak-to-peak limit that a longer test would not exceed. It is described by its standard deviation, the rms value, and converted to a peak-to-peak figure only at a stated bit-error rate.', ['A Gaussian spread is described by its:', 'Standard deviation (rms)', ['Largest value', 'Mean']]],
+  ]),
+  ...atLevel(2, [
+    ['Which jitter measure compares every edge with its ideal position, and so accumulates over time?', 'Time-interval error, also called phase jitter', ['Period jitter, which compares one period with the ideal period', 'Cycle-to-cycle jitter, which compares neighbouring periods', 'Duty-cycle distortion, which compares the high and low times'], 'kinds of jitter', 'TIE is the edge position error against an ideal clock: the running sum of the period errors. That is why it is the measure that matters for serial links, which sample data against a clock whose phase has wandered.', ['A measure that adds up period errors is:', 'Time-interval error', ['Period jitter', 'Cycle-to-cycle jitter']]],
+    ['Which kinds of jitter are bounded and caused by identifiable effects?', 'Deterministic: data-dependent, periodic and duty-cycle', ['Random: thermal and shot noise in the oscillator and buffers', 'Total: only the sum of the random and deterministic parts', 'Phase: only the jitter measured at the receiver input'], 'deterministic jitter', 'Deterministic jitter has known causes: patterns in the data (data-dependent jitter), coupled periodic signals such as supply ripple, and duty-cycle distortion. Because it is bounded it is quoted peak-to-peak, not rms.', ['A bounded jitter is quoted as:', 'Peak-to-peak', ['An rms value', 'A bit-error rate']]],
+    ['A clock\'s periods are 1.00, 1.02 and 0.99 ns. What is the largest cycle-to-cycle jitter?', '0.03 ns', ['0.02 ns', '0.01 ns', '0.05 ns'], 'cycle-to-cycle jitter', 'Cycle-to-cycle jitter is the difference between adjacent periods: |1.02 − 1.00| = 0.02 ns and |0.99 − 1.02| = 0.03 ns, so the largest is 0.03 ns.', ['Cycle-to-cycle jitter compares:', 'Neighbouring periods', ['One period and the ideal', 'Edges and the ideal']], '|0.99 − 1.02| = 0.03 ns is the largest step between neighbouring periods'],
+  ]),
+  ...atLevel(3, [
+    ['Why must a total-jitter number come with a bit-error rate?', 'RJ is unbounded, so how far it reaches depends on the bits counted', ['Because the bit-error rate sets the data rate of the link, in turn', 'Because deterministic jitter grows with the number of bits sent', 'Because jitter is only defined for the bits that had errors'], 'total jitter and BER', 'More bits tested means rarer events, and with Gaussian random jitter rarer events lie further out in the tail. So TJ = DJ + 2·Q·RJ grows with Q, which is set by the target BER (Q = 7.03 at 1e-12).', ['If you ask for a lower BER, Q gets:', 'Bigger', ['Smaller', 'No different']]],
+    ['Total jitter at a BER of 1e-12 counts the random part how many times, in units of RJ (rms)?', '2 × 7.03, about 14', ['7.03, since only one side of the Gaussian tail counts', '3, the usual three-sigma rule of thumb for a spread', '1, as RJ is already in the same units as the total'], 'the total jitter formula', 'Both tails of the Gaussian count, so TJ = DJ + 2·Q·RJ with Q = 7.03 at 1e-12. The random part is multiplied by about 14 before it joins the deterministic part.', ['Both tails count, so Q is multiplied by:', '2', ['1', '3']]],
+    ['Data-dependent jitter appears with long runs of equal bits. What usually causes it?', 'Channel loss, so each bit leans on the ones before', ['Thermal noise in the output buffer of the transmitter driver', 'A ripple on the supply at one fixed frequency', 'The receiver sampling clock running a bit fast'], 'data-dependent jitter', 'A lossy channel smears each bit into the next ones (inter-symbol interference), so an edge moves depending on the bits before it. That jitter is deterministic and bounded, and equalization reduces it.', ['Inter-symbol interference makes jitter that is:', 'Bounded and pattern-dependent', ['Gaussian, random and unbounded', 'Fixed in frequency']], 'Channel loss: each bit leans on the ones before it (ISI)'],
+  ]),
+], (why) => `${why}.`, d);
+
+export const CLOCK_JITTER: Gen[] = [tjGen, jitterKinds];
+
 // keep the helpers used by later sections referenced (tier, choice, concept, mc, db10, lin, deg)
-void [mc, db10, lin];
+void [mc];

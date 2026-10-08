@@ -4,6 +4,7 @@ import { hexa, num, qty } from '../lessons/answers';
 import { calc, choice, count, show, walk } from '../lessons/teach';
 import { ask, gen, mc, pick, say, between } from '../lessons/types';
 import { boss, practice, tier, type PracticeSet } from './types';
+import { CLOCK_JITTER } from './g-analog';
 import { atLevel, concept, sig, type ConceptQ } from './util';
 
 const hard = (set: PracticeSet, i: number) => gen((r) => ({ ...set.gens[i](r, 3), teach: undefined }));
@@ -394,12 +395,14 @@ export const clockingPractice = practice('practice-clocking', 'Clocking Drills',
       calc('dB improvement:', `${l} − (${l2})`, l - l2, 'dB', String(l - l2), 0.005),
       calc('Factor = 10^(dB/20):', `10^(${l - l2}/20)`, ratio, '', sig(ratio), 0.03));
   },
+  ...CLOCK_JITTER,
 ]);
 const sci3 = (x: number) => x.toExponential(2).replace('e-', 'e-');
 
 export const clockingBoss = bossOf(clockingPractice, 'boss-clocking', 'The Clock Tree Review', 'PLL ratios, ring oscillators and jitter', 220,
-  'Boss fight, {name}. The SerDes team needs a clock. Divider, oscillator and jitter budget. Exam rules.', [0, 1, 2, 2],
-  [mc('Why must a PLL\'s supply be especially quiet?', ['It does not need to be quieter than logic', 'The VCO turns supply noise into phase noise', 'The divider fails if its supply droops', 'Supply noise shifts the reference frequency of the crystal'], 1, 'Any supply or control-line noise becomes frequency and so phase noise, so PLLs use dedicated regulators, heavy decoupling and isolation from digital switching. Supply noise modulates the oscillator directly.')]);
+  'Boss fight, {name}. The SerDes team needs a clock. Divider, oscillator and jitter budget. Exam rules.', [0, 1, 2, 2, 3],
+  [mc('The link budget quotes total jitter at a bit-error rate of 1e-12. Why not just quote the largest jitter you ever saw?', ['Random jitter is unbounded: how far it reaches depends on how many bits you look at', 'Because the largest jitter is always the deterministic part, whatever the BER', 'Because bit-error rates are measured in picoseconds on the scope', 'Jitter only exists at the receiver, so a peak would mean nothing at the source'], 0, 'Random jitter is Gaussian, so a longer test always finds a bigger excursion. TJ = DJ + 2·Q·RJ fixes the question by naming the probability: Q = 7.03 at 1e-12.'),
+   mc('Why must a PLL\'s supply be especially quiet?', ['It does not need to be quieter than logic', 'The VCO turns supply noise into phase noise', 'The divider fails if its supply droops', 'Supply noise shifts the reference frequency of the crystal'], 1, 'Any supply or control-line noise becomes frequency and so phase noise, so PLLs use dedicated regulators, heavy decoupling and isolation from digital switching. Supply noise modulates the oscillator directly.')]);
 
 export const FRONTIER_PRACTICE_A = [edaPractice, libcharPractice, ioesdPractice, socintPractice, clockingPractice];
 export const FRONTIER_BOSSES_A = [edaBoss, libcharBoss, ioesdBoss, socintBoss, clockingBoss];

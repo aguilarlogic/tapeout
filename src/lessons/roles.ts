@@ -5,6 +5,7 @@ import { art, ask, gen, Lesson, mc, pick, say } from './types';
 
 const r1 = (x: number) => Math.round(x * 10) / 10;
 const r2 = (x: number) => Math.round(x * 100) / 100;
+const r3 = (x: number) => +x.toPrecision(3);
 const log10 = Math.log10;
 
 // ------------------------------------------------------------------ circuits & signals
@@ -12,7 +13,7 @@ const log10 = Math.log10;
 export const analog: Lesson = {
   id: 'analog',
   title: 'Analog & Mixed-Signal',
-  concept: 'op-amps, gain, noise, matching, ADCs, PLLs',
+  concept: 'op-amps, gain, noise, matching, ADC specs, PLLs',
   xp: 110,
   steps: [
     say('**The role.** Analog and mixed-signal (AMS) designers build the parts of a chip that touch the real, continuous world: amplifiers, data converters (ADCs and DACs), PLLs, voltage references, regulators, sensors and high-speed I/O front ends. The work is transistor-level design in Cadence Virtuoso, simulation in SPICE-class simulators (Spectre, HSPICE), Monte Carlo runs across process corners, and a lot of time spent with layout engineers, because in analog the layout is part of the circuit.'),
@@ -59,6 +60,28 @@ export const analog: Lesson = {
       const enob = (sinad - 1.76) / 6.02;
       return ask(`A "12-bit" ADC measures a SINAD of ${sinad} dB on the bench. What is its ENOB (effective number of bits)?`, qty(enob, 'bits', 0.03, r1(enob).toString()), `ENOB = (${sinad} - 1.76) / 6.02 = ${r1(enob)} bits. The datasheet word length is not the resolution you actually get; noise and distortion eat bits.`, '(SINAD - 1.76) / 6.02.');
     }),
+    say('Converters are specified by more than ideal SNR. The **dynamic** specs are measured with a sine-wave input. **SINAD** is the signal over everything else, noise and distortion together. **SFDR** (spurious-free dynamic range) is the gap from the carrier down to the largest spur, in dBc (dB below the carrier); one big spur caps SINAD near the SFDR. **THD** is the power of the harmonics against the carrier.'),
+    gen((r) => {
+      const sfdr = pick(r, [56, 62, 68, 74, 80]);
+      const enob = (sfdr - 1.76) / 6.02;
+      return ask(`An ADC's noise floor is far below its largest spur, which sits ${sfdr} dBc under the carrier, so SINAD is limited to about the SFDR. What is its ENOB?`, qty(enob, 'bits', 0.03, r1(enob).toString()), `ENOB = (${sfdr} - 1.76) / 6.02 = ${r1(enob)} bits. A clean noise floor cannot rescue a converter with a bad spur.`, 'SINAD ≈ SFDR here, so (SFDR - 1.76) / 6.02.');
+    }),
+    say('The **static** specs ask whether the steps are the right size. Every code should span one LSB. **DNL** (differential non-linearity) is the step width in LSB minus 1: a code twice as wide as ideal has DNL = +1, and DNL = −1 means a step of zero width, a **missing code** that the converter never outputs. **INL** (integral non-linearity) is how far the whole transfer curve strays from the ideal straight line (drawn through the end points, or a best fit); it is the running sum of the DNL errors.'),
+    gen((r) => {
+      const w = pick(r, [0.5, 0.6, 0.75, 1.25, 1.4, 1.5, 1.8, 2, 0]);
+      return ask(`One code of an ADC has a step ${w} LSB wide. What is its DNL, in LSB?`, qty(w - 1, '', 0.02, r2(w - 1).toString()), `DNL = ${w} / 1 - 1 = ${r2(w - 1)} LSB.${w === 0 ? ' A DNL of -1 is a missing code.' : ''}`, 'DNL = step width / 1 LSB - 1.');
+    }),
+    say('Amplifiers have their own limits. The output of an op-amp cannot change faster than its **slew rate** SR, in V/µs. A sine of peak Vpk needs a slope of up to 2π·f·Vpk, so the highest frequency it can deliver at full amplitude, the **full-power bandwidth**, is f = SR / (2π·Vpk). **CMRR** and **PSRR** (common-mode and power-supply rejection ratios) say in dB how strongly a common-mode input, or a wiggle on the supply, is suppressed against a wanted signal: 80 dB is a factor of 10,000.'),
+    gen((r) => {
+      const sr = pick(r, [1, 2, 5, 10, 20]), vp = pick(r, [1, 2, 5, 10]);
+      const f = (sr * 1e6) / (2 * Math.PI * vp) / 1e3;
+      return ask(`An op-amp slews at ${sr} V/µs. What is its full-power bandwidth for a ${vp} V peak sine, in kHz?`, qty(f, 'kHz', 0.03, r1(f).toString()), `f = SR / (2π·Vpk) = ${sr}e6 / (2π × ${vp}) = ${r1(f)} kHz. Above it the output turns into a triangle wave.`, 'f = SR / (2π × Vpeak).');
+    }),
+    gen((r) => {
+      const cm = pick(r, [10, 100, 500]), db = pick(r, [60, 80, 100]);
+      const out = (cm * 1000) / 10 ** (db / 20);
+      return ask(`An amplifier with ${db} dB of CMRR sees ${cm} mV of common-mode input. What differential signal would give the same output, in µV?`, qty(out, 'uV', 0.03, r3(out).toString()), `${db} dB is a factor of ${10 ** (db / 20)}; ${cm} mV / ${10 ** (db / 20)} = ${r3(out)} µV.`, 'Divide by 10^(dB/20).');
+    }),
     gen((r) => {
       const fref = pick(r, [25, 50, 100]);
       const n = pick(r, [20, 32, 40]);
@@ -66,13 +89,13 @@ export const analog: Lesson = {
     }),
     mc('Why does a **verification** engineer need to know any of this?', ['They do not; analog blocks are signed off separately by the analog team', 'Mixed-signal bugs live at the analog/digital boundary', 'Because analog blocks are now written in UVM', 'Only to check the ADC\'s digital decimation filter'], 1, 'Mixed-signal chips are verified with real-number models (RNM) of the analog blocks running inside the digital simulator (SystemVerilog `real` and `nettype`, or Verilog-AMS), fast enough for a digital regression. Many respins come from the seams between the analog and digital teams: wrong enable polarity, missing calibration, bad power-up order. That is DV territory.'),
   ],
-  recap: ['AMS designers trade gain, bandwidth, noise, linearity, offset and power.', 'Feedback: gain = -Rf/Rin; aim for ~60° phase margin.', 'kT/C noise: halving it costs 4× capacitance.', 'Mismatch ∝ 1/√area (Pelgrom).', 'ADC: SNR = 6.02N + 1.76 dB; ENOB is what you really get.', 'PLL: f_out = N × f_ref.'],
+  recap: ['AMS designers trade gain, bandwidth, noise, linearity, offset and power.', 'Feedback: gain = -Rf/Rin; aim for ~60° phase margin.', 'kT/C noise: halving it costs 4× capacitance.', 'Mismatch ∝ 1/√area (Pelgrom).', 'ADC: SNR = 6.02N + 1.76 dB; ENOB is what you really get.', 'SFDR is carrier to largest spur in dBc; DNL = step width/LSB - 1, and -1 is a missing code; INL is the drift from the ideal line.', 'Full-power bandwidth = SR / (2π·Vpk); CMRR and PSRR are rejection ratios in dB.', 'PLL: f_out = N × f_ref.'],
 };
 
 export const rf: Lesson = {
   id: 'rf',
   title: 'RF & Wireless',
-  concept: 'dBm, wavelength, matching, S-parameters, noise figure',
+  concept: 'dBm, wavelength, matching, S-parameters, noise figure, linearity',
   xp: 110,
   steps: [
     say('**The role.** RF engineers design the radios in phones, Wi-Fi, GPS, radar and satellites: low-noise amplifiers (LNAs), mixers, oscillators, power amplifiers, filters and antennas, both on chip (RFIC) and on the board. Tools: Keysight ADS, Cadence SpectreRF, EM solvers such as HFSS, and in the lab vector network analyzers and spectrum analyzers. The work is analog design at frequencies where every wire is a transmission line.'),
@@ -103,9 +126,24 @@ export const rf: Lesson = {
       const nf = 10 * log10(f1 + (f2 - 1) / g1);
       return ask(`An LNA with NF = ${nf1} dB and gain ${g1db} dB is followed by a mixer with NF = ${nf2} dB. What is the total noise figure, in dB?`, qty(nf, 'dB', 0.04, r2(nf).toString()), `Convert to linear: F1 = ${r2(f1)}, G1 = ${r2(g1)}, F2 = ${r2(f2)}. F = ${r2(f1)} + (${r2(f2)} - 1)/${r2(g1)} = ${r2(f1 + (f2 - 1) / g1)}, so NF = ${r2(nf)} dB. The noisy mixer barely matters because the LNA's gain comes first.`, 'Convert dB to linear, apply F1 + (F2 - 1)/G1, convert back.');
     }),
+    say('Noise sets the weakest signal a receiver can hear; **linearity** sets the strongest it can take. An amplifier compresses as its input rises: the **1 dB compression point** (P1dB) is the input power at which the gain has fallen by 1 dB. Two strong tones at f1 and f2 also mix in the nonlinearity and make **third-order intermodulation** (IM3) products at 2f1 − f2 and 2f2 − f1, right beside the tones where no filter can remove them. IM3 rises **3 dB for every 1 dB** of input while the tones rise 1 dB for 1 dB, so the gap between them closes by 2 dB per dB.'),
+    say('Extend both lines and they meet at the **third-order intercept**, IIP3 when referred to the input. A two-tone test gives it directly: with ΔP the fundamental minus the IM3 level, in dB, **IIP3 = P_in + ΔP/2**. For a pure third-order nonlinearity IIP3 sits about 9.6 dB above P1dB (real amplifiers often show 10–12 dB).'),
+    gen((r) => {
+      const pin = pick(r, [-30, -25, -20, -15, -10]), dp = pick(r, [30, 40, 50, 60]);
+      return ask(`A two-tone test at ${pin} dBm per tone shows the IM3 products ${dp} dB below the tones. What is the input IP3, in dBm?`, qty(pin + dp / 2, 'dBm', 0.03, String(pin + dp / 2)), `IIP3 = P_in + ΔP/2 = ${pin} + ${dp}/2 = ${pin + dp / 2} dBm. The intercept is a place on the extended lines, far above anything you could apply.`, 'IIP3 = P_in + ΔP/2.');
+    }),
+    say('In a chain, later stages see the gain of those before them, so their linearity matters more. Add the reciprocals in **linear power** (mW): 1/IIP3_total = 1/IIP3₁ + G₁/IIP3₂ + …, where G₁ is the gain in front of stage 2. Gain early in the chain costs linearity late: a high-gain LNA makes the mixer\'s IIP3 the bottleneck.'),
+    gen((r) => {
+      const g = pick(r, [10, 15, 20]), i1 = pick(r, [-10, -5, 0]), i2 = pick(r, [0, 5, 10]);
+      const tot = 1 / (1 / 10 ** (i1 / 10) + 10 ** (g / 10) / 10 ** (i2 / 10));
+      const dbm = 10 * log10(tot);
+      return ask(`An LNA (gain ${g} dB, IIP3 = ${i1} dBm) feeds a mixer with IIP3 = ${i2} dBm. What is the cascaded input IP3, in dBm?`, qty(dbm, 'dBm', 0.04, r1(dbm).toString()), `In mW: 1/IIP3 = 1/${r3(10 ** (i1 / 10))} + ${r3(10 ** (g / 10))}/${r3(10 ** (i2 / 10))} = ${r3(1 / tot)}, so IIP3 = ${r3(tot)} mW = ${r1(dbm)} dBm. The mixer, seen through the LNA's gain, dominates.`, 'Convert to mW, add 1/IIP3₁ and G₁/IIP3₂, invert, back to dBm.');
+    }),
+    say('Two more numbers judge the signal a transmitter makes. **EVM** (error vector magnitude) is how far the points of the received constellation land from their ideal positions, as a percentage or in dB. **ACLR** (adjacent-channel leakage ratio) is how much power spills into the neighbouring channel compared with the wanted one. Compression and IM3 raise both.'),
+    mc('A transmitter\'s spectrum shows power spilling into the next channel. Which spec measures that?', ['ACLR', 'EVM', 'S11', 'P1dB'], 0, 'ACLR compares the neighbouring-channel power with the wanted channel. EVM measures how far the constellation points are from their ideal places; S11 is the input match; P1dB is where the gain has dropped 1 dB.'),
     mc('A 5G phone points its beam at the tower without moving anything. How?', ['A small motor tilts the antenna module toward the tower', 'A phased array: many antennas fed at different phases', 'It retunes the carrier frequency until the signal peaks', 'It transmits in all directions at full power'], 1, 'Beam steering by phase shift: each small antenna is fed with a slightly different phase, so the waves add up in one direction. Phased arrays are huge in 5G mmWave, radar and satellite internet, and their calibration and control logic is a big mixed-signal verification job.'),
   ],
-  recap: ['dBm = 10·log10(P / 1 mW); dBs add.', 'λ = c / f; antennas scale with λ.', 'Match to 50 Ω; Γ = (ZL - Z0)/(ZL + Z0).', 'S21 = gain, S11 = input match.', 'Friis: the first stage (the LNA) sets the noise figure.', 'Phased arrays steer beams electronically.'],
+  recap: ['dBm = 10·log10(P / 1 mW); dBs add.', 'λ = c / f; antennas scale with λ.', 'Match to 50 Ω; Γ = (ZL - Z0)/(ZL + Z0).', 'S21 = gain, S11 = input match.', 'Friis: the first stage (the LNA) sets the noise figure.', 'P1dB, IM3 (3 dB per dB) and IIP3 = P_in + ΔP/2; cascade 1/IIP3 = 1/IIP3₁ + G₁/IIP3₂; EVM and ACLR judge a transmitter.', 'Phased arrays steer beams electronically.'],
 };
 
 export const pmic: Lesson = {
