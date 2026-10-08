@@ -65,6 +65,8 @@ export const ooo: Lesson = {
       return mc(`\`${i1}\` then \`${i2}\`. Which dependence links them?`, ['RAW', 'WAR', 'WAW', 'none'], idx, kind === 'RAW' ? 'sub reads r1, which add writes: read after write, a true dependence.' : kind === 'WAR' ? 'sub writes r2, which add reads: write after read. Renaming sub\'s r2 to a fresh physical register removes it.' : 'Both write r1: write after write. Renaming gives each its own physical register.');
     }),
     mc('**Register renaming** maps architectural registers to a larger pool of physical registers. Which dependences does it eliminate?', ['RAW dependences only, which are the only real ones', 'WAR and WAW dependences', 'All three kinds of dependence, including the true ones', 'None of the dependences, as it only widens the register file'], 1, 'Renaming removes the false (name) dependences, exposing more parallelism. RAW dependences remain; the scheduler waits for those values.'),
+    say('The classic recipe for this is **Tomasulo\'s algorithm**: instructions wait in **reservation stations** until their operands arrive, a **common data bus** broadcasts each result tagged with its producer, and waiting stations grab the value as it goes past. The tags are renaming in disguise. Modern cores use physical register files, issue queues and a ROB, but the same two ideas: wait for operands, and name results by who produces them.'),
+    mc('In Tomasulo\'s algorithm, how does an instruction waiting in a reservation station get an operand that is still being computed?', ['It polls the register file, one read after another, until the value appears', 'It watches the common data bus for the tag of the unit that will produce it', 'It stalls the whole front end of the core until the operand has arrived', 'It re-executes the producer on its own spare functional unit to get the value'], 1, 'The station holds the producer\'s tag instead of a value, and captures the result when that tag is broadcast on the common data bus. Nothing else has to stall, and write-after-read and write-after-write hazards disappear because results are named by tag.'),
     mc('Why keep a **reorder buffer** (ROB) if instructions execute out of order?', ['To speed up execution', 'To retire instructions in order, keeping exceptions precise', 'To store the cache lines that the load queue has already read', 'It is only there for debugging, and is removed in shipped parts'], 1, 'Mispredicted work can then be discarded. Execution is out of order; commit is in order. The ROB is what makes speculation safe to undo.'),
     say('To keep a wide core fed, the front end must guess branch outcomes **before** they execute: **branch prediction**. A classic predictor keeps a 2-bit saturating counter per branch: two wrong guesses in a row are needed to flip its prediction.'),
     app('branch', 'I will open a branch predictor simulator. Step the 2-bit counter through a stream of branch outcomes and predict what it says each time.', 6),
@@ -75,7 +77,7 @@ export const ooo: Lesson = {
     say('Modern predictors (gshare, perceptron, **TAGE**) use global branch history and hit 95-99% accuracy. The core runs far ahead along the predicted path: **speculative execution**. If the guess was wrong, the work is squashed, but some side effects linger...'),
     mc('What did **Spectre** exploit?', ['A bug in one vendor\'s CPU adder, which gives wrong sums at times', 'Squashed speculative instructions still leave traces in the cache', 'Weak passwords on the debug port of the processor, in its firmware', 'The ROB being too small, so that speculative work spills to memory'], 1, 'The traces, such as cache state, can be measured with timing. Architecturally the squashed instructions never happened, but the cache remembers. Spectre changed how every CPU team thinks about speculation, isolation and side channels.'),
   ],
-  recap: ['Superscalar + OoO: execute when operands are ready.', 'RAW is true; WAR/WAW are removed by register renaming.', 'The ROB retires in order for precise exceptions and squashing.', '2-bit counters tolerate one-off mispredictions; TAGE/gshare use history.', 'Speculation leaks through microarchitectural state (Spectre).'],
+  recap: ['Superscalar + OoO: execute when operands are ready (Tomasulo: reservation stations + common data bus).', 'RAW is true; WAR/WAW are removed by register renaming.', 'The ROB retires in order for precise exceptions and squashing.', '2-bit counters tolerate one-off mispredictions; TAGE/gshare use history.', 'Speculation leaks through microarchitectural state (Spectre).'],
 };
 
 export const cache: Lesson = {
@@ -102,7 +104,8 @@ export const cache: Lesson = {
       return ask(`A ${size} KiB, ${ways}-way cache with ${line}-byte lines and 32-bit addresses. How many **${which}** bits?`, num(ans), `offset = log2(${line}) = ${off}; sets = ${size}K/(${line}×${ways}) = ${sets}, index = ${idx}; tag = 32 - ${idx} - ${off} = ${32 - idx - off}.`, 'Work out offset bits, then the number of sets, then what is left for the tag.');
     }),
     app('cache', 'Let me open a cache simulator. Watch the addresses stream in and call each access: hit or miss?', 8),
-    say('Misses come in three flavours, the **3 Cs**: **compulsory** (first touch), **capacity** (the working set is too big), **conflict** (too many lines map to the same set). More associativity kills conflict misses; a bigger cache kills capacity misses.'),
+    say('Misses come in four flavours, the **4 Cs**: **compulsory** (first touch), **capacity** (the working set is too big), **conflict** (too many lines map to the same set) and, once there is more than one core, **coherence** (another core wrote the line, so your copy was invalidated and the next read misses). More associativity kills conflict misses; a bigger cache kills capacity misses; coherence misses survive both and only less sharing removes them.'),
+    mc('Core 0 re-reads a line it cached earlier, but core 1 wrote it in between and invalidated core 0\'s copy. What kind of miss is this?', ['Compulsory: it is the first read of the data after the write', 'Capacity: the working set has grown past the cache size', 'Coherence: the copy was invalidated by another core\'s write', 'Conflict: the line was evicted by another line in the same set'], 2, 'The line was in the cache and would still be there on a single core; another core\'s write killed it. A bigger or more associative cache does not help, which is why false sharing and heavy sharing hurt scaling.'),
     gen((r) => {
       const ht = pick(r, [1, 2, 4]);
       const mr = pick(r, [0.02, 0.05, 0.1]);
@@ -121,7 +124,7 @@ export const cache: Lesson = {
       return ask(`A TLB with ${e} entries and ${name} pages. What is its reach, in **MiB**?`, qty(reach / 1024, 'MiB', 0.01), `${e} × ${name} = ${reach / 1024} MiB. Huge pages exist to multiply TLB reach for big-memory workloads.`, 'Entries × page size.');
     }),
   ],
-  recap: ['Temporal and spatial locality make caches work.', 'Address = tag | index | offset; sets = size/(line × ways).', 'Misses: compulsory, capacity, conflict.', 'AMAT = hit + miss rate × penalty (recursive).', 'Write-back + dirty bits; TLB reach = entries × page size.'],
+  recap: ['Temporal and spatial locality make caches work.', 'Address = tag | index | offset; sets = size/(line × ways).', 'Misses: compulsory, capacity, conflict, and coherence (the 4 Cs).', 'AMAT = hit + miss rate × penalty (recursive).', 'Write-back + dirty bits; TLB reach = entries × page size.'],
 };
 
 export const coherence: Lesson = {
@@ -140,8 +143,10 @@ export const coherence: Lesson = {
 
    MOESI adds:
    O  Owned       dirty but shared: this cache supplies data, memory is stale`),
+    say('Intel-style protocols use **MESIF** instead: the extra **F** (Forward) state marks exactly one of the Shared copies as the designated responder. When another core misses, only the F holder answers, so several sharers do not all reply at once and memory is not asked when a cache already has the data. MOESI (Owned) saves memory write-backs; MESIF (Forward) saves duplicate answers.'),
     say('The rule of thumb: to **write**, a core must own the only valid copy, so it invalidates everyone else first. To **read**, it can share, but a Modified copy elsewhere must supply the data.'),
     mc('Core 0 has line A in **M**. Core 1 reads A. Under MESI, what are the states afterwards?', ['C0: M, C1: I (the owner keeps the line, and the reader misses)', 'C0: S, C1: S (C0 writes the dirty data back)', 'C0: I, C1: M (the line moves across', 'C0: E, C1: E (both hold a clean'], 1, 'The Modified copy is written back (or forwarded) and both end in Shared. Under MOESI, C0 would go to Owned instead, skipping the write-back to memory, which saves bandwidth.'),
+    mc('Several caches hold a line in Shared and another core misses on it. What does the **F** state of MESIF decide?', ['Which one sharer answers the request, so the others stay quiet', 'Which core may write the line next, without any invalidation', 'Which copy is dirty and must be written back to memory later', 'Which cache will evict the line first when its set is full'], 0, 'Forward marks the single designated responder among the Shared copies. Without it, either memory answers every time or all sharers answer together. The F copy moves to the newest requester.'),
     app('mesi', 'I have a coherence simulator for you. Two cores, one line. Predict each cache\'s state after every access.', 6),
     say('How do caches find out about each other\'s accesses? **Snooping**: every cache watches a shared bus and reacts. Simple, but broadcast does not scale. **Directories**: a directory tracks which caches hold each line and sends targeted messages. That is what large multi-core chips use.'),
     mc('Two threads on different cores each update their **own** counter, but the counters sit in the same 64-byte line. Performance is terrible. Why?', ['A compiler bug', 'False sharing: each write invalidates the other core\'s copy', 'The counters are too small, so the cache cannot hold each of them', 'The TLB thrashes'], 1, 'The line ping-pongs between the caches. Coherence works at line granularity. Pad or align hot per-thread data to separate lines.'),
@@ -155,7 +160,7 @@ export const coherence: Lesson = {
     mc('Under **sequential consistency** (SC), can r1 == r2 == 0? And under x86\'s **TSO**?', ['Neither allows it', 'SC: no. TSO: yes, since stores can wait in a store buffer', 'SC: yes. TSO: no, because TSO adds fences to every store here', 'Both allow it, since loads may pass loads under either model'], 1, 'The later load reads memory while the store sits in the buffer. This is the classic store-buffering litmus test. TSO lets a load pass an earlier store to a different address. Weaker models (ARM, RISC-V RVWMO) allow even more reordering; programmers use fences or atomic acquire/release operations to restore order.'),
     ask('What instruction class restores ordering on a weakly ordered CPU? (one word)', { canonical: 'fence', check: (s) => /^(fence|fences|barrier|barriers|membar|memory ?barrier|dmb|mfence)$/i.test(s.trim()) }, 'A fence (barrier) prevents memory operations from being reordered across it: RISC-V `fence`, ARM `dmb`, x86 `mfence`.', 'RISC-V calls it by its own name; ARM calls it DMB.'),
   ],
-  recap: ['Coherence: one address, all copies agree. MESI/MOESI states.', 'Writes need exclusive ownership (invalidate others); M → S on remote read (O in MOESI).', 'Snooping for small systems, directories for many cores.', 'False sharing: per-thread data in one line ping-pongs.', 'Consistency: ordering across addresses. SC vs TSO vs weak; fences restore order.'],
+  recap: ['Coherence: one address, all copies agree. MESI/MOESI states; MESIF adds Forward (one designated sharer answers).', 'Writes need exclusive ownership (invalidate others); M → S on remote read (O in MOESI).', 'Snooping for small systems, directories for many cores.', 'False sharing: per-thread data in one line ping-pongs.', 'Consistency: ordering across addresses. SC vs TSO vs weak; fences restore order.'],
 };
 
 export const dram: Lesson = {
@@ -371,6 +376,12 @@ export const perf: Lesson = {
       const sp = 1 / ((1 - p) + p / s);
       return ask(`${p * 100}% of a program's time is accelerated ${s}×. Overall speedup?`, qty(sp, 'x', 0.02, sp.toFixed(2)), `1 / (${(1 - p).toFixed(2)} + ${p}/${s}) = ${sp.toFixed(2)}×. Even with infinite speedup the limit would be ${(1 / (1 - p)).toFixed(0)}×.`, 'Plug into 1 / ((1 - p) + p/s).');
     }),
+    say('Amdahl fixes the **problem size** and asks how much faster it gets. **Gustafson\'s law** fixes the **run time** and asks how much more work N processors can do. If a fraction s of the run time is serial, the scaled speedup is **N − s·(N − 1)**. Both are right; they answer different questions, and big machines are bought to run bigger problems, which is Gustafson\'s view.'),
+    gen((r) => {
+      const s_ = pick(r, [0.05, 0.1, 0.2]), n = pick(r, [16, 64, 256]);
+      const sp = n - s_ * (n - 1);
+      return ask(`A job keeps a serial fraction of ${s_ * 100}% of its run time while the problem grows with the machine. Gustafson's scaled speedup on ${n} processors?`, qty(sp, 'x', 0.01, sp.toFixed(1)), `${n} - ${s_} × (${n} - 1) = ${sp.toFixed(1)}×. Amdahl with the same fraction would cap the speedup at ${(1 / s_).toFixed(0)}× for a fixed-size problem.`, 'N minus s times (N - 1).');
+    }),
     gen((r) => {
       const bw = pick(r, [25.6, 51.2, 102.4]); // GB/s
       const lat = pick(r, [80, 100]); // ns
@@ -386,7 +397,7 @@ export const perf: Lesson = {
     }),
     say('That is the whole stack, {name}: from electrons to architecture. One thing left, the final review. I will pull questions from everything you have learned.', 'proud'),
   ],
-  recap: ['Model fidelity vs speed: functional → cycle-accurate → RTL → emulation.', 'Discrete-event simulation: jump between timestamped events.', 'gem5: CPU models (Atomic/Timing/Minor/O3), Ruby, SE vs FS.', 'Geometric mean for speedups.', 'Amdahl, Little\'s law, roofline.'],
+  recap: ['Model fidelity vs speed: functional → cycle-accurate → RTL → emulation.', 'Discrete-event simulation: jump between timestamped events.', 'gem5: CPU models (Atomic/Timing/Minor/O3), Ruby, SE vs FS.', 'Geometric mean for speedups.', 'Amdahl (fixed size) versus Gustafson (scaled size: N − s·(N − 1)); Little\'s law; roofline.'],
 };
 
 export const ARCH_LESSONS = [pipe, ooo, cache, coherence, dram, bus, noc, serdes, perf];
