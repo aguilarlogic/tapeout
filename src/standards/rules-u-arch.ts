@@ -17,4 +17,6 @@ export const RULES_U_ARCH: Rule[] = [
   { id: 'U7-lut', why: 'U7: teach fracturable LUTs', require: { file: /lessons\/roles\.ts$/, re: /fracturable/ } },
   { id: 'U7-dsp', why: 'U7: a DSP block is 27 x 18, not 25 x 18', require: { file: /glossary\.ts$/, re: /27 × 18/ } },
   { id: 'U7', why: 'U7: DSP multipliers are 27 x 18 (older 25 x 18 and 18 x 18 are obsolete)', ban: /\b25 ?[x×] ?18\b/ },
+  { id: 'U14a', why: 'U14: emulators run a full SoC at roughly 1-5 MHz', ban: /emulat[^`]*MHz|MHz[^`]*emulat/i, unless: /\$\{|1[-–]5 MHz|\b[1-5] MHz emulator/ },
+  { id: 'U14b', why: 'U14: FPGA prototypes run at roughly 10-50 MHz or more', ban: /prototyp[^`]*MHz|MHz[^`]*prototyp/i, unless: /\$\{|10[-–]50 MHz/ },
 ];

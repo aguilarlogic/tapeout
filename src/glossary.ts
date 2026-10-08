@@ -165,7 +165,7 @@ export const GLOSSARY: Entry[] = [
   E('binning|speed bin|burn-in|bathtub curve', 'Sorting parts by speed/power into SKUs; burn-in removes early-life failures.', 'ate'),
   E('fpga|lut|look-up table', 'Field-programmable gate array: LUTs, flops, block RAM and DSPs in programmable routing. A k-LUT holds 2^k bits.', 'emu'),
   E('dsp block|dsp slice', 'FPGA multiplier block: a 27 × 18-bit multiplier with pre-adder and accumulator (27 × 27 or 18 × 19 on some families).', 'emu'),
-  E('emulation|emulator|palladium|zebu|veloce|fpga prototype|prototyping', 'Running the RTL on special hardware at MHz speeds so software can run before silicon.', 'emu'),
+  E('emulation|emulator|palladium|zebu|veloce|fpga prototype|prototyping', 'Running the RTL on special hardware so software can run before silicon: emulators run a full SoC at roughly 1-5 MHz with full visibility, FPGA prototypes at roughly 10-50 MHz or more with limited visibility.', 'emu'),
   E('co-emulation|transactor', 'Connecting a host testbench to an emulated DUT through transaction-level transactors.', 'emu'),
   E('ai accelerator|npu|tpu|gpu|tensor core', 'Chips built around massive arrays of MAC units with high data reuse and HBM bandwidth.', 'npu'),
   E('mac|multiply-accumulate|tops|flops', 'One multiply plus one add. A matmul needs M·N·K MACs; peak TOPS = 2 × MACs × f.', 'npu'),
