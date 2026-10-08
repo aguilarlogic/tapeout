@@ -330,7 +330,7 @@ export const fabPractice = practice('practice-fab', 'Fab & Yield Drills', 'litho
   },
   (r, d) => {
     const d0 = pick(r, [0.05, 0.1, 0.2]), a = pick(r, [50, 100, 300, 600]), y = yieldOf(a, d0) * 100;
-    const idea = 'The Poisson yield model says defects land randomly on the wafer. The chance a die has none is Y = e^(-A × D₀), where A is the die area in cm² (1 cm² = 100 mm²) and D₀ is the defect density in defects per cm². Bigger dies catch more defects, so yield falls exponentially with area.';
+    const idea = 'The Poisson yield model says defects land randomly on the wafer. The chance a die has none is Y = e^(-A × D₀), where A is the die area in cm² (1 cm² = 100 mm²) and D₀ is the defect density in defects per cm². Bigger dies catch more defects, so yield falls exponentially with area. Poisson is the simplest and most pessimistic yield model: fabs use clustered models such as Y = (1 + A·D₀/α)^(-α), which predict higher yield for large dies.';
     if (d === 1) return walk(ask(`D₀ = ${d0} defects/cm², die ${a} mm². Poisson yield, in %?`, qty(y, '%', 0.02, sig(y)), `Y = e^(-A·D₀) = e^(-${a / 100} × ${d0}) = ${sig(y)}%.`, 'Convert mm² to cm² first.'),
       'Poisson yield', idea,
       calc('The die area in cm² (mm² ÷ 100):', `${a} / 100`, a / 100, 'cm2', String(a / 100), 0.001),
@@ -349,6 +349,26 @@ export const fabPractice = practice('practice-fab', 'Fab & Yield Drills', 'litho
       'the defect density a yield target needs', `${idea} To find D₀ for a yield target, take the natural log of both sides: ln(Y) = -A × D₀, so D₀ = -ln(Y) ÷ A.`,
       calc('-ln(Y), with Y as a fraction:', `-ln(${t / 100})`, -Math.log(t / 100), '', sig(-Math.log(t / 100), 4), 0.005),
       calc(`D₀ = that ÷ A, with A = ${a / 100} cm²:`, `${sig(-Math.log(t / 100), 4)} / ${a / 100}`, dd, '', sig(dd), 0.02));
+  },
+  // W6 R2.11: clustered (negative binomial) yield versus Poisson. Example in the idea: A·D₀ = 1, α = 2 gives 36.8% versus 44.4%.
+  (r, d) => {
+    const x = pick(r, [0.5, 1, 2, 3]), al = pick(r, [1, 2, 4]);
+    const yp = Math.exp(-x) * 100, yc = (1 + x / al) ** -al * 100;
+    const idea = 'Real defects cluster: they pile up on some dies and miss others, so more dies escape untouched than Poisson predicts. Fabs therefore use clustered models, such as the negative binomial Y = (1 + A·D₀/α)^(-α), where a small α means heavy clustering and α → ∞ gives back Poisson, Y = e^(-A·D₀). For A·D₀ = 1 and α = 2, Poisson gives 36.8% and the clustered model 44.4%. Poisson is the simplest and most pessimistic model, especially for large dies.';
+    if (d === 1) return walk(ask(`A·D₀ = ${x} and the clustering parameter α = ${al}. Clustered yield Y = (1 + A·D₀/α)^(-α), in %?`, qty(yc, '%', 0.02, sig(yc)), `(1 + ${x}/${al})^(-${al}) = ${sig(yc)}%.`, 'Add 1, then raise to the power -α.'),
+      'clustered yield', idea,
+      calc('The base, 1 + A·D₀/α:', `1 + ${x} / ${al}`, 1 + x / al, '', sig(1 + x / al, 4), 0.005),
+      calc('Y = base^(-α), as a %:', `${sig(1 + x / al, 4)}^(-${al}) × 100`, yc, '%', sig(yc), 0.02));
+    if (d === 2) return walk(ask(`A·D₀ = ${x}. By how many percentage points does a clustered model with α = ${al} beat the Poisson yield?`, qty(yc - yp, '', 0.05, sig(yc - yp)), `Poisson ${sig(yp)}%; clustered ${sig(yc)}%; gain ${sig(yc - yp)} points.`, 'Compute both yields and subtract.'),
+      'clustering gain', idea,
+      calc('Poisson yield e^(-A·D₀), as a %:', `e^(-${x}) × 100`, yp, '%', sig(yp), 0.02),
+      calc('Clustered yield (1 + A·D₀/α)^(-α), as a %:', `(1 + ${x}/${al})^(-${al}) × 100`, yc, '%', sig(yc), 0.02),
+      calc('The gain, in percentage points:', `${sig(yc)} - ${sig(yp)}`, yc - yp, '', sig(yc - yp), 0.05));
+    return walk(ask(`A large die has A·D₀ = ${x}. A fab quotes the clustered yield with α = ${al}. How many times higher is that than the Poisson yield?`, qty(yc / yp, '', 0.03, sig(yc / yp)), `${sig(yc)}% / ${sig(yp)}% = ${sig(yc / yp)}. Poisson is pessimistic, and more so for large dies.`, 'Divide the clustered yield by the Poisson yield.'),
+      'Poisson versus clustered yield', idea,
+      calc('Poisson yield e^(-A·D₀), as a %:', `e^(-${x}) × 100`, yp, '%', sig(yp), 0.02),
+      calc('Clustered yield (1 + A·D₀/α)^(-α), as a %:', `(1 + ${x}/${al})^(-${al}) × 100`, yc, '%', sig(yc), 0.02),
+      calc('The ratio, clustered ÷ Poisson:', `${sig(yc)} / ${sig(yp)}`, yc / yp, '', sig(yc / yp), 0.03));
   },
   (r, d) => {
     const a = pick(r, [50, 100, 200, 400, 600]), n = dpw(a);
