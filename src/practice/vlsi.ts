@@ -76,6 +76,36 @@ export const staPractice = practice('practice-sta', 'Timing Drills', 'setup/hold
       count('How many of the slacks are negative?', 'count of values below 0', neg.length),
       count('Their sum (ignore the positive ones):', neg.join(' + '), tns));
   },
+  (r, d) => {
+    const n = pick(r, [4, 9, 16, 25, 36]), sg = pick(r, [2, 3, 4]), mean = pick(r, [25, 50, 100]);
+    const idea = 'Statistical (POCV) timing gives every cell arc a mean delay and a standard deviation σ. Independent random variations do not all go the same way, so their sigmas add as a root-sum-square: σ_path = √(σ1² + σ2² + …), which for N equal arcs is √N × σ. Slack is then checked at a chosen sigma (often 3σ): arrival = mean + 3 × σ_path. A flat OCV derate instead adds the same percentage to every cell, as if all of them were slow at once.';
+    const sp = Math.sqrt(n) * sg;
+    if (d === 1) return walk(ask(`A path has ${n} independent arcs, each with σ = ${sg} ps. Path σ, in ps?`, qty(sp, 'ps', 0.02, String(sp)), `√${n} × ${sg} = ${sp} ps. Sigmas add as a root-sum-square, not linearly (that would be ${n * sg} ps).`, 'Root-sum-square: √N × σ.'),
+      'path sigma', idea,
+      calc('Root of the number of arcs:', `√${n}`, Math.sqrt(n), '', String(Math.sqrt(n)), 0.005),
+      calc('Path σ = √N × the arc σ, in ps:', `${Math.sqrt(n)} × ${sg}`, sp, 'ps', String(sp), 0.02));
+    const tot = n * mean, arr = tot + 3 * sp;
+    if (d === 2) return walk(ask(`${n} arcs in series, each with a mean of ${mean} ps and σ = ${sg} ps. Arrival checked at 3σ, in ps?`, qty(arr, 'ps', 0.01, String(arr)), `Mean ${n} × ${mean} = ${tot}; σ_path = √${n} × ${sg} = ${sp}; arrival = ${tot} + 3 × ${sp} = ${arr} ps.`, 'Mean plus three path sigmas.'),
+      'arrival at 3σ', idea,
+      count('Path mean = N × the arc mean:', `${n} × ${mean}`, tot),
+      calc('Path σ = √N × the arc σ, in ps:', `√${n} × ${sg}`, sp, 'ps', String(sp), 0.02),
+      calc('Arrival = mean + 3 × σ_path, in ps:', `${tot} + 3 × ${sp}`, arr, 'ps', String(arr), 0.01));
+    const flat = tot * 0.08, diff = flat - 3 * sp;
+    return walk(ask(`The same ${n}-arc path (mean ${mean} ps per arc, σ = ${sg} ps per arc) could instead get a flat 8% derate. How many ps **more** margin does the flat derate add than the 3σ check? (A negative answer means it adds less.)`, qty(diff, 'ps', 0.01, String(diff)), `Flat: 8% × ${tot} = ${flat} ps. 3σ: 3 × ${sp} = ${3 * sp} ps. Difference ${diff} ps. ${diff > 0 ? 'Flat OCV is the more pessimistic: it assumes every arc is slow at once.' : 'On a short path the statistics can be the more pessimistic, since √N has not yet averaged much out.'}`, '8% of the path mean, minus three path sigmas.'),
+      'flat derate against statistical margin', idea,
+      calc('Margin from the flat 8% derate, in ps:', `0.08 × ${tot}`, flat, 'ps', String(flat), 0.01),
+      calc('Margin from 3σ, in ps:', `3 × √${n} × ${sg}`, 3 * sp, 'ps', String(3 * sp), 0.01),
+      calc('Flat minus 3σ, in ps:', `${flat} - ${3 * sp}`, diff, 'ps', String(diff), 0.01));
+  },
+  (r, d) => {
+    const m = tier(d, 2, pick(r, [3, 4]), pick(r, [3, 4, 5])), p = tier(d, 3, pick(r, [3, 4]), pick(r, [4, 5])), c = tier(d, 1, pick(r, [3, 4]), pick(r, [4, 5, 6]));
+    const n = m * p * c;
+    const idea = 'Multi-mode multi-corner (MMMC) analysis runs the design in every combination of operating mode (functional, test, sleep, each with its own clocks and constraints) and corner (a process-voltage-temperature point plus an interconnect corner). Each combination is one scenario, so the counts multiply.';
+    return walk(ask(`A block has ${m} modes, ${p} PVT corners${c > 1 ? ` and ${c} interconnect (RC) corners` : ''}. How many signoff scenarios is that?`, num(n), `${m} × ${p}${c > 1 ? ` × ${c}` : ''} = ${n}. Real flows prune scenarios that can never be the worst, but the raw count is why signoff farms are big.`, 'Modes × corners.'),
+      'counting scenarios', idea,
+      count('Corners = PVT corners' + (c > 1 ? ' × RC corners:' : ':'), c > 1 ? `${p} × ${c}` : String(p), p * c),
+      count('Scenarios = modes × corners:', `${m} × ${p * c}`, n));
+  },
   (r, d) => concept(r, [...atLevel(2, [
     ['Which PVT corner is usually worst for setup?', 'Slow process, low voltage', ['Fast process, high voltage, low temperature', 'Typical process at nominal voltage', 'Fast process, low voltage'], 'corners for setup', 'PVT stands for process, voltage and temperature: the conditions that change how fast a chip is. Setup fails when data is TOO SLOW, so the worst setup case is the slowest conditions: slow transistors, low supply voltage, and (usually) high temperature.', ['Setup is violated when data is:', 'Too slow', ['Too fast', 'Exactly on time']], 'Setup fails when data arrives too late, so the slowest conditions are worst. Heat usually slows things further, except in advanced nodes with temperature inversion, where cold is slower.'],
     ['Which corner is usually worst for hold?', 'Fast process, high voltage', ['Slow process, low voltage', 'Typical process at nominal voltage', 'Slow process, high temperature'], 'corners for hold', 'Hold fails when data is TOO FAST and races ahead to the capture flop. So the worst hold case is the fastest conditions: fast transistors and high voltage, which make the short paths shorter still.', ['Hold is violated when data is:', 'Too fast', ['Too slow', 'Late']], 'Hold fails when data arrives too early, so the fastest conditions are worst: the short paths are at their shortest.'],
@@ -85,6 +115,11 @@ export const staPractice = practice('practice-sta', 'Timing Drills', 'setup/hold
   ]),
     ...atLevel(1, [['What does setup slack measure?', 'Margin before the next clock edge', ['Delay after the clock edge', 'Power used by the clock', 'Margin needed before the next clock edge arrives'], 'setup slack', 'Setup slack is the time left over when the data arrives before it must be captured at the next edge. Positive slack means the path meets timing; negative slack is a setup violation.', ['Positive setup slack means the path:', 'Meets timing', ['Fails timing', 'Has no clock']]]]),
     ...atLevel(3, [['Why does a multicycle path need its own constraint?', 'The tool would time it as single-cycle', ['They are always too slow for any design to matter', 'Synthesis cannot place them', 'They use the wrong clock edge only'], 'multicycle paths', 'By default the timer checks a path against one clock period. When the design captures a result only every second cycle, a set_multicycle_path constraint tells the tool the real budget, so it does not report a false violation.', ['A default path is timed against:', 'One clock period', ['Two clock periods', 'No period']]]]),
+    ...atLevel(3, [
+    ['Which interconnect corner is usually the most pessimistic for hold on a short, gate-dominated path?', 'Cbest, paired with the fast device corner', ['Cworst, paired with the slow device corner', 'RCworst, paired with the typical device corner', 'Typical RC, as short paths have almost no wire'], 'interconnect corners', 'Extraction gives the wires at Cworst/Cbest (capacitance extremes) and RCworst/RCbest (resistance-capacitance extremes). Setup uses the worst ones: Cworst for short, gate-dominated paths, RCworst for long resistive wires. Hold uses the best ones: Cbest for short paths, RCbest for long-wire paths, together with the fast device corner (at advanced nodes checked at both temperature extremes).', ['Hold fails when data is too:', 'Fast, so use the least capacitance', ['Slow, so use the most capacitance', 'Late, so use the most resistance']], 'Hold fails when data is too fast, so a short path is checked at Cbest with the fast device corner'],
+    ['For setup on a long, resistive wire, which interconnect corner is checked?', 'RCworst', ['Cbest', 'Typical RC', 'Cworst'], 'interconnect corners', 'Long wires are dominated by resistance times capacitance, so the worst setup case is the corner where that product is highest: RCworst. Short, gate-dominated paths are dominated by capacitance instead, so they use Cworst.', ['A long wire\'s delay is dominated by:', 'Its resistance times capacitance', ['The gate delay alone', 'The clock period']], 'Long wires are limited by their RC product, so setup is checked where it is highest'],
+    ['What does POCV (statistical OCV) store per cell arc that flat OCV does not?', 'A mean and a sigma for each arc', ['One derate shared by every cell', 'A table of derates indexed by depth', 'The depth of the clock tree'], 'the variation-modelling progression', 'Flat OCV applies one derate everywhere. AOCV looks up a derate by depth and distance. POCV/SOCV reads a mean and a σ for every arc (the Liberty variation format), adds the sigmas as a root-sum-square and checks slack at a chosen sigma, often 3σ.', ['Independent arc sigmas on one path add:', 'As a root-sum-square', ['Linearly, one after another', 'As the largest single sigma']], 'A mean and a σ per arc, combined as a root-sum-square and checked at a chosen sigma'],
+    ]),
   ], (why) => `${why}.`, d),
 ]);
 
@@ -344,6 +379,7 @@ export const staBoss = boss({
   clock period 1250 ps`),
     { t: 'gen', make: () => ask('What is the setup WNS in the SS corner, in ps?', qty(-30, 'ps', 0.001, '-30'), 'Path A: 1150 - 1180 = -30 ps. Path B has +60.') },
     { t: 'gen', make: () => ask('What is the hold WNS in the FF corner, in ps?', qty(-13, 'ps', 0.001, '-13'), 'Path C: 62 - 75 = -13 ps (hold slack = arrival - required). Path D: +15.') },
+    mc('Path C is short and gate-dominated. Which interconnect corner goes with the FF device corner for its hold check?', ['Cworst, since the most capacitance is worst', 'Cbest, since less capacitance is faster', 'RCworst, since resistance dominates short paths', 'Typical RC, as short paths see no wire'], 1, 'Hold fails when data is too fast, so use the best case for the wires too: Cbest for short paths (RCbest for long-wire ones). Setup is the mirror image: Cworst for short paths, RCworst for long.'),
     mc('To fix path C (hold), you add a delay buffer. Where must you check that it does not break setup?', ['On path C itself, in the slow SS corner', 'Only in the FF corner, where hold failed', 'Nowhere: hold fixes never affect setup', 'On path A, the worst setup path'], 0, 'The added delay is largest in SS. A buffer that fixes hold in FF adds even more delay in SS. Hold fixes need setup margin on the same path.'),
     { t: 'gen', make: () => ask('Path A launches from a register that only updates every other cycle (an enable). You apply a 2-cycle multicycle path. New setup slack, in ps (required time grows by one period)?', qty(1220, 'ps', 0.001, '1220'), '1150 + 1250 - 1180 = +1220 ps. Remember -hold 1 as well.') },
     { t: 'gen', make: () => ask('The launch and capture clocks share 300 ps of clock tree. Late derate 1.06, early 0.94. How much CRPR credit, in ps?', qty(36, 'ps', 0.01, '36'), '300 × (1.06 - 0.94) = 36 ps: enough to close path A even without the multicycle, if the report had not already applied it.') },

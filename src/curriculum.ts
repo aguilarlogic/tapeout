@@ -167,7 +167,7 @@ export const ACTS: Act[] = [
     chapters: [
       { name: 'Transistors', modules: [...drill('mos'), ...logic(['cmos-inv', 'cmos-nand', 'cmos-nor', 'cmos-and', 'cmos-aoi']), bossMod('boss-devices'), incident('inc-cell')] },
       { name: 'Circuit design', modules: [...drill('vlsi'), bossMod('boss-circuit'), incident('inc-bypass')] },
-      { name: 'Static timing', modules: [...drill('sta'), ...mods(TIMING_LEVELS, 'sta', 'sta'), ...sta2('sta-report', 'sta-ocv', 'sta-mcp'), bossMod('boss-sta'), ...sta2('sta-eco'), incident('inc-sta')] },
+      { name: 'Static timing', modules: [...drill('sta'), ...mods(TIMING_LEVELS, 'sta', 'sta'), ...sta2('sta-report', 'sta-ocv', 'sta-pocv', 'sta-mcp'), bossMod('boss-sta'), ...sta2('sta-eco'), incident('inc-sta')] },
       { name: 'Layout', modules: [...layout('layout-drc', 'layout-inv', 'layout-lvs', 'layout-nand'), ...layout('layout-boss'), incident('inc-drc')] },
       { name: 'Physical design', modules: [...pd('pd-place', 'pd-congestion', 'pd-cts', 'pd-ir', 'pd-floorplan'), ...pd('pd-boss'), incident('inc-pdcore')] },
       { name: 'Low power', modules: [...drill('power'), bossMod('boss-lowpower'), bossMod('boss-upf'), incident('inc-wake')] },

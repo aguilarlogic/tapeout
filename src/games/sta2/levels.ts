@@ -1,5 +1,5 @@
 // STA Lab missions beyond the interactive timing game: reading a path report, on-chip variation with CRPR, multicycle
-// exceptions, and an ECO budget boss.  They run on the generic lab page.
+// exceptions, statistical (POCV) timing, and an ECO budget boss.  They run on the generic lab page.
 import { between, type Rng } from '../../lessons/types';
 import type { ArchLevel, Goal } from '../arch/types';
 
@@ -102,6 +102,60 @@ const staOcv: ArchLevel = {
   },
 };
 
+// ============================================================ 2b. statistical timing (POCV)
+interface PocvArc { name: string; cell: string; mean: number; sigma: number }
+const UP_MEAN = 0.85, UP_SIGMA = 0.8; // an upsized arc is faster and tighter
+const staPocv: ArchLevel = {
+  id: 'sta-pocv', title: 'Statistical timing at 3σ', concept: 'per-arc mean and σ, root-sum-square path σ, slack at 3σ, choosing arcs to upsize', xp: 180, lab: 'STA', tier: 'guided',
+  ticket: 'The library now carries a mean and a σ for every arc, and signoff checks setup at 3σ. The path fails by a few picoseconds. Find the path σ, the slack at 3σ, and upsize as few arcs as you can to close it.',
+  model: 'Arcs vary independently and each carries one σ. Real variation data is a table of σ per arc, slew and load point, and some of it is correlated.',
+  build: (r) => {
+    const n = between(r, 6, 8);
+    const arcs: PocvArc[] = Array.from({ length: n }, (_, i) => ({ name: `U${i + 1}`, cell: CELLS[between(r, 0, CELLS.length - 1)], mean: r3(0.08 + 0.01 * between(r, 0, 14)), sigma: r3(0.004 + 0.001 * between(r, 0, 8)) }));
+    const clkq = 0.25, setup = 0.08;
+    const total = (up: Set<number>) => {
+      const ms = arcs.map((a, i) => (up.has(i) ? a.mean * UP_MEAN : a.mean)), ss = arcs.map((a, i) => (up.has(i) ? a.sigma * UP_SIGMA : a.sigma));
+      return { mean: clkq + ms.reduce((x, y) => x + y, 0), sigma: Math.sqrt(ss.reduce((x, y) => x + y * y, 0)) };
+    };
+    const arrival3 = (up: Set<number>) => { const t = total(up); return t.mean + 3 * t.sigma; };
+    // every subset of arcs, grouped by size, with the arrival it gives
+    const subsets: { up: Set<number>; arr: number }[][] = Array.from({ length: n + 1 }, () => []);
+    for (let m = 0; m < 1 << n; m++) { const up = new Set<number>(); for (let i = 0; i < n; i++) if (m & (1 << i)) up.add(i); subsets[up.size].push({ up, arr: arrival3(up) }); }
+    const best = (k: number) => subsets[k].reduce((a, b) => (b.arr < a.arr ? b : a));
+    // the period sits between what one and two upsizes can reach, so exactly two upsizes are needed
+    const T = r3((best(1).arr + best(2).arr) / 2 + setup);
+    const slack3 = (up: Set<number>) => T - setup - arrival3(up);
+    const budget = 2;
+    const sol = best(2).up;
+    const sigma0 = total(new Set()).sigma, s0 = r3(slack3(new Set()));
+    const flat = T - setup - (clkq + arcs.reduce((a, x) => a + x.mean, 0) * 1.08);
+    const report = ['Point            Mean(ns)   Sigma(ns)', '-----------------------------------', `FF1/CK->Q        ${n2(clkq).padStart(8)}   ${n2(0).padStart(9)}`, ...arcs.map((a) => `${a.name} (${a.cell})`.padEnd(16) + ` ${n2(a.mean).padStart(8)}   ${n2(a.sigma).padStart(9)}`), '', `clock period ${n2(T)} ns   FF2 setup ${n2(setup)} ns   no skew, no uncertainty`].join('\n');
+    return {
+      brief: `<p>Older flows derate every cell by the same percentage. <b>Statistical (POCV) timing</b> reads, for each cell arc, a <b>mean</b> delay and a <b>standard deviation σ</b> from the library (the Liberty variation data). Independent arcs do not all go slow together, so their sigmas add as a <b>root-sum-square</b>: <code>σ_path = √(σ1² + σ2² + …)</code>. Setup is checked at a chosen sigma, here <b>3σ</b>: <code>arrival = mean + 3·σ_path</code>.</p>
+<p>The report lists the mean and σ of every arc on the path FF1 → FF2 (clock-to-Q is treated as exact). Compute: (1) the <b>path σ</b> (ns), (2) the <b>setup slack at 3σ</b> (ns): <code>period − setup − (mean arrival + 3·σ_path)</code>.</p>
+<p>It is negative. You may <b>upsize at most ${budget} arcs</b>: an upsized arc has its mean ×${UP_MEAN} and its σ ×${UP_SIGMA}. List the arcs to upsize (names separated by spaces, for example <code>U1 U4</code>) so that the slack at 3σ becomes ≥ 0.</p>`,
+      hints: ['σ_path: square each arc σ, add them, take the square root. The clock-to-Q has σ = 0.', 'Mean arrival = clock-to-Q + the sum of the arc means. Slack = period − setup − (mean + 3 × σ_path).', 'The arcs with the largest mean also save the most delay when upsized, and a large σ shrinks the 3σ term; check each candidate, then try a pair.'],
+      controls: [{ id: 'sg', kind: 'text', label: 'Path σ (ns)', value: '', rows: 1 }, { id: 'sl', kind: 'text', label: 'Slack at 3σ (ns)', value: '', rows: 1 }, { id: 'up', kind: 'text', label: 'Arcs to upsize', value: '', rows: 1 }],
+      listing: { label: 'Path report', text: report },
+      run: (v) => {
+        const picked = String(v.up).split(/[\s,]+/).filter(Boolean).map((x) => x.toUpperCase());
+        const idx = picked.map((x) => arcs.findIndex((a) => a.name === x));
+        const valid = idx.every((i) => i >= 0) && new Set(idx).size === idx.length;
+        const up = new Set(idx.filter((i) => i >= 0));
+        const after = slack3(up);
+        const planOk = picked.length > 0 && valid && up.size <= budget && after >= -1e-9;
+        const goals: Goal[] = [
+          { label: 'path σ', ok: near(v.sg, sigma0, 0.00051), note: near(v.sg, sigma0, 0.00051) ? undefined : 'root of the sum of squared arc σs' },
+          { label: 'slack at 3σ', ok: near(v.sl, s0), note: near(v.sl, s0) ? undefined : 'period − setup − (mean + 3σ)' },
+          { label: `at most ${budget} arcs upsized, slack at 3σ ≥ 0`, ok: planOk, note: !valid ? 'use arc names from the report, each once' : up.size > budget ? `${up.size} arcs is over the budget` : `slack at 3σ would be ${n2(after)} ns` },
+        ];
+        return { goals, metrics: [['slack at 3σ after your plan', `${n2(after)} ns`], ['a flat 8% derate on the data path would give', `${n2(flat)} ns`]] };
+      },
+      solution: { values: { sg: n2(sigma0), sl: n2(s0), up: [...sol].map((i) => arcs[i].name).join(' ') } },
+    };
+  },
+};
+
 // ============================================================ 3. multicycle
 interface McPath { name: string; data: number; datamin: number; k: number }
 const staMcp: ArchLevel = {
@@ -196,4 +250,4 @@ const staEco: ArchLevel = {
   },
 };
 
-export const STA2_LEVELS: ArchLevel[] = [staReport, staOcv, staMcp, staEco];
+export const STA2_LEVELS: ArchLevel[] = [staReport, staOcv, staPocv, staMcp, staEco];

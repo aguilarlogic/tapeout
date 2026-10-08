@@ -1,5 +1,5 @@
 // Act IV - VLSI & implementation: static timing, circuit design, low power, boards.
-import { qty } from './answers';
+import { num, qty } from './answers';
 import { art, ask, between, gen, Lesson, mc, pick, say } from './types';
 
 const r2 = (x: number) => Math.round(x * 100) / 100;
@@ -43,6 +43,29 @@ export const sta: Lesson = {
       return ask(`The worst path needs ${t} ns including clk→Q and setup. What is fmax in **MHz**?`, qty(1000 / t, 'MHz', 0.01), `fmax = 1/${t} ns = ${(1000 / t).toFixed(0)} MHz.`, 'f = 1/T; 1 ns ↔ 1000 MHz.');
     }),
     say('Timing is checked across **corners**: process (slow/typical/fast silicon), voltage and temperature (PVT). Setup is usually worst at the slow corner, hold at the fast one. On top, **OCV** derates model variation between two paths on the same die.'),
+    say('The wires have corners too. Extraction gives the interconnect at its **Cworst / Cbest** extremes (capacitance at its highest or lowest) and its **RCworst / RCbest** extremes (the resistance-capacitance product at its highest or lowest). Setup is checked at the worst ones: **Cworst** for short, gate-dominated paths, where capacitance sets the delay, and **RCworst** for long paths, where resistive wire dominates. Hold is checked at the best ones: **Cbest** for short paths and **RCbest** for long-wire paths, always paired with the fast device corner.'),
+    mc('Which interconnect corner is usually the most pessimistic for **hold** on a short, gate-dominated path?', ['Cworst, with the slow device corner', 'Cbest, with the fast device corner', 'RCworst, with the typical device corner', 'Typical RC, since a short path has hardly any wire'], 1, 'Hold fails when data is too fast, so you want the least capacitance and the fastest gates: Cbest with the fast device corner. At advanced nodes that fast corner is checked at both temperature extremes (the hot one can be the worst).'),
+    say('Every combination of **mode** (functional, test, sleep, each with its own clocks and constraints) and **corner** (a PVT point plus an interconnect corner) is a **scenario**. This is **multi-mode multi-corner (MMMC)** analysis, and a real signoff runs dozens of scenarios, setup and hold alike.'),
+    gen((r) => {
+      const m = pick(r, [2, 3, 4]), p = pick(r, [3, 4, 5]), c = pick(r, [3, 4, 5]);
+      return ask(`A block has ${m} modes, ${p} PVT corners and ${c} interconnect (RC) corners. How many scenarios does full signoff need?`, num(m * p * c), `${m} × ${p} × ${c} = ${m * p * c}. Each scenario is one mode in one corner, so the count multiplies; real flows prune scenarios that can never be the worst.`, 'Modes × PVT corners × RC corners.');
+    }),
+    say('A single flat derate on every path is crude, so the variation models got sharper in three steps. **OCV** applies one flat derate (say 8%) to every cell. **AOCV** reads a table of derates that shrink with logic depth (random variation averages out along a long path) and with distance. **POCV** (also called SOCV) is statistical: the library stores for every cell arc a mean delay and a standard deviation σ (the Liberty variation format, **LVF**). Independent arc σs add as a **root-sum-square**, so a path of N similar arcs has σ_path = √N·σ_arc, and slack is checked at a chosen sigma (often 3σ): arrival = mean + 3·σ_path.'),
+    art(`
+   flat OCV    every arc x 1.08                       margin grows with N   (N x 8%)
+   AOCV        derate looked up by depth and distance margin shrinks with depth
+   POCV / LVF  arc = (mean, sigma)                    sigma_path = sqrt(s1^2 + s2^2 + ...)
+               slack checked at mean + 3 x sigma_path`),
+    gen((r) => {
+      const n = pick(r, [4, 9, 16, 25]), s = pick(r, [2, 3, 4, 5]);
+      return ask(`A path has ${n} cell arcs in series, each with a delay σ of ${s} ps (independent). What is the **path σ**, in ps?`, qty(Math.sqrt(n) * s, 'ps', 0.02, String(Math.sqrt(n) * s)), `σ_path = √(${n} × ${s}²) = √${n} × ${s} = ${Math.sqrt(n) * s} ps. Independent variations partly cancel, so σ grows as √N while the mean grows as N.`, 'Root-sum-square of the arc sigmas: √N times one arc\'s σ.');
+    }),
+    gen((r) => {
+      const n = pick(r, [9, 16, 25]), s = pick(r, [2, 3]), mean = pick(r, [30, 40, 50]);
+      const tot = n * mean, arr = tot + 3 * Math.sqrt(n) * s;
+      return ask(`${n} arcs in series, each with a mean of ${mean} ps and σ = ${s} ps. What is the arrival at **3σ**, in ps?`, qty(arr, 'ps', 0.01, String(arr)), `Mean = ${n} × ${mean} = ${tot} ps; σ_path = √${n} × ${s} = ${Math.sqrt(n) * s} ps; arrival = ${tot} + 3 × ${Math.sqrt(n) * s} = ${arr} ps.`, 'Mean plus three times the path σ.');
+    }),
+    mc('The same 16-arc path (mean 800 ps, σ = 16 ps) is checked once with a flat 8% derate and once at 3σ. Which is more pessimistic?', ['The 3σ check, which adds 48 ps of margin', 'The flat 8% derate, which adds 64 ps of margin', 'They are identical for a path of this length', 'Neither, because both checks add nothing to the mean'], 1, 'Flat OCV charges every arc its worst case as if all were slow at once (8% of 800 = 64 ps). Statistically, 16 independent arcs rarely all go the same way: 3σ is only 3 × 16 = 48 ps (6%). That recovered margin is why signoff moved to POCV.'),
     say('Not every path is real. You tell the tool with **timing exceptions** in the SDC constraints file:'),
     art(`
   create_clock -name clk -period 1.0 [get_ports clk]
@@ -58,7 +81,7 @@ export const sta: Lesson = {
     }),
     mc('WNS is -50 ps and TNS is -900 ns. What does that tell you?', ['One path misses by 50 ps; fix that one path', 'Many paths are failing: a systemic problem', 'The design is close to passing; it is a small fix', 'The worst path misses by 900 ns'], 1, 'The worst path misses by 50 ps, but thousands of paths are failing, which points to something systemic like a bad constraint or a missing pipeline stage. WNS is the single worst slack; TNS sums every negative slack. Small WNS with huge TNS means many paths are all slightly failing.'),
   ],
-  recap: ['Setup: cq + logic_max + setup ≤ T + skew - uncertainty.', 'Hold: cq + logic_min ≥ skew + hold + hold uncertainty (no clock period!).', 'Positive skew helps setup, hurts hold.', 'Corners (PVT) and OCV; setup at slow, hold at fast.', 'SDC: clocks, IO delays, false paths, multicycle paths (with the -hold fix).'],
+  recap: ['Setup: cq + logic_max + setup ≤ T + skew - uncertainty.', 'Hold: cq + logic_min ≥ skew + hold + hold uncertainty (no clock period!).', 'Positive skew helps setup, hurts hold.', 'Corners (PVT) and OCV; setup at slow, hold at fast. RC corners: setup at Cworst (short) / RCworst (long), hold at Cbest (short) / RCbest (long).', 'MMMC: scenarios = modes × corners, dozens at signoff.', 'Variation: flat OCV, then AOCV tables, then POCV/LVF (mean and σ per arc; path σ is the root-sum-square, checked at 3σ).', 'SDC: clocks, IO delays, false paths, multicycle paths (with the -hold fix).'],
 };
 
 export const vlsi: Lesson = {
