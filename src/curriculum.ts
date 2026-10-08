@@ -142,7 +142,7 @@ export const ACTS: Act[] = [
       { name: 'C', modules: [...drill('c'), ...code('code-c-swap', 'code-c-strings', 'code-c-array', 'code-c-bits', 'code-c-layout', 'code-c-list', 'code-c-vec', 'code-c-bug-overflow', 'code-c-bug-uaf', 'code-c-bug-leak', 'code-c-bug-dangling', 'code-c-bug-uninit'), bossMod('boss-c'), ...code('code-boss-c-ring', 'code-boss-c-split', 'code-boss-c-crc')] },
       { name: 'C++', modules: [...drill('cpp'), bossMod('boss-cpp')] },
       { name: 'Algorithms', modules: [...drill('dsa'), ...code('code-py-fibmemo', 'code-py-bsearch', 'code-py-bfs', 'code-py-topo', 'code-py-lru'), bossMod('boss-dsa'), ...code('code-boss-py-graph')] },
-      { name: 'Hardware/software interface', modules: [...drill('asm'), ...isa('isa-first', 'isa-branch', 'isa-loop', 'isa-array', 'isa-strlen', 'isa-popcount', 'isa-mul', 'isa-gcd', 'isa-copy', 'isa-reverse', 'isa-abi', 'isa-fix-signed', 'isa-fix-max', 'isa-fib', 'isa-sort'), bossMod('boss-asm'), ...isa('isa-boss-str', 'isa-boss-perf', 'isa-boss-rec')] },
+      { name: 'Hardware/software interface', modules: [...drill('asm'), ...isa('isa-first', 'isa-branch', 'isa-loop', 'isa-array', 'isa-strlen', 'isa-popcount', 'isa-mul', 'isa-gcd', 'isa-copy', 'isa-reverse', 'isa-abi', 'isa-fix-signed', 'isa-fix-max', 'isa-fib', 'isa-sort', 'isa-trap', 'isa-timer', 'isa-crt0'), bossMod('boss-asm'), ...isa('isa-boss-str', 'isa-boss-perf', 'isa-boss-rec')] },
       { name: 'Operating systems', modules: [...drill('os'), ...code('code-os-rr', 'code-os-paging', 'code-os-deadlock', 'code-os-alloc'), bossMod('boss-os'), ...code('code-os-boss-sched')] },
     ],
   },

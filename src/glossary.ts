@@ -42,6 +42,8 @@ export const GLOSSARY: Entry[] = [
   E('union find|union-find|disjoint set', 'A structure that merges sets and answers "same set?" nearly in O(1). Used for connectivity checks.', 'dsa'),
   E('isa|instruction set', 'The instruction set architecture: the contract between hardware and software (x86, ARM, RISC-V).', 'asm'),
   E('risc-v|riscv', 'An open, modular ISA widely used in teaching, embedded cores and increasingly everywhere.', 'asm'),
+  E('csr|control and status register|mtvec|mepc|mcause|mret', 'Control and status registers hold a core\'s trap state: mtvec (handler address), mepc (where to resume), mcause (why), mstatus (interrupt enable). csrr/csrw/csrrw access them; mret returns from a trap.', 'asm'),
+  E('trap|exception handler|crt0|startup code', 'A trap is a jump to a handler, caused by an exception (illegal opcode, ecall) or an interrupt. crt0 is the start-up code that sets the stack pointer, copies .data from flash and zeroes .bss before main.', 'asm'),
   E('lexer|parser|compiler', 'Compiler front end: the lexer turns characters into tokens, the parser turns tokens into a syntax tree.', 'asm'),
   E('linker|loader', 'The linker combines object files and resolves symbols; the loader maps the program into memory and starts it.', 'asm'),
   E('endianness|little endian|big endian', 'Byte order in memory. Little-endian stores the least significant byte at the lowest address.', 'asm'),
