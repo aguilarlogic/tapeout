@@ -23,3 +23,17 @@ describe('SV interpreter warns about x/z literals in == (E8)', () => {
     expect(runSv(prog("a ==? 4'b10x1"), { maxTime: 100 }).warnings).toBe(0);
   });
 });
+
+describe('$isunknown in the SV lab', () => {
+  it('is refused, because a 2-state simulator can never see an X', () => {
+    const r = runSv(`module top;
+  logic [3:0] a = 4'b1001;
+  initial begin
+    if ($isunknown(a)) $display("unknown");
+    $finish;
+  end
+endmodule`, { maxTime: 100 });
+    const out = JSON.stringify(r);
+    expect(out).toMatch(/isunknown is meaningless/);
+  });
+});

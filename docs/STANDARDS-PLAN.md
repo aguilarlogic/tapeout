@@ -39,12 +39,12 @@ statements out; every item has at least one rule or regression test.
 
 Known deviations and open follow-ups:
 
-- The SV testbench lab's `$isunknown` still returns 0; only the SVA lab rejects it (E8 asked for the SVA error only).
+- `$isunknown` is now refused in both the SVA lab and the SV testbench lab (2-state simulators cannot see an X).
 - The Bluetooth incident antenna branch quotes S11 −1 dB now; the Wallace-tree "off by one at 32 rows" drill has an approximation note only.
 - `practice-fab` yield item at A·D₀ = 1, α = 2 (36.8% vs 44.4%) is a generator over several values, not a fixed item.
 - The `fusa-hara` event ratings and the soft-error FIT inputs are illustrative and not taken from the plan.
 - PM-to-overshoot: the lesson says about 23% at 45°; one practice item uses the ζ ≈ PM/100 rule (about 20%).
-- The CTE of an organic substrate is quoted as about 15 ppm/°C in the `pkg` lesson and 17 in one warpage generator.
+- The organic-substrate CTE is quoted as roughly 15 to 17 ppm/°C in the lesson, and the warpage generator uses 17.
 - The Allan plot and a few scenario inputs (Λ, metal pitch) are illustrative.
 
 The report also gives each finding an ID (4.1, F1, S3.1, V3.2, A3.1, R3.4, X3.2 …). This plan quotes those IDs, so you
