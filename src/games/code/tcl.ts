@@ -232,7 +232,10 @@ export class TclInterp {
     }
     return v;
   }
-  hasVar(name: string): boolean { const [f, n] = this.resolve(name); return f.vars.has(n); }
+  /** The frame and name a variable lives under, after following global and upvar links. */
+  lookup(name: string): [Frame, string] { return this.resolve(name); }
+  /** True for a scalar, an array element, or an array with at least one element (as info exists). */
+  hasVar(name: string): boolean { const [f, n] = this.resolve(name); return f.vars.has(n) || [...f.vars.keys()].some((k) => k.startsWith(n + '(')); }
   setVar(name: string, v: string): string { const [f, n] = this.resolve(name); f.vars.set(n, v); return v; }
   unsetVar(name: string) { const [f, n] = this.resolve(name); f.vars.delete(n); for (const k of [...f.vars.keys()]) if (k.startsWith(n + '(')) f.vars.delete(k); }
 
@@ -261,7 +264,7 @@ export class TclInterp {
       else f.vars.set(ps[i].name, ps[i].def!);
     }
     if (variadic) f.vars.set('args', listJoin(args.slice(fixed)));
-    if (this.depth >= 200) this.fail('too many nested evaluations (infinite loop?)');
+    if (this.depth >= 1000) this.fail('too many nested evaluations (infinite loop?)');
     const saved = this.frame, savedLine = this.line;
     this.frame = f; this.depth++;
     try {
@@ -497,7 +500,7 @@ function fmtFormat(it: TclInterp, fmt: string, args: string[]): string {
     if (k >= args.length) it.fail('not enough arguments for all format specifiers');
     const arg = args[k++];
     let s: string;
-    if ('di'.includes(conv)) { const n = parseNum(arg); s = String(typeof n === 'bigint' ? n : n === null ? it.fail(`expected integer but got "${arg}"`) : Math.trunc(n)); if (flags.includes('+') && !s.startsWith('-')) s = '+' + s; }
+    if ('di'.includes(conv)) { const n = parseNum(arg); s = String(typeof n === 'bigint' ? n : n === null || !Number.isInteger(n) ? it.fail(`expected integer but got "${arg}"`) : n); if (flags.includes('+') && !s.startsWith('-')) s = '+' + s; }
     else if (conv === 'u') s = String(toInt(it, arg));
     else if (conv === 'x' || conv === 'X' || conv === 'o' || conv === 'b') {
       const n = BigInt(toInt(it, arg));
@@ -536,6 +539,7 @@ function lsortCmd(it: TclInterp, a: string[]): string {
     else if (o === '-unique') uniq = true;
     else if (o === '-nocase') nocase = true;
     else if (o === '-index') index = a[++i];
+    else if (o === '-command' || o === '-indices') it.fail(`lsort ${o} is real Tcl, but this lab does not support it`);
     else it.fail(`bad option "${o}": must be -ascii, -command, -decreasing, -dictionary, -increasing, -index, -indices, -integer, -nocase, -real, or -unique`);
   }
   let xs = listSplit(a[a.length - 1]);
@@ -581,7 +585,7 @@ function stringCmd(it: TclInterp, a: string[]): string {
     case 'repeat': return s.repeat(toInt(it, a[3]));
     case 'reverse': return [...s].reverse().join('');
     case 'equal': { const nc = a.includes('-nocase'); const r = a.filter((x) => x !== '-nocase' && x !== '-length'); return (nc ? r[2].toLowerCase() === r[3].toLowerCase() : r[2] === r[3]) ? '1' : '0'; }
-    case 'compare': return String(strCompare(a.includes('-nocase') ? s.toLowerCase() : s, a.includes('-nocase') ? a[3].toLowerCase() : a[3]));
+    case 'compare': { const nc = a.includes('-nocase'); const r = a.filter((x) => x !== '-nocase'); return String(nc ? strCompare(r[2].toLowerCase(), r[3].toLowerCase()) : strCompare(r[2], r[3])); }
     case 'match': {
       const nc = a[2] === '-nocase';
       const pat = nc ? a[3] : a[2], str = nc ? a[4] : a[3];
@@ -728,9 +732,12 @@ const CMDS: Record<string, Fn> = {
   puts: (it, a) => {
     let args = a.slice(1), nl = true;
     if (args[0] === '-nonewline') { nl = false; args = args.slice(1); }
-    if (args.length === 2) args = [args[1]];
-    if (args.length !== 1) it.fail('wrong # args: should be "puts ?-nonewline? ?channelId? string"');
-    it.write(args[0] + (nl ? '\n' : ''));
+    if (args.length !== 1 && args.length !== 2) it.fail('wrong # args: should be "puts ?-nonewline? ?channelId? string"');
+    const chan = args.length === 2 ? args[0] : 'stdout';
+    // stderr is a real channel, but the lab only shows (and checks) stdout
+    if (chan === 'stderr') return '';
+    if (chan !== 'stdout') it.fail(`can not find channel named "${chan}"`);
+    it.write(args[args.length - 1] + (nl ? '\n' : ''));
     return '';
   },
   expr: (it, a) => { need(it, a, 1, -1, 'arg ?arg ...?'); return fmtVal(it.expr(a.slice(1).join(' '))); },
@@ -849,7 +856,7 @@ const CMDS: Record<string, Fn> = {
     const lo = Math.max(0, idx(it, a[2], xs.length)), hi = idx(it, a[3], xs.length);
     return listJoin([...xs.slice(0, lo), ...a.slice(4), ...xs.slice(Math.max(lo, hi + 1))]);
   },
-  linsert: (it, a) => { const xs = listSplit(a[1]); const n = Math.min(xs.length, Math.max(0, idx(it, a[2], xs.length + 1) + (a[2].startsWith('end') ? 1 : 0))); return listJoin([...xs.slice(0, n), ...a.slice(3), ...xs.slice(n)]); },
+  linsert: (it, a) => { const xs = listSplit(a[1]); const n = Math.min(xs.length, Math.max(0, idx(it, a[2], xs.length + 1))); return listJoin([...xs.slice(0, n), ...a.slice(3), ...xs.slice(n)]); },
   lset: (it, a) => {
     const xs = listSplit(it.getVar(a[1])); const n = idx(it, a[2], xs.length);
     if (n < 0 || n >= xs.length) it.fail('list index out of range');
@@ -887,15 +894,15 @@ const CMDS: Record<string, Fn> = {
   string: stringCmd,
   dict: dictCmd,
   array: (it, a) => {
-    const base = a[2];
-    const keys = () => [...it.frame.vars.keys()].filter((k) => k.startsWith(base + '(') && k.endsWith(')'));
-    const strip = (k: string) => k.slice(base.length + 1, -1);
+    const [f, base] = it.lookup(a[2] ?? '');
+    const keys = () => [...f.vars.keys()].filter((k) => k.startsWith(base + '(') && k.endsWith(')')).map((k) => a[2] + k.slice(base.length));
+    const strip = (k: string) => k.slice(a[2].length + 1, -1);
     switch (a[1]) {
       case 'exists': return keys().length ? '1' : '0';
       case 'names': return listJoin(keys().map(strip).filter((k) => !a[3] || globMatch(a[3], k)));
       case 'size': return String(keys().length);
       case 'get': return listJoin(keys().flatMap((k) => [strip(k), it.getVar(k)]));
-      case 'set': { const xs = listSplit(a[3]); for (let i = 0; i + 1 < xs.length; i += 2) it.setVar(`${base}(${xs[i]})`, xs[i + 1]); return ''; }
+      case 'set': { const xs = listSplit(a[3]); for (let i = 0; i + 1 < xs.length; i += 2) it.setVar(`${a[2]}(${xs[i]})`, xs[i + 1]); return ''; }
       case 'unset': for (const k of keys()) it.unsetVar(k); return '';
       default: return it.fail(`unknown or ambiguous subcommand "${a[1]}": must be exists, get, names, set, size, or unset`);
     }

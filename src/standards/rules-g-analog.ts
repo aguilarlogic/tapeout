@@ -54,8 +54,8 @@ export const RULES_G_ANALOG: Rule[] = [
   },
   {
     id: 'G1.2-pm-zeta',
-    why: 'G1.2: PM ~ 100*zeta; 45 degrees is roughly 23% overshoot and 60 degrees roughly 9%',
-    require: { file: /lessons\/signals/, re: /PM ≈ 100·ζ[^\n]{0,160}23%[^\n]{0,40}9%/ },
+    why: 'G1.2: PM ~ 100*zeta; 45 degrees is roughly 20-25% overshoot (20% from the rule, 23% from the exact mapping) and 60 degrees roughly 9%',
+    require: { file: /lessons\/signals/, re: /PM ≈ 100·ζ[^\n]{0,160}20–25%[^\n]{0,40}9%/ },
   },
   {
     id: 'G1.2-nyquist',

@@ -64,8 +64,8 @@ const ktcNoise: Gen = (r, d) => {
       calc('The noise squared, in V²:', `(${v}e-6)^2`, (v * 1e-6) ** 2, '', sci((v * 1e-6) ** 2, 2), 0.03),
       calc('C = kT ÷ v², in pF:', `4.14e-21 / ${sci((v * 1e-6) ** 2, 2)} × 1e12`, c, 'pF', sig(c), 0.03));
   }
-  const n = pick(r, [10, 12, 14]), fs = pick(r, [1, 2]), lsb = fs / 2 ** n, half = lsb / 2, c = (KT / half ** 2) * 1e12;
-  return walk(ask(`A ${n}-bit ADC has a ${fs} V full scale. How large must its sampling capacitor be so that kT/C noise at 300 K stays below half an LSB, in pF?`, qty(c, 'pF', 0.04, sig(c)), `LSB = ${fs} V / ${2 ** n} = ${sig(lsb * 1e6)} µV; half is ${sig(half * 1e6)} µV. C = kT/v² = 4.14e-21 / (${sig(half)})² = ${sig(c)} pF. Each extra bit needs 4× this.`, 'Half an LSB is the target noise v; C = kT/v².'),
+  const n = pick(r, [12, 14, 16]), fs = pick(r, [1, 2]), lsb = fs / 2 ** n, half = lsb / 2, c = (KT / half ** 2) * 1e12;
+  return walk(ask(`A ${n}-bit ADC has a ${fs} V full scale. How large must its sampling capacitor be so that kT/C noise at 300 K stays below half an LSB, in pF?`, qty(c, 'pF', 0.04, sig(c)), `LSB = ${fs} V / ${2 ** n} = ${sig(lsb * 1e6)} µV; half is ${sig(half * 1e6)} µV. C = kT/v² = 4.14e-21 / (${sci(half, 2)})² = ${sig(c)} pF. Each extra bit needs 4× this.`, 'Half an LSB is the target noise v; C = kT/v².'),
     'kT/C against the LSB', `${idea} An ADC's smallest step is one LSB = full scale ÷ 2^N. To keep the sampler's noise below half an LSB, set v = LSB/2 and solve the formula for C.`,
     calc('One LSB, in µV:', `${fs} / ${2 ** n} × 1e6`, lsb * 1e6, 'uV', sig(lsb * 1e6), 0.02),
     calc('Half an LSB, in V:', `${sig(lsb * 1e6)}e-6 / 2`, half, 'V', sci(half, 2), 0.02),
@@ -263,7 +263,7 @@ const gainMarginRead: Gen = (r, d) => {
 const pmResponse: Gen = (r) => {
   const bands: [number[], string][] = [
     [[10, 15, 20, 25], 'Strong ringing, close to oscillating'],
-    [[40, 45, 50], 'About 20% overshoot with a few decaying rings'],
+    [[45, 50], 'About 20% overshoot with a few decaying rings'],
     [[60, 65, 70], 'Under 10% overshoot and a quick, clean settle'],
   ];
   const [pms, right] = pick(r, bands);

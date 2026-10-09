@@ -188,7 +188,7 @@ export const dram: Lesson = {
       const bw = (mt * 8) / 1000;
       return ask(`A DDR5-${mt} DIMM transfers ${mt} MT/s on a 64-bit data path (two 32-bit subchannels). Peak bandwidth in **GB/s**?`, qty(bw, 'GB/s', 0.01), `${mt}e6 transfers/s × 8 bytes = ${bw.toFixed(1)} GB/s.`, 'Transfers per second × bytes per transfer.');
     }),
-    say('GPUs and AI accelerators need far more. **HBM** stacks DRAM dies on top of each other and sits next to the processor on a silicon interposer, Up to HBM3E each stack has a **1024-bit** interface (HBM3E parts run about 9.2 to 9.8 Gb/s per pin, about 1.2 TB/s per stack); **HBM4** doubles it to **2048 bits** at up to about 8 Gb/s per pin, about 2 TB/s per stack. Very wide, moderately fast, and lower energy per bit.'),
+    say('GPUs and AI accelerators need far more. **HBM** stacks DRAM dies on top of each other and sits next to the processor on a silicon interposer. Up to HBM3E, each stack has a **1024-bit** interface (HBM3E parts run about 9.2 to 9.8 Gb/s per pin, about 1.2 TB/s per stack); **HBM4** doubles it to **2048 bits** at up to about 8 Gb/s per pin, about 2 TB/s per stack. Very wide, moderately fast, and lower energy per bit.'),
     gen((r) => {
       const [gen, w, gbps] = pick(r, [['HBM2E', 1024, 3.2], ['HBM3', 1024, 6.4], ['HBM3E', 1024, 9.6], ['HBM4', 2048, 8]] as [string, number, number][]);
       const bw = (w * gbps) / 8;
@@ -215,11 +215,11 @@ export const dram: Lesson = {
     gen((r) => {
       const trc = pick(r, [45, 48, 52]);
       const n = 32e-3 / (trc * 1e-9);
-      return ask(`With tRC = ${trc} ns, how many activations of one row fit in a 32 ms refresh window?`, qty(n, '', 0.01, String(Math.round(n))), `32e-3 / ${trc}e-9 ≈ ${Math.round(n).toLocaleString('en-US')} activations. Far above any realistic flip threshold, so something other than refresh must stop the attack.`, 'Window ÷ time per activation.');
+      return ask(`With tRC = ${trc} ns, how many activations of one row fit in DDR5's 32 ms refresh window?`, qty(n, '', 0.01, String(Math.round(n))), `32e-3 / ${trc}e-9 ≈ ${Math.round(n).toLocaleString('en-US')} activations. Far above any realistic flip threshold, so something other than refresh must stop the attack.`, 'Window ÷ time per activation.');
     }),
     say('The defences arrived in layers. **Target-row refresh (TRR)** inside the DRAM tracks a few aggressor rows and refreshes their neighbours, but **many-sided** patterns hammer more rows than the tracker can follow, so some always slip through. **Refresh management (RFM)** moves the counting to the controller: it counts activations per bank and issues extra refreshes when a count crosses a threshold. **Per-row activation counting** (PRAC) puts a counter on every row inside the DRAM; when one gets too hot the DRAM alerts the controller to pause traffic (papers call it alert back-off) and refreshes the victim rows.'),
     mc('Why did target-row refresh alone fail against Rowhammer?', ['It tracks only a few aggressor rows, and many-sided patterns overflow it', 'It refreshes every row so often that the DRAM runs out of bandwidth', 'It only works when the controller supports it, and none ever did', 'It refreshes the aggressor row itself, which then flips its neighbours'], 0, 'Real trackers hold a handful of entries. A pattern with more aggressor rows than entries makes the tracker forget some of them, and their victims are never refreshed in time. Counting every row (PRAC) or counting in the controller (RFM) removes that limit.'),
-    say('DDR5 also has **on-die ECC**: the chip corrects a single-bit error inside the array before the data leaves. It is invisible to the system: the controller never learns that anything was corrected, it does nothing for errors on the bus or from a failed chip, and a multi-bit upset gets through. So servers still want **system ECC** (the 40-bit DIMM), whose syndromes the controller can log and act on.'),
+    say('DDR5 also has **on-die ECC**: the chip corrects a single-bit error inside the array before the data leaves. It is invisible to the system: the controller never learns that anything was corrected, it does nothing for errors on the bus or from a failed chip, and a multi-bit upset gets through. So servers still want **system ECC** (an ECC DIMM: each 32-bit subchannel gets 8 check bits, 40 in all), whose syndromes the controller can log and act on.'),
     mc('DDR5 chips have on-die ECC. Why do servers still use ECC DIMMs?', ['It is invisible to the system and covers only the array, not the bus or a chip failure', 'It is switched off as soon as a DIMM carries more than one rank, so nobody can rely on it', 'It only checks the refresh timing of the rows, while system ECC is what stores the data', 'It corrects the commands and addresses on the bus but never the data bits in the array'], 0, 'The correction happens silently inside the chip, so the operating system cannot count errors or retire failing pages, and bus errors or a dead chip are outside what it covers. System-level ECC is end to end and reports what it fixes.'),
   ],
   recap: ['DRAM: 1T1C, refresh, destructive reads, row buffers.', 'Hit: CL. Closed: tRCD + CL. Conflict: tRP + tRCD + CL.', 'Controllers schedule for row hits (FR-FCFS) and bank parallelism.', 'DDR5 BW = MT/s × 8 B; HBM = width × Gb/s ÷ 8 per stack (1024 bits through HBM3E, 2048 from HBM4).', 'LPDDR for phones, GDDR7 for graphics and inference (PAM3), HBM for training.', 'Wide, short interposer wires make HBM possible.', 'Rowhammer: TRR is overflowed by many-sided patterns; RFM and per-row activation counting fix it.', 'On-die ECC is invisible to the system, so system ECC is still needed.'],
@@ -345,7 +345,7 @@ export const serdes: Lesson = {
 
 export const perf: Lesson = {
   id: 'perf',
-  title: 'Modeling Performance',
+  title: 'Modelling Performance',
   concept: 'simulation, gem5, benchmarks, Amdahl, roofline',
   xp: 120,
   steps: [

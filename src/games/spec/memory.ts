@@ -183,7 +183,7 @@ const pkgThermal: ArchLevel = {
     const b = best!;
     return {
       brief: `<p>Heat flows from the junction through the die and package (θ<sub>jc</sub> = ${thjc} K/W), the thermal interface material (TIM), and the heat sink to the air at ${Ta} °C: <b>T<sub>j</sub> = T<sub>a</sub> + P · (θ<sub>jc</sub> + θ<sub>TIM</sub> + θ<sub>sink</sub>)</b>.</p>
-<ul><li>TIM: none 0.5 K/W ($0), grease 0.15 ($1), solder 0.05 ($3).</li><li>Sink: none 8 K/W ($0), fin 3.5 ($2), large 1.8 ($6), vapor chamber 0.9 ($12). A fan cuts the sink resistance by 40% for $1.5.</li><li>The chip draws ${P0} W at full speed. Throttling the clock to x% cuts the dynamic power roughly as x³ (voltage follows frequency); leakage does not follow the cube.</li></ul>
+<ul><li>TIM: none 0.5 K/W ($0), grease 0.15 ($1), solder 0.05 ($3).</li><li>Sink: none 8 K/W ($0), fin 3.5 ($2), large 1.8 ($6), vapor chamber 0.9 ($12). A fan cuts the sink resistance by 40% for $1.5.</li><li>The chip draws ${P0} W at full speed. Throttling the clock to x% cuts the dynamic power roughly as x³ (voltage follows frequency). Leakage does not follow the cube; this lab treats the whole draw as dynamic.</li></ul>
 <p>Keep <b>T<sub>j</sub> ≤ ${Tmax} °C</b>, never throttle below <b>90%</b> performance, and spend at most <b>$${b.cost}</b> on cooling.</p>`,
       hints: ['Add the three resistances, multiply by the power, then add the ambient. Solve for the largest total resistance you may have.', 'A 10% throttle saves 27% power, which is worth more than a very expensive heat sink in many cases.', 'Check the cheap combinations first: TIM and fan are inexpensive resistance reductions.'],
       controls: [

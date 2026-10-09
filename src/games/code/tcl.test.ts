@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { tclScripts } from '../../practice/tooling';
+import { rng } from '../../sim/harness';
+import { TCL_LEVELS } from './levels-tcl';
+import { runCode } from './run';
 import { TclInterp } from './tcl';
 
 const out = (src: string, opts = {}) => {
@@ -213,4 +216,46 @@ describe('the Tcl drills in the flows practice set agree with this interpreter',
     }
     expect(seen.size).toBeGreaterThanOrEqual(8);
   });
+});
+
+describe('tcl subset: fidelity fixes from the standards audit', () => {
+  it('puts takes a channel: stdout works, stderr is kept apart, anything else is an error', () => {
+    expect(out('puts stdout hi')).toBe('hi\n');
+    expect(out('puts stderr oops\nputs ok')).toBe('ok\n');
+    expect(err('puts hello world')).toMatch(/can not find channel named "hello"/);
+  });
+  it('array and info exists see through global and upvar links', () => {
+    expect(out('set a(x) 1\nset a(y) 2\nproc f {} { global a; return [array size a] }\nputs [f]')).toBe('2\n');
+    expect(out('set a(x) 1\nproc g {n} { upvar $n arr; return [lsort [array names arr]] }\nputs [g a]')).toBe('x\n');
+    expect(out('set a(x) 1\nputs [info exists a]\nputs [info exists a(x)]\nputs [info exists a(q)]')).toBe('1\n1\n0\n');
+  });
+  it('linsert counts end as the slot after the last element', () => {
+    expect(out('puts [linsert {a b c} end X]\nputs [linsert {a b c} end-1 X]\nputs [linsert {a b c} 0 X]')).toBe('a b c X\na b X c\nX a b c\n');
+  });
+  it('string compare -nocase reads its option before the strings', () => {
+    expect(out('puts [string compare -nocase b A]\nputs [string compare -nocase abc ABC]\nputs [string compare a b]')).toBe('1\n0\n-1\n');
+  });
+  it('unary minus binds tighter than **, as in Tcl', () => {
+    expect(out('puts [expr {-2**2}]\nputs [expr {-(2**2)}]')).toBe('4\n-4\n');
+  });
+  it('allows recursion several hundred levels deep', () => {
+    expect(out('proc d {n} { if {$n == 0} { return 0 }; return [expr {1 + [d [expr {$n - 1}]]}] }\nputs [d 300]')).toBe('300\n');
+  });
+  it('format %d refuses a fraction', () => {
+    expect(err('format %d 3.5')).toMatch(/expected integer/);
+  });
+});
+
+describe('tcl subset: array set through a link', () => {
+  it('writes into the linked array', () => {
+    expect(out('proc f {} { global cfg; array set cfg {a 1 b 2} }\nf\nputs [lsort [array names cfg]] \nputs $cfg(b)')).toBe('a b\n2\n');
+  });
+});
+
+describe('code-tcl-netlist rejects near misses', () => {
+  const inst = TCL_LEVELS.find((l) => l.id === 'code-tcl-netlist')!.build(rng(1));
+  const run = (src: string) => runCode('tcl', inst, src);
+  it('accepts the solution', () => expect(run(inst.solution).passed).toBe(true));
+  it('needs the sort', () => expect(run(inst.solution.replace('return [lsort $names]', 'return $names')).passed).toBe(false));
+  it('needs the DFF filter, not every sequential cell', () => expect(run(inst.solution.replace('-filter "ref_name =~ DFF*"', '-filter "is_sequential == true"')).passed).toBe(false));
 });

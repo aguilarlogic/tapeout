@@ -179,12 +179,12 @@ export const ACTS: Act[] = [
     ],
   },
   {
-    id: 'arch', n: 6, name: 'Architecture', tagline: 'Out-of-order cores, memory systems, interconnect and modeling', region: 'CACHE · NOC',
+    id: 'arch', n: 6, name: 'Architecture', tagline: 'Out-of-order cores, memory systems, interconnect and modelling', region: 'CACHE · NOC',
     chapters: [
       { name: 'Cores', modules: [...drill('pipe'), ...arch('pipe-fwd', 'pipe-branch', 'pipe-sched', 'pipe-unroll'), ...drill('ooo'), ...arch('ooo-rename', 'ooo-window', 'ooo-diagnose'), bossMod('boss-cpu'), ...arch('pipe-boss', 'ooo-boss')] },
       { name: 'Memory hierarchy', modules: [...drill('cache'), ...arch('cache-predict', 'cache-block', 'cache-conflict', 'cache-policy', 'cache-tile', 'cache-write'), ...drill('coherence', 'dram'), bossMod('boss-mem'), ...arch('cache-boss')] },
       { name: 'Interconnect', modules: [...drill('bus'), bossMod('boss-protocols'), ...drill('noc', 'serdes'), bossMod('boss-interconnect')] },
-      { name: 'Modeling', modules: [...drill('perf'), bossMod('boss-perf')] },
+      { name: 'Modelling', modules: [...drill('perf'), bossMod('boss-perf')] },
       {
         name: 'Tapeout', modules: [
           { id: 'drills', kind: 'drills', title: 'Interview Gauntlet', concept: 'spaced-repetition interview questions', xp: 150, route: '#/drills' },

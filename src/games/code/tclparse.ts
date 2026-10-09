@@ -231,15 +231,17 @@ class ExprParser {
       a = { k: 'bin', op, a, b: this.level(n + 1) };
     }
   }
-  private unary(): Ex {
-    const op = this.peek();
-    if (op === '-' || op === '+' || op === '!' || op === '~') { this.take(op); return { k: 'un', op, a: this.unary() }; }
-    return this.pow();
-  }
+  // Tcl binds unary operators tighter than **, so -2**2 is 4; ** itself is right-associative.
+  private unary(): Ex { return this.pow(); }
   private pow(): Ex {
-    const a = this.primary();
-    if (this.peek() === '**') { this.take('**'); return { k: 'bin', op: '**', a, b: this.unary() }; }
+    const a = this.prefix();
+    if (this.peek() === '**') { this.take('**'); return { k: 'bin', op: '**', a, b: this.pow() }; }
     return a;
+  }
+  private prefix(): Ex {
+    const op = this.peek();
+    if (op === '-' || op === '+' || op === '!' || op === '~') { this.take(op); return { k: 'un', op, a: this.prefix() }; }
+    return this.primary();
   }
   private primary(): Ex {
     this.ws();

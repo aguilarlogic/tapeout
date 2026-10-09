@@ -388,7 +388,8 @@ function find(ctx: Ctx, args: string[]): number {
       case '-delete': action = 'delete'; break;
       case '-exec': {
         action = 'exec'; execCmd = []; i++;
-        while (i < args.length && args[i] !== ';' && args[i] !== '+') execCmd.push(args[i++]);
+        // `+` ends the command only straight after {} (as in real find); elsewhere it is an ordinary argument
+        while (i < args.length && args[i] !== ';' && !(args[i] === '+' && args[i - 1] === '{}')) execCmd.push(args[i++]);
         // an unquoted ; was already eaten by the shell as a command separator, so the terminator never arrives
         if (i >= args.length || !execCmd.length) { ctx.err("find: missing argument to '-exec'\n"); return 1; }
         batch = args[i] === '+';

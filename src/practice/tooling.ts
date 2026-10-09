@@ -31,7 +31,11 @@ const REGEX_TASKS = [
 
 const TESTS = ['fifo_test', 'axi_test', 'dma_test', 'irq_test', 'cdc_test'];
 function results(r: Rng, n: number) {
-  return Array.from({ length: n }, () => ({ t: pick(r, TESTS), ok: r() < 0.55, seed: between(r, 1000, 9999) }));
+  const rows = Array.from({ length: n }, () => ({ t: pick(r, TESTS), ok: r() < 0.55, seed: between(r, 1000, 9999) }));
+  // Every log shows at least one failure and one pass, so no drill asks for an empty list (no extra draws: same stream).
+  if (rows.every((x) => x.ok)) rows[0].ok = false;
+  if (rows.every((x) => !x.ok)) rows[n - 1].ok = true;
+  return rows;
 }
 
 const PERM = (bits: number) => (bits & 4 ? 'r' : '-') + (bits & 2 ? 'w' : '-') + (bits & 1 ? 'x' : '-');
@@ -61,7 +65,7 @@ export const shellPractice = practice('practice-shell', 'Shell Drills', 'regex, 
   (r, d) => {
     const [, task, canon, pos, neg, method, [pq, pr, pw]] = pick(r, REGEX_TASKS.filter((x) => x[0] === d));
     const a = rx(canon, [...pos], [...neg]);
-    return walk(ask(`Write a regular expression${/\\d|\(\?[=!]/.test(canon) ? " (Python `re` syntax; grep -P is the same)" : ""} that matches ${task}.\nMust match: ${pos.map((x) => `\`${x}\``).join(', ')}\nMust not match: ${neg.map((x) => `\`${x}\``).join(', ')}`, a, `One answer: \`${canon}\`. I test yours against every example, so any correct pattern passes.`, 'Anchors: ^ start, $ end. Classes: [0-9] works in every tool; \\w and \\d are Perl-style shorthands (Python re, grep -P). Repeats: + one or more, * zero or more.'),
+    return walk(ask(`Write a regular expression${/\\d|\(\?[=!]/.test(canon) ? " (Python `re` syntax; grep -P is the same)" : ""} that matches ${task}.\nMust match: ${pos.map((x) => `\`${x}\``).join(', ')}\nMust not match: ${neg.map((x) => `\`${x}\``).join(', ')}`, a, `One answer: \`${canon}\`. I test yours against every example, so any correct pattern passes.`, 'Anchors: ^ start, $ end. Classes: [0-9] works in every tool; \\d is a Perl-style shorthand (Python re, grep -P); GNU grep also accepts \\w, \\s and \\b. Repeats: + one or more, * zero or more.'),
       `regex: ${method}`, REGEX_IDEA,
       'Look at what the "must match" lines share, and what the "must not match" lines lack: that difference is exactly what your pattern has to demand.',
       choice(pq, pr, pw),
@@ -479,7 +483,7 @@ export const shellBoss = boss({
     mc('Two signatures account for 90% of failures. What do you do first?', ['Rerun one failing seed of each with waves on, to reproduce it', 'Rerun the whole regression with a new set of random seeds', 'Mark both as known failures, and move on to the long tail', 'Email everyone the raw logs, and ask who has seen them before'], 0, 'Deterministic reproduction from the seed is how DV debug starts: bucket, reproduce, then find the root cause. Deterministic reproduction from the seed is how DV debug starts. Bucket, reproduce, root-cause.'),
     { t: 'gen', make: (r) => { const seed = between(r, 10000, 99999); return ask(`Write the command to rerun test fifo_test with seed ${seed} using the script ./run_test (it takes --test and --seed), saving all output to rerun.log.`, has(`./run_test --test fifo_test --seed ${seed} > rerun.log 2>&1`, ['./run_test'], ['--test fifo_test', '--test=fifo_test'], [`--seed ${seed}`, `--seed=${seed}`], ['rerun.log']), `\`./run_test --test fifo_test --seed ${seed} > rerun.log 2>&1\`.`); } },
     mc('The rerun passes. The regression run with the same seed failed. What is the most likely explanation?', ['The test is not reproducible from its seed', 'The seed was recorded wrongly in the regression log file', 'The Linux farm machine is flaky, so the run just glitched', 'The first run was hit by a cosmic ray during the simulation'], 0, 'Some randomness or timing is not seeded: a DV bug in itself. Every source of randomness must derive from the seed, or failures cannot be reproduced. Check for unseeded $urandom, wall-clock time, or ordering of parallel processes.'),
-    { t: 'gen', make: () => ask('Write a command that lists the 5 largest files in the current directory tree (to find the waveform dump filling the disk).', has('find . -type f -exec du -h {} + | sort -rh | head -5', ['find'], ['du'], ['sort'], ['-h', '-rh', '-hr', '-n', '-rn', '-nr'], ['head'], ['5']), '`find . -type f -exec du -h {} + | sort -rh | head -5`. (`du -ah . | sort -rh | head -5` also lists directories and the top-level `.`, so it shows files or directories, not just files.) Full disks kill regressions at 3 AM all the time.') },
+    { t: 'gen', make: () => ask('Write a command that lists the 5 largest files in the current directory tree (to find the waveform dump filling the disk).', has('find . -type f -exec du -h {} + | sort -rh | head -5', ['find'], ['du', '-printf', 'ls -S', 'ls -lS', 'stat'], ['sort', 'ls -S', 'ls -lS'], ['-h', '-rh', '-hr', '-n', '-rn', '-nr', '-S', '-lS'], ['head'], ['5']), '`find . -type f -exec du -h {} + | sort -rh | head -5`. (`du -ah . | sort -rh | head -5` also lists directories and the top-level `.`, so it shows files or directories, not just files.) Full disks kill regressions at 3 AM all the time.') },
   ],
   recap: ['grep -c / -o, sort | uniq -c to bucket failures.', 'Regex with escapes and counts.', 'Reproduce from the seed; nondeterminism is a bug.'],
 });

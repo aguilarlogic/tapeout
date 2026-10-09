@@ -90,6 +90,7 @@ const flops: CodeLevel = {
       { pre: DESIGN, call: 'flop_names u_io' },
       { pre: DESIGN, call: 'flop_names u_none', hidden: true },
       { pre: 'read_netlist {u_x/a1 INV_X1 u_x/f1 DFF_X4}', call: 'flop_names u_x', hidden: true },
+      { pre: 'read_netlist {u_x/z9 DFF_X1 u_x/b1 DFF_X2 u_x/a3 LAT_X1 u_x/m1 DFFR_X1}', call: 'flop_names u_x', hidden: true },
     ],
   }),
 };

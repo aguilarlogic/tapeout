@@ -429,9 +429,9 @@ export const probPractice = practice('practice-prob', 'Probability Drills', 'yie
     ];
     if (d < 3) return walk(ask(`Independent random jitter sources of ${srcs.join(', ')} ps rms. Total rms jitter, in ps?`, qty(rss, 'ps', 0.02, sig(rss)), `√(${srcs.map((x) => `${x}²`).join(' + ')}) = ${sig(rss)} ps.`, 'Independent variances add.'),
       'root-sum-square', idea, ...rssSteps);
-    const dj = pick(r, [5, 10, 20]), ber = pick(r, [[14.07, '1e-12'], [12.72, '1e-10']] as const);
+    const dj = pick(r, [5, 10, 20]), ber = pick(r, [[14.07, '1e-12', '7.03'], [12.72, '1e-10', '6.36']] as const);
     const tj = dj + ber[0] * rss;
-    return walk(ask(`A SerDes link has ${dj} ps of deterministic jitter and random sources of ${srcs.join(', ')} ps rms. At a BER of ${ber[1]} the random part counts as ${ber[0]}σ (that is 2·Q·σ, with Q ≈ ${(ber[0] / 2).toFixed(2)}). Total jitter, in ps?`, qty(tj, 'ps', 0.02), `RJ = √(${srcs.map((x) => `${x}²`).join(' + ')}) = ${sig(rss)} ps. TJ = DJ + ${ber[0]}·RJ = ${dj} + ${sig(ber[0] * rss)} = ${sig(tj)} ps. Deterministic jitter adds linearly; random adds in quadrature.`, 'TJ = DJ + Q·RJ, where RJ is the root-sum-square.'),
+    return walk(ask(`A SerDes link has ${dj} ps of deterministic jitter and random sources of ${srcs.join(', ')} ps rms. At a BER of ${ber[1]} the random part counts as ${ber[0]}σ (that is 2·Q·σ, with Q ≈ ${ber[2]}). Total jitter, in ps?`, qty(tj, 'ps', 0.02), `RJ = √(${srcs.map((x) => `${x}²`).join(' + ')}) = ${sig(rss)} ps. TJ = DJ + ${ber[0]}·RJ = ${dj} + ${sig(ber[0] * rss)} = ${sig(tj)} ps. Deterministic jitter adds linearly; random adds in quadrature.`, 'TJ = DJ + Q·RJ, where RJ is the root-sum-square.'),
       'total jitter', idea, ...rssSteps,
       calc(`The random part at this BER, ${ber[0]} × RJ:`, `${ber[0]} × ${sig(rss)}`, ber[0] * rss, 'ps'),
       calc('Add the deterministic part:', `${dj} + ${sig(ber[0] * rss)}`, tj, 'ps', undefined, 0.02));

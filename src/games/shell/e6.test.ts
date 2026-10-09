@@ -25,6 +25,10 @@ describe('find -exec terminators (E6)', () => {
     expect(text(sh.run('find p -type f -exec echo {} +'))).toBe('p/x p/y\n');
     expect(text(sh.run('find p -type f -exec echo {} \\;'))).toBe('p/x\np/y\n');
   });
+  it('a + that does not follow {} is an ordinary argument', () => {
+    const sh = mk();
+    expect(text(sh.run('find p -name x -exec echo 1 + 2 {} \\;'))).toBe('1 + 2 p/x\n');
+  });
 });
 
 describe('grep regex flavours (E6)', () => {

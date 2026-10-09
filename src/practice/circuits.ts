@@ -629,7 +629,7 @@ export const acBoss = boss({
 export const electronicsBoss = boss({
   id: 'boss-electronics',
   title: 'The First Amplifier',
-  concept: 'bias, size and analyze a common-source gain stage by hand',
+  concept: 'bias, size and analyse a common-source gain stage by hand',
   xp: 180,
   steps: [
     say('Boss fight. A sensor chip needs a single-stage amplifier with a gain of at least 20, and the analog lead wants your hand calculations before anyone opens a simulator. Process: µnCox = 300 µA/V², λ = 0.1 V⁻¹ at this length, V_DD = 1.8 V.', 'thinking'),

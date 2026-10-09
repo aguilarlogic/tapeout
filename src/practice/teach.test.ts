@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Question } from '../lessons/types';
 import { rng } from '../sim/harness';
-import { PRACTICE } from './index';
+import { BOSSES, PRACTICE } from './index';
 import type { Difficulty } from './types';
 
 /** Every practice question can be taught: a method, why it applies, and steps the player works through. */
@@ -38,4 +38,31 @@ describe('practice walkthroughs', () => {
       }
     });
   }
+});
+
+// A results log with no FAIL line made the "write the failing test names" step expect an empty answer.
+describe('shell log drills', () => {
+  it('every results log has at least one FAIL and one PASS, so each walkthrough step has an answer', () => {
+    const shell = PRACTICE.find((p) => p.id === 'practice-shell')!;
+    for (const d of [1, 2, 3] as Difficulty[]) for (let seed = 1; seed <= 400; seed++) {
+      const q = shell.gens[1](rng(seed), d);
+      expect(q.q, `d${d} seed${seed}`).toMatch(/FAIL seed=/);
+      expect(q.q, `d${d} seed${seed}`).toMatch(/PASS seed=/);
+      checkWalk(q, `practice-shell gen1 d${d} seed${seed}`);
+    }
+  });
+});
+
+describe('shell boss: the largest-files command', () => {
+  const step = BOSSES.find((b) => b.id === 'boss-shell')!.steps.find((s) => s.t === 'gen' && /5 largest files/.test((s as { make: (r: () => number) => Question }).make(rng(1)).q))!;
+  const a = (step as { make: (r: () => number) => Question }).make(rng(1));
+  const ok = (cmd: string) => a.t === 'ask' && a.a.check(cmd);
+  it('accepts the usual correct forms', () => {
+    expect(ok('find . -type f -exec du -h {} + | sort -rh | head -5')).toBe(true);
+    expect(ok("find . -type f -printf '%s %p\\n' | sort -rn | head -5")).toBe(true);
+    expect(ok('find . -type f | xargs ls -lS | head -5')).toBe(true);
+  });
+  it('still rejects du alone, which lists directories too', () => {
+    expect(ok('du -ah . | sort -rh | head -5')).toBe(false);
+  });
 });
