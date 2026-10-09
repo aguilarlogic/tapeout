@@ -137,7 +137,7 @@ export class Design {
         if (a.init) continue;
         if (sig.dir === 'input') throw new VerilogError(`cannot assign to input '${name}'`, a.line);
         if (sig.kind === 'reg' || sig.kind === 'integer') {
-          throw new VerilogError(`'${name}' is declared as a reg, so it can't be driven by 'assign'. Declare it as a wire, or drive it from an always block.`, a.line);
+          throw new VerilogError(`'${name}' is declared as a reg, so it can't be driven by 'assign'. Declare it as logic (or a wire), or drive it from an always block.`, a.line);
         }
         if (this.lvIsWhole(a.lhs, name)) claim(name, `assign on line ${a.line}`, a.line);
         else if (drivers.get(name)?.startsWith('always')) claim(name, `assign on line ${a.line}`, a.line);
@@ -158,7 +158,7 @@ export class Design {
         const sig = this.signals.get(name)!;
         if (sig.dir === 'input') throw new VerilogError(`cannot assign to input '${name}'`, blk.line);
         if (sig.kind === 'wire') {
-          throw new VerilogError(`'${name}' is a wire, so it can't be assigned inside an always block. Declare it as 'reg' (or 'output reg').`, blk.line);
+          throw new VerilogError(`'${name}' is a wire, so it can't be assigned inside an always block. Declare it as 'logic' (or 'output logic'); older code writes 'reg'.`, blk.line);
         }
         claim(name, `always block on line ${blk.line}`, blk.line);
       }

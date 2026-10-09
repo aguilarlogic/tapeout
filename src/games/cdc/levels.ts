@@ -61,33 +61,33 @@ class SyncBench implements Bench {
 }
 const SYNC_SPEC: CdcSpec = { clocks: { clka: 'A', clkb: 'B' }, inputs: { rst_n: '*', d: 'A', en_b: 'B' } };
 const SYNC_STARTER = `// A flag from domain A (clka) must reach domain B (clkb), where q follows it while en_b (a domain B signal) is high.
-module flag_xfer(input clka, input clkb, input rst_n, input d, input en_b, output reg q);
-  reg a_q;
+module flag_xfer(input clka, input clkb, input rst_n, input d, input en_b, output logic q);
+  logic a_q;
 
   // domain A: register the flag
-  always @(posedge clka or negedge rst_n) begin
+  always_ff @(posedge clka or negedge rst_n) begin
     if (!rst_n) a_q <= 1'b0;
     else a_q <= d;
   end
 
   // domain B: use it
-  always @(posedge clkb or negedge rst_n) begin
+  always_ff @(posedge clkb or negedge rst_n) begin
     if (!rst_n) q <= 1'b0;
     else q <= a_q & en_b;
   end
 endmodule
 `;
-const SYNC_SOL = `module flag_xfer(input clka, input clkb, input rst_n, input d, input en_b, output reg q);
-  reg a_q;
-  reg s1, s2;
+const SYNC_SOL = `module flag_xfer(input clka, input clkb, input rst_n, input d, input en_b, output logic q);
+  logic a_q;
+  logic s1, s2;
 
-  always @(posedge clka or negedge rst_n) begin
+  always_ff @(posedge clka or negedge rst_n) begin
     if (!rst_n) a_q <= 1'b0;
     else a_q <= d;
   end
 
   // two flops in the destination domain: s1 may go metastable, s2 is clean
-  always @(posedge clkb or negedge rst_n) begin
+  always_ff @(posedge clkb or negedge rst_n) begin
     if (!rst_n) begin
       s1 <= 1'b0;
       s2 <= 1'b0;
@@ -153,8 +153,8 @@ const PULSE_STARTER = `// pulse_a is a one-cycle pulse in the fast domain A. Pro
 module pulse_xfer(input clka, input clkb, input rst_n, input pulse_a, output pulse_b);
   // TODO
   // This attempt synchronizes the pulse like a level. A short pulse can fall entirely between two clkb edges.
-  reg p1, p2;
-  always @(posedge clkb or negedge rst_n) begin
+  logic p1, p2;
+  always_ff @(posedge clkb or negedge rst_n) begin
     if (!rst_n) begin p1 <= 1'b0; p2 <= 1'b0; end
     else begin p1 <= pulse_a; p2 <= p1; end
   end
@@ -162,17 +162,17 @@ module pulse_xfer(input clka, input clkb, input rst_n, input pulse_a, output pul
 endmodule
 `;
 const PULSE_SOL = `module pulse_xfer(input clka, input clkb, input rst_n, input pulse_a, output pulse_b);
-  reg tog;
-  reg s1, s2, s3;
+  logic tog;
+  logic s1, s2, s3;
 
   // domain A: turn each pulse into a level change that stays until the next pulse
-  always @(posedge clka or negedge rst_n) begin
+  always_ff @(posedge clka or negedge rst_n) begin
     if (!rst_n) tog <= 1'b0;
     else if (pulse_a) tog <= ~tog;
   end
 
   // domain B: synchronize the level, then detect its change
-  always @(posedge clkb or negedge rst_n) begin
+  always_ff @(posedge clkb or negedge rst_n) begin
     if (!rst_n) begin s1 <= 1'b0; s2 <= 1'b0; s3 <= 1'b0; end
     else begin s1 <= tog; s2 <= s1; s3 <= s2; end
   end
@@ -232,15 +232,15 @@ const GRAY_SPEC: CdcSpec = { clocks: { clka: 'A', clkb: 'B' }, inputs: { rst_n: 
 const GRAY_STARTER = `// A 4-bit counter in domain A. Domain B needs to read its value as cnt_b (binary, a little late is fine,
 // but it must always be a value the counter really had).
 module gray_xfer(input clka, input clkb, input rst_n, input inc, output [3:0] cnt_b);
-  reg [3:0] cnt;                         // binary counter, domain A (given)
-  always @(posedge clka or negedge rst_n) begin
+  logic [3:0] cnt;                         // binary counter, domain A (given)
+  always_ff @(posedge clka or negedge rst_n) begin
     if (!rst_n) cnt <= 4'd0;
     else if (inc) cnt <= cnt + 4'd1;
   end
 
   // TODO: this just copies the binary count across. Going from 0111 to 1000 changes four bits at once.
-  reg [3:0] c1, c2;
-  always @(posedge clkb or negedge rst_n) begin
+  logic [3:0] c1, c2;
+  always_ff @(posedge clkb or negedge rst_n) begin
     if (!rst_n) begin c1 <= 4'd0; c2 <= 4'd0; end
     else begin c1 <= cnt; c2 <= c1; end
   end
@@ -248,17 +248,17 @@ module gray_xfer(input clka, input clkb, input rst_n, input inc, output [3:0] cn
 endmodule
 `;
 const GRAY_SOL = `module gray_xfer(input clka, input clkb, input rst_n, input inc, output [3:0] cnt_b);
-  reg [3:0] cnt;
-  reg [3:0] g;                           // Gray-coded copy, registered in domain A
-  reg [3:0] c1, c2;
-  always @(posedge clka or negedge rst_n) begin
+  logic [3:0] cnt;
+  logic [3:0] g;                           // Gray-coded copy, registered in domain A
+  logic [3:0] c1, c2;
+  always_ff @(posedge clka or negedge rst_n) begin
     if (!rst_n) begin cnt <= 4'd0; g <= 4'd0; end
     else begin
       if (inc) cnt <= cnt + 4'd1;
       g <= cnt ^ (cnt >> 1);
     end
   end
-  always @(posedge clkb or negedge rst_n) begin
+  always_ff @(posedge clkb or negedge rst_n) begin
     if (!rst_n) begin c1 <= 4'd0; c2 <= 4'd0; end
     else begin c1 <= g; c2 <= c1; end
   end
@@ -278,7 +278,7 @@ const cdcGray: CdcLevel = {
       brief: `<p>Synchronizing each bit of a bus separately is <b>not</b> synchronizing the bus. If several bits change at once, the destination may catch some of them before the edge and some after, and read a value that never existed: <code>0111 → 1000</code> can be sampled as <code>1111</code>, <code>0000</code> or anything between.</p>
 <p><b>Gray code</b> fixes it for counters: consecutive values differ in exactly <b>one</b> bit, so a sample taken mid-change is either the old value or the new value. Convert in the source domain, register the Gray value there, synchronize the Gray bits with two flops, and convert back to binary in the destination: <code>g = b ^ (b &gt;&gt; 1)</code>, and the inverse is a running XOR from the top bit down.</p>
 <p>The starter copies the binary count over. Run it to see the corrupted readings, then fix it.</p>`,
-      hints: ['In domain A add <code>reg [3:0] g;</code> and <code>g &lt;= cnt ^ (cnt &gt;&gt; 1);</code>. Cross <code>g</code>, not <code>cnt</code>.', 'Binary from Gray, bit by bit: <code>b[3] = g[3]; b[2] = b[3] ^ g[2]; b[1] = b[2] ^ g[1]; b[0] = b[1] ^ g[0];</code>'],
+      hints: ['In domain A add <code>logic [3:0] g;</code> and <code>g &lt;= cnt ^ (cnt &gt;&gt; 1);</code>. Cross <code>g</code>, not <code>cnt</code>.', 'Binary from Gray, bit by bit: <code>b[3] = g[3]; b[2] = b[3] ^ g[2]; b[1] = b[2] ^ g[1]; b[0] = b[1] ^ g[0];</code>'],
       starter: GRAY_STARTER, solution: GRAY_SOL,
     };
   },
@@ -323,24 +323,24 @@ const HS_STARTER = `// Send an 8-bit word from domain A to domain B.
 //   Domain A: when send is high and busy is low, din holds the word (din changes every cycle otherwise).
 //   Domain B: valid pulses for one clkb cycle, and dout holds that word in the same cycle.
 //   busy must be high from the cycle after send until the transfer is complete, so the next send waits.
-module hs_xfer(input clka, input clkb, input rst_n, input send, input [7:0] din, output busy, output reg valid, output reg [7:0] dout);
+module hs_xfer(input clka, input clkb, input rst_n, input send, input [7:0] din, output busy, output logic valid, output logic [7:0] dout);
   // TODO: This version samples din in domain B with no handshake at all.
   assign busy = 1'b0;
-  always @(posedge clkb or negedge rst_n) begin
+  always_ff @(posedge clkb or negedge rst_n) begin
     if (!rst_n) begin valid <= 1'b0; dout <= 8'd0; end
     else begin valid <= send; dout <= din; end
   end
 endmodule
 `;
-const HS_SOL = `module hs_xfer(input clka, input clkb, input rst_n, input send, input [7:0] din, output busy, output reg valid, output reg [7:0] dout);
-  reg req;               // A: request, stays high until acknowledged
-  reg [7:0] data_a;      // A: the word, held steady while req is high
-  reg a1, a2;            // A: acknowledge synchronizer
-  reg r1, r2, r3;        // B: request synchronizer (r3 for edge detection)
-  reg ack;               // B: acknowledge, follows the synchronized request
+const HS_SOL = `module hs_xfer(input clka, input clkb, input rst_n, input send, input [7:0] din, output busy, output logic valid, output logic [7:0] dout);
+  logic req;               // A: request, stays high until acknowledged
+  logic [7:0] data_a;      // A: the word, held steady while req is high
+  logic a1, a2;            // A: acknowledge synchronizer
+  logic r1, r2, r3;        // B: request synchronizer (r3 for edge detection)
+  logic ack;               // B: acknowledge, follows the synchronized request
   assign busy = req | a2;
 
-  always @(posedge clka or negedge rst_n) begin
+  always_ff @(posedge clka or negedge rst_n) begin
     if (!rst_n) begin req <= 1'b0; data_a <= 8'd0; a1 <= 1'b0; a2 <= 1'b0; end
     else begin
       a1 <= ack;
@@ -352,7 +352,7 @@ const HS_SOL = `module hs_xfer(input clka, input clkb, input rst_n, input send, 
     end
   end
 
-  always @(posedge clkb or negedge rst_n) begin
+  always_ff @(posedge clkb or negedge rst_n) begin
     if (!rst_n) begin r1 <= 1'b0; r2 <= 1'b0; r3 <= 1'b0; ack <= 1'b0; valid <= 1'b0; dout <= 8'd0; end
     else begin
       r1 <= req;
@@ -408,17 +408,17 @@ class RdcBench implements Bench {
 const RDC_SPEC: CdcSpec = { clocks: { clk: 'A' }, inputs: { rstA_n: '*', rstB_n: '*', go: 'A' }, resets: { rstA_n: 'SUB', rstB_n: 'SYS' } };
 const RDC_STARTER = `// One clock. The subsystem raises req after go; it is cleared by its own reset rstA_n, which can assert at any time.
 // The controller reads req and keeps two flags, of which exactly one must be high: idle or busy.
-module req_ctl(input clk, input rstA_n, input rstB_n, input go, output reg idle, output reg busy);
-  reg req;
+module req_ctl(input clk, input rstA_n, input rstB_n, input go, output logic idle, output logic busy);
+  logic req;
 
   // subsystem, in reset domain A
-  always @(posedge clk or negedge rstA_n) begin
+  always_ff @(posedge clk or negedge rstA_n) begin
     if (!rstA_n) req <= 1'b0;
     else if (go) req <= 1'b1;
   end
 
   // controller, in reset domain B only
-  always @(posedge clk or negedge rstB_n) begin
+  always_ff @(posedge clk or negedge rstB_n) begin
     if (!rstB_n) begin
       idle <= 1'b1;
       busy <= 1'b0;
@@ -429,16 +429,16 @@ module req_ctl(input clk, input rstA_n, input rstB_n, input go, output reg idle,
   end
 endmodule
 `;
-const RDC_SOL = `module req_ctl(input clk, input rstA_n, input rstB_n, input go, output reg idle, output reg busy);
-  reg req;
+const RDC_SOL = `module req_ctl(input clk, input rstA_n, input rstB_n, input go, output logic idle, output logic busy);
+  logic req;
 
-  always @(posedge clk or negedge rstA_n) begin
+  always_ff @(posedge clk or negedge rstA_n) begin
     if (!rstA_n) req <= 1'b0;
     else if (go) req <= 1'b1;
   end
 
   // the controller is cleared by BOTH resets: while the subsystem reset is asserted it is held, so it never captures req
-  always @(posedge clk or negedge rstA_n or negedge rstB_n) begin
+  always_ff @(posedge clk or negedge rstA_n or negedge rstB_n) begin
     if (!rstA_n || !rstB_n) begin
       idle <= 1'b1;
       busy <= 1'b0;
@@ -513,7 +513,7 @@ const FIFO_STARTER = `// A 4-word, 8-bit asynchronous FIFO. Write side: wclk, wr
 // Pointers need one extra bit to tell full from empty. Cross them in Gray code through two-flop synchronizers.
 module async_fifo(input wclk, input rclk, input rst_n, input wr_en, input [7:0] wdata, output full,
                   input rd_en, output [7:0] rdata, output empty);
-  reg [7:0] mem [0:3];
+  logic [7:0] mem [0:3];
   // TODO
   assign full = 1'b0;
   assign empty = 1'b1;
@@ -522,10 +522,10 @@ endmodule
 `;
 const FIFO_SOL = `module async_fifo(input wclk, input rclk, input rst_n, input wr_en, input [7:0] wdata, output full,
                   input rd_en, output [7:0] rdata, output empty);
-  reg [7:0] mem [0:3];
-  reg [2:0] wbin, wgray, rbin, rgray;
-  reg [2:0] rg1, rg2;                    // read pointer, synchronized into the write domain
-  reg [2:0] wg1, wg2;                    // write pointer, synchronized into the read domain
+  logic [7:0] mem [0:3];
+  logic [2:0] wbin, wgray, rbin, rgray;
+  logic [2:0] rg1, rg2;                    // read pointer, synchronized into the write domain
+  logic [2:0] wg1, wg2;                    // write pointer, synchronized into the read domain
   wire [2:0] wbin_n;
   wire [2:0] rbin_n;
   assign wbin_n = wbin + 3'd1;
@@ -534,7 +534,7 @@ const FIFO_SOL = `module async_fifo(input wclk, input rclk, input rst_n, input w
   assign empty = (rgray == wg2);
   assign rdata = mem[rbin[1:0]];
 
-  always @(posedge wclk or negedge rst_n) begin
+  always_ff @(posedge wclk or negedge rst_n) begin
     if (!rst_n) begin wbin <= 3'd0; wgray <= 3'd0; rg1 <= 3'd0; rg2 <= 3'd0; end
     else begin
       rg1 <= rgray;
@@ -547,7 +547,7 @@ const FIFO_SOL = `module async_fifo(input wclk, input rclk, input rst_n, input w
     end
   end
 
-  always @(posedge rclk or negedge rst_n) begin
+  always_ff @(posedge rclk or negedge rst_n) begin
     if (!rst_n) begin rbin <= 3'd0; rgray <= 3'd0; wg1 <= 3'd0; wg2 <= 3'd0; end
     else begin
       wg1 <= wgray;

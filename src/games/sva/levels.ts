@@ -16,9 +16,9 @@ function mut(name: string, golden: string, find: string | RegExp, replace: strin
 }
 
 // ===================================================================== 1. latency
-const RESP = `module resp(input clk, input rst, input req, output reg ack, output reg busy);
-  reg [1:0] cnt;
-  always @(posedge clk) begin
+const RESP = `module resp(input clk, input rst, input req, output logic ack, output logic busy);
+  logic [1:0] cnt;
+  always_ff @(posedge clk) begin
     if (rst) begin ack <= 1'b0; busy <= 1'b0; cnt <= 2'd0; end
     else begin
       ack <= 1'b0;
@@ -51,8 +51,8 @@ const latency: SvaLevel = {
 };
 
 // ===================================================================== 2. register
-const REGLD = `module regld(input clk, input rst, input load, input [2:0] d, output reg [2:0] q);
-  always @(posedge clk) begin
+const REGLD = `module regld(input clk, input rst, input load, input [2:0] d, output logic [2:0] q);
+  always_ff @(posedge clk) begin
     if (rst) q <= 3'd0;
     else if (load) q <= d;
   end
@@ -79,8 +79,8 @@ const reg: SvaLevel = {
 };
 
 // ===================================================================== 3. arbiter
-const ARB = `module arb3(input clk, input rst, input [2:0] req, output reg [2:0] gnt);
-  always @(posedge clk) begin
+const ARB = `module arb3(input clk, input rst, input [2:0] req, output logic [2:0] gnt);
+  always_ff @(posedge clk) begin
     if (rst) gnt <= 3'b000;
     else if (req[0]) gnt <= 3'b001;
     else if (req[1]) gnt <= 3'b010;
@@ -111,10 +111,10 @@ const arbiter: SvaLevel = {
 };
 
 // ===================================================================== 4. fifo counter
-const CNT = `module cnt4(input clk, input rst, input push, input pop, output full, output empty, output reg [2:0] count);
+const CNT = `module cnt4(input clk, input rst, input push, input pop, output full, output empty, output logic [2:0] count);
   assign full = (count == 3'd4);
   assign empty = (count == 3'd0);
-  always @(posedge clk) begin
+  always_ff @(posedge clk) begin
     if (rst) count <= 3'd0;
     else if (push && !full && !(pop && !empty)) count <= count + 3'd1;
     else if (pop && !empty && !(push && !full)) count <= count - 3'd1;
@@ -148,8 +148,8 @@ const fifoCount: SvaLevel = {
 };
 
 // ===================================================================== 5. valid/ready
-const VSRC = `module vsrc(input clk, input rst, input ready, input go, output reg valid, output reg [1:0] data);
-  always @(posedge clk) begin
+const VSRC = `module vsrc(input clk, input rst, input ready, input go, output logic valid, output logic [1:0] data);
+  always_ff @(posedge clk) begin
     if (rst) begin valid <= 1'b0; data <= 2'd0; end
     else begin
       if (!valid || ready) begin
@@ -179,9 +179,9 @@ const handshakeProto: SvaLevel = {
 };
 
 // ===================================================================== 6. fsm
-const FSM = `module fsm(input clk, input rst, input start, input done, output reg [1:0] state);
+const FSM = `module fsm(input clk, input rst, input start, input done, output logic [1:0] state);
   localparam IDLE = 2'd0, RUN = 2'd1, FIN = 2'd2;
-  always @(posedge clk) begin
+  always_ff @(posedge clk) begin
     if (rst) state <= IDLE;
     else case (state)
       IDLE: if (start) state <= RUN;
@@ -212,9 +212,9 @@ const fsm: SvaLevel = {
 };
 
 // ===================================================================== 7. pulse
-const PULSE = `module pulse(input clk, input rst, input start, output reg busy);
-  reg [2:0] n;
-  always @(posedge clk) begin
+const PULSE = `module pulse(input clk, input rst, input start, output logic busy);
+  logic [2:0] n;
+  always_ff @(posedge clk) begin
     if (rst) begin busy <= 1'b0; n <= 3'd0; end
     else if (!busy && start) begin busy <= 1'b1; n <= 3'd1; end
     else if (busy) begin
@@ -260,9 +260,9 @@ const cover: SvaLevel = {
 };
 
 // ===================================================================== 8b. goto
-const BATCH = `module batch(input clk, input rst, input start, input gnt, output reg busy, output reg done);
-  reg [1:0] n;
-  always @(posedge clk) begin
+const BATCH = `module batch(input clk, input rst, input start, input gnt, output logic busy, output logic done);
+  logic [1:0] n;
+  always_ff @(posedge clk) begin
     if (rst) begin busy <= 1'b0; n <= 2'd0; done <= 1'b0; end
     else begin
       done <= 1'b0;
@@ -296,9 +296,9 @@ const gotoCount: SvaLevel = {
 };
 
 // ===================================================================== 8c. within
-const TXW = `module txw(input clk, input rst, input go, output reg act, output reg beat);
-  reg [3:0] t;
-  always @(posedge clk) begin
+const TXW = `module txw(input clk, input rst, input go, output logic act, output logic beat);
+  logic [3:0] t;
+  always_ff @(posedge clk) begin
     if (rst) begin act <= 1'b0; beat <= 1'b0; t <= 4'd0; end
     else begin
       beat <= 1'b0;
@@ -334,10 +334,10 @@ const withinWindow: SvaLevel = {
 };
 
 // ===================================================================== assume mode
-const CNT_RAW = `module cnt4(input clk, input rst, input push, input pop, output full, output empty, output reg [2:0] count);
+const CNT_RAW = `module cnt4(input clk, input rst, input push, input pop, output full, output empty, output logic [2:0] count);
   assign full = (count == 3'd4);
   assign empty = (count == 3'd0);
-  always @(posedge clk) begin
+  always_ff @(posedge clk) begin
     if (rst) count <= 3'd0;
     else if (push && !pop) count <= count + 3'd1;
     else if (pop && !push) count <= count - 3'd1;
@@ -361,9 +361,9 @@ const assume: SvaLevel = {
 };
 
 // ===================================================================== assume mode: liveness and fairness
-const GATE = `module gate(input clk, input rst, input req, input stall, output reg gnt);
-  reg pend;
-  always @(posedge clk) begin
+const GATE = `module gate(input clk, input rst, input req, input stall, output logic gnt);
+  logic pend;
+  always_ff @(posedge clk) begin
     if (rst) begin pend <= 1'b0; gnt <= 1'b0; end
     else begin
       gnt <= 1'b0;
@@ -391,8 +391,8 @@ const liveness: SvaLevel = {
 };
 
 // ===================================================================== fix mode
-const wrapCounter = (m: number, bug: boolean) => `module dec(input clk, input rst, input en, output reg [3:0] q);
-  always @(posedge clk) begin
+const wrapCounter = (m: number, bug: boolean) => `module dec(input clk, input rst, input en, output logic [3:0] q);
+  always_ff @(posedge clk) begin
     if (rst) q <= 4'd0;
     else if (en) q <= (q == 4'd${bug ? m + 1 : m}) ? 4'd0 : q + 4'd1;
   end
@@ -413,8 +413,8 @@ const formalDepth: SvaLevel = {
   }),
 };
 
-const ARB_BUG = `module arb3(input clk, input rst, input [2:0] req, output reg [2:0] gnt);
-  always @(posedge clk) begin
+const ARB_BUG = `module arb3(input clk, input rst, input [2:0] req, output logic [2:0] gnt);
+  always_ff @(posedge clk) begin
     if (rst) gnt <= 3'b000;
     else begin
       gnt <= 3'b000;
@@ -443,9 +443,9 @@ const fixArb: SvaLevel = {
 // ===================================================================== bosses
 const burstDesign = (L: number, B: number, tweak?: { ackAt?: number; validEnd?: number; spurious?: boolean; early?: boolean }) => {
   const ackAt = tweak?.ackAt ?? L - 1, validEnd = tweak?.validEnd ?? L + B;
-  return `module burst(input clk, input rst, input req, output reg ack, output reg valid, output reg act);
-  reg [3:0] t;
-  always @(posedge clk) begin
+  return `module burst(input clk, input rst, input req, output logic ack, output logic valid, output logic act);
+  logic [3:0] t;
+  always_ff @(posedge clk) begin
     if (rst) begin act <= 1'b0; t <= 4'd0; ack <= 1'b0; valid <= 1'b0; end
     else begin
       ack <= ${tweak?.spurious ? "(act && t == 4'd1 && req)" : "1'b0"};

@@ -22,7 +22,7 @@ const HEADER = `module rv32_core (
 `;
 
 const DECODE = `  // ---------- fetch
-  reg [31:0] pc;
+  logic [31:0] pc;
   assign imem_addr = pc;
   wire [31:0] instr = imem_rdata;
 
@@ -49,7 +49,7 @@ const DECODE = `  // ---------- fetch
   wire isAuipc  = opcode == 7'b0010111;
 
   // ---------- register file: x0 always reads as zero
-  reg [31:0] rf [0:31];
+  logic [31:0] rf [0:31];
   wire [31:0] rv1 = (rs1 == 5'd0) ? 32'd0 : rf[rs1];
   wire [31:0] rv2 = (rs2 == 5'd0) ? 32'd0 : rf[rs2];
 `;
@@ -62,8 +62,8 @@ const ALU = `
   wire        lt_u = rv1 < aluB;
   wire        sub  = isOp & f7[5];
   wire [31:0] sra  = rv1[31] ? ~((~rv1) >> sh) : (rv1 >> sh);
-  reg [31:0] alu;
-  always @* begin
+  logic [31:0] alu;
+  always_comb begin
     alu = 32'd0;
     case (f3)
       3'b000: alu = sub ? (rv1 - aluB) : (rv1 + aluB);
@@ -93,8 +93,8 @@ const MUL = `
   wire [31:0] rem_s    = dz ? rv1 : (rv1[31] ? (32'd0 - ur) : ur);
   wire [31:0] div_u    = dz ? 32'hFFFFFFFF : (rv1 / rv2);
   wire [31:0] rem_u    = dz ? rv1 : (rv1 % rv2);
-  reg [31:0] mres;
-  always @* begin
+  logic [31:0] mres;
+  always_comb begin
     mres = 32'd0;
     case (f3)
       3'b000: mres = prod[31:0];
@@ -113,8 +113,8 @@ const BRANCH = `
   // ---------- branches
   wire        blt = (rv1[31] != rv2[31]) ? rv1[31] : (rv1 < rv2);
   wire        bltu = rv1 < rv2;
-  reg taken;
-  always @* begin
+  logic taken;
+  always_comb begin
     taken = 1'b0;
     case (f3)
       3'b000: taken = rv1 == rv2;
@@ -141,9 +141,9 @@ const MEM_SUB = `
   wire [31:0] daddr = rv1 + (isStore ? immS : immI);
   assign dmem_addr  = daddr;
   wire [1:0]  lane  = daddr[1:0];
-  reg [31:0] wdata;
-  reg [3:0]  we;
-  always @* begin
+  logic [31:0] wdata;
+  logic [3:0]  we;
+  always_comb begin
     wdata = rv2;
     we = 4'b0000;
     if (isStore & !rst) begin
@@ -157,8 +157,8 @@ const MEM_SUB = `
   assign dmem_wdata = wdata;
   assign dmem_we    = we;
   wire [31:0] shifted = dmem_rdata >> {lane, 3'b000};
-  reg [31:0] loadval;
-  always @* begin
+  logic [31:0] loadval;
+  always_comb begin
     case (f3)
       3'b000: loadval = {{24{shifted[7]}}, shifted[7:0]};
       3'b001: loadval = {{16{shifted[15]}}, shifted[15:0]};
@@ -187,7 +187,7 @@ ${jumps ? `  wire [31:0] jalr_target = (rv1 + immI) & 32'hFFFFFFFE;
       (isBranch & taken) ? (pc + immB) :
       pc4;
 ` : '  wire [31:0] next_pc = pc4;\n'}
-  always @(posedge clk) begin
+  always_ff @(posedge clk) begin
     if (rst) pc <= 32'd0;
     else begin
       pc <= next_pc;
@@ -219,7 +219,7 @@ export const STARTER_STAGE1 = HEADER + '\n' + DECODE + `
   // ---------- TODO 3: write-back
   // Pick the result (lui: immU, auipc: pc + immU, load: dmem_rdata, otherwise alu) and write it to rf[rd]
   // unless rd is x0. Remember that everything happens on the clock edge.
-  always @(posedge clk) begin
+  always_ff @(posedge clk) begin
     if (rst) pc <= 32'd0;
     else pc <= pc + 32'd4;
   end

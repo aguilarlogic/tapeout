@@ -44,8 +44,12 @@ const pinsOf = (ref: string): [string, string][] => PINS.find(([re]) => re.test(
 
 const NUM = /^[+-]?(?:0[xX][0-9a-fA-F]+|0[bB][01]+|0[oO][0-7]+|\d+)$/;
 const FLT = /^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/;
+/** A decimal-looking integer with a leading 0: Tcl 8.6 reads it as octal, and 08 or 09 is not a number at all. */
+const LEAD0 = /^[+-]?0\d+$/;
+export const badOctal = (s: string) => LEAD0.test(s.trim()) && /[89]/.test(s);
 function parseNum(s: string): bigint | number | null {
   const t = s.trim();
+  if (LEAD0.test(t)) { if (/[89]/.test(t)) return null; const neg = t[0] === '-'; const v = BigInt('0o' + t.replace(/^[+-]?0/, '')); return neg ? -v : v; }
   if (NUM.test(t)) { const neg = t[0] === '-'; const u = t.replace(/^[+-]/, ''); return neg ? -BigInt(u) : BigInt(u); }
   if (FLT.test(t)) return Number(t);
   if (/^[+-]?inf(inity)?$/i.test(t)) return t[0] === '-' ? -Infinity : Infinity;
@@ -104,6 +108,9 @@ export class TclInterp {
   }
 
   get stdout() { return this.out.join(''); }
+  /** What puts stderr wrote: shown in the lab, never compared. */
+  errOut: string[] = [];
+  get stderr() { return this.errOut.join(''); }
   write(s: string) {
     this.outLen += s.length;
     if (this.outLen > this.maxOutput) { if (this.outLen - s.length <= this.maxOutput) this.out.push('\n... output truncated ...\n'); return; }
@@ -285,7 +292,7 @@ export class TclInterp {
   private num(v: Val, op: string): bigint | number {
     if (typeof v !== 'string') return v;
     const n = parseNum(v);
-    if (n === null) this.fail(v.trim() === '' ? `can't use empty string as operand of "${op}"` : `can't use non-numeric string as operand of "${op}"`);
+    if (n === null) this.fail(v.trim() === '' ? `can't use empty string as operand of "${op}"` : badOctal(v) ? `can't use invalid octal number as operand of "${op}"` : `can't use non-numeric string as operand of "${op}"`);
     return n;
   }
   private int(v: Val, op: string): bigint {
@@ -529,7 +536,7 @@ function fmtFormat(it: TclInterp, fmt: string, args: string[]): string {
 }
 
 function lsortCmd(it: TclInterp, a: string[]): string {
-  let mode = 'ascii', dec = false, uniq = false, nocase = false, index: string | null = null;
+  let mode = 'ascii', dec = false, uniq = false, nocase = false, index: string | null = null, command: string | null = null, indices = false;
   let i = 1;
   for (; i < a.length - 1; i++) {
     const o = a[i];
@@ -539,13 +546,20 @@ function lsortCmd(it: TclInterp, a: string[]): string {
     else if (o === '-unique') uniq = true;
     else if (o === '-nocase') nocase = true;
     else if (o === '-index') index = a[++i];
-    else if (o === '-command' || o === '-indices') it.fail(`lsort ${o} is real Tcl, but this lab does not support it`);
+    else if (o === '-command') command = a[++i];
+    else if (o === '-indices') indices = true;
     else it.fail(`bad option "${o}": must be -ascii, -command, -decreasing, -dictionary, -increasing, -index, -indices, -integer, -nocase, -real, or -unique`);
   }
   let xs = listSplit(a[a.length - 1]);
   const key = (x: string) => (index === null ? x : listSplit(x)[idx(it, index, listSplit(x).length)] ?? '');
   const cmp = (x: string, y: string): number => {
     const p = key(x), q = key(y);
+    if (command !== null) {
+      const r = it.evalScript(listJoin([...listSplit(command), p, q]));
+      const n = parseNum(r);
+      if (n === null || typeof n === 'number') it.fail(`-compare command returned non-integer result`);
+      return Number(n);
+    }
     if (mode === 'integer') return toInt(it, p) - toInt(it, q);
     if (mode === 'real') return Number(p) - Number(q);
     if (mode === 'dictionary') {
@@ -560,6 +574,10 @@ function lsortCmd(it: TclInterp, a: string[]): string {
     }
     return nocase ? strCompare(p.toLowerCase(), q.toLowerCase()) : strCompare(p, q);
   };
+  if (indices) {
+    const order = xs.map((_x, n) => n).sort((m, n) => (dec ? -cmp(xs[m], xs[n]) : cmp(xs[m], xs[n])));
+    return listJoin(order.map(String));
+  }
   xs = [...xs].sort((x, y) => (dec ? -cmp(x, y) : cmp(x, y)));
   if (uniq) xs = xs.filter((x, n) => n === 0 || cmp(xs[n - 1], x) !== 0);
   return listJoin(xs);
@@ -673,16 +691,19 @@ function dictCmd(it: TclInterp, a: string[], ctx: Ctx): string {
 }
 
 function regexpCmd(it: TclInterp, a: string[], sub: boolean): string {
-  let all = false, nocase = false, inline = false, i = 1;
+  let all = false, nocase = false, inline = false, indices = false, i = 1;
   for (; i < a.length; i++) {
     const o = a[i];
     if (o === '--') { i++; break; }
     if (o === '-all') all = true; else if (o === '-nocase') nocase = true; else if (o === '-inline') inline = true;
+    else if (o === '-indices' && !sub) indices = true;
     else if (/^-(?:line|lineanchor|nolinestop|expanded|about)$/.test(o)) { /* accepted and ignored */ }
     else break;
   }
-  const re = toRegExp(it, a[i], (nocase ? 'i' : '') + (all ? 'g' : ''));
+  const re = toRegExp(it, a[i], (nocase ? 'i' : '') + (all ? 'g' : '') + (indices ? 'd' : ''));
   const str = a[i + 1];
+  // with -indices each group reports "first last" character positions (inclusive), or "-1 -1" if it did not take part
+  const groupsOf = (m: RegExpExecArray | RegExpMatchArray): string[] => (indices ? [...m].map((_x, k) => { const p = m.indices?.[k]; return p ? `${p[0]} ${p[1] - 1}` : '-1 -1'; }) : [...m].map((x) => x ?? ''));
   if (sub) {
     // regsub ?-all? ?-nocase? exp string subSpec ?varName?: & and \0 are the match, \1..\9 the groups
     const spec = a[i + 2], varName = a[i + 3];
@@ -698,14 +719,15 @@ function regexpCmd(it: TclInterp, a: string[], sub: boolean): string {
   const vars = a.slice(i + 2);
   if (all) {
     const ms = [...str.matchAll(re)];
-    if (inline) return listJoin(ms.flatMap((m) => [...m].map((x) => x ?? '')));
-    if (vars.length && ms.length) [...ms[ms.length - 1]].forEach((x, k) => { if (vars[k]) it.setVar(vars[k], x ?? ''); });
+    if (inline) return listJoin(ms.flatMap(groupsOf));
+    if (vars.length && ms.length) groupsOf(ms[ms.length - 1]).forEach((x, k) => { if (vars[k]) it.setVar(vars[k], x); });
     return String(ms.length);
   }
   const m = re.exec(str);
-  if (inline) return m ? listJoin([...m].map((x) => x ?? '')) : '';
+  if (inline) return m ? listJoin(groupsOf(m)) : '';
   if (!m) return '0';
-  vars.forEach((v, k) => it.setVar(v, m[k] ?? ''));
+  const gs = groupsOf(m);
+  vars.forEach((v, k) => it.setVar(v, gs[k] ?? (indices ? '-1 -1' : '')));
   return '1';
 }
 
@@ -734,8 +756,7 @@ const CMDS: Record<string, Fn> = {
     if (args[0] === '-nonewline') { nl = false; args = args.slice(1); }
     if (args.length !== 1 && args.length !== 2) it.fail('wrong # args: should be "puts ?-nonewline? ?channelId? string"');
     const chan = args.length === 2 ? args[0] : 'stdout';
-    // stderr is a real channel, but the lab only shows (and checks) stdout
-    if (chan === 'stderr') return '';
+    if (chan === 'stderr') { it.errOut.push(args[args.length - 1] + (nl ? '\n' : '')); return ''; }
     if (chan !== 'stdout') it.fail(`can not find channel named "${chan}"`);
     it.write(args[args.length - 1] + (nl ? '\n' : ''));
     return '';
@@ -908,6 +929,33 @@ const CMDS: Record<string, Fn> = {
     }
   },
   format: (it, a) => fmtFormat(it, a[1], a.slice(2)),
+  // scan string format ?varName ...?: %d reads decimal even with a leading 0, which is how Tcl code dodges the octal trap
+  scan: (it, a) => {
+    need(it, a, 2, -1, 'string format ?varName ...?');
+    const conv: string[] = [];
+    let re = '^';
+    for (let k = 0; k < a[2].length; k++) {
+      const ch = a[2][k];
+      if (/\s/.test(ch)) { re += '\\s*'; continue; }
+      if (ch !== '%') { re += ch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); continue; }
+      const c = a[2][++k];
+      if (c === '%') { re += '%'; continue; }
+      const pat = ({ d: '([+-]?\\d+)', i: '([+-]?\\d+)', u: '(\\d+)', x: '([0-9a-fA-F]+)', o: '([0-7]+)', s: '(\\S+)', f: '([+-]?(?:\\d+\\.?\\d*|\\.\\d+)(?:[eE][+-]?\\d+)?)', c: '([\\s\\S])' } as Record<string, string>)[c];
+      if (!pat) it.fail(`bad scan conversion character "${c}"`);
+      re += (c === 'c' ? '' : '\\s*') + pat;
+      conv.push(c === 'e' || c === 'g' ? 'f' : c);
+    }
+    const m = new RegExp(re).exec(a[1]);
+    const vals: string[] = [];
+    if (m) for (let k = 0; k < conv.length && m[k + 1] !== undefined; k++) {
+      const v = m[k + 1], c = conv[k];
+      vals.push(c === 'd' || c === 'i' || c === 'u' ? String(BigInt(v.replace(/^\+/, ''))) : c === 'x' ? String(BigInt('0x' + v)) : c === 'o' ? String(BigInt('0o' + v)) : c === 'f' ? fmtDouble(Number(v)) : c === 'c' ? String(v.charCodeAt(0)) : v);
+    }
+    const names = a.slice(3);
+    if (!names.length) return listJoin(vals);
+    vals.forEach((v, k) => { if (names[k]) it.setVar(names[k], v); });
+    return String(vals.length);
+  },
   regexp: (it, a) => regexpCmd(it, a, false),
   regsub: (it, a) => regexpCmd(it, a, true),
   switch: (it, a, ctx) => {

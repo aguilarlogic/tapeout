@@ -106,6 +106,9 @@ function cCase(inst: CodeInstance, src: string, c: CodeCase): CaseResult & { out
 
 // Tcl: `call` is a script whose result (a string) is compared with the reference's; lines past this base belong to the call, not the learner.
 const CALL_BASE = 1_000_000;
+/** stdout, then anything written with puts stderr, marked so it reads like a terminal's error stream. */
+const withStderr = (it: TclInterp) => it.stdout + (it.stderr ? it.stderr.replace(/\n$/, '').split('\n').map((l) => `stderr: ${l}\n`).join('') : '');
+
 function tclCase(inst: CodeInstance, src: string, c: CodeCase): CaseResult & { out: string } {
   const base = { call: c.call, pre: c.pre, hidden: !!c.hidden, out: '' };
   const ref = new TclInterp({ maxSteps: 4_000_000 });
@@ -125,12 +128,12 @@ function tclCase(inst: CodeInstance, src: string, c: CodeCase): CaseResult & { o
     it.steps = 0; // setup is free: the budget is for the call under test
     it.maxSteps = inst.maxSteps ?? 3_000_000;
     const got = it.evalTop(c.call, CALL_BASE);
-    base.out = it.stdout;
+    base.out = withStderr(it);
     let ok = got === want;
     if (!ok && c.tol !== undefined) { const g = Number(got), w = Number(want); ok = got.trim() !== '' && !Number.isNaN(g) && Math.abs(g - w) <= c.tol; }
     return { ...base, ok, expected: want, got };
   } catch (e) {
-    base.out = it.stdout;
+    base.out = withStderr(it);
     return { ...base, ok: false, expected: want, error: it.describe(e), line: lineOf(e) };
   }
 }

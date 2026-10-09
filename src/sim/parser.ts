@@ -181,7 +181,8 @@ class Parser {
           }
           if (this.accept('=')) {
             const rhs = this.expr();
-            const init = kind === 'reg' || kind === 'integer';
+            // a variable (reg, logic, integer) with = gets a power-on value; only a wire's = is a continuous assign
+            const init = kind !== 'wire';
             mod.assigns.push({ lhs: { k: 'id', name: id.text, line: id.line }, rhs, line: id.line, init });
           }
         } while (this.accept(','));

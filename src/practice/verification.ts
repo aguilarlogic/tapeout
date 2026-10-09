@@ -68,16 +68,16 @@ export const dvPractice = practice('practice-dv', 'Testbench & Debug Drills', 's
   (r, d) => {
     const a = between(r, 1, 9), b = between(r, 10, 19);
     const nb = 'A non-blocking assignment (<=) works in two phases: first every right-hand side is read using the values from BEFORE the clock edge, then all the left-hand sides are updated together. A blocking assignment (=) takes effect immediately, so the next line sees the new value.';
-    if (d === 1) return walk(ask(`Registers a = ${a}, b = ${b}.${code('always @(posedge clk) begin\n  a <= b;\n  b <= a;\nend')}What is b after one clock edge?`, num(a), `Nonblocking assignments all read their right-hand sides first, then update: the values swap. b = ${a}.`, 'With <=, every right side is read before anything changes.'),
+    if (d === 1) return walk(ask(`Registers a = ${a}, b = ${b}.${code('always_ff @(posedge clk) begin\n  a <= b;\n  b <= a;\nend')}What is b after one clock edge?`, num(a), `Nonblocking assignments all read their right-hand sides first, then update: the values swap. b = ${a}.`, 'With <=, every right side is read before anything changes.'),
       'non-blocking assignments swap values', nb,
       count(`a <= b reads the OLD b (${b}), so a becomes:`, 'old b', b),
       count(`b <= a reads the OLD a (${a}), not the new one, so b becomes:`, 'old a', a));
-    if (d === 2) return walk(ask(`Registers a = ${a}, b = ${b}.${code('always @(posedge clk) begin\n  a = b;\n  b = a;\nend')}What is b after one clock edge?`, num(b), `Blocking: a becomes ${b} immediately, then b = a reads the new a: b = ${b}. Both end up ${b}. Use <= for flops.`, 'With =, each line sees the previous line\'s result.'),
+    if (d === 2) return walk(ask(`Registers a = ${a}, b = ${b}.${code('always_ff @(posedge clk) begin\n  a = b;\n  b = a;\nend')}What is b after one clock edge?`, num(b), `Blocking: a becomes ${b} immediately, then b = a reads the new a: b = ${b}. Both end up ${b}. Use <= for flops.`, 'With =, each line sees the previous line\'s result.'),
       'blocking assignments in order', nb,
       count(`a = b happens immediately: a becomes the value of b:`, 'b', b),
       count('b = a then reads the NEW a, so b becomes:', 'new a', b));
     const c = between(r, 20, 29);
-    return walk(ask(`Registers a = ${a}, b = ${b}, c = ${c}. The designer meant a 2-stage pipeline:${code('always @(posedge clk) begin\n  b = a;\n  c = b;\nend')}What is c after one clock edge?`, num(a), `Blocking assignments collapse the pipeline: b = ${a}, then c = b = ${a}. With <= c would be ${b}. One stage of latency just vanished, and the test only fails when data changes every cycle.`, 'Each blocking line sees the line above.'),
+    return walk(ask(`Registers a = ${a}, b = ${b}, c = ${c}. The designer meant a 2-stage pipeline:${code('always_ff @(posedge clk) begin\n  b = a;\n  c = b;\nend')}What is c after one clock edge?`, num(a), `Blocking assignments collapse the pipeline: b = ${a}, then c = b = ${a}. With <= c would be ${b}. One stage of latency just vanished, and the test only fails when data changes every cycle.`, 'Each blocking line sees the line above.'),
       'blocking assignments collapse a pipeline', nb,
       count('b = a takes effect at once. b becomes:', 'a', a),
       count('c = b now reads the NEW b, so c becomes:', 'new b', a));
@@ -668,11 +668,11 @@ cycle   0  1  2  3  4  5  6  7  8  9
 en      1  1  1  0  1  1  1  1  0  1
 count   0  1  2  3  3  4  5  7  8  8`),
     { t: 'gen', make: () => ask('At which cycle does count first show a wrong value?', num(7), 'Expected: 0 1 2 3 3 4 5 6 7 7. Cycle 7 shows 7 instead of 6; everything after is off by one.') },
-    art(`always @(posedge clk) begin
+    art(`always_ff @(posedge clk) begin
   tmp = a + b;       // blocking
   y  <= tmp;
 end
-always @(posedge clk) z <= tmp;`),
+always_ff @(posedge clk) z <= tmp;`),
     mc('What does z get on each edge?', ['Either the old or the new tmp, depending on which always block the simulator runs first: a race', 'Always the new tmp, because blocking writes are applied before the edge', 'Always the old tmp, because the clock edge samples values first', 'X, since two always blocks end up driving the same variable'], 0, 'It depends on which always block the simulator runs first. Blocking writes read by another block at the same edge race. Adding a $display changes scheduling, which is why the bug "moved".'),
     mc('The counter\'s enable comes from the testbench, driven with a blocking assignment exactly at posedge clk. Fix?', ['Drive it through a clocking block, so the DUT samples the old value', 'Add a #1 delay inside the DUT on the enable input path to the counter', 'Switch the counter over to blocking assignments throughout the design', 'Run the same test on a second simulator and compare the two logs'], 0, 'Clocking blocks exist precisely to remove TB/DUT races.'),
     { t: 'gen', make: () => ask('Unrelated: `if (sel) y = a; else y = b;` with sel = X, a = 1, b = 0. What does RTL simulation give y?', num(0), 'The else branch: y = 0. Gate-level sim would give X. RTL X-optimism hides reset and init bugs.') },

@@ -27,16 +27,25 @@ describe('PLL jitter model', () => {
 describe('pll-jitter generator', () => {
   it('seeds 1-100: solvable, default fails, grid optimum within one step of BW*', () => {
     const lvl = findArchLevel('pll-jitter')!;
+    const wins: Record<number, number> = {};
     for (let s = 1; s <= 100; s++) {
       const inst = lvl.build(rng(s));
       const fout = Number(/<b>(\d+) MHz<\/b>/.exec(inst.brief)![1]);
-      const a = Number(/σ² = ([\d.]+)·N²·BW/.exec(inst.brief)![1]);
+      const aOf = Object.fromEntries([...inst.brief.matchAll(/<b>(\d+) MHz reference<\/b>: a = ([\d.]+)/g)].map((m) => [m[1], Number(m[2])]));
+      expect(Object.keys(aOf).sort(), `seed ${s} lists a for every reference`).toEqual(['100', '25', '50']);
       const b = Number(/σ² = ([\d.]+)\/BW \(fs²\)/.exec(inst.brief)![1]);
-      const j = { fout, a, b };
       const sol = inst.run({ ...defaults(inst.controls), ...inst.solution.values });
       expect(sol.goals.every((g) => g.ok), `seed ${s} solvable`).toBe(true);
       expect(inst.run(defaults(inst.controls)).goals.every((g) => g.ok), `seed ${s} default`).toBe(false);
       const fref = Number(inst.solution.values.fref);
+      wins[fref] = (wins[fref] ?? 0) + 1;
+      // the winner is the reference with the smallest a·N², and no other reference can meet the spec at any bandwidth
+      const m = (f: number) => aOf[f] * (fout / f) ** 2;
+      for (const f of [25, 50, 100]) if (f !== fref) {
+        expect(m(f), `seed ${s}: ${f} MHz has a larger a·N² than the winner`).toBeGreaterThan(m(fref));
+        for (const bw of grid) if (bw <= f / 10) expect(inst.run({ fref: String(f), bw }).goals.every((g) => g.ok), `seed ${s}: ${f} MHz at ${bw}`).toBe(false);
+      }
+      const j = { fout, a: aOf[fref], b };
       const cap = fref / 10;
       let bestBw = grid[0], bestT = Infinity;
       for (const bw of grid) if (bw <= cap) { const t = jitter(j, fref, bw).tot; if (t < bestT) { bestT = t; bestBw = bw; } }
@@ -44,5 +53,7 @@ describe('pll-jitter generator', () => {
       expect(want, `seed ${s} BW* inside the grid`).toBeGreaterThanOrEqual(0.25);
       expect(Math.abs(bestBw - want), `seed ${s}: grid ${bestBw} vs BW* ${want}`).toBeLessThanOrEqual(0.25 + 1e-9);
     }
+    // every reference is the right answer in some scenarios, so 'always pick the highest' does not work
+    for (const f of [25, 50, 100]) expect(wins[f] ?? 0, `${f} MHz wins in ${wins[f] ?? 0} of 100 seeds`).toBeGreaterThanOrEqual(15);
   });
 });

@@ -13,7 +13,7 @@ describe('cdc-rdc', () => {
     expect(bad.some((b) => /exactly one of idle or busy/.test(b))).toBe(true);
   });
   it('a synchronous reset in the source is the second valid cure', { timeout: 60000 }, () => {
-    const src = inst.starter.replace('always @(posedge clk or negedge rstA_n) begin', 'always @(posedge clk) begin');
+    const src = inst.starter.replace('always_ff @(posedge clk or negedge rstA_n) begin', 'always_ff @(posedge clk) begin');
     expect(src).not.toBe(inst.starter);
     const ev = evaluate(inst, src);
     expect(ev.error?.message).toBeUndefined();

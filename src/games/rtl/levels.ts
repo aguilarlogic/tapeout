@@ -418,7 +418,7 @@ endmodule
   assign rise = sig & ~prev;
 endmodule`,
     stimulus: () => ({ clock: 'clk', vectors: seq('rst', 1, 2, 50, (_i, r) => ({ sig: r() < 0.5 ? 1 : 0 }), 9) }),
-    hints: ['You need one reg (e.g. prev) updated every cycle with sig.', 'assign rise = sig & ~prev;'],
+    hints: ['You need one flop (e.g. logic prev) updated every cycle with sig.', 'assign rise = sig & ~prev;'],
   },
   {
     id: 'seqdet',

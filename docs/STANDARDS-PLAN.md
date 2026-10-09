@@ -47,11 +47,15 @@ Known deviations and open follow-ups:
   practice band is 45–50° only, since 40° is nearer 30%.
 - The organic-substrate CTE is quoted as roughly 15 to 17 ppm/°C in the lesson, and the warpage generator uses 17.
 - The Allan plot and a few scenario inputs (Λ, metal pitch) are illustrative.
-- U11 covers the RTL lab and the digital lesson. Older drills, SVA and CDC sources and the RV32I core project still use
-  `always @(*)` / `reg` style in places; both styles compile, so this is a polish item only.
-- The PLL lab (E11) has the right 1/BW VCO term, but its scenarios all land the best reference near 100 MHz.
-- The Tcl lab interpreter is a teaching subset: no `regexp -indices`, `lsort -command` / `-indices`, octal literals
-  or the "invalid bareword" error. `puts stderr` is accepted and not shown.
+- U11 now covers the lab RTL too: the CDC, SVA and RV32I core sources use `logic`, `always_ff` and `always_comb`
+  (lint `U11-labs`), and a `logic x = v;` declaration is a power-on value, as for `reg`. `always @(*)` stays only where
+  an item teaches legacy code on purpose (sensitivity-list and latch drills); testbench `always @(posedge clk)` is
+  correct SystemVerilog and stays.
+- The PLL jitter lab (E11) gives each reference its own noise coefficient a, so the best reference is the smallest
+  a·N²; each of 25, 50 and 100 MHz wins in some scenarios (tested over 100 seeds).
+- The Tcl lab interpreter follows Tcl 8.6, the version EDA tools embed: a leading 0 is octal and `08` is an error
+  (`scan` reads decimal), barewords are refused, `regexp -indices`, `lsort -command` / `-indices` work, and
+  `puts stderr` is shown in the console, marked, but never checked.
 - Audit pass (Oct 2026): every item was re-checked against this plan. The fixes are the shell log drills
   (no empty answers), the RISC-V vs Verilog shift rule (E2b), `find -exec … +`, the 3σ STA boss item, FTTI
   margins, two answer keys left stale by a merge (C overflow, SR latch; now pinned by a test), the FP bias table,

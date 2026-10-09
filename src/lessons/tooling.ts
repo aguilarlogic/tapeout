@@ -188,6 +188,7 @@ export const flows: Lesson = {
       return ask(`What does this TCL print?\n\n\`set blocks {${items.join(' ')}}\`\n\`puts [llength $blocks]\``, num(n), `llength counts list elements: ${n}. TCL lists are space-separated words in braces.`, 'Count the words in the list.');
     }),
     say('**Braces versus quotes** is the rule that trips everyone. `"..."` still substitutes `$x` and `[cmd]`. `{...}` substitutes **nothing**: it hands the text over untouched, which is how a script is passed to `if`, `foreach`, `proc` and `catch` to run later.'),
+    say('One more trap: in the Tcl version most EDA tools embed, a number with a **leading zero is octal**. `expr {010 + 1}` gives 9, and a value such as `08` from a timestamp or a cell name is an error in arithmetic. Read such fields with `scan $x %d n`, which always takes decimal.'),
     art(`
    set n 3
    puts "n is $n"        →  n is 3

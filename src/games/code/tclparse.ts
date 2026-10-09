@@ -270,6 +270,8 @@ class ExprParser {
       this.i += num[0].length;
       const t = num[0];
       if (/^0[xXbBoO]/.test(t)) return { k: 'num', v: BigInt(t) };
+      // Tcl 8.6 (the version EDA tools embed): a leading 0 means octal, so 010 is 8 and 08 is an error
+      if (/^0\d+$/.test(t)) { if (/[89]/.test(t)) this.err(`expected integer but got "${t}" (looks like invalid octal number)`); return { k: 'num', v: BigInt('0o' + t.slice(1)) }; }
       return { k: 'num', v: /[.eE]/.test(t) ? Number(t) : BigInt(t) };
     }
     const id = /^[A-Za-z_][A-Za-z0-9_]*/.exec(s.slice(i));
@@ -288,6 +290,7 @@ class ExprParser {
         }
         return { k: 'fn', name: id[0], args };
       }
+      if (!/^(true|false|yes|no|on|off|inf|nan)$/i.test(id[0])) this.err(`invalid bareword "${id[0]}"; should be "$${id[0]}" or "{${id[0]}}" or "${id[0]}(...)"`);
       return { k: 'word', s: id[0] };
     }
     this.err(`invalid character "${c}"`);

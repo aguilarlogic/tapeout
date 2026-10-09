@@ -153,28 +153,36 @@ const pllJitter: ArchLevel = {
   model: 'Noise models are idealised (white reference noise, 1/f² VCO noise).',
   ticket: 'The serial link needs a clock with less than a given RMS jitter. Pick the reference frequency and the loop bandwidth: too narrow and the VCO\'s own noise wanders through, too wide and the reference and charge-pump noise pass.',
   build: (r) => {
-    let j: Jit = { fout: 2400, a: 0.05, b: 7000 }, best: { fref: number; bw: number; tot: number } | undefined, spec = 0;
+    // Each reference comes from a different source with its own noise coefficient a, so the best reference is the one with
+    // the smallest a·N² (best σ² = 2·√(a·N²·b)), not simply the highest frequency. Any of the three can win.
     const grid = Array.from({ length: 48 }, (_, i) => 0.25 + 0.25 * i);
-    for (let tries = 0; tries < 80 && !best; tries++) {
-      // b is set from the wanted optimum at the 50 MHz reference, BW* = √(b / (a·N²)) = t MHz (1.5-5 MHz, inside the 0.25-12 MHz grid at every reference).
-      const fout = pick(r, [1200, 2400, 4800]), a = (2 + between(r, 0, 8)) / 100, t = pick(r, [1.5, 2, 2.5, 3, 4, 5]), n50 = fout / 50;
-      j = { fout, a, b: Number((a * (n50 * t) ** 2).toPrecision(3)) };
+    let fout = 2400, aOf: Record<number, number> = { 25: 0.05, 50: 0.05, 100: 0.05 }, bv = 7000, spec = 0;
+    let best: { fref: number; bw: number; tot: number } | undefined;
+    const jOf = (fref: number): Jit => ({ fout, a: aOf[fref], b: bv });
+    for (let tries = 0; tries < 200 && !best; tries++) {
+      fout = pick(r, [1200, 2400, 4800]);
+      const win = pick(r, JIT_FREFS), aw = pick(r, [0.02, 0.03, 0.05, 0.08]), mw = aw * (fout / win) ** 2;
+      // the losers' a·N² is 1.6-6× the winner's: at least 12% more jitter at their own optimum
+      aOf = Object.fromEntries(JIT_FREFS.map((f) => [f, f === win ? aw : Number(((mw * pick(r, [1.6, 2, 3, 4, 6])) / (fout / f) ** 2).toPrecision(2))]));
+      const t = win * pick(r, [0.04, 0.06, 0.08, 0.1]); // the winner's optimum bandwidth, inside f_ref/10
+      bv = Number((mw * t * t).toPrecision(3));
       let cand: { fref: number; bw: number; tot: number } | undefined;
-      const perRef = JIT_FREFS.map((fref) => { let m = Infinity; for (const bw of grid) if (bw <= fref / 10) m = Math.min(m, jitter(j, fref, bw).tot); return m; });
-      for (const fref of JIT_FREFS) for (const bw of grid) if (bw <= fref / 10) { const t = jitter(j, fref, bw).tot; if (!cand || t < cand.tot) cand = { fref, bw, tot: t }; }
+      const perRef = JIT_FREFS.map((fref) => { let m = Infinity; for (const bw of grid) if (bw <= fref / 10) m = Math.min(m, jitter(jOf(fref), fref, bw).tot); return m; });
+      for (const fref of JIT_FREFS) for (const bw of grid) if (bw <= fref / 10) { const x = jitter(jOf(fref), fref, bw).tot; if (!cand || x < cand.tot) cand = { fref, bw, tot: x }; }
       spec = Math.ceil(cand!.tot * 1.02);
-      const failing = perRef.filter((m) => m > spec).length;
-      const defOk = jitter(j, 25, 1).tot <= spec;
-      if (failing >= 1 && !defOk) best = cand;
+      const others = perRef.filter((m, k) => JIT_FREFS[k] !== cand!.fref && m > spec).length;
+      const defOk = jitter(jOf(25), 25, 1).tot <= spec;
+      if (cand!.fref === win && others === JIT_FREFS.length - 1 && !defOk && aOf[25] >= 0.001) best = cand;
     }
     const b = best!;
-    const ref = (fref: number, bw: number) => jitter(j, fref, bw);
+    const ref = (fref: number, bw: number) => jitter(jOf(fref), fref, bw);
     return {
-      brief: `<p>A PLL generates <b>${j.fout} MHz</b> from a crystal-derived reference of <b>25, 50 or 100 MHz</b> (divide ratio N = ${j.fout}/f<sub>ref</sub>). Two noise sources shape the output, integrated over the band that matters:</p>
-<ul><li><b>Reference + charge-pump noise</b> pass through the loop: σ² = ${j.a}·N²·BW (fs², BW in MHz). A higher reference frequency lowers N and so this term.</li>
-<li><b>VCO noise</b> is suppressed inside the loop bandwidth: σ² = ${j.b}/BW (fs²).</li></ul>
+      brief: `<p>A PLL generates <b>${fout} MHz</b> from one of three references on the board (divide ratio N = ${fout}/f<sub>ref</sub>). Two noise sources shape the output, integrated over the band that matters:</p>
+<ul><li><b>Reference + charge-pump noise</b> pass through the loop: σ² = a·N²·BW (fs², BW in MHz). Each reference is a different part, so each has its own measured a:
+<ul>${JIT_FREFS.map((f) => `<li><b>${f} MHz reference</b>: a = ${aOf[f]}</li>`).join('')}</ul></li>
+<li><b>VCO noise</b> is suppressed inside the loop bandwidth: σ² = ${bv}/BW (fs²).</li></ul>
 <p>The loop bandwidth may not exceed f<sub>ref</sub>/10. Reach an RMS jitter of at most <b>${spec} fs</b>.</p>`,
-      hints: ['Total σ² = a·N²·BW + b/BW. At the minimum the two terms are equal, so BW* = √(b / (a·N²)).', 'A higher reference frequency halves N and doubles the optimum bandwidth, as long as BW stays under f<sub>ref</sub>/10.', 'Try each reference frequency at its own optimum bandwidth: a higher f<sub>ref</sub> lowers N, and with it the best jitter you can reach.'],
+      hints: ['Total σ² = a·N²·BW + b/BW. At the minimum the two terms are equal, so BW* = √(b / (a·N²)).', 'At that optimum the best σ² is 2·√(a·N²·b). So compare a·N² across the three references: a higher f<sub>ref</sub> lowers N, but a noisier part can cancel the gain.', 'Pick the reference with the smallest a·N², then set the bandwidth to its BW*, keeping it under f<sub>ref</sub>/10.'],
       controls: [
         { id: 'fref', kind: 'select', label: 'Reference', options: JIT_FREFS.map((x) => ({ value: String(x), label: `${x} MHz` })), value: '25' },
         { id: 'bw', kind: 'number', label: 'Loop bandwidth (MHz)', min: 0.25, max: 12, step: 0.25, value: 1 },
@@ -187,7 +195,7 @@ const pllJitter: ArchLevel = {
             { label: `bandwidth ≤ f_ref/10 (${fref / 10} MHz)`, ok: bw <= fref / 10, note: `${bw} MHz` },
             { label: `jitter ≤ ${spec} fs`, ok: x.tot <= spec, note: `${r1(x.tot)} fs` },
           ],
-          metrics: [['reference noise', `${r1(x.ref)} fs`], ['VCO noise', `${r1(x.vco)} fs`], ['total RMS', `${r1(x.tot)} fs`], ['N', String(j.fout / fref)]],
+          metrics: [['reference noise', `${r1(x.ref)} fs`], ['VCO noise', `${r1(x.vco)} fs`], ['total RMS', `${r1(x.tot)} fs`], ['N', String(fout / fref)], ['a·N²', String(Number((aOf[fref] * (fout / fref) ** 2).toPrecision(3)))]],
           view: { kind: 'plot', series: [{ label: 'reference', xs: bws.map((q) => Math.log2(q)), ys: bws.map((q) => ref(fref, q).ref) }, { label: 'VCO', xs: bws.map((q) => Math.log2(q)), ys: bws.map((q) => ref(fref, q).vco) }, { label: 'total', xs: bws.map((q) => Math.log2(q)), ys: bws.map((q) => ref(fref, q).tot) }], xlabel: 'log2 bandwidth (MHz)', ylabel: 'jitter (fs)', marks: [{ y: spec, label: 'spec' }] },
         };
       },

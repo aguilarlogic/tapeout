@@ -197,6 +197,22 @@ describe('design-rule errors and lints', () => {
   });
 });
 
+describe('SystemVerilog-first messages and logic initialisers', () => {
+  it('a logic declaration with = is a power-on value, as for reg', () => {
+    const d = new Design(`module m(input logic clk, input logic d, output logic q);
+      logic seen = 1'b1;
+      always_ff @(posedge clk) begin q <= d & seen; seen <= 0; end
+    endmodule`);
+    expect(d.get('seen')).toBe(1n);
+    clockIt(d, { d: 1 });
+    expect(d.get('q')).toBe(1n);
+    expect(d.get('seen')).toBe(0n);
+  });
+  it('tells you to declare logic, not reg', () => {
+    expect(() => new Design('module m(input a, output y);\nalways_comb y = a;\nendmodule')).toThrow(/Declare it as 'logic'/);
+  });
+});
+
 describe('sensitivity lists', () => {
   it('only re-evaluates on listed signals, like a real simulator', () => {
     const d = new Design(`module m(input a, input b, output reg y);

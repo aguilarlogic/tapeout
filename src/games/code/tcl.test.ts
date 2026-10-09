@@ -222,6 +222,7 @@ describe('tcl subset: fidelity fixes from the standards audit', () => {
   it('puts takes a channel: stdout works, stderr is kept apart, anything else is an error', () => {
     expect(out('puts stdout hi')).toBe('hi\n');
     expect(out('puts stderr oops\nputs ok')).toBe('ok\n');
+    expect(TclInterp.run('puts stderr oops\nputs -nonewline stderr !').interp.stderr).toBe('oops\n!');
     expect(err('puts hello world')).toMatch(/can not find channel named "hello"/);
   });
   it('array and info exists see through global and upvar links', () => {
@@ -258,4 +259,42 @@ describe('code-tcl-netlist rejects near misses', () => {
   it('accepts the solution', () => expect(run(inst.solution).passed).toBe(true));
   it('needs the sort', () => expect(run(inst.solution.replace('return [lsort $names]', 'return $names')).passed).toBe(false));
   it('needs the DFF filter, not every sequential cell', () => expect(run(inst.solution.replace('-filter "ref_name =~ DFF*"', '-filter "is_sequential == true"')).passed).toBe(false));
+});
+
+describe('tcl subset: numbers as Tcl 8.6 reads them (as EDA tools embed it)', () => {
+  it('a leading 0 means octal, and 08 is an error', () => {
+    expect(out('puts [expr {010 + 1}]\nputs [expr {0o10}]\nputs [expr {0 + 00}]\nputs [expr {0x10 + 0b11}]')).toBe('9\n8\n0\n19\n');
+    expect(err('expr {08 + 1}')).toMatch(/invalid octal number/);
+    expect(err('set h 09\nexpr {$h + 1}')).toMatch(/invalid octal number/);
+    expect(out('scan 09 %d h\nputs [expr {$h + 1}]')).toBe('10\n');
+  });
+  it('rejects a bare word in an expression, but keeps the boolean words', () => {
+    expect(err('expr {abc eq abc}')).toMatch(/invalid bareword "abc"/);
+    expect(out('puts [expr {"abc" eq {abc}}]\nif {yes} { puts y }\nputs [expr {true && !off}]')).toBe('1\ny\n1\n');
+  });
+});
+
+describe('tcl subset: regexp -indices and lsort -command / -indices', () => {
+  it('regexp -indices stores first and last character positions', () => {
+    expect(out('regexp -indices {b+} abbbc m\nputs $m')).toBe('1 3\n');
+    expect(out('regexp -indices {(a)(x)?(b)} zab all g1 g2 g3\nputs "$all|$g1|$g2|$g3"')).toBe('1 2|1 1|-1 -1|2 2\n');
+    expect(out('puts [regexp -indices -inline {c(d)} abcd]')).toBe('{2 3} {3 3}\n');
+  });
+  it('lsort -command sorts with your comparison proc', () => {
+    expect(out('proc bylen {a b} { expr {[string length $a] - [string length $b]} }\nputs [lsort -command bylen {ccc a bb}]\nputs [lsort -decreasing -command bylen {ccc a bb}]')).toBe('a bb ccc\nccc bb a\n');
+  });
+  it('lsort -indices returns the positions in sorted order', () => {
+    expect(out('puts [lsort -indices {c a b}]\nputs [lsort -indices -integer -decreasing {5 10 7}]')).toBe('1 2 0\n1 2 0\n');
+  });
+});
+
+describe('the Tcl lab console shows puts stderr', () => {
+  it('marks stderr lines and still checks only the return value', () => {
+    const inst = TCL_LEVELS[0].build(rng(1));
+    const src = inst.solution.replace(/^proc (\S+) \{([^}]*)\} \{\n/m, (m) => `${m}    puts stderr "debug: called"\n`);
+    expect(src).not.toBe(inst.solution);
+    const rep = runCode('tcl', inst, src);
+    expect(rep.passed).toBe(true);
+    expect(rep.stdout).toContain('stderr: debug: called');
+  });
 });
