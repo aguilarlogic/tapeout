@@ -174,7 +174,7 @@ const pllJitter: ArchLevel = {
 <ul><li><b>Reference + charge-pump noise</b> pass through the loop: σ² = ${j.a}·N²·BW (fs², BW in MHz). A higher reference frequency lowers N and so this term.</li>
 <li><b>VCO noise</b> is suppressed inside the loop bandwidth: σ² = ${j.b}/BW (fs²).</li></ul>
 <p>The loop bandwidth may not exceed f<sub>ref</sub>/10. Reach an RMS jitter of at most <b>${spec} fs</b>.</p>`,
-      hints: ['Total σ² = a·N²·BW + b/BW. At the minimum the two terms are equal, so BW* = √(b / (a·N²)).', 'A higher reference frequency halves N and doubles the optimum bandwidth, as long as BW stays under f<sub>ref</sub>/10.', 'Try each reference frequency at its own optimum bandwidth: the smallest f<sub>ref</sub> can force the optimum above f<sub>ref</sub>/10.'],
+      hints: ['Total σ² = a·N²·BW + b/BW. At the minimum the two terms are equal, so BW* = √(b / (a·N²)).', 'A higher reference frequency halves N and doubles the optimum bandwidth, as long as BW stays under f<sub>ref</sub>/10.', 'Try each reference frequency at its own optimum bandwidth: a higher f<sub>ref</sub> lowers N, and with it the best jitter you can reach.'],
       controls: [
         { id: 'fref', kind: 'select', label: 'Reference', options: JIT_FREFS.map((x) => ({ value: String(x), label: `${x} MHz` })), value: '25' },
         { id: 'bw', kind: 'number', label: 'Loop bandwidth (MHz)', min: 0.25, max: 12, step: 0.25, value: 1 },

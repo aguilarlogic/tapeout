@@ -12,7 +12,7 @@ export const kcl: Lesson = {
   concept: 'KCL, KVL, nodal analysis, superposition, Thevenin and Norton',
   xp: 100,
   steps: [
-    say("Ohm's law describes one resistor. To analyze a whole circuit you need two more laws, both from Gustav Kirchhoff in 1845, and both just bookkeeping. **KCL**: the currents flowing into a node add up to zero (charge does not pile up). **KVL**: the voltages around any closed loop add up to zero (you end where you started)."),
+    say("Ohm's law describes one resistor. To analyse a whole circuit you need two more laws, both from Gustav Kirchhoff in 1845, and both just bookkeeping. **KCL**: the currents flowing into a node add up to zero (charge does not pile up). **KVL**: the voltages around any closed loop add up to zero (you end where you started)."),
     art(`
            I1 = 3 mA ──►●──► I3 = ?
                         │
@@ -76,7 +76,7 @@ export const ac: Lesson = {
   concept: 'sinusoids, impedance, phasors, filters, Bode plots, resonance',
   xp: 100,
   steps: [
-    say('Resistors do not care how fast a signal changes. Capacitors and inductors do. To analyze circuits across frequency we use one of the best ideas in engineering: treat every sinusoid as a rotating arrow, a **phasor**, and give capacitors and inductors a complex resistance called **impedance**.'),
+    say('Resistors do not care how fast a signal changes. Capacitors and inductors do. To analyse circuits across frequency we use one of the best ideas in engineering: treat every sinusoid as a rotating arrow, a **phasor**, and give capacitors and inductors a complex resistance called **impedance**.'),
     art(`
    ω = 2πf                        (radians per second)
 

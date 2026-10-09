@@ -185,7 +185,7 @@ export const ACTS: Act[] = [
       { name: 'Out-of-order', modules: [...drill('ooo'), ...arch('ooo-rename', 'ooo-window', 'ooo-diagnose'), bossMod('boss-cpu'), ...arch('ooo-boss'), incident('inc-ooo')] },
       { name: 'Memory hierarchy', modules: [...drill('cache'), ...arch('cache-predict', 'cache-block', 'cache-conflict', 'cache-policy', 'cache-tile', 'cache-write'), ...drill('coherence', 'dram'), bossMod('boss-mem'), ...arch('cache-boss'), incident('inc-memhier')] },
       { name: 'Interconnect', modules: [...drill('bus'), bossMod('boss-protocols'), ...drill('noc', 'serdes'), bossMod('boss-interconnect'), incident('inc-noc')] },
-      { name: 'Modeling', modules: [...drill('perf'), bossMod('boss-perf'), incident('inc-model')] },
+      { name: 'Modelling', modules: [...drill('perf'), bossMod('boss-perf'), incident('inc-model')] },
       {
         name: 'Tapeout', modules: [
           { id: 'drills', kind: 'drills', title: 'Interview Gauntlet', concept: 'spaced-repetition interview questions', xp: 150, route: '#/drills' },

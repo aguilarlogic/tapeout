@@ -786,7 +786,7 @@ export class CInterp {
         // the result has the promoted type of the left operand only
         const lt = this.promote(a.ty) as Extract<CType, { k: 'int' }>;
         const lx = this.conv(a, lt).v as bigint;
-        // C does not mask the count the way RISC-V and Verilog do: a negative count or one >= the width is undefined behaviour
+        // C does not mask the count the way RISC-V does (and Verilog gives 0): a negative count or one >= the width is undefined behaviour
         const cnt = b.v as bigint;
         if (cnt < 0n) throw new CError(`runtime error: shift exponent ${cnt} is negative`, line, 'ubsan');
         if (cnt >= BigInt(lt.bits)) throw new CError(`runtime error: shift exponent ${cnt} is too large for ${lt.bits}-bit type '${typeStr(lt)}'`, line, 'ubsan');

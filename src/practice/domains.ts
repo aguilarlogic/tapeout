@@ -60,11 +60,11 @@ export const npuPractice = practice('practice-npu', 'AI Hardware Drills', 'MAC c
     // KV width = KV heads x head dimension: equal to the model width only for multi-head attention.
     const layers = pick(r, [32, 40, 80]), dm = pick(r, [1024, 4096, 5120, 8192]), tok = pick(r, [4096, 32768]), kv = (2 * layers * dm * tok * 2) / 1e9;
     const gqaIdea = 'With multi-head attention the KV width equals the model width. Grouped-query attention shares each K/V head across several query heads, so the KV width is much smaller: a 70B-class model with 8 KV heads of 128 dims stores 1024 numbers per token per layer for K, and again for V.';
-    if (d === 3 && pick(r, [0, 1]) === 1) {
-      const mha = pick(r, [4096, 5120, 8192]), ratio = mha / 1024;
-      return walk(ask(`A model uses grouped-query attention with KV width 1024. The same model without it (multi-head attention, KV width ${mha}) needs how many times more KV-cache memory?`, num(ratio), `The cache is proportional to the KV width: ${mha} / 1024 = ${ratio}.`, 'Cache size scales with KV width; everything else is the same.'),
+    if (d === 3) {
+      const mha = pick(r, [4096, 8192]), g = pick(r, [512, 1024, 2048]), ratio = mha / g;
+      return walk(ask(`A model uses grouped-query attention with KV width ${g}. The same model without it (multi-head attention, KV width ${mha}) needs how many times more KV-cache memory?`, num(ratio), `The cache is proportional to the KV width: ${mha} / ${g} = ${ratio}.`, 'Cache size scales with KV width; everything else is the same.'),
         'KV width and grouped-query attention', gqaIdea,
-        calc('Everything else is equal, so the ratio is the ratio of KV widths:', `${mha} / 1024`, ratio, '', String(ratio), 0.001));
+        calc('Everything else is equal, so the ratio is the ratio of KV widths:', `${mha} / ${g}`, ratio, '', String(ratio), 0.001));
     }
     return walk(ask(`KV cache: ${layers} layers, KV width ${dm} (KV heads × head dimension), ${tok} tokens of context, FP16. Size, in GB? (2 × layers × KV width × tokens × 2 bytes)`, qty(kv, 'GB', 0.02, sig(kv)), `2 (K and V) × ${layers} × ${dm} × ${tok} × 2 bytes = ${sig(kv)} GB per sequence. Long contexts can need more memory than the weights.`, 'Keys and values, per layer, per token.'),
       'the KV cache', `While generating text, a transformer keeps the "key" and "value" vectors of every earlier token in every layer, so it does not have to recompute them: the KV cache. Per token and per layer it stores 2 vectors (K and V) of the KV width, each number in 2 bytes (FP16). So its size = 2 × layers × KV width × tokens × 2 bytes. ${gqaIdea}`,
@@ -295,7 +295,7 @@ export const hwsecPractice = practice('practice-hwsec', 'Security Drills', 'brut
     ['A device derives its identity from the previous layer\'s secret plus a hash of the next layer\'s code. What happens when the firmware is modified?', 'The derived identity changes', ['The identity stays the same', 'The chip erases its fuses', 'The boot ROM rewrites the firmware'],
       'layered device identity', 'Each layer\'s secret depends on the hash of the code that follows it. Different code gives a different hash, so a different secret: modified firmware can not pose as the original.',
       ['Modified code has a different hash, so its derived secret is:', 'Different', ['The same', 'Zero']], 'The hash of the changed code goes into the derivation, so the identity is different and the original can not be impersonated'],
-    ['An attacker glitches the clock during the signature check. Best countermeasure?', 'Verify twice, with redundant comparison and glitch detectors', ['Use a longer signature', 'Hide the boot ROM contents', 'Raise the clock frequency'],
+    ['An attacker glitches the clock during the signature check. Best countermeasure?', 'Redundant checks, plus glitch detectors', ['Use a longer signature that takes longer to check', 'Hide the boot ROM contents from outside readers', 'Raise the clock so a glitch has no time to act'],
       'fault-injection countermeasures', 'A single check is a single point of failure. Doing it twice and comparing in a redundant way, with sensors that notice glitches and reset the chip, forces the attacker to land several unlikely glitches at once.',
       ['A glitch skips one instruction. Computing the check twice means the attacker must:', 'Skip both, in the same way', ['Skip only one', 'Skip neither']], 'Redundant checks plus glitch detectors, so one glitch is not enough'],
     ]),
@@ -423,7 +423,8 @@ export const fusaPractice = practice('practice-fusa', 'Functional Safety Drills'
   },
   (r, d) => {
     const idea = 'A fault can cause harm if it lasts longer than the fault-tolerant time interval (FTTI) of the safety goal. The system has to detect the fault and then reach the safe state inside that interval, so detection time plus reaction time must fit. The margin is what is left over.';
-    const ftti = pick(r, [15, 20, 30, 50]), rea = pick(r, [3, 5, 6, 10]), det = pick(r, [2, 4, 5, 8]);
+    // The FTTI always leaves some margin, so the d1 answer is never negative.
+    const rea = pick(r, [3, 5, 6, 10]), det = pick(r, [2, 4, 5, 8]), ftti = Math.max(pick(r, [15, 20, 30, 50]), det + rea + 2);
     if (d === 1) return walk(ask(`The FTTI is ${ftti} ms. A fault is detected in ${det} ms and the reaction takes ${rea} ms. How many ms of margin are left?`, qty(ftti - det - rea, 'ms', 0.001, String(ftti - det - rea)), `${ftti} - ${det} - ${rea} = ${ftti - det - rea} ms.`, 'FTTI minus detection minus reaction.'),
       'the FTTI budget', idea,
       calc('Time used = detection + reaction, in ms:', `${det} + ${rea}`, det + rea, 'ms', String(det + rea), 0.001),
@@ -621,7 +622,7 @@ export const photonicsBoss = boss({
     { t: 'gen', make: () => ask('Each fibre carries 8 wavelengths at 200 Gb/s. How many fibres for 51.2 Tb/s?', num(32), '8 × 200 = 1.6 Tb/s per fibre; 51.2 / 1.6 = 32.') },
     { t: 'gen', make: () => ask('Laser 6 dBm, two couplers of 2 dB, modulator 5 dB, waveguide 1 dB. Received power, in dBm?', qty(-4, 'dBm', 0.02, '-4'), '6 - 4 - 5 - 1 = -4 dBm.') },
     { t: 'gen', make: () => ask('The receiver needs -9 dBm. Margin, in dB?', qty(5, 'dB', 0.02, '5'), '-4 - (-9) = 5 dB.') },
-    mc('In the field, one wavelength fails as the switch heats up. Likely cause?', ['A ring modulator drifted off resonance', 'The fibre connector loosened', 'The laser power is too high at that wavelength', 'The germanium detector stopped absorbing'], 0, 'Its heater control could not track the temperature. Rings move about 0.1 nm/K; thermal tuning must track it.'),
+    mc('In the field, one wavelength fails as the switch heats up. Likely cause?', ['A ring modulator drifted off resonance', 'The fibre connector loosened', 'The laser power is too high at that wavelength', 'The germanium detector stopped absorbing'], 0, 'Its heater control could not track the temperature. Rings move about 0.08 nm/K; thermal tuning must track it.'),
   ],
   recap: ['pJ/bit.', 'WDM.', 'Link budget.', 'Ring thermal tuning.'],
 });

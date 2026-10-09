@@ -2,9 +2,14 @@
 
 This table tracks which standard or reference governs each topic in TAPEOUT's curriculum, so the game's learning content never needs to name them. Updated October 2026.
 
+The "Baseline finding" column records what the October 2026 baseline audit found, before `docs/STANDARDS-PLAN.md` was
+carried out. Every gap or error it flags ("fixes needed", "absent", "wrong") has since been fixed by the plan item it
+names; see the plan's status table, and its "Known deviations" list for what is still open. Keep the column as the
+baseline; record later reviews under "Review trigger" or in the plan.
+
 ## Foundations (Act 1)
 
-| Area | Topic ids | Standard / reference | Version | Status (Oct 2026) | Review trigger |
+| Area | Topic ids | Standard / reference | Version | Baseline finding (before the plan) | Review trigger |
 |---|----|----|----|----|----|
 | Numbers, circuits, signals, math | bits, twos, practice-bits, practice-twos | CS2023 AR-Logic and AR-Representation | — | Covered: two's complement and binary32 correct | New CS specification (successor to CE2016) |
 | — | bits, twos, practice-bits, practice-twos | ABET EAC criteria | 2026-2027 | Digital foundations strong | ABET 2027-2028 revision |
@@ -19,7 +24,7 @@ This table tracks which standard or reference governs each topic in TAPEOUT's cu
 
 ## Systems and Software (Act 2)
 
-| Area | Topic ids | Standard / reference | Version | Status (Oct 2026) | Review trigger |
+| Area | Topic ids | Standard / reference | Version | Baseline finding (before the plan) | Review trigger |
 |---|----|----|----|----|----|
 | The shell | shell, practice-shell, sh-nav, sh-grep, sh-pipes, sh-find, sh-awk, sh-sed, sh-perm, sh-loop, sh-script, boss-shell, sh-boss-triage | POSIX | IEEE 1003.1-2024 / Open Group Issue 8 (2024-06-14) | Lessons mix POSIX, GNU and bash without labelling; `find -exec ;` and grep regex errors need fixing | POSIX.1-2026 or later |
 | Git | git, practice-git, git-first, git-branch, git-undo, git-conflict, git-stash, git-bisect, boss-git, git-boss-merge, git-boss-bisect | Git source control | 2.56.0 current; Git 3.0 will default to `main` | `switch`/`restore` taught correctly; lab silently creates `main` | Git 3.0 release (date TBD) |
@@ -33,7 +38,7 @@ This table tracks which standard or reference governs each topic in TAPEOUT's cu
 
 ## RTL and Verification
 
-| Area | Topic ids | Standard / reference | Version | Status (Oct 2026) | Review trigger |
+| Area | Topic ids | Standard / reference | Version | Baseline finding (before the plan) | Review trigger |
 |---|----|----|----|----|----|
 | Verilog and RTL | verilog, practice-verilog, boss-hdl, rtl | SystemVerilog (IEEE 1800) | 1800-2023 | Lessons and labs use Verilog-2001 style; simulator already parses `always_ff`/`logic` | IEEE 1800-2029 or later |
 | — | verilog, practice-verilog, boss-hdl, rtl | Verilog (IEEE 1364) | 2001; merged into IEEE 1800 in 2009 | Lessons teach 2001-style correctly | IEEE 1800 updates |
@@ -43,7 +48,7 @@ This table tracks which standard or reference governs each topic in TAPEOUT's cu
 
 ## Implementation, DFT and Board
 
-| Area | Topic ids | Standard / reference | Version | Status (Oct 2026) | Review trigger |
+| Area | Topic ids | Standard / reference | Version | Baseline finding (before the plan) | Review trigger |
 |---|----|----|----|----|----|
 | Timing | sta, practice-sta, mods(TIMING_LEVELS), sta-report, sta-ocv, sta-mcp, boss-sta, sta-eco | SDC (Synopsys Design Constraints) | 2.1 | Syntax and multicycle -setup N / -hold N-1 pairing correct | SDC updates (TBD) |
 | Low power | power, boss-lowpower, boss-upf | UPF | IEEE 1801-2024 (UPF 4.0), early 2025 | UPF named without version or syntax; content needs version labelling | IEEE 1801 / UPF updates (TBD) |
@@ -54,7 +59,7 @@ This table tracks which standard or reference governs each topic in TAPEOUT's cu
 
 ## Architecture, Memory, Interconnect and AI Hardware
 
-| Area | Topic ids | Standard / reference | Version | Status (Oct 2026) | Review trigger |
+| Area | Topic ids | Standard / reference | Version | Baseline finding (before the plan) | Review trigger |
 |---|----|----|----|----|----|
 | Interconnect (AMBA) | arch, pipe-fwd, pipe-branch, pipe-sched, pipe-unroll, bus, practice-bus, boss-protocols, noc, practice-noc, serdes, boss-interconnect | AMBA AXI | Issue L (Aug 2025) | Every AXI rule correct; manager/subordinate terminology since AXI H.b (Jan 2021); master/slave vocabulary in old lessons needs updating | AXI M.x / next revision |
 | — | arch, noc, practice-noc, serdes, boss-interconnect | AMBA CHI | Issue H (Sep 2025) | Not taught in detail; teaches AXI-style handshake only | CHI updates (TBD) |
@@ -68,7 +73,7 @@ This table tracks which standard or reference governs each topic in TAPEOUT's cu
 
 ## Safety, Security, Reliability, ESD, Test, Packaging
 
-| Area | Topic ids | Standard / reference | Version | Status (Oct 2026) | Review trigger |
+| Area | Topic ids | Standard / reference | Version | Baseline finding (before the plan) | Review trigger |
 |---|----|----|----|----|----|
 | Functional safety | fusa, practice-fusa, fusa-fmeda, fusa-asil, fusa-campaign, boss-fusa, incident(inc-limp) | ISO 26262 | 2018 edition governs; Edition 3 DIS around Q4 2026, publication roughly 2027-2028 | ASIL B/C/D SPFM/LFM/PMHF numbers correct; FMEDA lab formula wrong (G1.10 fixes needed); no S/E/C, SOTIF, Part 11 | ISO 26262:2027-2028 third edition DIS/publication |
 | Functional safety | fusa, practice-fusa, fusa-fmeda, fusa-asil, fusa-campaign, boss-fusa, incident(inc-limp) | NCEES FE E&C | July 2020, expires July 2027 | Safety and reliability concepts covered | New FE Electrical and Computer spec (July 2027) |
@@ -79,7 +84,7 @@ This table tracks which standard or reference governs each topic in TAPEOUT's cu
 
 ## Analog, RF, Photonics, Quantum, Sensors, MEMS, EDA, Emerging
 
-| Area | Topic ids | Standard / reference | Version | Status (Oct 2026) | Review trigger |
+| Area | Topic ids | Standard / reference | Version | Baseline finding (before the plan) | Review trigger |
 |---|----|----|----|----|----|
 | Analog and clocking | analog, practice-analog, clab-inverting, clab-gbw, clab-csamp, clab-mirror, boss-analog, clab-boss-amp; control, practice-control, sig-pid, boss-control; pll-loop, boss-clocking, pll-jitter; libchar, practice-libchar, lib-table, lib-setup, boss-libchar | IEEE 1241-2023 (ADC test) | 2023 | SNR, ENOB, jitter-limited SNR, kT/C correct; no SFDR, INL/DNL, THD | IEEE 1241 updates (TBD) |
 | — | clocking, practice-clocking, pll-loop, boss-clocking, pll-jitter | Jitter (JEDEC JESD65B) | JESD65B | Phase-noise-to-jitter formula correct; taxonomy missing; glossary definition loose | JEDEC JESD65 updates |

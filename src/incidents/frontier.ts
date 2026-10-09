@@ -133,7 +133,7 @@ export const customerIncident: Incident = {
     { cmd: 'straps', cost: 10, what: 'read the strap pins at reset', read: by({ strap: 'BOOT_SEL = 11, which is UART download mode (the evaluation board reads 01)' }, 'BOOT_SEL = 01, SPI flash boot') },
     { cmd: 'spi', cost: 25, what: 'logic analyzer on the SPI flash bus', read: by({ strap: 'no SPI traffic at all', sequence: 'no SPI traffic at all', crystal: 'no SPI traffic at all', decap: 'SPI traffic starts, then stops when reset pulses', resetrc: 'SPI traffic starts, then stops when reset interrupts it', flash: 'the ROM sends its read command and the flash never answers' }) },
     { cmd: 'uart', cost: 10, what: 'open the UART console during power-up', read: by({ strap: 'ROM banner: "waiting for download"' }, 'no output at all') },
-    { cmd: 'sch', cost: 20, what: 'compare the customer schematic with the reference design', read: by({ decap: 'only 2 of the 6 required 0.1 µF decoupling capacitors fitted on VDDCORE' }, 'the schematic matches the reference design here') },
+    { cmd: 'sch', cost: 20, what: 'compare the customer schematic with the reference design', read: by({ decap: 'only 2 of the 6 required 0.1 µF decoupling capacitors fitted on VDDCORE', crystal: 'the crystal load capacitors are several times larger than in the reference design' }, 'the schematic matches the reference design here') },
   ],
 };
 

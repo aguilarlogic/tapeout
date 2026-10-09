@@ -107,7 +107,7 @@ interface PocvArc { name: string; cell: string; mean: number; sigma: number }
 const UP_MEAN = 0.85, UP_SIGMA = 0.8; // an upsized arc is faster and tighter
 const staPocv: ArchLevel = {
   id: 'sta-pocv', title: 'Statistical timing at 3σ', concept: 'per-arc mean and σ, root-sum-square path σ, slack at 3σ, choosing arcs to upsize', xp: 180, lab: 'STA', tier: 'guided',
-  ticket: 'The library now carries a mean and a σ for every arc, and signoff checks setup at 3σ. The path fails by a few picoseconds. Find the path σ, the slack at 3σ, and upsize as few arcs as you can to close it.',
+  ticket: 'The library now carries a mean and a σ for every arc, and signoff checks setup at 3σ. The path fails at 3σ. Find the path σ, the slack at 3σ, and upsize as few arcs as you can to close it.',
   model: 'Arcs vary independently and each carries one σ. Real variation data is a table of σ per arc, slew and load point, and some of it is correlated.',
   build: (r) => {
     const n = between(r, 6, 8);

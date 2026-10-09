@@ -23,7 +23,7 @@ const first: IsaLevel = {
   build: (r) => ({
     style: 'program', mode: 'write',
     brief: `<p>RISC-V has 32 integer registers, <code>x0</code> to <code>x31</code>, with friendly names: <code>a0</code>-<code>a7</code> for arguments, <code>t0</code>-<code>t6</code> for temporaries, <code>s0</code>-<code>s11</code> saved registers, <code>sp</code> the stack pointer, <code>ra</code> the return address. <code>zero</code> (<code>x0</code>) always reads as 0. Instructions look like <code>add rd, rs1, rs2</code>: destination first.</p>
-<p>The test sets <code>a0</code> = x and <code>a1</code> = y. Leave <b><code>a2 = 3·x + y</code></b>. There is no multiply here: <code>slli rd, rs, k</code> shifts left (times 2<sup>k</sup>), and <code>add</code> adds. A program ends by asking the (simulated) operating system to exit, using RARS-style ecall numbers (a7 = service): <code>li a7, 93</code> then <code>ecall</code>.</p>`,
+<p>The test sets <code>a0</code> = x and <code>a1</code> = y. Leave <b><code>a2 = 3·x + y</code></b>. There is no multiply here: <code>slli rd, rs, k</code> shifts left (times 2<sup>k</sup>), and <code>add</code> adds. A program ends by asking the (simulated) operating system to exit, using Linux-style ecall numbers (a7 = service; exit is 93): <code>li a7, 93</code> then <code>ecall</code>.</p>`,
     hints: ['3·x = 2·x + x. <code>slli t0, a0, 1</code> gives 2·x in <code>t0</code>.', '<code>add t0, t0, a0</code> then <code>add a2, t0, a1</code>.'],
     starter: `# a0 = x, a1 = y. Leave a2 = 3*x + y, then exit.\n    # TODO\n${EXIT}`,
     cases: Array.from({ length: 6 }, (_, i) => {

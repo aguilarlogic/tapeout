@@ -159,7 +159,7 @@ export const flows: Lesson = {
   concept: 'Makefiles, dependencies, TCL scripting, EDA flow scripts',
   xp: 90,
   steps: [
-    say('Chip tools are not clicked, they are **scripted**. A synthesis run, a place-and-route flow or a regression is a pipeline of steps, each with inputs and outputs. **Make** decides which steps need to rerun, and **TCL** is the language almost every EDA tool (Synopsys, Cadence, Siemens, Xilinx Vivado) speaks.'),
+    say('Chip tools are not clicked, they are **scripted**. A synthesis run, a place-and-route flow or a regression is a pipeline of steps, each with inputs and outputs. **Make** decides which steps need to rerun, and **TCL** is the language almost every EDA tool (Synopsys, Cadence, Siemens, AMD Vivado) speaks.'),
     art(`
    # Makefile: target: dependencies, then the command (indented with a TAB)
    netlist.v: rtl/*.sv constraints.sdc
