@@ -411,7 +411,7 @@ inside it, so screen readers may read out fragments.
   - a list of keyboard shortcuts;
   - the export and import from U10.
 
-### U22 · Labs are not usable on phones (Sev 3, Pri 2) · Decision
+### U22 · Labs are not usable on phones (Sev 3, Pri 2) · Decision ✅ done (option b: honest card, key hints hidden on touch)
 
 **Confirmed at 390 px.** In Logic Lab and Board Router the schematic and board shrink until the pins are about 10 px,
 so drag-to-wire does not work on touch. The brief shows keyboard shortcuts ("R route · V via · Ctrl+Z") on a touch
