@@ -14,6 +14,8 @@ import { launchGame } from './launch';
 import { mapApp } from './map';
 import { settingsApp } from './settings';
 import { bindMentorLog } from './mentor';
+import { checkRoute, type RouteCheck } from './route';
+import { didYouMean } from './suggest';
 import { getWindow, initWM, openWindow } from './wm';
 
 /** Each lab's page is its own chunk in the hosted build, so its engine (simulator, interpreter...) loads only when a lab opens. The single-file build inlines them. */
@@ -72,6 +74,14 @@ function home() {
   if (location.hash && location.hash !== '#/') location.hash = '#/';
 }
 
+/** A route that names nothing real: TAPEOUT says so in the terminal, with the closest matches, and no empty window opens. */
+function unknownRoute(c: Extract<RouteCheck, { ok: false }>) {
+  (getWindow('term') ?? openTerminal()).focus();
+  const what = c.kind === 'module' ? 'module' : 'practice set';
+  const hint = c.kind === 'module' ? 'Type `map` to see them all.' : 'Type `skills` to see them, or `practice` for a mix.';
+  void term.say(`No ${what} called "${c.bad}".${didYouMean(c.suggestions)} ${hint}`, 'thinking');
+}
+
 function route() {
   const [section, id] = location.hash.replace(/^#\/?/, '').split('/').filter(Boolean);
   document.querySelectorAll('.modal-bg').forEach((m) => m.remove());
@@ -80,6 +90,8 @@ function route() {
     term.focus();
     return;
   }
+  const check = checkRoute(section, id ?? '', Object.hasOwn(LABS, section));
+  if (!check.ok) return unknownRoute(check);
   if (section === 'learn' && id) {
     (getWindow('term') ?? openTerminal()).focus();
     if (profile()) shell.run(`learn ${id}`);

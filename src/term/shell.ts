@@ -13,6 +13,7 @@ import { BOSSES, findBoss, findPractice, PRACTICE, problem } from '../practice';
 import { gradePractice, nextDifficulty, PRACTICE_COUNT, PRACTICE_HARD, PRACTICE_PASS, PRACTICE_START, type Boss, type Difficulty, type PracticeSet } from '../practice/types';
 import { setMood } from '../os/avatar';
 import { focusGame, launchGame, randomGame, skipGame } from '../os/launch';
+import { closestMatches, didYouMean } from '../os/suggest';
 import { best, levelRecord, load, playerName, prefs, Prefs, Profile, profile, rank, RANKS, recordBest, recordMix, resetAll, setPrefs, setProfile, totalXp, updateCard } from '../state';
 import { h, stars as starEls } from '../ui/dom';
 import { runIncident } from './incident';
@@ -142,7 +143,7 @@ export class Shell {
         return arg ? this.printAct(arg) : this.printActs();
       case 'learn': case 'open': case 'cd': case 'run': case 'lesson': {
         const m = this.findModuleByText(arg);
-        if (!m) return t.print(`No module called "${arg}". Try \`ls\`.`, 'err');
+        if (!m) return t.print(`No module called "${arg}".${didYouMean(closestMatches(arg, ALL_MODULES))} Try \`ls\`.`, 'err');
         return this.openModule(m);
       }
       case 'play': case 'arcade': case 'game': case 'games': {
