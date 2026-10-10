@@ -49,6 +49,13 @@ function backupNote(levelId: string, ranked: boolean): string[] {
 /** The note that goes with a star lost to hints. */
 export const hintNote = (hintsUsed: number) => (hintsUsed ? ['Solve it without hints for another star.'] : []);
 
+/** The brief's HTML. A scrolling block (a code sample, a waveform) takes focus, so a keyboard user can scroll it. */
+function briefBody(html: string): HTMLElement {
+  const body = h('div', { class: 'brief-body', html });
+  body.querySelectorAll('pre').forEach((p) => p.setAttribute('tabindex', '0'));
+  return body;
+}
+
 /** The left-hand panel of a lab: tag, optional ticket line, the brief, any extras, an optional note (boss rules), then the hint box. */
 export function briefPanel(o: { tag: string; ticket?: string; html: string; note?: string; model?: string; hintBox?: Node | string }, ...extra: (Node | string | false | undefined)[]) {
   return h('aside', { class: 'brief panel' },
@@ -56,7 +63,7 @@ export function briefPanel(o: { tag: string; ticket?: string; html: string; note
     o.ticket ? h('p', { class: 'dim small' }, o.ticket) : '',
     // where the lab simplifies reality, say so: a professional would notice
     o.model ? h('p', { class: 'dim small model-note' }, h('b', null, 'About this simulator: '), o.model) : '',
-    h('div', { class: 'brief-body', html: o.html }),
+    briefBody(o.html),
     ...extra.map((x) => x || ''),
     o.note ? h('p', { class: 'dim small' }, o.note) : '',
     o.hintBox ?? '');

@@ -45,6 +45,9 @@ body { display: block; }
 /* ---------------------------------------------------------------- windows */
 .win { position: absolute; display: flex; flex-direction: column; background: var(--bg); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--win-shadow); overflow: hidden; resize: both; min-width: 320px; min-height: 200px; animation: win-in 0.18s ease-out; }
 .win.focused { border-color: color-mix(in srgb, var(--accent) 55%, var(--border)); }
+.win:focus { outline: none; } /* focus lands on the dialog when it opens; its border shows which window has it */
+/* Text for screen readers only (the terminal's log). */
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 .win.min { display: none; }
 .win.max { left: 6px !important; top: 6px !important; width: calc(100% - 12px) !important; height: calc(100% - 12px) !important; resize: none; }
 @keyframes win-in { from { transform: scale(0.97) translateY(6px); opacity: 0; } }
@@ -409,7 +412,8 @@ table.tt th.exp, table.tt td.exp { color: var(--wave-exp); }
 .tier { font-size: 0.75rem; padding: 3px 9px; border-radius: 99px; border: 1px solid var(--border); color: var(--text); background: var(--panel-2); white-space: nowrap; }
 a.tier:hover { border-color: var(--accent); text-decoration: none; }
 .tier.done { border-color: color-mix(in srgb, var(--ok) 60%, var(--border)); color: var(--ok); }
-.tier.wip { opacity: 0.45; border-style: dashed; cursor: help; }
+/* Not opacity: faded text fails contrast. Dashed border and the dim colour say "not built yet" instead. */
+.tier.wip { color: var(--text-dim); border-style: dashed; cursor: help; }
 .role-list { border: 1px solid var(--border); border-radius: 12px; padding: 8px 10px; background: var(--panel); position: sticky; top: 0; }
 .role-list h3 { margin: 4px 0 8px; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-dim); }
 .role-row { display: grid; grid-template-columns: 22px minmax(0, 1fr) 60px 36px; gap: 6px; align-items: center; padding: 4px 4px; border-radius: 6px; color: var(--text); font-size: 0.8rem; }

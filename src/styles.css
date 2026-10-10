@@ -8,6 +8,7 @@
   --text-dim: #8a9aab;
   --accent: #14b8a6;
   --accent-2: #0e8f82;
+  --accent-text: #14b8a6; /* accent as text on tinted chips: AA on the chip background */
   --accent-ink: #04201d;
   --ok: #34d399;
   --warn: #fbbf24;
@@ -51,12 +52,14 @@
     --border: #d8e0e8;
     --text: #17212b;
     --text-dim: #5b6b7b;
-    --accent: #0d9488;
+    /* Light-theme colours are chosen for WCAG AA (4.5:1) as text on the panels and tinted chips. */
+    --accent: #0f766e;
     --accent-2: #0f766e;
+    --accent-text: #115e59;
     --accent-ink: #ffffff;
-    --ok: #059669;
+    --ok: #047857;
     --warn: #b45309;
-    --err: #dc2626;
+    --err: #b91c1c;
     --code-bg: #f7f9fb;
     --shadow: 0 10px 30px rgba(20, 40, 60, 0.12);
     --wave-grid: #e6ebf0;
@@ -123,7 +126,7 @@ h4 { margin-top: 1em; font-size: 0.8rem; text-transform: uppercase; letter-spaci
 .stars { letter-spacing: 2px; font-size: 1.05rem; }
 .star { color: var(--border); }
 .star.on { color: var(--gold); }
-.xp-chip { font-size: 0.78rem; padding: 2px 8px; border-radius: 99px; background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); font-weight: 600; white-space: nowrap; }
+.xp-chip { font-size: 0.78rem; padding: 2px 8px; border-radius: 99px; background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent-text); font-weight: 600; white-space: nowrap; }
 .tag { display: inline-block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; padding: 2px 8px; border-radius: 99px; background: var(--panel-2); color: var(--text-dim); border: 1px solid var(--border); }
 
 .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; min-width: 0; }
@@ -132,6 +135,7 @@ h4 { margin-top: 1em; font-size: 0.8rem; text-transform: uppercase; letter-spaci
 /* ---------------------------------------------------------------- level layout */
 .level-head { margin-bottom: 14px; }
 .crumbs { font-size: 0.85rem; color: var(--text-dim); margin-bottom: 4px; }
+.crumbs a { text-decoration: underline; } /* a link in running text needs more than colour to stand out */
 .title-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .title-row h2 { margin: 0; font-size: 1.5rem; }
 .level-grid { display: grid; grid-template-columns: minmax(260px, 360px) minmax(0, 1fr); gap: 14px; align-items: start; }
@@ -139,6 +143,7 @@ h4 { margin-top: 1em; font-size: 0.8rem; text-transform: uppercase; letter-spaci
 .clab-grid { grid-template-columns: minmax(260px, 360px) minmax(0, 1fr); }
 .sta-grid { grid-template-columns: minmax(220px, 270px) minmax(0, 1fr) minmax(280px, 340px); }
 .brief-body p, .brief-body ul { margin: 0.5em 0; }
+.brief-body a { text-decoration: underline; } /* a link in running text must be told apart by more than colour */
 .brief-body ul { padding-left: 1.2em; }
 .brief-body .note { border-left: 3px solid var(--accent); padding: 4px 10px; background: var(--panel-2); border-radius: 0 6px 6px 0; }
 table.mini { border-collapse: collapse; font-size: 0.85rem; margin: 6px 0; }

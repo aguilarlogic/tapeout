@@ -212,6 +212,9 @@ export function textTargets(root: Node): { node: Text; full: string }[] {
 const ITEMS = 'li, tr, .choice, .term-opt';
 
 /** Type every piece of text inside an element. Buttons inside stay unclickable until it finishes. */
+/** A finished line as a screen reader should hear it: no spinner or bar glyphs, single spaces. */
+export const spokenLine = (text: string) => text.replace(/[⠀-⣿█░]/g, '').replace(/\s+/g, ' ').trim();
+
 export async function typeInto(el: HTMLElement, p: Pace, tk: Token, opts: { rate?: number; onStep?: () => void } = {}) {
   const targets = textTargets(el);
   const starts: number[] = [];
@@ -222,6 +225,8 @@ export async function typeInto(el: HTMLElement, p: Pace, tk: Token, opts: { rate
   }).filter((x) => x.start > 0);
   items.forEach((x) => x.item.classList.add('tw-hide'));
   el.classList.add('tw-live');
+  // The animated copy is hidden from screen readers while it types; the finished line is announced once instead.
+  el.setAttribute('aria-hidden', 'true');
   try {
     await typeText(targets, p, tk, {
       rate: opts.rate,
@@ -233,6 +238,7 @@ export async function typeInto(el: HTMLElement, p: Pace, tk: Token, opts: { rate
   } finally {
     items.forEach((x) => x.item.classList.remove('tw-hide'));
     el.classList.remove('tw-live');
+    el.removeAttribute('aria-hidden');
   }
 }
 

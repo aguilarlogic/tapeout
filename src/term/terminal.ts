@@ -6,7 +6,7 @@ import type { Mood } from '../lessons/types';
 import { setMood, setTalking } from '../os/avatar';
 import { playerName, prefs } from '../state';
 import { h } from '../ui/dom';
-import { animate, heldKey, Output, type Pace, paceFor, prefersReducedMotion, progressBar, revealPre, revealRows, spinFrame, type Token, typeInto, wait } from './typewriter';
+import { animate, heldKey, Output, type Pace, paceFor, prefersReducedMotion, progressBar, revealPre, revealRows, spinFrame, spokenLine, type Token, typeInto, wait } from './typewriter';
 
 export class Interrupted extends Error {
   constructor() { super('interrupted'); }
@@ -46,6 +46,7 @@ function rowsOf(node: HTMLElement): HTMLElement[] {
 export class Terminal {
   el: HTMLElement;
   private out: HTMLElement;
+  private live: HTMLElement;
   private input: HTMLInputElement;
   private promptEl: HTMLElement;
   private chipsEl: HTMLElement;
@@ -64,13 +65,16 @@ export class Terminal {
   private q: Output;
 
   constructor() {
-    this.out = h('div', { class: 'term-out', role: 'log', 'aria-live': 'polite' });
+    // The visible transcript is typed a character at a time, so it is not live: screen readers would hear fragments.
+    // Each finished line is written once to the visually hidden log instead (see announce).
+    this.out = h('div', { class: 'term-out', role: 'log', 'aria-live': 'off' });
+    this.live = h('div', { class: 'sr-only', role: 'log', 'aria-live': 'polite', 'aria-relevant': 'additions' });
     this.promptEl = h('span', { class: 'term-prompt' });
     this.input = h('input', { class: 'term-input', type: 'text', autocomplete: 'off', spellcheck: 'false', 'aria-label': 'Terminal input', autocapitalize: 'off' }) as HTMLInputElement;
     this.input.readOnly = true;
     this.chipsEl = h('div', { class: 'term-chips' });
     const line = h('div', { class: 'term-line' }, this.promptEl, this.input);
-    this.el = h('div', { class: 'term', tabindex: '-1' }, this.out, line, this.chipsEl);
+    this.el = h('div', { class: 'term', tabindex: '-1' }, this.out, line, this.chipsEl, this.live);
     this.q = new Output((busy) => this.onBusy(busy), () => !this.el.isConnected);
     this.el.addEventListener('click', (e) => {
       if ((e.target as HTMLElement).closest('button, a')) return;
@@ -130,8 +134,9 @@ export class Terminal {
     this.accepting = false;
     this.input.readOnly = true;
     this.el.classList.remove('waiting');
-    this.append(h('div', { class: 'tl' }, h('span', { class: 'term-prompt' }, this.promptEl.textContent ?? ''), h('span', { class: 'you' }, ` ${v}`)));
-    if (v.trim()) { this.history.push(v); this.hIndex = this.history.length; }
+    const echo = h('div', { class: 'tl' }, h('span', { class: 'term-prompt' }, this.promptEl.textContent ?? ''), h('span', { class: 'you' }, ` ${v}`));
+    this.append(echo);
+    if (v.trim()) { this.history.push(v); this.hIndex = this.history.length; this.announce(echo); }
     this.input.value = '';
     this.input.placeholder = '';
     this.chipsEl.replaceChildren();
@@ -152,7 +157,23 @@ export class Terminal {
 
   private push(task: (tk: Token) => Promise<void> | void): Promise<void> {
     this.spoke = true;
-    return this.q.push(task);
+    return this.q.push(async (tk) => {
+      const last = this.out.lastElementChild;
+      try { await task(tk); } finally { this.announceSince(last); }
+    });
+  }
+
+  /** Every line that appeared after `last` is written to the hidden log, once, now that it is finished. */
+  private announceSince(last: Element | null) {
+    for (let n = last ? last.nextElementSibling : this.out.firstElementChild; n; n = n.nextElementSibling) this.announce(n as HTMLElement);
+  }
+
+  private announce(node: HTMLElement) {
+    const text = spokenLine(node.innerText || node.textContent || '');
+    if (!text) return;
+    this.live.append(h('div', null, text));
+    // The log is for a session's worth of reading, not an archive.
+    while (this.live.childElementCount > 300) this.live.firstElementChild?.remove();
   }
 
   // ---------------------------------------------------------------- output (all queued, all typed)

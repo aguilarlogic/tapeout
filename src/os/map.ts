@@ -50,7 +50,8 @@ const view: { query: string; group: KindGroup | 'all'; mine: boolean; open: Map<
 
 /** The die floorplan: one block per act, whose standard-cell rows light up with progress. */
 export function die(onPick?: (a: Act) => void): SVGSVGElement {
-  const root = svg('svg', { viewBox: '0 0 320 320', class: 'die', role: 'img', 'aria-label': 'Your chip: each block fills in as you complete an act' });
+  // A group, not an image: it holds the act buttons, and an image may not contain focusable controls.
+  const root = svg('svg', { viewBox: '0 0 320 320', class: 'die', role: 'group', 'aria-label': 'Your chip: each block fills in as you complete an act' });
   root.append(svg('rect', { x: 4, y: 4, width: 312, height: 312, rx: 10, class: `pkg${readiness() === 100 ? ' done' : ''}` }));
   const pads = 14, lit = readiness() / 100;
   for (let i = 0; i < pads; i++) {
@@ -65,7 +66,8 @@ export function die(onPick?: (a: Act) => void): SVGSVGElement {
   ACTS.forEach((a, i) => {
     const [x, y, w, hh] = boxes[i];
     const frac = actProgress(a).frac;
-    const g = svg('g', { class: 'region', tabindex: 0, role: 'button', 'aria-label': `Act ${a.n}: ${a.name}, ${Math.round(frac * 100)}%` });
+    // The name starts with the visible label ("1 · Foundations"), as the label-in-name rule requires.
+    const g = svg('g', { class: 'region', tabindex: 0, role: 'button', 'aria-label': `${a.n} · ${a.region}: Act ${a.n}, ${a.name}, ${Math.round(frac * 100)}%` });
     if (onPick) { g.addEventListener('click', () => onPick(a)); g.addEventListener('keydown', (e) => { if ((e as KeyboardEvent).key === 'Enter') onPick(a); }); }
     g.append(svg('rect', { x, y, width: w, height: hh, class: `blk${frac === 1 ? ' done' : ''}` }));
     const rows = Math.floor((hh - 22) / 7), on = Math.round(rows * frac);

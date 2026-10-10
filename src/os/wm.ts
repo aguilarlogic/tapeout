@@ -2,6 +2,7 @@
 import { pace } from '../term/terminal';
 import { animate, progressBar, spinFrame, type Token } from '../term/typewriter';
 import { h } from '../ui/dom';
+import { nextWindowId, ownsKeys } from './keys';
 
 export interface WinOpts {
   id: string;
@@ -35,6 +36,8 @@ let desktop: HTMLElement;
 let tasks: HTMLElement;
 let z = 10;
 const wins = new Map<string, Win>();
+/** The element that had focus when each window was last opened. */
+const openers = new Map<string, HTMLElement | null>();
 const listeners = new Set<() => void>();
 export const onWindowsChange = (f: () => void) => listeners.add(f);
 const changed = () => listeners.forEach((f) => f());
@@ -42,12 +45,41 @@ const changed = () => listeners.forEach((f) => f());
 export function initWM(d: HTMLElement, taskArea: HTMLElement) {
   desktop = d;
   tasks = taskArea;
+  window.addEventListener('keydown', onKey);
 }
 
 const small = () => window.innerWidth < 760;
 
 export function getWindow(id: string) {
   return wins.get(id);
+}
+
+/** Keyboard focus goes into a window: the terminal's input if it is waiting, else the terminal or the window itself. */
+function enter(el: HTMLElement) {
+  const target = el.querySelector<HTMLElement>('.term-input:not([readonly])') ?? el.querySelector<HTMLElement>('.term') ?? el;
+  target.focus({ preventScroll: true });
+}
+
+/** Escape closes the focused window, unless the terminal, a text field or a canvas has focus. Alt+` cycles windows. */
+function onKey(e: KeyboardEvent) {
+  if (e.defaultPrevented) return;
+  if (e.altKey && !e.ctrlKey && !e.metaKey && (e.key === '`' || e.code === 'Backquote')) {
+    const next = nextWindowId([...wins.keys()], focusedWindow(), e.shiftKey);
+    if (!next) return;
+    e.preventDefault();
+    wins.get(next)!.focus();
+    enter(wins.get(next)!.el);
+    return;
+  }
+  if (e.key === 'Escape' && !e.altKey && !e.ctrlKey && !e.metaKey && !ownsKeys(e.target as Element | null)) {
+    const id = focusedWindow();
+    if (!id) return;
+    e.preventDefault();
+    const w = wins.get(id)!;
+    const cb = w.onClose;
+    w.close();
+    cb?.();
+  }
 }
 
 export function focusedWindow(): string | undefined {
@@ -78,7 +110,12 @@ function loadingScreen(body: HTMLElement, label: string) {
   });
 }
 
+/** Moves keyboard focus into a window as it opens, unless TAPEOUT is typing (that would cut its line short). */
+const focusOnOpen = (el: HTMLElement) => { if (!document.querySelector('.term.typing')) enter(el); };
+
 export function openWindow(o: WinOpts): Win {
+  // Remember what had focus, so closing the window can return the player there.
+  openers.set(o.id, document.activeElement instanceof HTMLElement ? document.activeElement : null);
   const existing = wins.get(o.id);
   if (existing) {
     existing.setTitle(o.title);
@@ -86,6 +123,7 @@ export function openWindow(o: WinOpts): Win {
     existing.onClose = o.onClose;
     existing.el.classList.remove('min');
     existing.focus();
+    focusOnOpen(existing.el);
     if (o.loading) loadingScreen(existing.body, o.loading);
     return existing;
   }
@@ -95,7 +133,7 @@ export function openWindow(o: WinOpts): Win {
   const btnMax = h('button', { class: 'win-btn', title: 'Maximize', 'aria-label': 'Maximize' }, '□');
   const btnClose = h('button', { class: 'win-btn close', title: 'Close', 'aria-label': 'Close' }, '×');
   const bar = h('div', { class: 'win-bar' }, h('span', { class: 'win-icon', 'aria-hidden': 'true' }, o.icon ?? '▣'), titleEl, h('span', { class: 'spacer' }), btnMin, btnMax, btnClose);
-  const el = h('section', { class: 'win', role: 'dialog', 'aria-label': o.title }, bar, body);
+  const el = h('section', { class: 'win', role: 'dialog', 'aria-label': o.title, tabindex: '-1' }, bar, body);
 
   const dw = desktop.clientWidth, dh = desktop.clientHeight;
   const w = Math.min(o.w ?? 900, dw - 16), hh = Math.min(o.h ?? 600, dh - 16);
@@ -126,12 +164,17 @@ export function openWindow(o: WinOpts): Win {
       changed();
     },
     close() {
+      const back = openers.get(o.id);
+      openers.delete(o.id);
       el.remove();
       taskBtn.remove();
       wins.delete(o.id);
       changed();
       const next = focusedWindow();
       if (next) wins.get(next)!.focus();
+      // Focus goes back to whatever opened the window, if it is still on the page; else to the window in front.
+      if (back && back !== document.body && back.isConnected) back.focus({ preventScroll: true });
+      else if (next) enter(wins.get(next)!.el);
     },
     minimize() {
       el.classList.add('min');
@@ -156,15 +199,18 @@ export function openWindow(o: WinOpts): Win {
       el.style.left = `${Math.max(-el.offsetWidth + 80, Math.min(desktop.clientWidth - 80, ox + ev.clientX - sx))}px`;
       el.style.top = `${Math.max(0, Math.min(desktop.clientHeight - 40, oy + ev.clientY - sy))}px`;
     };
-    const up = () => { bar.removeEventListener('pointermove', move); bar.removeEventListener('pointerup', up); };
+    // A cancelled pointer (the browser took the gesture over) must drop the listeners too, or they stay attached.
+    const up = () => { bar.removeEventListener('pointermove', move); bar.removeEventListener('pointerup', up); bar.removeEventListener('pointercancel', up); };
     bar.addEventListener('pointermove', move);
     bar.addEventListener('pointerup', up);
+    bar.addEventListener('pointercancel', up);
   });
 
   desktop.append(el);
   tasks.append(taskBtn);
   wins.set(o.id, win);
   win.focus();
+  focusOnOpen(el);
   if (o.loading) loadingScreen(body, o.loading);
   return win;
 }
