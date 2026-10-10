@@ -1,4 +1,4 @@
-// Settings.app: how TAPEOUT types, your saved progress (backup and restore), and the danger zone.
+// Settings.app: how TAPEOUT types, how the screen reads (text size, motion), the keys, backups, and the danger zone.
 import { applyBackup, backupFileName, exportBackup, load, markExported, onChange, prefs, profile, rank, readBackup, resetAll, setPrefs, totalXp, type Backup, type Prefs } from '../state';
 import { pace, rich } from '../term/terminal';
 import { PACES, prefersReducedMotion, type Token, typeInto } from '../term/typewriter';
@@ -10,6 +10,35 @@ const SPEEDS: { id: Prefs['speed']; name: string; blurb: string }[] = [
   { id: 'normal', name: 'Normal', blurb: `about ${PACES.normal.cps} characters a second (the default)` },
   { id: 'fast', name: 'Fast', blurb: `about ${PACES.fast.cps} characters a second, short pauses` },
   { id: 'instant', name: 'Instant', blurb: 'no typing and no loading animations: text appears at once' },
+];
+
+const TEXT: { id: Prefs['text']; name: string }[] = [
+  { id: 'normal', name: 'Normal' },
+  { id: 'large', name: 'Large' },
+  { id: 'larger', name: 'Larger' },
+];
+
+const MOTION: { id: Prefs['motion']; name: string; blurb: string }[] = [
+  { id: 'system', name: 'As my system says', blurb: 'follows the reduce-motion setting of this computer' },
+  { id: 'reduce', name: 'Reduce', blurb: 'no typing animations, spinners or fading windows, whatever the system says' },
+  { id: 'full', name: 'Full', blurb: 'all animations, even if the system asks for less' },
+];
+
+/** Keys that work in the game today. Keep this list in step with the handlers. */
+const KEYS: [string, string][] = [
+  ['Escape', 'Close the focused window (not while the terminal or a code editor has the keyboard)'],
+  ['Alt + `', 'Cycle through the open windows'],
+  ['Enter / Space', 'Open a focused desktop icon'],
+  ['Enter / Esc', 'In a dialog: confirm, or cancel'],
+  ['Enter', 'In the terminal: send the line. ↑ and ↓ recall earlier commands'],
+  ['Tab', 'In the terminal, on an empty line: pick the first suggested command'],
+  ['Any key', 'While TAPEOUT is typing: finish the message at once'],
+  ['Ctrl + Enter', 'In a code lab: run the check'],
+  ['Tab', 'In a code lab: indent'],
+  ['Ctrl + Z', 'Undo in the board router'],
+  ['R / V', 'In the board router: route tool, or via tool'],
+  ['Delete', 'In the logic lab: remove the selected part or wire'],
+  ['Ctrl + C', 'In the shell lab: cancel the line you are typing'],
 ];
 
 const SAMPLE = 'Hi, {name}. This is how fast I will type. I pause after each sentence, and a little longer before a question. Press any key or click to finish a line early. Ready?';
@@ -40,7 +69,7 @@ const when = (iso: string) => {
   return Number.isNaN(t) ? 'an unknown date' : new Date(t).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 };
 
-/** One row of radio-style buttons. */
+/** One row of radio-style buttons: used for speed, text size and motion. */
 function choice<T extends string>(label: string, items: { id: T; name: string; blurb?: string }[], current: () => T, pick: (id: T) => void): HTMLElement {
   const group = h('div', { class: 'speed-options', role: 'radiogroup', 'aria-label': label });
   const render = () => {
@@ -121,7 +150,18 @@ export function settingsApp(): HTMLElement {
     }, () => importBox.replaceChildren(h('p', { class: 'note', role: 'alert' }, 'That file could not be read. Your save has not changed.')));
   });
 
-  // ---- the danger zone: a full reset asks for the player's name (or RESET), and offers an export first
+  // ---- reduced motion and text size
+  const motionNote = () => {
+    const m = prefs().motion;
+    if (m === 'reduce') return 'Typing and loading animations are off.';
+    if (m === 'full') return 'Animations stay on, even though your system asks for less.';
+    return prefersReducedMotion() ? 'Your system asks for reduced motion, so typing and loading animations are off.' : '';
+  };
+  const motionLine = h('p', { class: 'note' }, motionNote());
+  const motionOptions = choice('Reduced motion', MOTION, () => prefs().motion, (id) => { setPrefs({ motion: id }); motionLine.textContent = motionNote(); play(); });
+  const textOptions = choice('Text size', TEXT, () => prefs().text, (id) => setPrefs({ text: id }));
+
+  // ---- the danger zone
   const resetFlow = () => {
     const name = profile()?.name;
     const phrases = [name, 'RESET'].filter((x): x is string => !!x);
@@ -144,15 +184,24 @@ export function settingsApp(): HTMLElement {
       h('h3', null, 'TAPEOUT typing speed'),
       h('p', { class: 'dim' }, ...rich('How fast TAPEOUT types in the terminal, the flashcards and its speech bubbles. You can also type `speed slow` (or `normal`, `fast`, `instant`) in the terminal.')),
       speedOptions,
-      prefersReducedMotion() ? h('p', { class: 'note' }, 'Your system asks for reduced motion, so typing and loading animations are off whatever you pick here.') : null,
       h('div', { class: 'preview-head' }, h('span', { class: 'dim' }, 'Preview'), h('button', { class: 'btn ghost', onclick: play }, '↻ Replay')),
       preview),
+    h('section', { class: 'panel' },
+      h('h3', null, 'Screen'),
+      h('p', { class: 'dim' }, 'Text size makes the contents of every window bigger. The desktop and taskbar keep their size.'),
+      textOptions,
+      h('h4', null, 'Reduced motion'),
+      motionOptions,
+      motionLine),
     h('section', { class: 'panel' },
       h('h3', null, 'Your progress'),
       summary,
       h('p', { class: 'dim' }, 'A backup is one file with your XP, ranks, flashcards, high scores and lab drafts. Keep it somewhere safe: the game lives in this browser, and clearing the site data loses it.'),
       h('div', { class: 'import-actions' }, exportBtn, h('button', { class: 'btn', onclick: () => fileInput.click() }, 'Import progress…'), fileInput),
       importBox),
+    h('section', { class: 'panel' },
+      h('h3', null, 'Keyboard shortcuts'),
+      h('dl', { class: 'keys' }, ...KEYS.flatMap(([k, what]) => [h('dt', null, h('kbd', null, k)), h('dd', { class: 'dim' }, what)]))),
     h('section', { class: 'panel danger-zone' },
       h('h3', null, 'Danger zone'),
       h('p', { class: 'dim' }, 'Erase everything in this browser. You will be asked to type your name, or RESET, and offered an export first.'),

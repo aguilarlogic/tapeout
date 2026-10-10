@@ -22,6 +22,10 @@ export interface Profile {
 
 export interface Prefs {
   speed: 'slow' | 'normal' | 'fast' | 'instant';
+  /** Window content zoom. Default 'normal'. */
+  text: 'normal' | 'large' | 'larger';
+  /** Overrides the system's reduced-motion setting. 'system' follows it. */
+  motion: 'system' | 'reduce' | 'full';
 }
 
 export interface Progress {
@@ -44,7 +48,7 @@ export const SCHEMA_VERSION = 1;
 let cache: Progress | null = null;
 
 function blank(): Progress {
-  return { schema: SCHEMA_VERSION, levels: {}, cards: {}, prefs: { speed: 'normal' }, best: {} };
+  return { schema: SCHEMA_VERSION, levels: {}, cards: {}, prefs: { speed: 'normal', text: 'normal', motion: 'system' }, best: {} };
 }
 
 /**
@@ -71,7 +75,7 @@ export function load(): Progress {
   try {
     raw = localStorage.getItem(KEY);
   } catch { /* storage blocked: play without saving */ }
-  if (!raw) { cache = blank(); return cache; }
+  if (!raw) { cache = blank(); applyDisplayPrefs(); return cache; }
   try {
     const parsed = JSON.parse(raw) as Partial<Progress>;
     cache = migrate(parsed);
@@ -81,6 +85,7 @@ export function load(): Progress {
     try { localStorage.setItem(`${KEY}.unreadable`, raw); } catch { /* ignore */ }
     cache = blank();
   }
+  applyDisplayPrefs();
   return cache!;
 }
 
@@ -271,6 +276,17 @@ export function setPrefs(p: Partial<Prefs>) {
   const s = load();
   s.prefs = { ...s.prefs, ...p };
   save();
+  applyDisplayPrefs();
+}
+
+/** Text size and motion live on <html> so the stylesheet can act on them. Absent means "as the system says". */
+export function applyDisplayPrefs() {
+  if (typeof document === 'undefined') return;
+  const p = cache?.prefs;
+  const root = document.documentElement;
+  root.dataset.text = p?.text ?? 'normal';
+  if (p?.motion && p.motion !== 'system') root.dataset.motion = p.motion;
+  else delete root.dataset.motion;
 }
 
 export const best = (): Record<string, number> => load().best;
@@ -290,6 +306,7 @@ export function resetAll() {
   save(true);
   // Lab drafts live outside the progress blob; leaving them would bring old solutions back into the editors.
   clearDrafts();
+  applyDisplayPrefs();
 }
 
 function clearDrafts() {
@@ -447,6 +464,7 @@ export function applyBackup(b: Backup, mode: 'merge' | 'replace') {
       localStorage.setItem(`${DRAFT}${k}`, v);
     }
   } catch { /* ignore */ }
+  applyDisplayPrefs();
 }
 
 /** Backups are suggested after milestones, when the last one is more than two weeks old and TAPEOUT has not nagged within three days. */

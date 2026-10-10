@@ -32,7 +32,12 @@ export function paceFor(speed: Speed, reducedMotion = false): Pace {
   return PACES[speed] ?? PACES.normal;
 }
 
-export const prefersReducedMotion = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+/** The Settings.app override wins over the system's reduced-motion flag (set on <html> by applyDisplayPrefs). */
+export const prefersReducedMotion = () => {
+  const o = typeof document !== 'undefined' ? document.documentElement.dataset.motion : undefined;
+  if (o) return o === 'reduce';
+  return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+};
 
 const SENTENCE_START = /[A-Z0-9"'(*`[{]/;
 
