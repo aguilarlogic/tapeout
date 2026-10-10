@@ -488,4 +488,186 @@ Use these heuristics:
 
 ## Findings log
 
-(Part B findings go here.)
+This pass covered every area in Part B with four agents. The ids run U24 to U56. Some ids in a range were not needed, so there are gaps. ✅ marks a finding fixed on this branch. "Decision" means the owner decides. "open" means a real problem with a proposed fix that has not been made.
+
+### U24 · Quantity answers reject the Greek letter mu, a capital K and SPICE "meg" (Sev 3, Pri 3) ✅ done
+**Seen.**
+- `qty(1e-6,'A')` rejected `1 μA` (Greek mu), though it accepted `1 µA` (the micro sign).
+- `4.7K` and `100 KHz` were rejected.
+- `4.7meg` and `4.7 MEG` were rejected for Ω.
+
+**Code.** `src/lessons/answers.ts` (`parseQuantity`).
+**Fix.** All of these are now accepted. Tests are in `src/lessons/answers.test.ts`.
+
+### U25 · Integer answers reject "10,000" and "1e4" (Sev 2, Pri 2) ✅ done
+**Seen.** `num(10000)` rejected `10,000` and `1e4`, though it accepted `10 000`. `parseQuantity` already strips commas, so the two parsers disagreed.
+**Code.** `src/lessons/answers.ts` (`parseInteger`).
+**Fix.** Both forms are now accepted.
+
+### U26 · Boolean answers reject "a XOR b", the words and/or/not, and ⊕ · ⋅ × (Sev 3, Pri 3) ✅ done
+**Seen.** The rules for the words and/or/not ran after spaces had been stripped, so `a and b` became `aandb` and never matched. XOR was not recognised at all.
+**Code.** `src/lessons/answers.ts` (`compileBool`).
+**Fix.** Words and symbols are now rewritten before the spaces are stripped.
+
+### U27 · Wrong answers get one generic line, with no near-miss help (Sev 3, Pri 3) · Decision
+**Seen.** `question()` answers every miss with "Not quite." or the hint. `4.7` for a 4.7k answer gets the same reply as `5k`.
+**Proposed fix.** Add an optional `near(input)` to Answer. For a quantity, say when the prefix is off by a power of 1000, and say when the unit is missing.
+**Owner's call.** Naming the prefix gives away part of the answer.
+**Minor points.**
+- `hexa(31)` rejects `8'd31` by design.
+- `3 nS` passes as `3 ns`, because units are lowercased.
+
+### U28 · Python, C and Tcl code labs run on the main thread (Sev 3, Pri 3) ✅ done
+**Seen.** `src/games/code/page.ts` calls `runCode()` synchronously. The sva, rv and sv labs run in the eval worker (`src/ui/evalclient.ts`), with a timeout and a cancel.
+**Reproduce.** In `code-py-parse`, submit `while True: pass`. The click blocks for about 560 ms before "TimeoutError" appears.
+- Syntax errors come back in 60–100 ms, with a line number.
+- An empty editor gets "3 of 3 example cases fail." and nothing says the editor is empty.
+
+**Proposed fix.** Make `runCode` a job kind in the eval worker. Add an empty-editor message.
+**Size.** Medium.
+
+### U29 · A reload in the middle of a lesson drops the lesson with no resume (Sev 2, Pri 2) · open
+**Seen.** Reloading during lesson 1 brings the terminal back at the menu ("Next up: … Type next"). Nothing says the lesson was interrupted. No XP is lost, and lab drafts survive the reload.
+**Code.** `src/term/shell.ts` (the lesson run does not keep its position).
+**Proposed fix.** Store the lesson id and step. On boot, offer: "You were in the middle of X. Type `resume`, or `next` to start it again."
+
+**Not covered in this pass:** the shell lab with git, SVA formal, tb/UVM, CDC, ISA and RV.
+
+**U28, how it was fixed.** The code labs now run as a new `code` job in the eval worker (`src/games/eval.job.ts`), with the same 20 s timeout, Cancel and main-thread fallback as the other labs. In Chromium, an infinite loop now leaves the page responsive (5 ms input latency), and an empty editor is named as empty.
+
+### U47 · A misspelt git command is blamed on the repository (Sev 3, Pri 3) ✅ done
+**Seen.** Outside a repository, `git comit -m x` printed "fatal: not a git repository".
+**Fix.** The subcommand is now checked first, so the player gets git's own "'comit' is not a git command" (`src/games/shell/git.ts`, test in `git-typo.test.ts`).
+
+### U48 · An empty editor gets a raw parser error (Sev 3, Pri 3) ✅ done
+**Seen.** With an empty editor, the cdc and rv labs said "expected 'module' but found '<end of file>'", and tb said "unknown type 'Packet'".
+**Fix.** A shared `EMPTY_EDITOR` message in `src/ui/labkit.ts`, used by the rv, cdc, sv and code labs.
+
+### U49 · An unfinished shell line waits at a bare ">" with no explanation (Sev 2, Pri 2) ✅ done
+**Fix.** One dim line now says what is still open (an unclosed quote, for example) and that Ctrl+C cancels it (`src/games/shell/page.ts`).
+
+### U50 · No runaway probe for sva and tb yet (Sev 2, Pri 2) · open
+The rv and cdc subsets reject `while`, so no runaway loop can be written there. The isa lab stops after 200,000 instructions and stays responsive. The probes for tb and sva were not valid programs, so neither was tested. Next step: probe sva with declared signals and a large delay range.
+
+Also checked, no finding: syntax errors are line-numbered in isa, cdc, rv, sva and tb. Input latency after a click is 1–10 ms in every lab.
+
+### U30 · The 3 AM Regression boss gives its method away in the question (Sev 3, Pri 4) ✅ done
+**Seen.** Question 3 of `boss-shell` says "(hint: grep -o, sort, uniq -c)", but bosses are "no hints".
+**Reproduce.** `learn boss-shell`, third question.
+**Code.** `src/practice/tooling.ts` (`shellBoss`).
+**Fix.** The parenthetical is removed. `src/practice/boss-hints.test.ts` scans every boss question (20 seeds per generator) for "hint".
+
+### U31 · `what is <term>` answers a neighbouring entry for six interview terms (Sev 3, Pri 3) ✅ done
+**Seen.** 22 common interview terms were looked up:
+- "CDC" hit the metastability entry, because `cdc` was only an alias;
+- "FIFO" hit only "async fifo";
+- "latch-up" hit the latch entry, which is a different thing;
+- "pipelining" had no entry;
+- "LVS" and "DRC" shared an entry with parasitic extraction.
+
+**Reproduce.** `what is latch-up` answers about latches.
+**Code.** `src/glossary.ts` (`lookup()`).
+**Fix.** Each term has its own entry, and extraction has one of its own. `src/glossary.test.ts` checks that each term's own entry comes first, and that every "learn more" lesson exists. All 283 glossary lesson links resolve.
+
+### U32 · `what is fusa` prints the heading "Iso 26262", which slips past the standards ban (Sev 2, Pri 2) · Decision (part of U23)
+**Seen.** `what is fusa` resolves to `E('iso 26262|asil|functional safety|fusa')` (`src/glossary.ts`). The heading is `terms[0]` title-cased in `define()` (`src/term/shell.ts`), so it reads "Iso 26262". The ban in `src/standards/rules-0.ts` is case-sensitive, so it misses "Iso 26262".
+**Options.**
+- (a) Standard names are allowed: make the ban case-insensitive, and give FuSa its own heading.
+- (b) They are not: reorder the aliases so that `terms[0]` is "functional safety", and make the ban case-insensitive.
+
+### U33 · Incident clock and cost: checked by reading, clear, no fix (open for a browser play-through)
+- The lab header states the time budget and says that wrong calls cost time (`src/term/incident.ts`).
+- The prompt shows the time left, and `time` prints it.
+- `ask` costs HINT_COST and says so.
+- A wrong `diagnose` costs WRONG_COST, rules out that cause, and lets the run continue while time remains.
+- A right answer that was a guess is flagged.
+
+### U34 · Boss and lab hint paths: checked, closed, no fix
+- **Terminal bosses** run in exam mode: the hint and teach-me chips are empty, and typed hint or teach-me text is graded as an answer.
+- **Lab bosses** show no hint control in the browser. Checked: `/arch/cache-boss`, `/shell/sh-boss-triage`, `/sva/sva-boss-burst`, `/clab/clab-boss-ohm`, `/isa/isa-boss-str`, `/layout/layout-boss`.
+- **Show solution** exists only in RTL levels, and RTL has no boss-tier levels.
+- **Capstone hiring panels** (`cap-<role>`) take the exam path.
+- **Not played in the browser:** the capstones and `career`.
+
+### U35 · Minigame replay and scoring: rules shown; replay checked by reading
+- Replay runs `run()` again with a fresh frame.
+- The Bit Flipper timer is cleared on a match and when its window closes, so a replay does not leak an interval.
+- In a lesson, a finished game does not settle the lesson until the player clicks "Back to the lesson".
+- Not played in the browser.
+
+### U36 · A lesson waiting on a game hangs when a second game replaces it (Sev 4, Pri 4) ✅ done
+**Reproduce.** `learn bits` and let it wait on Bit Flipper. Open Truth Table from the Start menu, then press "skip the game". The wait line stays and the input stays locked.
+**Code.** `openWindow` in `src/os/wm.ts` reuses the `mini` window without calling the old `onClose`.
+**Fix.** In `src/os/launch.ts`, a new launch first settles the one on screen.
+
+### U37 · At 390 px the lesson's wait buttons are hidden behind the game window (Sev 4, Pri 4) ✅ done
+**Fix.** The game window itself now shows "Your lesson is waiting for this game. [Skip the game]" (`src/os/launch.ts`, `.mg-wait`).
+
+### U38 · Lab Prev/Next ignore the player's goal path (Sev 3, Pri 3) ✅ done
+**Seen.** `src/ui/layout.ts` used the curriculum order through `neighbours()`, while `next` follows the goal path.
+**Fix.** A new `pathNeighbours()` in `src/curriculum.ts`, with a test.
+
+### U39 · UVM Builder slots can't be reached by keyboard (Sev 4, Pri 4) ✅ done
+**Reproduce.** On `#/uvm/uvm-arch`, Tab reaches none of the 10 slots.
+**Fix.** The slots are now focusable buttons with labels. Enter or Space places the part.
+
+### U40 · Timing lab gates and wires can't be selected from the keyboard (Sev 4, Pri 4) ✅ done
+**Reproduce.** On `#/sta/sta-slack`, Tab reaches none of the 5 nodes. The size buttons also lose focus when the view redraws.
+**Fix.** Nodes are focusable, and focus survives the redraw (`src/games/timing/page.ts`).
+
+### U41 · The logic lab can't undo a delete or a cleared board (Sev 3, Pri 3) ✅ done
+**Fix.** An Undo button, Ctrl+Z, a 100-step history, and Clear can be undone (`src/games/logic/page.ts`).
+
+### U42 · `help` doesn't list the window keys (Sev 3, Pri 3) ✅ done
+**Fix.** `help` now lists the Escape and Alt+` keys (`src/term/help.ts`). The Settings shortcut list now says Escape is skipped while typing.
+
+### U43 · Three CSS tokens are never defined, so colours fall back to hard-coded values (Sev 3, Pri 4) ✅ done
+**Seen.**
+- `var(--dim)`, `var(--panel2)` and `var(--line)` are used 18 times in `src/styles.css`, and none of them is defined.
+- In light mode, the arch lab's select is drawn with a 1.1:1 contrast ratio (`#/arch/sig-alias`).
+
+**Fix.** These now point at `--text-dim`, `--panel-2` and `--border`. `src/os/tokens.test.ts` fails on any undefined token.
+
+### U44 · Lab windows have serious or critical axe violations (Sev 4, Pri 4) ✅ done
+**Seen.**
+- The arch plot SVG has no name.
+- The active PCB layer button is 3.4:1.
+- The coverage lab's sliders are 12 px tall.
+- The read-only code blocks in sva, isa and sv can't take focus.
+
+**Fix.** All four are fixed. Every lab section now passes, in light and dark.
+
+### U45 · Lab briefs: unnamed landmark and skipped heading level (Sev 2, Pri 3) ✅ done (shared brief)
+**Fix.** The brief `aside` is named "Lab brief", and its sub-headings are level 3.
+**Open.** The heading order is still wrong in the circuit, logic, isa, arch and uvm panels, and the logic lab has an empty `th`.
+
+### U46 · Settings option groups aren't proper radio groups (Sev 3, Pri 3) ✅ done
+**Fix.** Each group has one Tab stop, and the arrow keys, Home and End move and choose (`src/os/settings.ts`, `radioStep`).
+
+### U51 · The schematic editor can't be used from the keyboard (Sev 4, Pri 3) · Decision
+**Seen.** On `#/logic/logic-not` no key adds a part or starts a wire. That takes a drag or a click on each pin.
+**Proposed.** A keyboard editing mode: a cursor that moves over the pins, Enter to wire two pins, and a key to add a part.
+
+### U52 · The logic schematic is drawn at 0.41 scale at 390 px (Sev 3, Pri 3) · Decision (with U22)
+**Seen.** The 760×440 drawing is rendered at 310×179 px.
+**Proposed.** A zoom control, or a taller canvas that pans. This is part of the U22 decision.
+
+### U53 · Arch labs can't undo a single change; Reset clears everything (Sev 2, Pri 2) · Decision
+**Code.** `src/games/arch/page.ts`.
+**Proposed.** A history like U41's.
+
+### U54 · Coverage lab: removing a phase is instant, with no confirmation or undo (Sev 2, Pri 2) · open
+**Code.** `src/games/coverage/page.ts`, `phases.splice` (found by reading the code; not clicked in the browser).
+**Proposed.** Add an undo, as in U41.
+
+### U55 · UVM Builder: a wrong placement says "doesn't belong" without saying where the part goes (Sev 2, Pri 2) · open
+**Code.** `src/games/uvm/page.ts`, the slot's `onclick`.
+**Proposed.** A hint drawn from the slot's role.
+
+### U56 · Arch status gives only counts: "N of M goals not met" (Sev 1, Pri 1) · open
+**Proposed.** Name the first failing goal in the status line (`src/games/arch/page.ts`, `run()`).
+
+### Not covered
+- Keyboard placement in the PCB router: the R, V, E, L and Ctrl+Z keys exist, but cursor movement wasn't checked.
+- Undo in the circuit lab's text editor.
+
