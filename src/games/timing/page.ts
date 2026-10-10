@@ -20,6 +20,8 @@ export function timingPage(id: string): HTMLElement {
   let rep: TimingReport = analyzeTiming(level, st);
   let sel: Sel = null;
   let reportPath = 0;
+  /** The gate or wire to focus after the next redraw, so keyboard focus survives the rebuild (U40). */
+  let focusKey: string | null = null;
 
   const schematicHost = h('div', { class: 'sta-schematic' });
   const inspector = h('div', { class: 'inspector' });
@@ -28,10 +30,19 @@ export function timingPage(id: string): HTMLElement {
   const report = h('pre', { class: 'sta-report' });
 
   const update = () => {
+    // A size or Vt button keeps keyboard focus: the inspector is rebuilt, so refocus the same button by position (U40).
+    const buttons = [...inspector.querySelectorAll('button')];
+    const at = buttons.indexOf(document.activeElement as HTMLButtonElement);
     rep = analyzeTiming(level, st);
     saveDraft(draftKey, st);
     render();
+    if (at >= 0) (inspector.querySelectorAll('button')[at] as HTMLButtonElement | undefined)?.focus();
   };
+  /** Gates and wires are focusable: Enter or Space selects one, as a click does. */
+  const onPick = (key: string, pick: () => void) => ({
+    onclick: () => { focusKey = key; pick(); render(); },
+    onkeydown: (ev: KeyboardEvent) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); focusKey = key; pick(); render(); } },
+  });
 
   const nodeById = new Map(level.nodes.map((n) => [n.id, n]));
   const pos = (n: TNode) => ({ x: PAD + n.x * COL_W, y: PAD + n.y * ROW_H });
@@ -51,7 +62,7 @@ export function timingPage(id: string): HTMLElement {
       const k = edgeKey(e);
       const crit = rep.critical.has(k) && rep.wns < 0;
       const selected = sel?.kind === 'edge' && sel.key === k;
-      const g = svg('g', { class: `sta-edge${crit ? ' crit' : ''}${selected ? ' sel' : ''}`, onclick: () => { sel = { kind: 'edge', key: k }; render(); } });
+      const g = svg('g', { class: `sta-edge${crit ? ' crit' : ''}${selected ? ' sel' : ''}`, tabindex: '0', role: 'button', 'aria-label': `Wire from ${e.from} to ${e.to}`, 'data-key': `e:${k}`, ...onPick(`e:${k}`, () => { sel = { kind: 'edge', key: k }; }) });
       g.append(svg('path', { d, class: 'hit' }), svg('path', { d, class: 'wire' }));
       const buf = st.buffers[k] ?? 0;
       const midY = (y1 + y2) / 2;
@@ -67,7 +78,7 @@ export function timingPage(id: string): HTMLElement {
       const p = pos(n);
       const selected = sel?.kind === 'node' && sel.id === n.id;
       const crit = rep.critical.has(n.id) && rep.wns < 0;
-      const g = svg('g', { class: `sta-node ${n.kind}${crit ? ' crit' : ''}${selected ? ' sel' : ''}${n.kind === 'ff' && endpointBad(n.id) ? ' bad' : ''}`, onclick: () => { sel = { kind: 'node', id: n.id }; render(); } });
+      const g = svg('g', { class: `sta-node ${n.kind}${crit ? ' crit' : ''}${selected ? ' sel' : ''}${n.kind === 'ff' && endpointBad(n.id) ? ' bad' : ''}`, tabindex: '0', role: 'button', 'aria-label': `${n.kind === 'ff' ? 'Flip-flop' : 'Gate'} ${n.label}`, 'data-key': `n:${n.id}`, ...onPick(`n:${n.id}`, () => { sel = { kind: 'node', id: n.id }; }) });
       if (n.kind === 'ff') {
         g.append(svg('rect', { x: p.x, y: p.y, width: FF_W, height: 44, rx: 4 }));
         g.append(svg('path', { d: `M${p.x},${p.y + 30} l8,6 l-8,6`, class: 'clkmark' }));
@@ -83,6 +94,7 @@ export function timingPage(id: string): HTMLElement {
       root.append(g);
     }
     schematicHost.replaceChildren(root);
+    if (focusKey) { (root.querySelector(`[data-key="${focusKey}"]`) as SVGElement | null)?.focus({ preventScroll: true }); focusKey = null; }
   };
 
   const renderInspector = () => {

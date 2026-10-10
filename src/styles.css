@@ -248,6 +248,7 @@ table.mini td, table.mini th { border: 1px solid var(--border); padding: 2px 8px
 .sta-node rect { fill: var(--panel-2); stroke: var(--border); stroke-width: 1.5; }
 .sta-node.ff rect { stroke: var(--wave-clk); }
 .sta-node text { fill: var(--text); }
+.sta-node:focus-visible rect, .sta-edge:focus-visible .wire { stroke: var(--accent); stroke-width: 3; outline: none; }
 .sta-node text.sub { fill: var(--text-dim); font-size: 13px; }
 .sta-node .clkmark { fill: none; stroke: var(--wave-clk); stroke-width: 1.5; }
 .sta-node.crit rect { stroke: var(--err); stroke-width: 2.4; }
