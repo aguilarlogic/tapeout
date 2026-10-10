@@ -120,8 +120,10 @@ h4 { margin-top: 1em; font-size: 0.8rem; text-transform: uppercase; letter-spaci
 .btn.seg { border: none; border-radius: 0; background: transparent; }
 .btn.seg + .btn.seg { border-left: 1px solid var(--border); }
 .btn.seg.on { background: var(--accent); color: var(--accent-ink); }
-.btn.seg.layer-0.on { background: var(--pcb-top); color: #fff; }
-.btn.seg.layer-1.on { background: var(--pcb-bot); color: #fff; }
+/* Dark ink on the layer colours: white on them is 3.4:1, dark is 5.6:1 or better. */
+.btn.seg.layer-0.on { background: var(--pcb-top); color: #0b0f14; }
+.btn.seg.layer-1.on { background: var(--pcb-bot); color: #0b0f14; }
+input[type='range'] { min-height: 24px; } /* WCAG 2.2 target size: the native track is about 12px */
 
 .stars { letter-spacing: 2px; font-size: 1.05rem; }
 .star { color: var(--border); }

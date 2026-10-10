@@ -31,7 +31,9 @@ function plotEl(v: Extract<View, { kind: 'plot' }>): HTMLElement {
     if (text !== undefined) e.textContent = text;
     return e;
   };
-  const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, class: 'arch-plot', role: 'img' });
+  // An image needs a name: say what is plotted, from the caption, the series and the axes.
+  const name = [v.caption, v.series.map((s) => s.label).join(', '), v.ylabel && v.xlabel ? `${v.ylabel} against ${v.xlabel}` : ''].filter(Boolean).join('. ');
+  const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, class: 'arch-plot', role: 'img', 'aria-label': name || 'Plot' });
   const fmt = (x: number) => (Math.abs(x) >= 100 || Number.isInteger(x) ? String(Math.round(x)) : x.toFixed(2));
   for (let i = 0; i <= 4; i++) {
     const y = y0 + ((y1 - y0) * i) / 4;

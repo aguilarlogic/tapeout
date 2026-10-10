@@ -49,7 +49,7 @@ export function svPage(id: string): HTMLElement {
   const provided = inst.fixed.replace('@@DUT@@', inst.dut ?? '').trim();
   const shown = provided ? h('details', { class: 'src-view' },
     h('summary', null, inst.uvm ? 'Provided code: DUT, interface, scaffold (read only; the UVM library itself is built in)' : 'Provided code: DUT and harness (read only)'),
-    h('pre', { class: 'ed-hl src', html: highlight(provided) })) : '';
+    h('pre', { class: 'ed-hl src', tabindex: '0', html: highlight(provided) })) : '';
 
   // --- results
   const status = h('div', { class: 'status idle' }, 'Check runs your testbench. Submit also banks the result.');

@@ -43,8 +43,8 @@ export function svaPage(id: string): HTMLElement {
   // --- the design (read only) and any given directives
   const shown = h('details', { class: 'src-view', open: '' },
     h('summary', null, fix ? 'Given assertions (read only)' : 'The design under test (read only)'),
-    h('pre', { class: 'ed-hl src', html: highlight(fix ? inst.given ?? '' : inst.design) }));
-  const given = !fix && inst.given ? h('details', { class: 'src-view', open: '' }, h('summary', null, 'Given directives (read only)'), h('pre', { class: 'ed-hl src', html: highlight(inst.given) })) : '';
+    h('pre', { class: 'ed-hl src', tabindex: '0', html: highlight(fix ? inst.given ?? '' : inst.design) }));
+  const given = !fix && inst.given ? h('details', { class: 'src-view', open: '' }, h('summary', null, 'Given directives (read only)'), h('pre', { class: 'ed-hl src', tabindex: '0', html: highlight(inst.given) })) : '';
 
   // --- results
   const status = h('div', { class: 'status idle' }, fix ? 'Check runs the proof and the reference comparison; Run formal lets you choose the depth.' : 'Check judges your assertions. Submit also banks the result.');
