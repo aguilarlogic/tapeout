@@ -26,6 +26,9 @@ export function skipGame() {
 export function launchGame(id: string, opts: { rounds?: number; fromLesson?: boolean } = {}): Promise<GameResult | null> {
   const game = findGame(id);
   if (!game) return Promise.resolve(null);
+  // A new game replaces the one on screen (they share one window). Settle the old launch first, so a lesson waiting
+  // on it is skipped rather than left waiting for a window that no longer exists (U36).
+  endCurrent?.();
   return new Promise((resolve) => {
     let settled = false;
     let last: GameResult | null = null;
