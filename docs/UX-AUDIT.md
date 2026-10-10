@@ -70,7 +70,7 @@ a reproduction or a code reference.
 
 ## Part A: confirmed findings
 
-### U1 · Lesson diagrams are blank at `instant` speed and with reduced motion (Sev 5, Pri 5)
+### U1 · Lesson diagrams are blank at `instant` speed and with reduced motion (Sev 5, Pri 5) ✅ done
 
 **Confirmed in the browser.** Start lesson 1 (`next`) at speed `instant`. The "place values of an 8-bit number"
 figure renders as an empty dark box, with only its caption showing: `<pre></pre>` in the DOM. At `fast` speed the
@@ -93,7 +93,7 @@ diagrams are the main teaching medium.
 **Test.** Add a `revealSteps` test with `interval = 0` and `count > 1`, and assert that the last `show` call is
 `count`. Add a test that `revealPre` at `INSTANT` leaves the full text in place.
 
-### U2 · "teach me how" is graded as a wrong answer in lessons (Sev 5, Pri 5)
+### U2 · "teach me how" is graded as a wrong answer in lessons (Sev 5, Pri 5) ✅ done
 
 **Confirmed in the browser.** Lesson 1, first question ("What is binary 0110 in decimal?"):
 
@@ -119,7 +119,7 @@ defined. Otherwise the text drops through to `q.a.check(v)` and counts as a miss
 
 Also add `teach me` to the "During lessons" line in `help`.
 
-### U3 · Desktop icons can't be opened with the keyboard, and need a double-click (Sev 4, Pri 5)
+### U3 · Desktop icons can't be opened with the keyboard, and need a double-click (Sev 4, Pri 5) ✅ done
 
 **Confirmed in the browser.** Focus the "Map" desktop icon and press Enter: nothing opens.
 
@@ -131,7 +131,7 @@ web users expect, and nothing tells them to.
 
 **Test.** Write a DOM test that dispatches a keyboard-style click (`detail: 0`) and asserts that the route changes.
 
-### U4 · Taskbar buttons overflow into the tray (Sev 4, Pri 4)
+### U4 · Taskbar buttons overflow into the tray (Sev 4, Pri 4) ✅ done
 
 **Confirmed.** With six windows open at 1440 px, the last task button runs under the rank label ("Verilog IDE — Chc
 Intern"). At 390 px the tray shows only "Intern", and the XP and clock are cut off.
@@ -139,7 +139,7 @@ Intern"). At 390 px the tray shows only "Intern", and the XP and clock are cut o
 **Fix.** Let `.tasks` shrink, with labels that truncate to icons when space runs out (or a horizontal scroll), and
 never let it overlap the tray. On small screens, move rank and XP into the start menu header.
 
-### U5 · A bad route opens a dead window (Sev 4, Pri 4)
+### U5 · A bad route opens a dead window (Sev 4, Pri 4) ✅ done
 
 **Confirmed.** `#/sta/sta-setup` (an id that does not exist) opens a maximised window titled "Lab — sta-setup" whose
 whole content is "Unknown block.". There is no way back but the close button.
@@ -150,7 +150,7 @@ have TAPEOUT say so in the terminal, suggest the closest match (search the modul
 
 **Test.** Add a routing test for an unknown id.
 
-### U6 · Players see unfinished-content and audit wording (Sev 4, Pri 4)
+### U6 · Players see unfinished-content and audit wording (Sev 4, Pri 4) ✅ done
 
 **Confirmed.** Skills.app shows:
 
@@ -166,7 +166,7 @@ you are to each role". Remove the "fully built" counter from the player view. If
 behind a debug flag. Grep all player-facing text for "audit", "built", "TODO", "stub" and "placeholder", and fix any
 other leaks.
 
-### U7 · The onboarding goal question is mostly ignored (Sev 4, Pri 4)
+### U7 · The onboarding goal question is mostly ignored (Sev 4, Pri 4) ✅ done
 
 **Confirmed in code.** `startAct()` (`src/curriculum.ts:233-239`) works like this:
 
@@ -190,7 +190,7 @@ The game asks a question and then ignores the answer. Players notice this.
 **Test.** For each background and goal pair, assert that the recommended path differs where the design says it
 should.
 
-### U8 · A minigame mid-lesson silently locks the terminal (Sev 4, Pri 4)
+### U8 · A minigame mid-lesson silently locks the terminal (Sev 4, Pri 4) ✅ done
 
 **Confirmed.** In lesson 1, TAPEOUT opens Bit Flipper and the lesson waits for it. The terminal still shows
 `answer>`, but it is read-only, and nothing tells the player why. If they minimise or lose the game window, they look
@@ -200,7 +200,7 @@ stuck.
 · [open it] [skip the game]", with working buttons. Keep the prompt from looking typeable. Treat closing the game
 window as a skip: `launchGame` already settles when the window closes, so check that the lesson carries on cleanly.
 
-### U9 · "Show solution" overwrites the player's code (Sev 4, Pri 4)
+### U9 · "Show solution" overwrites the player's code (Sev 4, Pri 4) ✅ done
 
 **Confirmed in code.** `src/games/rtl/page.ts:101-107` sets `ed.value = level.golden` after a native `confirm()`. The
 player's draft is gone, and there is no undo.
@@ -208,7 +208,7 @@ player's draft is gone, and there is no undo.
 **Fix.** Show the reference in a read-only panel or a side-by-side diff, and leave the editor alone. Keep the
 1-star rule. Check every other lab page for the same pattern: grep for `golden`, `solution` and `ed.value =`.
 
-### U10 · Progress can be lost, and two tabs overwrite each other (Sev 4, Pri 4)
+### U10 · Progress can be lost, and two tabs overwrite each other (Sev 4, Pri 4) ✅ done
 
 **Confirmed in code.**
 
@@ -234,7 +234,7 @@ player's draft is gone, and there is no undo.
 - A merge keeps the better record.
 - A malformed import file is rejected without touching the save.
 
-### U11 · Reset and confirmations break the fiction and are too easy to trigger (Sev 3, Pri 3)
+### U11 · Reset and confirmations break the fiction and are too easy to trigger (Sev 3, Pri 3) ✅ done
 
 **Confirmed in code.** "Reset all progress" sits in the start menu under the arcade games
 (`src/os/desktop.ts:142-148`) and needs one native `confirm()`. Native `confirm()` is also used for Reset code and
@@ -246,7 +246,7 @@ Show solution.
 - ask the player to type their name (or `RESET`);
 - move the item to Settings.app under a "Danger zone" heading.
 
-### U12 · Player names with `$` or markup break TAPEOUT's lines (Sev 3, Pri 3)
+### U12 · Player names with `$` or markup break TAPEOUT's lines (Sev 3, Pri 3) ✅ done
 
 **Confirmed by JS semantics.** `rich()` (`src/term/terminal.ts:22`) does `text.replace(/\{name\}/g, playerName())`
 with a plain string as the replacement. A name like `$&` prints `{name}`, and `` $` `` or `$'` inserts parts of the
@@ -255,7 +255,7 @@ sentence. A name containing `**` or backticks is also parsed as markup.
 **Fix.** Use a replacement function, and escape the name before markup parsing (or substitute it as a text node).
 Grep for other `.replace(` calls that take player text. Write a unit test.
 
-### U13 · Counts and names contradict each other (Sev 3, Pri 3)
+### U13 · Counts and names contradict each other (Sev 3, Pri 3) ✅ done
 
 **Confirmed.**
 
@@ -283,7 +283,7 @@ Grep for other `.replace(` calls that take player text. Write a unit test.
 
 **Test.** Add a test that scans player-facing strings for hard-coded module counts.
 
-### U14 · Bit Flipper says "Beat the clock" but shows no clock (Sev 3, Pri 3)
+### U14 · Bit Flipper says "Beat the clock" but shows no clock (Sev 3, Pri 3) ✅ done
 
 **Confirmed.** Its blurb is "Beat the clock for points" (`src/minigames/apps.ts:59`). The score uses hidden elapsed
 time (`performance.now()` at lines 69 and 77), but no timer is on screen.
@@ -291,7 +291,7 @@ time (`performance.now()` at lines 69 and 77), but no timer is on screen.
 **Fix.** Show a timer or a draining bar, and say how time turns into points. Audit the other eight minigames for
 rules that affect the score but are not shown.
 
-### U15 · A new player is told 60 flashcards are "due" (Sev 3, Pri 3)
+### U15 · A new player is told 60 flashcards are "due" (Sev 3, Pri 3) ✅ done
 
 **Confirmed.** A fresh profile opens Flashcards and sees "Mixed session · 60 due", including Verilog, UVM and STA
 decks it has never been taught. The first impression is a backlog.
@@ -319,7 +319,7 @@ block labels are about 8 px.
 Write `--os-*` design tokens in `src/os.css` and `src/styles.css` before restyling anything. Do not restyle the whole
 game in one commit.
 
-### U17 · The map is a wall of 552 cards (Sev 3, Pri 3)
+### U17 · The map is a wall of 552 cards (Sev 3, Pri 3) ✅ done
 
 **Confirmed.** Map.app renders every module of every act as a card in one long scroll. There is no search, no filter,
 no collapsing, and no estimate of time or difficulty.
@@ -332,7 +332,7 @@ no collapsing, and no estimate of time or difficulty.
 - Keep "▶ Next" pinned at the top.
 - Make the die's blocks jump to their act, which already works, and make their labels legible.
 
-### U18 · Pacing is slow at the default speed (Sev 3, Pri 3)
+### U18 · Pacing is slow at the default speed (Sev 3, Pri 3) ✅ done
 
 **Measured at `normal` speed.**
 
@@ -370,7 +370,7 @@ That is a retention risk for exactly the players who most need early wins.
 The heavy maths would then come just in time, before the labs that need it. Implement this through `recommended()`
 ordering, not by moving modules between acts.
 
-### U20 · The window manager is not accessible (Sev 3, Pri 3)
+### U20 · The window manager is not accessible (Sev 3, Pri 3) ✅ done
 
 **Confirmed in code** (`src/os/wm.ts`). Windows have `role="dialog"`, but:
 
@@ -393,7 +393,7 @@ inside it, so screen readers may read out fragments.
 - **Check.** Run axe-core (from npm, in your scratch script, not as a dependency) on the desktop, a lab, Map.app and
   Skills.app. Fix any serious or critical violations.
 
-### U21 · Contrast and settings are thin (Sev 2, Pri 2)
+### U21 · Contrast and settings are thin (Sev 2, Pri 2) ✅ done
 
 **Confirmed.**
 
