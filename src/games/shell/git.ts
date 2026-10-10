@@ -572,6 +572,9 @@ export const git: Utility = (ctx, args) => {
     if (r && rest[0] === 'user.email' && rest[1]) r.user.email = rest[1];
     return 0;
   }
+  // A misspelt subcommand is a typo, in or out of a repository: say so, as git does, rather than blame the repository.
+  const KNOWN = ['add', 'bisect', 'blame', 'branch', 'checkout', 'cherry-pick', 'commit', 'diff', 'fetch', 'log', 'ls-files', 'merge', 'mv', 'pull', 'push', 'rebase', 'remote', 'reset', 'restore', 'rev-parse', 'revert', 'rm', 'show', 'stash', 'status', 'switch', 'tag'];
+  if (!KNOWN.includes(sub)) { ctx.err(`git: '${sub}' is not a git command. See 'git --help'.\n`); return 1; }
   const r = findRepo(ctx);
   if (!r) { ctx.err('fatal: not a git repository (or any of the parent directories): .git\n'); return 128; }
   const flags = rest.filter((a) => a.startsWith('-'));
