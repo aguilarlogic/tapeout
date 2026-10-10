@@ -1,5 +1,5 @@
 // Code Lab page: an editor, example runs, a Submit that checks every case against the reference solution.
-import { briefPanel, busy, checkToolbar, draftEditor, finish, hintNote, labPage, loadSeed, newVariantButton, setStatus, useHints } from '../../ui/labkit';
+import { briefPanel, busy, checkToolbar, draftEditor, EMPTY_EDITOR, finish, hintNote, labPage, loadSeed, newVariantButton, setStatus, useHints } from '../../ui/labkit';
 import { evaluateInWorker } from '../../ui/evalclient';
 import { mentorSay } from '../../os/mentor';
 import { h } from '../../ui/dom';
@@ -62,7 +62,7 @@ export function codePage(id: string): HTMLElement {
   // The check runs in the eval worker (a runaway loop cannot freeze the page, and Cancel stops it). If no worker can
   // be made, the same check runs here.
   const run = (submit: boolean) => busy(status, async (onCancel) => {
-    if (!ed.value.trim()) { setStatus(status, 'err', 'Your editor is empty. Write some code, or Reset to the starter.'); return; }
+    if (!ed.value.trim()) { setStatus(status, 'err', EMPTY_EDITOR); return; }
     const job = evaluateInWorker<CodeReport>({ kind: 'code', levelId: level.id, seed, code: ed.value, onlyVisible: !submit }, { fallback: () => runCode(level.lang, inst, ed.value, !submit) });
     onCancel(job.cancel);
     let rep: CodeReport;

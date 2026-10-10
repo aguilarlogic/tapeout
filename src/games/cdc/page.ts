@@ -5,7 +5,7 @@ import { rng } from '../../sim/harness';
 import { evaluate, type Evaluation } from './check';
 import { findCdcLevel } from './levels';
 
-import { briefPanel, checkToolbar, draftEditor, goalItems, labPage, loadSeed, newVariantButton, setStatus, useHints, verdict } from '../../ui/labkit';
+import { briefPanel, checkToolbar, draftEditor, EMPTY_EDITOR, goalItems, labPage, loadSeed, newVariantButton, setStatus, useHints, verdict } from '../../ui/labkit';
 
 export function cdcPage(id: string): HTMLElement {
   const level = findCdcLevel(id);
@@ -48,6 +48,7 @@ export function cdcPage(id: string): HTMLElement {
   };
 
   const run = (submit: boolean) => {
+    if (!ed.value.trim()) { setStatus(status, 'err', EMPTY_EDITOR); return; }
     setStatus(status, 'idle', 'Analysing…');
     setTimeout(() => {
       const ev = evaluate(inst, ed.value);

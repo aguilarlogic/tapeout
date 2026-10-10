@@ -1,7 +1,7 @@
 // RV32 core project page: write the Verilog core, run it against the ISA simulator on whole programs, and read where
 // the first store or the first pc diverges.
 import { evaluateInWorker } from '../../ui/evalclient';
-import { briefPanel, busy, checkToolbar, draftEditor, finish, hintNote, labPage, loadSeed, newVariantButton, setStatus, useHints } from '../../ui/labkit';
+import { briefPanel, busy, checkToolbar, draftEditor, EMPTY_EDITOR, finish, hintNote, labPage, loadSeed, newVariantButton, setStatus, useHints } from '../../ui/labkit';
 import { mentorSay } from '../../os/mentor';
 import { rng } from '../../sim/harness';
 import { h } from '../../ui/dom';
@@ -46,6 +46,7 @@ export function rvPage(id: string): HTMLElement {
     ed.markLines(rep.error?.line ? [rep.error.line] : [], []);
   };
   const check = (submit: boolean) => busy(status, async (onCancel) => {
+    if (!ed.value.trim()) { setStatus(status, 'err', EMPTY_EDITOR); return; }
     const specs = inst.programs.filter((p) => submit || !p.hidden);
     // In a worker, so a slow core cannot freeze the page; it reports "program n of m" and can be cancelled or time out.
     const job = evaluateInWorker<CoreReport>({ kind: 'rv', levelId: level.id, seed, code: ed.value, submit }, {

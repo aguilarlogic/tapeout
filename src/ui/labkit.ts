@@ -144,6 +144,9 @@ export const checkToolbar = (run: (submit: boolean) => void, ed: Editor, starter
     o.variant || '');
 
 /** Set the status line's colour and text together. */
+/** What a lab says when a check is asked for on an empty editor (instead of the parser's "expected 'module'"). */
+export const EMPTY_EDITOR = 'Your editor is empty. Write some code, or Reset to the starter.';
+
 export const setStatus = (status: HTMLElement, kind: 'ok' | 'err' | 'idle', text: string) => { status.className = `status ${kind}`; status.textContent = text; };
 
 /** Say how a judged attempt went (status line and mentor); a clean Submit banks it with the usual hint rule. */

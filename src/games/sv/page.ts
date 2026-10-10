@@ -8,7 +8,7 @@ import { evaluate, type Evaluation } from './check';
 import type { CovGroupReport } from './cover';
 import { findTbLevel } from './levels';
 
-import { briefPanel, busy, checkToolbar, draftEditor, goalItems, labPage, loadSeed, newVariantButton, useHints, verdict } from '../../ui/labkit';
+import { briefPanel, busy, checkToolbar, draftEditor, EMPTY_EDITOR, goalItems, labPage, loadSeed, newVariantButton, setStatus, useHints, verdict } from '../../ui/labkit';
 
 function coverageView(cov: CovGroupReport[]): HTMLElement | string {
   if (!cov.length) return '';
@@ -70,6 +70,7 @@ export function svPage(id: string): HTMLElement {
   };
 
   const run = (submit: boolean) => busy(status, async (onCancel) => {
+    if (!ed.value.trim()) { setStatus(status, 'err', EMPTY_EDITOR); return; }
     {
       const job = evaluateInWorker<Evaluation>({ kind: 'tb', levelId: level.id, seed, code: ed.value }, { fallback: () => evaluate(inst, ed.value) });
       onCancel(job.cancel);
