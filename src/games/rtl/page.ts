@@ -3,6 +3,7 @@ import { run, RunResult } from '../../sim/harness';
 import { levelRecord, saveDraft } from '../../state';
 import { h } from '../../ui/dom';
 import { levelHeader } from '../../ui/layout';
+import { askConfirm } from '../../ui/modal';
 import { waveform } from '../../ui/waveform';
 import { ALL_RTL, RtlLevel } from './levels';
 import { briefPanel, draftEditor, finish, resetButton, setStatus, useHints } from '../../ui/labkit';
@@ -81,10 +82,12 @@ export function rtlPage(id: string): HTMLElement {
     h('button', {
       class: 'btn ghost',
       onclick: () => {
-        if (!confirm('Show the reference solution? You can still finish the level, but for 1 star.')) return;
-        usage.solution = true;
-        saveUsage();
-        ed.value = level.golden;
+        void askConfirm({ title: 'Show the solution?', body: 'You can still finish the level, but it counts for 1 star.', confirm: 'Show it' }).then((ok) => {
+          if (!ok) return;
+          usage.solution = true;
+          saveUsage();
+          ed.value = level.golden;
+        });
       },
     }, 'Show solution'),
     h('span', { class: 'spacer' }),

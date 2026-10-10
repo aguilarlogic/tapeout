@@ -10,6 +10,7 @@ import { findArchLevel } from './levels';
 import { defaults, type ArchResult, type Control, type Values, type View } from './types';
 
 import { briefPanel, finish, goalItems, labPage, loadSeed, newVariantButton, starsFor, useHints } from '../../ui/labkit';
+import { askConfirm } from '../../ui/modal';
 
 const PLOT_COLORS = ['#6cc8ff', '#ffb454', '#8be28b', '#ff7a90'];
 
@@ -148,7 +149,7 @@ export function archPage(id: string): HTMLElement {
   const toolbar = h('div', { class: 'toolbar' },
     h('button', { class: 'btn', onclick: () => check(false), title: 'Ctrl+Enter' }, '▶ Run'),
     h('button', { class: 'btn primary', onclick: () => check(true) }, '✔ Submit'),
-    h('button', { class: 'btn ghost', onclick: () => { if (confirm('Reset the controls and code?')) { Object.assign(values, defaults(inst.controls)); saveValues(); if (ed && inst.code) ed.value = inst.code.starter; clearDraft(draftKey); const host = document.getElementById('lab-slot'); if (host) host.replaceWith(archPage(level.id)); } } }, 'Reset'),
+    h('button', { class: 'btn ghost', onclick: () => void askConfirm({ title: 'Reset?', body: 'Reset the controls and code to their starting values? Your current work here is cleared.', confirm: 'Reset', danger: true }).then((ok) => { if (!ok) return; Object.assign(values, defaults(inst.controls)); saveValues(); if (ed && inst.code) ed.value = inst.code.starter; clearDraft(draftKey); const host = document.getElementById('lab-slot'); if (host) host.replaceWith(archPage(level.id)); }) }, 'Reset'),
     boss ? newVariantButton(seedKey, () => archPage(level.id)) : '',
   );
 

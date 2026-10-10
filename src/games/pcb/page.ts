@@ -7,6 +7,7 @@ import {
 } from './board';
 import { PCB_LEVELS } from './levels';
 import { briefPanel, finish } from '../../ui/labkit';
+import { askConfirm } from '../../ui/modal';
 
 type Tool = 'route' | 'via' | 'erase' | 'move';
 const CELL = 34;
@@ -66,7 +67,7 @@ export function pcbPage(id: string): HTMLElement {
     h('div', { class: 'segmented' }, mkTool('route', 'Route', 'R'), mkTool('via', 'Via', 'V'), mkTool('erase', 'Erase', 'E'), level.movable?.length ? mkTool('move', 'Move', 'M') : null),
     h('div', { class: 'segmented' }, ...layerBtns),
     h('button', { class: 'btn ghost', onclick: () => doUndo(), title: 'Ctrl+Z' }, 'Undo'),
-    h('button', { class: 'btn ghost', onclick: () => { if (confirm('Clear the whole board?')) { snapshot(); st = emptyBoard(); commit(); } } }, 'Clear'),
+    h('button', { class: 'btn ghost', onclick: () => void askConfirm({ title: 'Clear the board?', body: 'Every trace and via goes. You can undo it with Ctrl+Z.', confirm: 'Clear', danger: true }).then((ok) => { if (ok) { snapshot(); st = emptyBoard(); commit(); } }) }, 'Clear'),
     h('span', { class: 'spacer' }),
     h('button', { class: 'btn primary', onclick: () => signoff() }, 'Sign off layout'),
   );

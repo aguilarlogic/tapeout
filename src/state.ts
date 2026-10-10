@@ -30,6 +30,7 @@ export interface Progress {
   profile?: Profile;
   prefs: Prefs;
   best: Record<string, number>; // minigame high scores
+  lastExport?: number; // epoch ms of the last progress download
 }
 
 const KEY = 'tapeout.progress.v1';
@@ -236,4 +237,40 @@ export function clearDraft(key: string) {
   } catch {
     /* ignore */
   }
+}
+
+// ---------------------------------------------------------------- backup: export
+
+export const SCHEMA_VERSION = 1;
+
+/** A downloadable copy of everything the player has: progress plus lab drafts (each draft's stored JSON text). */
+export interface Backup {
+  format: 'tapeout-progress';
+  exported: string; // ISO time
+  schema: number;
+  progress: Progress;
+  drafts: Record<string, string>;
+}
+
+export function exportBackup(now = new Date()): Backup {
+  const drafts: Record<string, string> = {};
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k?.startsWith('tapeout.draft.')) drafts[k.slice('tapeout.draft.'.length)] = localStorage.getItem(k) ?? 'null';
+    }
+  } catch { /* storage blocked: export progress alone */ }
+  return { format: 'tapeout-progress', exported: now.toISOString(), schema: SCHEMA_VERSION, progress: load(), drafts };
+}
+
+/** The download's file name, dated in the player's local time: tapeout-progress-2026-10-10.json. */
+export function backupFileName(now = new Date()): string {
+  const d = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  return `tapeout-progress-${d}.json`;
+}
+
+/** Call once a backup has been downloaded, so TAPEOUT stops nagging. */
+export function markExported(now = Date.now()) {
+  load().lastExport = now;
+  save();
 }

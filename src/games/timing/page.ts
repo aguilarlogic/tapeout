@@ -5,6 +5,7 @@ import { levelHeader } from '../../ui/layout';
 import { TIMING_LEVELS } from './levels';
 import { analyzeTiming, edgeKey, emptyTiming, TimingReport, TimingState, TNode } from './sta';
 import { briefPanel, finish } from '../../ui/labkit';
+import { askConfirm } from '../../ui/modal';
 
 const COL_W = 128, ROW_H = 80, PAD = 24;
 const FF_W = 80, GATE_W = 100;
@@ -219,11 +220,11 @@ export function timingPage(id: string): HTMLElement {
     finish(level.id, level.xp, rep.stars, rep.stars < 3 ? [`Area ${rep.area} - hit ${level.par.area} or less for 3 stars.`] : []);
   };
 
-  const reset = () => {
-    if (!confirm('Undo all changes on this block?')) return;
+  const reset = () => void askConfirm({ title: 'Undo all changes?', body: 'This block goes back to how it was when you opened it.', confirm: 'Undo all', danger: true }).then((ok) => {
+    if (!ok) return;
     Object.assign(st, emptyTiming());
     update();
-  };
+  });
 
   render();
   return h('div', { class: 'level' },

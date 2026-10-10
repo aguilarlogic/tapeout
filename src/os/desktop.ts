@@ -4,7 +4,7 @@ import { findModule, KIND_APP } from '../curriculum';
 import { drillsPage } from '../games/drills/page';
 import { skillsApp } from '../mastery/app';
 import { MINIGAMES } from '../minigames/apps';
-import { onChange, profile, rank, resetAll, totalXp } from '../state';
+import { onChange, profile, rank, totalXp } from '../state';
 import { Shell } from '../term/shell';
 import { Terminal } from '../term/terminal';
 import { h } from '../ui/dom';
@@ -150,14 +150,6 @@ function taskbar(): HTMLElement {
     item('⚙', 'Settings: typing speed', () => (location.hash = '#/settings')),
     h('div', { class: 'start-sep' }, 'Arcade'),
     ...MINIGAMES.map((g) => item(g.icon, g.title, () => void launchGame(g.id))),
-    h('div', { class: 'start-sep' }),
-    item('⟲', 'Reset all progress', () => {
-      if (!confirm('Erase all progress, your name and saved work?')) return;
-      resetAll();
-      try { Object.keys(localStorage).filter((k) => k.startsWith('tapeout.')).forEach((k) => localStorage.removeItem(k)); } catch { /* ignore */ }
-      location.hash = '#/';
-      location.reload();
-    }),
   );
   const start = h('button', { class: 'start', 'aria-haspopup': 'menu', onclick: (e: Event) => { e.stopPropagation(); menu.hidden = !menu.hidden; } }, h('span', { class: 'logo-mark', 'aria-hidden': 'true' }), 'tapeout');
   document.addEventListener('click', (e) => { if (!menu.contains(e.target as Node)) menu.hidden = true; });

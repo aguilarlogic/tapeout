@@ -6,6 +6,7 @@ import { h } from '../../ui/dom';
 import { findShellLevel, shellInstanceFor, starsFor } from './levels';
 import { evaluate, exec, passed, replay, type Machine } from './run';
 import { parseScript } from './sh';
+import { askConfirm } from '../../ui/modal';
 
 /** True when the text so far is an unfinished command (open quote, compound statement or here-document). */
 function incomplete(src: string): boolean {
@@ -139,7 +140,7 @@ export function shellPage(id: string): HTMLElement {
   };
   const toolbar = h('div', { class: 'toolbar' },
     h('button', { class: 'btn primary', onclick: check }, '✔ Check goals'),
-    h('button', { class: 'btn ghost', onclick: () => { if (confirm('Reset the machine to its starting state? Your command history is cleared.')) reset(); } }, 'Reset machine'),
+    h('button', { class: 'btn ghost', onclick: () => void askConfirm({ title: 'Reset the machine?', body: 'It goes back to its starting state, and your command history is cleared.', confirm: 'Reset', danger: true }).then((ok) => { if (ok) reset(); }) }, 'Reset machine'),
     boss && newVariantButton(seedKey, () => shellPage(level.id), 'Roll a new variant of this mission? The machine resets.'),
   );
 

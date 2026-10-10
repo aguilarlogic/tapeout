@@ -6,6 +6,7 @@ import { levelHeader } from '../../ui/layout';
 import { Circuit, counts, Kind, Part, PINS, Sim, SIZE, starsFor, V, verify } from './circuit';
 import { CANVAS, findLogicLevel, starter } from './levels';
 import { briefPanel, finish, hintNote, useHints } from '../../ui/labkit';
+import { askConfirm } from '../../ui/modal';
 
 const GRID = 10;
 const snap = (v: number) => Math.round(v / GRID) * GRID;
@@ -261,7 +262,7 @@ export function logicPage(id: string): HTMLElement {
     clockInfo,
     h('span', { class: 'spacer' }),
     h('button', { class: 'btn ghost small', onclick: deleteSelected, title: 'Delete / Backspace' }, 'Delete selected'),
-    h('button', { class: 'btn ghost small', onclick: () => { if (confirm('Clear the board?')) { circ = starter(level); clearDraft(key); resim(true); draw(); } } }, 'Clear'),
+    h('button', { class: 'btn ghost small', onclick: () => void askConfirm({ title: 'Clear the board?', body: 'Every gate and wire goes, and the level starts again.', confirm: 'Clear', danger: true }).then((ok) => { if (ok) { circ = starter(level); clearDraft(key); resim(true); draw(); } }) }, 'Clear'),
   );
 
   const doVerify = () => {

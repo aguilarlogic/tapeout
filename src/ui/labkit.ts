@@ -28,6 +28,7 @@ import { mentorSay } from '../os/mentor';
 import { clearDraft, levelRecord, loadDraft, saveDraft } from '../state';
 import { editor, type Editor, type EditorOptions } from './editor';
 import { celebrate, levelHeader, nextHref } from './layout';
+import { askConfirm } from './modal';
 
 /** Bank a solve and show the celebration: the last step of every lab page. */
 export function finish(levelId: string, xp: number, stars: number, notes: string[] = []) {
@@ -82,12 +83,12 @@ export function useHints<X extends object = object>(hints: string[], usageKey: s
 
 /** The boss labs' "New variant" button: confirm, draw a new seed, and rebuild the page in place. */
 export function newVariantButton(seedKey: string, rebuild: () => HTMLElement, ask = 'Roll a new variant? This clears your current work.'): HTMLElement {
-  return h('button', { class: 'btn ghost', onclick: () => {
-    if (!confirm(ask)) return;
+  return h('button', { class: 'btn ghost', onclick: () => void askConfirm({ title: 'New variant', body: ask, confirm: 'New variant', danger: true }).then((ok) => {
+    if (!ok) return;
     saveDraft(seedKey, Math.floor(Math.random() * 1e6) + 1);
     const host = document.getElementById('lab-slot');
     if (host) host.replaceWith(rebuild()); else location.reload();
-  } }, 'New variant');
+  }) }, 'New variant');
 }
 
 type Kid = Node | string | false | undefined;
@@ -110,7 +111,7 @@ export const draftEditor = (draftKey: string, starter: string, onRun: () => void
 
 /** The "Reset" toolbar button: confirm, put the starter back and drop the draft. */
 export const resetButton = (ed: Editor, starter: string, draftKey: string, what = 'the starter', label = 'Reset') =>
-  h('button', { class: 'btn ghost', onclick: () => { if (confirm(`Reset to ${what}?`)) { ed.value = starter; clearDraft(draftKey); } } }, label);
+  h('button', { class: 'btn ghost', onclick: () => void askConfirm({ title: 'Reset?', body: `Reset to ${what}? Your current draft in this lab is cleared.`, confirm: 'Reset', danger: true }).then((ok) => { if (ok) { ed.value = starter; clearDraft(draftKey); } }) }, label);
 
 /** The usual lab toolbar: a check button (Ctrl+Enter), Submit, any extras, Reset, and on bosses a New variant button. */
 export const checkToolbar = (run: (submit: boolean) => void, ed: Editor, starter: string, draftKey: string, o: { label?: string; what?: string; extra?: Kid; variant?: Kid } = {}) =>

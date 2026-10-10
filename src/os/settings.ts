@@ -1,8 +1,9 @@
 // Settings.app: how fast TAPEOUT types, with a live preview.
-import { prefs, setPrefs, type Prefs } from '../state';
+import { backupFileName, exportBackup, markExported, prefs, profile, resetAll, setPrefs, type Prefs } from '../state';
 import { pace, rich } from '../term/terminal';
 import { PACES, prefersReducedMotion, type Token, typeInto } from '../term/typewriter';
-import { h } from '../ui/dom';
+import { h, toast } from '../ui/dom';
+import { askConfirm } from '../ui/modal';
 
 const SPEEDS: { id: Prefs['speed']; name: string; blurb: string }[] = [
   { id: 'slow', name: 'Slow', blurb: `about ${PACES.slow.cps} characters a second, with long pauses: plenty of time to read` },
@@ -12,6 +13,39 @@ const SPEEDS: { id: Prefs['speed']; name: string; blurb: string }[] = [
 ];
 
 const SAMPLE = 'Hi, {name}. This is how fast I will type. I pause after each sentence, and a little longer before a question. Press any key or click to finish a line early. Ready?';
+
+/** Save a backup file to the player's downloads. Counts as an export, so TAPEOUT stops suggesting one. */
+export function downloadBackup() {
+  const json = JSON.stringify(exportBackup(), null, 2);
+  const url = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
+  const a = h('a', { href: url, download: backupFileName() });
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+  markExported();
+  toast('Progress exported. Keep the file somewhere safe.', 'ok');
+}
+
+/** Wipe everything this game keeps in this browser, then start again from the desktop. */
+function fullReset() {
+  resetAll();
+  try { Object.keys(localStorage).filter((k) => k.startsWith('tapeout.')).forEach((k) => localStorage.removeItem(k)); } catch { /* ignore */ }
+  location.hash = '#/';
+  location.reload();
+}
+
+/** The danger zone: a full reset asks for the player's name (or RESET), and offers an export first. */
+function resetFlow() {
+  const name = profile()?.name;
+  const phrases = [name, 'RESET'].filter((x): x is string => !!x);
+  void askConfirm({
+    title: 'Erase all progress?',
+    body: 'This clears your name, XP, rank, flashcards, lab work and high scores from this browser. It cannot be undone.',
+    confirm: 'Erase everything', danger: true, typeToConfirm: phrases,
+    extra: h('button', { class: 'btn ghost', onclick: downloadBackup }, 'Export first'),
+  }).then((ok) => { if (ok) fullReset(); });
+}
 
 export function settingsApp(): HTMLElement {
   const root = h('div', { class: 'level settings' });
@@ -47,6 +81,10 @@ export function settingsApp(): HTMLElement {
       prefersReducedMotion() ? h('p', { class: 'note' }, 'Your system asks for reduced motion, so typing and loading animations are off whatever you pick here.') : null,
       h('div', { class: 'preview-head' }, h('span', { class: 'dim' }, 'Preview'), h('button', { class: 'btn ghost', onclick: play }, '↻ Replay')),
       preview),
+    h('section', { class: 'panel danger-zone' },
+      h('h3', null, 'Danger zone'),
+      h('p', { class: 'dim' }, 'Erase everything in this browser. You will be asked to type your name, or RESET, and offered an export first.'),
+      h('button', { class: 'btn danger', onclick: resetFlow }, 'Reset all progress…')),
   );
   requestAnimationFrame(play);
   return root;

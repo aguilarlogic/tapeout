@@ -440,3 +440,26 @@ a.tier:hover { border-color: var(--accent); text-decoration: none; }
   .incident-page .hdr { animation: none; }
   .win-loading { display: none; }
 }
+
+/* ---------------------------------------------------------------- in-OS confirm dialog (replaces confirm()) */
+.confirm-bg { position: fixed; inset: 0; z-index: 1100; display: grid; place-items: center; padding: 16px; background: rgba(2, 6, 9, 0.66); }
+.confirm-dialog { width: min(480px, 100%); max-height: calc(100vh - 32px); overflow: auto; background: var(--term-bg); color: var(--term-fg); border: 1px solid var(--term-ai); border-radius: 10px; box-shadow: var(--win-shadow); font-family: var(--mono); }
+.confirm-dialog.danger { border-color: var(--term-err); }
+.confirm-bar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid color-mix(in srgb, var(--term-ai) 25%, transparent); font-size: 0.85rem; }
+.confirm-dialog.danger .confirm-bar { border-bottom-color: color-mix(in srgb, var(--term-err) 35%, transparent); }
+.confirm-icon { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 4px; background: var(--term-ai); color: var(--term-bg); font-weight: 700; }
+.confirm-dialog.danger .confirm-icon { background: var(--term-err); }
+.confirm-title { font-weight: 700; }
+.confirm-body { padding: 14px 16px 4px; font-size: 0.9rem; line-height: 1.5; }
+.confirm-body p { margin: 0 0 8px; }
+.confirm-field { display: grid; gap: 6px; padding: 8px 16px 4px; font-size: 0.8rem; }
+.confirm-type { font: inherit; background: var(--term-bg); color: var(--term-you); border: 1px solid var(--term-dim); border-radius: 6px; padding: 7px 9px; }
+.confirm-type:focus-visible { outline: 2px solid var(--term-ai); outline-offset: 1px; }
+.confirm-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 12px 16px 14px; }
+.confirm-actions .btn { font-family: var(--mono); }
+.confirm-dialog .btn.ghost { color: var(--term-fg); border-color: var(--term-dim); }
+.confirm-actions .spacer { flex: 1; }
+.btn.danger { background: var(--term-err); border-color: var(--term-err); color: #1a0606; font-weight: 700; }
+.btn.danger:hover { filter: brightness(1.08); }
+.danger-zone { border-color: var(--err); }
+.danger-zone h3 { color: var(--err); }
