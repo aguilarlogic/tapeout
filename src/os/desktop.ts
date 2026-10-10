@@ -9,6 +9,7 @@ import { Shell } from '../term/shell';
 import { Terminal } from '../term/terminal';
 import { h } from '../ui/dom';
 import { avatar } from './avatar';
+import { activatesIcon } from './keys';
 import { launchGame } from './launch';
 import { mapApp } from './map';
 import { settingsApp } from './settings';
@@ -157,7 +158,9 @@ function taskbar(): HTMLElement {
 }
 
 function icons(): HTMLElement {
-  const icon = (glyph: string, label: string, fn: () => void) => h('button', { class: 'desk-icon', ondblclick: fn, onclick: (e: MouseEvent) => { if (e.detail === 1 && matchMedia('(pointer: coarse)').matches) fn(); } },
+  // A single click opens, and so does Enter or Space (a keyboard activation arrives as a click with detail 0). The
+  // second click of a double-click has detail 2 and is ignored, so double-click still works without opening twice.
+  const icon = (glyph: string, label: string, fn: () => void) => h('button', { class: 'desk-icon', onclick: (e: MouseEvent) => { if (activatesIcon(e.detail)) fn(); } },
     h('span', { class: 'di-glyph' }, glyph), h('span', { class: 'di-label' }, label));
   return h('div', { class: 'desk-icons' },
     icon('›_', 'Terminal', () => { (getWindow('term') ?? openTerminal()).focus(); term.focus(); }),
