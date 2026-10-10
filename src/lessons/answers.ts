@@ -66,9 +66,11 @@ export function parseQuantity(input: string, unit = ''): number | null {
   const m = s.match(/^(-?\d*\.?\d+(?:e[-+]?\d+)?)(.*)$/);
   if (!m) return null;
   const n = parseFloat(m[1]);
-  const rest = m[2];
-  if (rest === '') return n;
+  if (m[2] === '') return n;
   const [mult, base] = splitUnit(unit);
+  // Common spellings: Greek mu for micro, a capital K for kilo (but K is kelvin), SPICE's "meg" for mega.
+  let rest = m[2].replace(/^μ/, 'µ').replace(/^meg/i, 'M');
+  if (base !== 'K' && rest.startsWith('K')) rest = `k${rest.slice(1)}`;
   const aliases = UNIT_ALIASES[base] ?? [base.toLowerCase()];
   for (const pre of Object.keys(SI)) {
     if (!rest.startsWith(pre)) continue;
