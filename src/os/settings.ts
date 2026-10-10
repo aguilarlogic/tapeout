@@ -26,7 +26,7 @@ const MOTION: { id: Prefs['motion']; name: string; blurb: string }[] = [
 
 /** Keys that work in the game today. Keep this list in step with the handlers. */
 const KEYS: [string, string][] = [
-  ['Escape', 'Close the focused window (not while the terminal or a code editor has the keyboard)'],
+  ['Escape', 'Close the focused window (not while you type in the terminal, a text field or a canvas)'],
   ['Alt + `', 'Cycle through the open windows'],
   ['Enter / Space', 'Open a focused desktop icon'],
   ['Enter / Esc', 'In a dialog: confirm, or cancel'],

@@ -2,7 +2,7 @@
 import { award, promotionLine, withPromotion, type Award } from '../mastery/promotion';
 import { ACTS, actProgress, ALL_MODULES, findModule, goalRole, KIND_APP, KIND_LABEL, Module, nextInPath, planSentence, readiness, recommended, setGoalRole, startAct } from '../curriculum';
 import { CARDS, DECKS } from '../games/drills/cards';
-import { GLOSSARY, lookup } from '../glossary';
+import { lookup } from '../glossary';
 import { findIncident, INCIDENTS } from '../incidents';
 import { finalExam, FINAL_ID, findLesson } from '../lessons';
 import type { Lesson, Mood, Question } from '../lessons/types';
@@ -14,6 +14,7 @@ import { gradePractice, nextDifficulty, PRACTICE_COUNT, PRACTICE_HARD, PRACTICE_
 import { setMood } from '../os/avatar';
 import { focusGame, launchGame, randomGame, skipGame } from '../os/launch';
 import { closestMatches, didYouMean } from '../os/suggest';
+import { HELP_KEYS, HELP_ROWS } from './help';
 import { best, levelRecord, load, playerName, prefs, Prefs, Profile, profile, rank, RANKS, recordBest, recordMix, resetAll, setPrefs, setProfile, totalXp, updateCard } from '../state';
 import { h, stars as starEls } from '../ui/dom';
 import { runIncident } from './incident';
@@ -233,28 +234,8 @@ export class Shell {
   }
 
   private help() {
-    const rows: [string, string][] = [
-      ['next', 'continue where TAPEOUT recommends'],
-      ['map', 'open the campaign map'],
-      ['ls [act]', 'list the curriculum (e.g. `ls 3`)'],
-      ['learn <name>', 'open any lesson or lab (e.g. `learn cache`)'],
-      ['play [game]', 'the arcade: minigames TAPEOUT built'],
-      ['quiz', 'a quick interview question'],
-      ['practice [skill]', `${PRACTICE_COUNT} scored problems per set; no argument = a daily mix; --endless keeps going`],
-      ['skills [role]', 'your skill matrix: every topic, levels 0-3'],
-      ['roles [role]', 'job readiness for every role (DV, PD, quantum…)'],
-      ['goal <role>', 'steer your path and Skills.app towards a role, e.g. `goal dv`'],
-      ['boss [name]', 'list or start boss fights (no hints)'],
-      ['incidents [name]', 'on-call investigations: find the root cause against the clock'],
-      ['what is <term>', `look up any of ${GLOSSARY.length} terms`],
-      ['status', 'your rank, XP and progress'],
-      ['career', 'your rank story, the roles you are hired for, the next hiring panel'],
-      ['speed <s>', 'how fast I type: slow | normal | fast | instant'],
-      ['settings', 'open Settings.app (typing speed, with a preview)'],
-      ['name <n>', 'change your name'],
-      ['clear', 'clear the screen'],
-    ];
-    this.term.block(h('table', { class: 'term-table' }, ...rows.map(([c, d]) => h('tr', null, h('td', null, h('code', null, c)), h('td', null, ...rich(d))))));
+    const rowEl = ([c, d]: [string, string]) => h('tr', null, h('td', null, h('code', null, c)), h('td', null, ...rich(d)));
+    this.term.block(h('table', { class: 'term-table' }, ...HELP_ROWS.map(rowEl), ...HELP_KEYS.map(rowEl)));
     this.term.print('During lessons: `hint`, `teach me` (walk through the method), `skip` (reveal the answer), `quit`.', 'dim');
   }
 
