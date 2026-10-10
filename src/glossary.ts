@@ -1,5 +1,6 @@
 // TAPEOUT's built-in knowledge base: `define <term>` / `what is <term>` in the terminal.
 // Each entry: [term, aliases..., definition, lesson id to learn more].
+import { LOOKUP_ALIASES } from './glossary-aliases';
 
 type Entry = { terms: string[]; def: string; lesson?: string };
 
@@ -264,7 +265,7 @@ E('lithography|euv|duv|rayleigh', 'Printing patterns with light. Resolution R = 
   E('tvla|t-test leakage|welch', 'Leakage assessment: a fixed-versus-random Welch t-test on traces. |t| > 4.5 at the same point and sign in two independent trace sets flags leakage.', 'hwsec'),
   E('lifecycle|lifecycle state|rma', 'Chip lifecycle states: test, production, RMA (returned for analysis). Debug is locked in production, and transitions must not run backwards.', 'hwsec'),
   E('puf|physically unclonable function|trng', 'Turning manufacturing variation into a unique device key; TRNGs turn physical noise into random bits.', 'hwsec'),
-  E('iso 26262|asil|functional safety|fusa', 'The automotive functional safety standard. ASIL A-D grade the risk; D is the strictest.', 'fusa'),
+  E('functional safety|fusa|asil', 'Keeping a failing chip from hurting anyone, as the automotive safety standard defines it. ASIL A-D grade the risk; D is the strictest.', 'fusa'),
   E('fit|failures in time|mtbf|mttf', 'FIT = failures per 10⁹ device-hours. MTTF ≈ 10⁹ / FIT hours.', 'fusa'),
   E('ecc|secded|hamming code|parity', 'Error-correcting codes. SECDED Hamming: 8 check bits protect 64 data bits.', 'fusa'),
   E('hara|hazard analysis|s+e+c', 'Rating each hazardous event by severity S0–S3, exposure E0–E4 and controllability C0–C3. Any class 0 is QM; otherwise S + E + C: 10 is ASIL D, 9 C, 8 B, 7 A, 6 or less QM.', 'fusa'),
@@ -308,8 +309,9 @@ function dist(a: string, b: string): number {
 
 /** Look up a term; tolerates plurals, "what is a...", and small typos. */
 export function lookup(query: string): Entry | undefined {
-  const q = norm(query);
+  let q = norm(query);
   if (!q) return undefined;
+  q = LOOKUP_ALIASES[q] ?? q;
   const variants = [q, q.replace(/s$/, ''), q.replace(/es$/, '')];
   for (const e of GLOSSARY) if (e.terms.some((t) => variants.includes(t))) return e;
   for (const e of GLOSSARY) if (e.terms.some((t) => t.length > 3 && (q.includes(t) || (q.length > 3 && t.includes(q))))) return e;

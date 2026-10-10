@@ -24,3 +24,16 @@ describe('glossary links', () => {
     expect(missing).toEqual([]);
   });
 });
+
+// U23: a player may type a standard's number, but no heading TAPEOUT prints names one.
+describe('glossary headings never name a standard', () => {
+  it('"iso 26262" finds functional safety under its own heading', () => {
+    expect(headOf('iso 26262')?.[0]).toBe('functional safety');
+    expect(headOf('what is ISO 26262?')?.[0]).toBe('functional safety');
+    expect(headOf('fusa')?.[0]).toBe('functional safety');
+  });
+  it('no entry lists a standard id among its terms', () => {
+    const std = /\b(ieee ?\d{3,4}|iso ?\d{4,5}|iec ?\d{4,5}|ipc-\d{4}|jesd\d+)\b/i;
+    expect(GLOSSARY.flatMap((e) => e.terms).filter((t) => std.test(t))).toEqual([]);
+  });
+});

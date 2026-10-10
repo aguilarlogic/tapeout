@@ -425,7 +425,7 @@ device.
 
 Either way, hide keyboard hints on coarse pointers.
 
-### U23 · The "never names a standard" claim is false (Sev 2, Pri 2) · Decision
+### U23 · The "never names a standard" claim is false (Sev 2, Pri 2) · Decision ✅ done (option b: keep the silent rule)
 
 **Confirmed.** The product overview says the game never names the standards it follows. But player-facing text does
 name some:
@@ -569,7 +569,7 @@ Also checked, no finding: syntax errors are line-numbered in isa, cdc, rv, sva a
 **Code.** `src/glossary.ts` (`lookup()`).
 **Fix.** Each term has its own entry, and extraction has one of its own. `src/glossary.test.ts` checks that each term's own entry comes first, and that every "learn more" lesson exists. All 283 glossary lesson links resolve.
 
-### U32 · `what is fusa` prints the heading "Iso 26262", which slips past the standards ban (Sev 2, Pri 2) · Decision (part of U23)
+### U32 · `what is fusa` prints the heading "Iso 26262", which slips past the standards ban (Sev 2, Pri 2) ✅ done with U23
 **Seen.** `what is fusa` resolves to `E('iso 26262|asil|functional safety|fusa')` (`src/glossary.ts`). The heading is `terms[0]` title-cased in `define()` (`src/term/shell.ts`), so it reads "Iso 26262". The ban in `src/standards/rules-0.ts` is case-sensitive, so it misses "Iso 26262".
 **Options.**
 - (a) Standard names are allowed: make the ban case-insensitive, and give FuSa its own heading.
