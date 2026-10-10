@@ -17,19 +17,28 @@ export class Redirect extends Interrupted {}
 
 export const pace = (): Pace => paceFor(prefs().speed, prefersReducedMotion());
 
-/** Inline markup for TAPEOUT's lines: **bold**, `code`, {name}. */
-export function rich(text: string): Node[] {
-  const t = text.replace(/\{name\}/g, playerName());
-  const out: Node[] = [];
+export interface Span { kind: 'text' | 'b' | 'code'; text: string }
+
+/**
+ * Splits TAPEOUT's markup (**bold**, `code`, {name}) into spans. Markup is parsed first and the name is put in last,
+ * so a name with `$&`, `**` or backticks shows exactly as typed.
+ */
+export function richSpans(text: string, name: string): Span[] {
+  const out: Span[] = [];
   const re = /\*\*(.+?)\*\*|`([^`]+)`/g;
   let last = 0, m: RegExpExecArray | null;
-  while ((m = re.exec(t))) {
-    if (m.index > last) out.push(document.createTextNode(t.slice(last, m.index)));
-    out.push(m[1] !== undefined ? h('b', null, m[1]) : h('code', null, m[2]));
+  while ((m = re.exec(text))) {
+    if (m.index > last) out.push({ kind: 'text', text: text.slice(last, m.index) });
+    out.push(m[1] !== undefined ? { kind: 'b', text: m[1] } : { kind: 'code', text: m[2] });
     last = m.index + m[0].length;
   }
-  if (last < t.length) out.push(document.createTextNode(t.slice(last)));
-  return out;
+  if (last < text.length) out.push({ kind: 'text', text: text.slice(last) });
+  return out.map((s) => ({ ...s, text: s.text.split('{name}').join(name) }));
+}
+
+/** Inline markup for TAPEOUT's lines, as DOM nodes. */
+export function rich(text: string): Node[] {
+  return richSpans(text, playerName()).map((s) => (s.kind === 'text' ? document.createTextNode(s.text) : h(s.kind, null, s.text)));
 }
 
 export interface AskOpts { prompt?: string; chips?: (string | { label: string; value: string })[]; placeholder?: string }
