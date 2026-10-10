@@ -17,6 +17,8 @@ export interface Profile {
   name: string;
   background: 'new' | 'student' | 'pro';
   goal: 'design' | 'verif' | 'pd' | 'board' | 'arch' | 'special' | 'unsure';
+  /** A role set with `goal <role>`, when it is not the one the goal points at (see curriculum.goalRole). */
+  role?: string;
   since: number;
 }
 

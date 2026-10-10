@@ -1,11 +1,9 @@
 // Skills.app: the skill matrix as a live screen. Every skill, your level in it (0-3), and what to do next.
-import { findModule, KIND_LABEL } from '../curriculum';
-import { levelRecord, profile } from '../state';
+import { findModule, goalRole, KIND_LABEL } from '../curriculum';
+import { levelRecord } from '../state';
 import { capstoneId, isHired } from './career';
 import { h } from '../ui/dom';
-import { AREAS, findRole, LEVEL_NAME, nextStep, roleReadiness, ROLES, SKILLS, skillCeiling, skillLevel, skillsFor, type RoleId, type Skill } from './skills';
-
-const GOAL_ROLE: Record<string, RoleId | undefined> = { design: 'rtl', verif: 'dv', pd: 'pd', board: 'board', arch: 'arch' };
+import { AREAS, findRole, LEVEL_NAME, nextStep, roleReadiness, ROLES, SKILLS, skillCeiling, skillLevel, skillsFor, type Skill } from './skills';
 
 const pips = (lv: number, ceil: number) => h('span', { class: 'pips', title: `${LEVEL_NAME[lv]}${ceil < 3 ? ` · levels above ${ceil} coming soon` : ''}` },
   ...[1, 2, 3].map((i) => h('span', { class: `pip${i <= lv ? ' on' : ''}${i > ceil ? ' wip' : ''}` })));
@@ -21,7 +19,9 @@ function tierButton(s: Skill, tier: 'learn' | 'practice' | 'boss', label: string
 }
 
 export function skillsApp(focus?: string): HTMLElement {
-  const role = focus ? findRole(focus) : GOAL_ROLE[profile()?.goal ?? ''] ? findRole(GOAL_ROLE[profile()!.goal]!) : undefined;
+  // With no role in the URL, Skills.app opens on the player's goal role (`goal <role>` changes it).
+  const goal = goalRole();
+  const role = focus ? findRole(focus) : goal ? findRole(goal) : undefined;
   const list = role ? skillsFor(role.id) : SKILLS;
   const counts = [0, 0, 0, 0];
   list.forEach((s) => counts[skillLevel(s)]++);

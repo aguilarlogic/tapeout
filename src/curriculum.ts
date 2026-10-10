@@ -18,8 +18,8 @@ import { UVM_PUZZLES } from './games/uvm/puzzles';
 import { FINAL_ID, FINAL_XP, findLesson } from './lessons';
 import { findIncident } from './incidents';
 import { findBoss, findPractice } from './practice';
-import { ROLES } from './mastery/skills';
-import { levelRecord, profile } from './state';
+import { ROLES, SKILLS, type RoleId } from './mastery/skills';
+import { levelRecord, profile, type Profile } from './state';
 
 export type ModKind = 'lesson' | 'practice' | 'boss' | 'incident' | 'logic' | 'cmos' | 'rtl' | 'debug' | 'cov' | 'uvm' | 'sta' | 'pcb' | 'clab' | 'code' | 'shell' | 'sva' | 'tb' | 'cdc' | 'isa' | 'arch' | 'rv' | 'dft' | 'pd' | 'sta2' | 'layout' | 'sig' | 'spec' | 'drills' | 'final';
 
@@ -238,21 +238,97 @@ export function actProgress(a: Act) {
   return { done, total: ms.length, frac: done / ms.length };
 }
 
-/** Where a player should start, based on onboarding answers. */
-export function startAct(): number {
-  const p = profile();
-  if (!p || p.background === 'new') return 0;
-  if (p.goal === 'special') return 6;
-  if (p.background === 'student') return 2;
-  return { design: 2, verif: 4, pd: 3, board: 3, arch: 5, unsure: 2 }[p.goal];
+type Goal = Profile['goal'];
+
+/** The role each onboarding goal points at. `special` and `unsure` point at none. */
+const GOAL_ROLE: Partial<Record<Goal, RoleId>> = { design: 'rtl', verif: 'dv', pd: 'pd', board: 'board', arch: 'arch' };
+/** The entry act for each goal. A new player always starts at Foundations; their goal then shapes the order. */
+const GOAL_ACT: Record<Goal, number> = { design: 2, verif: 4, pd: 3, board: 3, arch: 5, special: 6, unsure: 2 };
+/** How TAPEOUT names a goal in its sentence about the plan. */
+const GOAL_PHRASE: Partial<Record<Goal, string>> = { design: 'RTL design', verif: 'verification', pd: 'physical design', board: 'board work', arch: 'architecture' };
+
+/** The role the player is steering towards: the one set with `goal <role>`, else the one their goal points at. */
+export function goalRole(p: Profile | undefined = profile()): RoleId | undefined {
+  if (!p) return undefined;
+  const id = p.role ?? GOAL_ROLE[p.goal];
+  return ROLES.find((r) => r.id === id)?.id;
 }
 
-/** The next unfinished module, starting at the player's entry act and wrapping around. */
+/** The profile with a new goal role. A core role also sets its onboarding goal; any other role is a specialist goal. */
+export function setGoalRole(p: Profile, role: RoleId): Profile {
+  const goal = (Object.keys(GOAL_ROLE) as Goal[]).find((g) => GOAL_ROLE[g] === role) ?? 'special';
+  return { ...p, goal, role };
+}
+
+/** Where a player should start, based on onboarding answers. */
+export function startAct(p: Profile | undefined = profile()): number {
+  if (!p || p.background === 'new') return 0;
+  return GOAL_ACT[p.goal];
+}
+
+/**
+ * Module ids a role's skills use. `named` are the skills that name the role; `shared` are the skills every role needs
+ * (the shell, git, python, logic...), which keep their place because later chapters depend on them.
+ */
+function skillsFor(role: RoleId): { named: Set<string>; used: Set<string> } {
+  const named = new Set<string>(), used = new Set<string>();
+  for (const s of SKILLS) {
+    const ids = [...s.learn, ...s.practice, ...s.boss];
+    if (s.roles === 'all') ids.forEach((id) => used.add(id));
+    else if (s.roles.includes(role)) ids.forEach((id) => { named.add(id); used.add(id); });
+  }
+  return { named, used };
+}
+
+/**
+ * The acts in the order TAPEOUT leads: the entry act first, as written, then the acts after it, then the acts before
+ * it. Within each act after the entry act (and the entry act itself for a specialist), chapters the goal role uses come
+ * first. The sort is stable, so each group keeps the act's own order and prerequisites stay in front.
+ */
+function pathActs(p: Profile | undefined): Act[] {
+  const start = startAct(p), role = goalRole(p);
+  if (!role) return [...ACTS.slice(start), ...ACTS.slice(0, start)];
+  const { used } = skillsFor(role);
+  const uses = (c: Chapter) => c.modules.some((m) => used.has(m.id));
+  const reorder = (a: Act): Act => ({ ...a, chapters: [...a.chapters.filter(uses), ...a.chapters.filter((c) => !uses(c))] });
+  const entry = p?.goal === 'special' ? reorder(ACTS[start]) : ACTS[start];
+  return [entry, ...ACTS.slice(start + 1).map(reorder), ...ACTS.slice(0, start)];
+}
+
+/** Every module, in the order TAPEOUT leads the player through them (see pathActs). */
+export function learningOrder(p: Profile | undefined = profile()): Module[] {
+  return pathActs(p).flatMap((a) => a.chapters.flatMap((c) => c.modules));
+}
+
+/** The next unfinished module on the player's path. */
 export function recommended(): Module | undefined {
-  const start = ACTS[startAct()].chapters[0].modules[0];
-  const i0 = ALL_MODULES.indexOf(start);
-  const order = [...ALL_MODULES.slice(i0), ...ALL_MODULES.slice(0, i0)];
-  return order.find((m) => !isDone(m));
+  return learningOrder().find((m) => !isDone(m));
+}
+
+/** One sentence on how the player's goal shaped the path: the first chapters it puts forward after the entry act. */
+export function planSentence(p: Profile | undefined = profile()): string {
+  const role = goalRole(p);
+  const phrase = p && GOAL_PHRASE[p.goal];
+  if (!role) return p?.goal === 'special'
+    ? 'You want a specialist role, so I start you in the specialist acts. Aim at one with `goal <role>`.'
+    : 'You are not sure yet, so I will take the curriculum in order. Aim at a role any time with `goal <role>`.';
+  // Name only chapters with a skill that names the role (not the shared basics), in path order, from the acts the
+  // path reaches after the entry act. A specialist's entry act is the catalogue itself, so that is where they go.
+  const special = p?.goal === 'special', start = startAct(p);
+  const { named } = skillsFor(role);
+  const reached = pathActs(p).slice(0, ACTS.length - start);
+  const names = [...new Set((special ? reached : reached.slice(1)).flatMap((a) => a.chapters.filter((c) => c.modules.some((m) => named.has(m.id))).map((c) => c.name)))].slice(0, 3);
+  const said = phrase ?? ROLES.find((r) => r.id === role)!.name.toLowerCase();
+  if (!names.length) return `You said ${said}, so I will take the curriculum in order.`;
+  const list = names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names[0];
+  return special ? `You said ${said}, so I will put ${list} first.` : `You said ${said}, so after this act I will steer you to ${list} first.`;
+}
+
+/** The module after `id` on the player's path (not the next one in the curriculum). */
+export function nextInPath(id: string): Module | undefined {
+  const order = learningOrder();
+  const i = order.findIndex((m) => m.id === id);
+  return i >= 0 ? order[i + 1] : undefined;
 }
 
 export function neighbours(id: string): { prev?: Module; next?: Module } {

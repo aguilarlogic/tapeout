@@ -1,13 +1,13 @@
 // TAPEOUT's brain: onboarding, the command shell, and the lesson runner.
 import { award, promotionLine, withPromotion, type Award } from '../mastery/promotion';
-import { ACTS, actProgress, ALL_MODULES, findModule, KIND_APP, KIND_LABEL, Module, neighbours, readiness, recommended, startAct } from '../curriculum';
+import { ACTS, actProgress, ALL_MODULES, findModule, goalRole, KIND_APP, KIND_LABEL, Module, nextInPath, planSentence, readiness, recommended, setGoalRole, startAct } from '../curriculum';
 import { CARDS, DECKS } from '../games/drills/cards';
 import { GLOSSARY, lookup } from '../glossary';
 import { findIncident, INCIDENTS } from '../incidents';
 import { finalExam, FINAL_ID, findLesson } from '../lessons';
 import type { Lesson, Mood, Question } from '../lessons/types';
 import { career, capstoneId } from '../mastery/career';
-import { findSkill, LEVEL_NAME, nextStep, roleReadiness, ROLES, SKILLS, skillCeiling, skillLevel, type RoleId } from '../mastery/skills';
+import { findRole, findSkill, LEVEL_NAME, nextStep, roleReadiness, ROLES, SKILLS, skillCeiling, skillLevel, type RoleId } from '../mastery/skills';
 import { MINIGAMES } from '../minigames/apps';
 import { BOSSES, findBoss, findPractice, PRACTICE, problem } from '../practice';
 import { gradePractice, nextDifficulty, PRACTICE_COUNT, PRACTICE_HARD, PRACTICE_PASS, PRACTICE_START, type Boss, type Difficulty, type PracticeSet } from '../practice/types';
@@ -106,10 +106,11 @@ export class Shell {
     const goal = await t.choose(['Digital design engineer (RTL)', 'Verification engineer (DV)', 'Physical design / timing engineer', 'Hardware / board engineer', 'Computer architect', 'A specialist: analog, RF, memory, AI chips, security, quantum...', 'Not sure yet, show me everything'], 'choose>', undefined, 'rows');
     prof.goal = (['design', 'verif', 'pd', 'board', 'arch', 'special', 'unsure'] as const)[goal];
     setProfile(prof);
-    // The whole curriculum as one line (U18); the full act table is for players who ask for the map.
+    // The goal shapes the path (U7): one sentence on how, then the start. The whole curriculum is one line (U18).
+    await t.say(planSentence(prof), 'happy');
     const act = ACTS[startAct()];
     const first = recommended()!;
-    await t.say(`Based on what you told me, start at **Act ${act.n}: ${act.name}**. First up: **${first.title}**.`);
+    await t.say(`Start at **Act ${act.n}: ${act.name}**. First up: **${first.title}**.`);
     await t.print(`${ALL_MODULES.length} modules across ${ACTS.length} acts. Type \`map\` to see them all.`, 'dim');
     await t.say('I open windows for labs and games as we go. Stuck? Type `help`, or ask me `what is a flip-flop`.', 'excited');
     const go = await t.choose(["Let's go.", 'Show me the map first.'], 'choose>', undefined, 'rows');
@@ -164,6 +165,8 @@ export class Shell {
         return this.careerCmd();
       case 'roles': case 'role': case 'careers': case 'jobs':
         return this.rolesCmd(arg);
+      case 'goal': case 'goals':
+        return this.goalCmd(arg);
       case 'boss': case 'bosses': {
         if (!arg) return this.printBosses();
         const b = findBoss(arg) ?? findBoss(`boss-${arg}`);
@@ -239,6 +242,7 @@ export class Shell {
       ['practice [skill]', `${PRACTICE_COUNT} scored problems per set; no argument = a daily mix; --endless keeps going`],
       ['skills [role]', 'your skill matrix: every topic, levels 0-3'],
       ['roles [role]', 'job readiness for every role (DV, PD, quantum…)'],
+      ['goal <role>', 'steer your path and Skills.app towards a role, e.g. `goal dv`'],
       ['boss [name]', 'list or start boss fights (no hints)'],
       ['incidents [name]', 'on-call investigations: find the root cause against the clock'],
       ['what is <term>', `look up any of ${GLOSSARY.length} terms`],
@@ -423,7 +427,7 @@ export class Shell {
       h('div', { class: 'dim' }, `${ok}/${PRACTICE_COUNT} first try · ${hard} at hard${grade ? ` · ${gained ? `+${gained} XP` : 'no new XP'}${mixed ? ` · ${mixed.streak}-day streak${mixed.bonus ? ` (milestone bonus +${mixed.bonus})` : ''}` : ''}` : ` · need ${PRACTICE_PASS} with ${PRACTICE_HARD} hard to pass`}`)), 'type', 2);
     await t.say(grade === 3 ? 'Near perfect at full difficulty. This topic is yours.' : grade ? 'Passed. That is practised, not just aware: it counts toward your skill level.' : ok >= 6 ? 'Close. The hard ones are where it counts; run it again.' : 'Keep at it. Every miss came with an explanation; a second run always goes better.', grade ? 'proud' : 'thinking');
     if (aw.promotedTo) await t.say(promotionLine(aw.promotedTo), 'excited');
-    const next = grade && !o.mix ? neighbours(o.id).next : undefined;
+    const next = grade && !o.mix ? nextInPath(o.id) : undefined;
     const opts = [...(next ? [`Continue: **${next.title}** (${KIND_LABEL[next.kind].toLowerCase()})`] : []), 'Run it again', 'Endless mode', 'Back to the shell'];
     const pick = await t.choose(opts, 'next>', (v) => this.queue.push(v));
     const k = opts[pick];
@@ -465,9 +469,10 @@ export class Shell {
   }
 
   private async careerCmd() {
-    const t = this.term, c = career();
+    const t = this.term, c = career(goalRole());
     t.print(`CAREER · ${c.title} · ${c.xp} XP`, 'hl');
     t.print(`${c.scope}: ${c.story}`, 'dim');
+    if (c.goal) t.print(`Your goal: ${c.goal.role.name} · ${Math.round(c.goal.readiness * 100)}% job-ready · change it with \`goal <role>\``, 'hl');
     t.print(`${RANKS.map((x) => (x.title === c.title ? `[${x.title}]` : x.title)).join(' → ')}`, 'dim');
     if (c.next) t.print(`${bar(c.progress, 20)} ${c.next.need} XP to ${c.next.title}`, 'mono');
     else t.print('You have reached the top of the ladder. The rest is for the love of it.', 'dim');
@@ -479,6 +484,24 @@ export class Shell {
         h('button', { class: 'term-mod', onclick: () => this.run(`learn ${capstoneId(role)}`) },
           h('span', { class: 'chk' }, role.icon), h('span', { class: 'mono' }, `${bar(readiness, 10)} ${String(Math.round(readiness * 100)).padStart(3)}%  `), h('span', null, role.name)))));
     }
+  }
+
+  /** `goal <role>` steers the path, Skills.app and `career` towards a role. With no argument, it says what the goal is. */
+  private goalCmd(arg: string) {
+    const t = this.term, p = profile();
+    if (!p) return t.say('Tell me your name first, then we can pick a goal.', 'thinking');
+    const q = arg.trim().toLowerCase();
+    if (!q) {
+      const r = goalRole(p);
+      return r
+        ? t.say(`Your goal is **${findRole(r)!.name}**. Change it with \`goal <role>\`, for example \`goal dv\`.`, 'neutral')
+        : t.say('You have no goal role yet. Pick one with `goal <role>`, for example `goal dv`, or see them all with `roles`.', 'neutral');
+    }
+    const role = ROLES.find((r) => r.id === q) ?? ROLES.find((r) => r.name.toLowerCase().includes(q));
+    if (!role) return t.print(`No role "${arg}". Type \`roles\` to list them.`, 'err');
+    setProfile(setGoalRole(p, role.id));
+    const next = recommended();
+    return t.say(`${planSentence()}${next ? ` Next up: **${next.title}**.` : ''}`, 'happy');
   }
 
   private async rolesCmd(arg: string) {
@@ -530,7 +553,7 @@ export class Shell {
     return this.guarded(async () => {
       void t.progress(`paging you in: ${inc.title}`);
       const res = await runIncident(t, inc, { define: (q) => this.define(q) });
-      const next = res.solved ? neighbours(id).next : undefined;
+      const next = res.solved ? nextInPath(id) : undefined;
       const opts = [...(next ? [`Continue: **${next.title}** (${KIND_LABEL[next.kind].toLowerCase()})`] : []), res.solved ? 'Replay (a different root cause)' : 'Try again (a different root cause)', 'Back to the shell'];
       const pick = await t.choose(opts, 'next>', (v) => this.queue.push(v));
       if (next && pick === 0) this.queue.push(`learn ${next.id}`);
@@ -622,7 +645,7 @@ export class Shell {
     if (bossDef) await t.say(pickOne(['Boss down. That is job-level work, {name}: no hints, no second tries.', 'Defeated. Somewhere a senior engineer just nodded approvingly.', 'That is the real thing. You earned that level.']), 'proud');
     else if (mode === 'final') await t.say('That is it. Every block signed off, every question answered. Your chip is ready for tapeout. For real next steps: put a design on silicon with Tiny Tapeout, and bring these answers to your interviews. I am proud of you, {name}.', 'proud');
     else await t.say(st === 3 ? pickOne(['Flawless. Onward.', 'Perfect run. You make this look easy.', 'Every question first try. Nice.']) : st === 2 ? 'Good work. A couple of stumbles, which is exactly how learning is supposed to feel.' : 'Done. This one was tough; come back and replay it for more stars later.', mood);
-    const nx = neighbours(l.id).next;
+    const nx = nextInPath(l.id);
     if (nx && mode !== 'final') {
       const pick = await t.choose([`Continue: **${nx.title}** (${KIND_LABEL[nx.kind].toLowerCase()})`, 'Back to the shell'], 'next>', (v) => this.queue.push(v));
       if (pick === 0) this.queue.push(`learn ${nx.id}`);

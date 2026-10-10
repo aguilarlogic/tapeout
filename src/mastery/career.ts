@@ -1,6 +1,6 @@
 // The career story: what each rank means, which roles you have been hired for, and what to aim at next.
 import { levelRecord, rank, totalXp } from '../state';
-import { findRole, roleReadiness, ROLES, type Role } from './skills';
+import { findRole, roleReadiness, ROLES, type Role, type RoleId } from './skills';
 
 /** One beat of the story per rank, shown when the player is promoted into it. */
 export const STORY: { scope: string; line: string }[] = [
@@ -25,17 +25,22 @@ export interface Career {
   next?: { title: string; need: number };
   progress: number;
   hired: Role[];
-  /** Roles you are closest to being hired for, best first. */
+  /** Roles you are closest to being hired for, best first. The goal role, if not hired yet, leads the list. */
   closest: { role: Role; readiness: number }[];
+  /** The role the player is steering towards (`goal <role>`), if they have one and are not hired for it yet. */
+  goal?: { role: Role; readiness: number };
 }
 
-export function career(): Career {
+export function career(goalRole?: RoleId): Career {
   const xp = totalXp(), r = rank(xp), st = STORY[Math.min(r.index, STORY.length - 1)];
+  const ranked = ROLES.filter((x) => !isHired(x)).map((x) => ({ role: x, readiness: roleReadiness(x.id) })).sort((a, b) => b.readiness - a.readiness);
+  const goal = goalRole ? ranked.find((c) => c.role.id === goalRole) : undefined;
   return {
     title: r.title, scope: st.scope, story: st.line, xp,
     next: r.next ? { title: r.next.title, need: r.next.xp - xp } : undefined, progress: r.progress,
     hired: hiredRoles(),
-    closest: ROLES.filter((x) => !isHired(x)).map((x) => ({ role: x, readiness: roleReadiness(x.id) })).sort((a, b) => b.readiness - a.readiness).slice(0, 3),
+    closest: goal ? [goal, ...ranked.filter((c) => c !== goal)].slice(0, 3) : ranked.slice(0, 3),
+    goal,
   };
 }
 
