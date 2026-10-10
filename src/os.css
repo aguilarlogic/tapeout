@@ -62,13 +62,15 @@ body { display: block; }
 .taskbar { position: relative; display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--taskbar); border-top: 1px solid var(--border); z-index: 900; min-width: 0; }
 .start { font: inherit; display: flex; align-items: center; gap: 8px; font-weight: 800; letter-spacing: 0.02em; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel); color: var(--text); cursor: pointer; flex: none; }
 .start:hover { border-color: var(--accent); }
-.tasks { display: flex; gap: 6px; flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; }
-.task { font: inherit; display: flex; align-items: center; gap: 6px; max-width: 220px; padding: 5px 10px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: var(--text-dim); cursor: pointer; font-size: 0.82rem; flex: none; }
+/* Task buttons shrink (down to their icon) so that many windows never run under the tray. */
+.tasks { display: flex; gap: 6px; flex: 1 1 0; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.task { font: inherit; display: flex; align-items: center; gap: 6px; flex: 0 1 220px; min-width: 44px; max-width: 220px; padding: 5px 10px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: var(--text-dim); cursor: pointer; font-size: 0.82rem; }
 .task.on { background: var(--panel-2); color: var(--text); border-color: color-mix(in srgb, var(--accent) 50%, var(--border)); }
-.task-icon { font-family: var(--mono); color: var(--accent); font-weight: 700; }
-.task-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.task-icon { flex: none; font-family: var(--mono); color: var(--accent); font-weight: 700; }
+.task-label { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tray { display: flex; align-items: center; gap: 10px; font-size: 0.82rem; flex: none; }
 .tray-rank { font-weight: 700; }
+.start-rank { display: none; padding: 0 10px 8px; font-size: 0.82rem; color: var(--text-dim); }
 .clock { font-family: var(--mono); color: var(--text-dim); }
 .start-menu { position: absolute; bottom: calc(100% + 6px); left: 8px; width: 270px; max-height: 70vh; overflow: auto; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--win-shadow); padding: 6px; }
 .start-menu[hidden] { display: none; }
@@ -351,8 +353,12 @@ table.tt th.exp, table.tt td.exp { color: var(--wave-exp); }
   .desk-icons { display: none; }
   .term-side { display: none; }
   .term { font-size: 13.5px; padding: 10px; }
-  .tray .track, .tray .dim, .clock { display: none; }
-  .task-label { max-width: 90px; }
+  /* Rank and XP move into the start menu header; the tray keeps the clock. */
+  .tray .tray-rank, .tray .track, .tray .dim { display: none; }
+  .start-rank { display: block; }
+  /* Task buttons become icons (the full title stays in the tooltip); the row scrolls if there are many. */
+  .task { min-width: 0; padding: 5px 8px; }
+  .task-label { display: none; }
   .map-top { grid-template-columns: minmax(0, 1fr); }
   .map-die { max-width: 240px; }
   .chapter { grid-template-columns: minmax(0, 1fr); }

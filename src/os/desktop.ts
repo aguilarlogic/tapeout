@@ -132,10 +132,15 @@ function route() {
 function taskbar(): HTMLElement {
   const tray = h('div', { class: 'tray' });
   const clock = h('span', { class: 'clock' });
+  // On small screens the tray drops rank and XP, and the start menu header shows them instead (see os.css).
+  const startRank = h('div', { class: 'start-rank' });
   const renderTray = () => {
     const xp = totalXp(), r = rank(xp);
+    const next = r.next ? `${r.next.xp - xp} XP to ${r.next.title}` : 'Top rank';
+    startRank.textContent = `${r.title} · ${xp} XP`;
+    startRank.title = next;
     tray.replaceChildren(
-      h('span', { class: 'tray-rank', title: r.next ? `${r.next.xp - xp} XP to ${r.next.title}` : 'Top rank' }, r.title),
+      h('span', { class: 'tray-rank', title: next }, r.title),
       h('div', { class: 'track small' }, h('div', { class: 'fill', style: `width:${Math.round(r.progress * 100)}%` })),
       h('span', { class: 'dim' }, `${xp} XP`),
       clock);
@@ -156,6 +161,7 @@ function taskbar(): HTMLElement {
   const item = (icon: string, label: string, fn: () => void) => h('button', { class: 'start-item', role: 'menuitem', onclick: () => { menu.hidden = true; fn(); } }, h('span', { class: 'si-icon' }, icon), label);
   menu.append(
     h('div', { class: 'start-head' }, h('b', null, 'TAPE-OS'), h('span', { class: 'dim' }, profile()?.name ?? '')),
+    startRank,
     item('›_', 'Terminal (TAPEOUT)', () => { (getWindow('term') ?? openTerminal()).focus(); term.focus(); }),
     item('◈', 'Campaign map', () => (location.hash = '#/map')),
     item('◉', 'Skills & job readiness', () => (location.hash = '#/skills')),
