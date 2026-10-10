@@ -279,6 +279,8 @@ table.tt th.exp, table.tt td.exp { color: var(--wave-exp); }
 .mg-window { display: flex; flex-direction: column; gap: 12px; }
 .mg-intro { display: flex; gap: 12px; align-items: center; }
 .mg-intro p { margin: 0; font-size: 0.88rem; }
+/* A lesson is waiting on this game: the way back to the lesson is here too, since a phone's game window covers the terminal. */
+.mg-wait { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 0.88rem; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel-2); }
 .mg-icon { width: 44px; height: 44px; flex: none; display: grid; place-items: center; border-radius: 12px; background: var(--term-bg); color: var(--term-ai); font-family: var(--mono); font-weight: 800; }
 .mg { display: flex; flex-direction: column; gap: 12px; }
 .mg-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; font-family: var(--mono); font-size: 0.8rem; color: var(--text-dim); }

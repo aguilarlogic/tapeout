@@ -35,8 +35,13 @@ export function launchGame(id: string, opts: { rounds?: number; fromLesson?: boo
     let end = (): void => {};
     const settle = (r: GameResult | null) => { if (!settled) { settled = true; if (endCurrent === end) endCurrent = null; resolve(r); } };
     const host = h('div', { class: 'mg-host' });
+    // The lesson's wait can also be ended from in here: on a phone this window covers the terminal (U37).
+    const waitRow = opts.fromLesson ? h('div', { class: 'mg-wait', role: 'status' },
+      h('span', null, 'Your lesson is waiting for this game. '),
+      h('button', { class: 'btn ghost small', onclick: () => end() }, 'Skip the game')) : null;
     const content = h('div', { class: 'mg-window' },
       h('div', { class: 'mg-intro' }, h('span', { class: 'mg-icon' }, game.icon), h('div', null, h('b', null, game.title), h('p', { class: 'dim' }, game.blurb))),
+      waitRow,
       host);
     const win = openWindow({
       id: 'mini', title: `${game.title}.app`, icon: game.icon, content, w: 620, h: 600, loading: `${game.title}.app`,
