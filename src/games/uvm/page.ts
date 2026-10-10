@@ -66,6 +66,9 @@ function archView(pz: ArchPuzzle, miss: () => void, finish: () => void): HTMLEle
       const el = h('div', {
         class: `slot${comp ? ' filled' : ''}${isParent ? ' container' : ''}`,
         style: `left:${s.x}%;top:${s.y}%;width:${s.w}%;height:${s.h}%`,
+        // Slots are reachable and operable by keyboard too (U39): Tab to a slot, Enter or Space places the picked part.
+        tabindex: '0', role: 'button', 'aria-label': comp ? `Slot: ${comp.label}` : 'Empty slot',
+        onkeydown: (ev: KeyboardEvent) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); (ev.currentTarget as HTMLElement).click(); } },
         onclick: (ev: Event) => {
           ev.stopPropagation();
           if (!picked) { toast('Pick a component from the palette first.', 'info'); return; }
