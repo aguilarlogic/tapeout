@@ -6,12 +6,15 @@ import { findRvLevel } from './rv/levels';
 import { evaluate as evaluateSv } from './sv/check';
 import { findTbLevel } from './sv/levels';
 import { evaluate as evaluateSva } from './sva/check';
+import { findCodeLevel } from './code/levels';
+import { runCode } from './code/run';
 import { findSvaLevel } from './sva/levels';
 
 export type EvalJob =
   | { id: number; kind: 'rv'; levelId: string; seed: number; code: string; submit: boolean }
   | { id: number; kind: 'tb'; levelId: string; seed: number; code: string }
-  | { id: number; kind: 'sva'; levelId: string; seed: number; code: string };
+  | { id: number; kind: 'sva'; levelId: string; seed: number; code: string }
+  | { id: number; kind: 'code'; levelId: string; seed: number; code: string; onlyVisible: boolean };
 export type EvalReply = { id: number; progress: [number, number] } | { id: number; ok: true; result: unknown } | { id: number; ok: false; error: string };
 
 /** Drop what cannot be posted (functions) from a result, keeping plain data, arrays, maps and sets. */
@@ -35,6 +38,9 @@ export function runJob(job: EvalJob, post: (m: EvalReply) => void) {
       const inst = findRvLevel(job.levelId)!.build(rng(job.seed));
       const specs = inst.programs.filter((p) => job.submit || !p.hidden);
       result = evaluateCore(job.code, specs, { onProgress: (n, total) => post({ id: job.id, progress: [n, total] }) });
+    } else if (job.kind === 'code') {
+      const level = findCodeLevel(job.levelId)!;
+      result = runCode(level.lang, level.build(rng(job.seed)), job.code, job.onlyVisible);
     } else if (job.kind === 'tb') {
       result = evaluateSv(findTbLevel(job.levelId)!.build(rng(job.seed)), job.code);
     } else {
