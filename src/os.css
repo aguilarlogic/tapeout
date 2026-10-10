@@ -4,7 +4,8 @@
   --term-fg: #c9e4dc;
   --term-ai: #5eead4;
   --term-you: #f1f5f9;
-  --term-dim: #64798a;
+  /* 4.60:1 on --term-bg (#060a0e), up from 4.39:1: the smallest step that clears WCAG AA for the 12px captions. */
+  --term-dim: #687c8e;
   --term-hl: #fbbf24;
   --term-err: #f87171;
   --term-ok: #4ade80;
