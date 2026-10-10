@@ -287,9 +287,9 @@ export class Terminal {
 
   /** Numbered choices, typed out; answer by number, by clicking, or by typing the option text. */
   /** `passthrough`: called with anything typed that is not an option (then the menu is abandoned via Redirect). */
-  async choose(options: string[], prompt = 'choose>', passthrough?: (text: string) => void): Promise<number> {
+  async choose(options: string[], prompt = 'choose>', passthrough?: (text: string) => void, mode: BlockMode = 'type'): Promise<number> {
     const list = h('ol', { class: 'term-choices' }, ...options.map((o, i) => h('li', null, h('button', { class: 'term-opt', onclick: () => this.submit(String(i + 1)) }, ...rich(o)))));
-    void this.block(list, 'type', 1.6);
+    void this.block(list, mode, 1.6);
     for (;;) {
       const v = (await this.ask({ prompt, placeholder: `1-${options.length}` })).trim().toLowerCase();
       const n = parseInt(v, 10);

@@ -169,11 +169,14 @@ function icons(): HTMLElement {
 }
 
 async function bootScreen(first: boolean) {
-  const lines = ['TAPE-OS BIOS v1.0', 'CPU: tapeout-risc-v @ 1 GHz ...... ok', 'SRAM 64 KiB ...... ok', 'PDK sky130 ...... mounted', 'mentor.ko ...... loaded'];
+  // First run: four short lines, not five, and a quicker beat between them (U18). Every line is skippable by click.
+  const lines = first
+    ? ['TAPE-OS BIOS 1.0', 'SRAM 64 KiB ...... ok', 'PDK sky130 ...... mounted', 'mentor.ko ...... ok']
+    : ['TAPE-OS BIOS v1.0', 'CPU: tapeout-risc-v @ 1 GHz ...... ok', 'SRAM 64 KiB ...... ok', 'PDK sky130 ...... mounted', 'mentor.ko ...... loaded'];
   const log = h('div', { class: 'boot-log' });
   const el = h('div', { class: 'boot', onclick: () => el.classList.add('skip') }, h('div', { class: 'boot-inner' }, avatar(96), h('div', { class: 'boot-title' }, 'TAPE-OS'), log));
   document.body.append(el);
-  const delay = first ? 260 : 70;
+  const delay = first ? 140 : 70;
   for (const l of lines) {
     if (el.classList.contains('skip')) break;
     log.append(h('div', null, l));

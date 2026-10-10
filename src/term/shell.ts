@@ -1,6 +1,6 @@
 // TAPEOUT's brain: onboarding, the command shell, and the lesson runner.
 import { award, promotionLine, withPromotion, type Award } from '../mastery/promotion';
-import { ACTS, actProgress, ALL_MODULES, CORE_ACTS, findModule, KIND_APP, KIND_LABEL, Module, neighbours, readiness, recommended, startAct } from '../curriculum';
+import { ACTS, actProgress, ALL_MODULES, findModule, KIND_APP, KIND_LABEL, Module, neighbours, readiness, recommended, startAct } from '../curriculum';
 import { CARDS, DECKS } from '../games/drills/cards';
 import { GLOSSARY, lookup } from '../glossary';
 import { findIncident, INCIDENTS } from '../incidents';
@@ -87,9 +87,9 @@ export class Shell {
 
   private async onboard() {
     const t = this.term;
-    for (const line of ['memory check ........ 640K ought to be enough', 'mounting /pdk/sky130 ........ ok', 'loading mentor.ko ........ ok', 'starting tapeout-ai ........ ok']) t.print(line, 'dim');
+    for (const line of ['mounting /pdk/sky130 ........ ok', 'starting tapeout-ai ........ ok']) t.print(line, 'dim');
     await t.say('Hello. My name is **TAPEOUT**.', 'happy');
-    await t.say('I am the AI that lives in this workstation. I was built for one job: training chip engineers, the people who design the processors in your phone, your car, and the data centres that run the internet.');
+    await t.say('I train chip engineers: the people who design the processors in your phone and your car.');
     await t.say("What's your name?");
     let name = '';
     while (!name) {
@@ -98,22 +98,22 @@ export class Shell {
     }
     const prof: Profile = { name, background: 'new', goal: 'unsure', since: Date.now() };
     setProfile(prof);
-    await t.say(`Nice to meet you, ${name}.`, 'wink');
-    await t.say('How much do you already know about electronics and computers?');
-    const bg = await t.choose(['Nothing yet. Start me from zero.', "Some. I'm studying EE, CE or CS.", 'A lot. I work in (or near) the industry.']);
+    await t.say(`Nice to meet you, ${name}. How much do you already know about electronics and computers?`, 'wink');
+    const bg = await t.choose(['Nothing yet. Start me from zero.', "Some. I'm studying EE, CE or CS.", 'A lot. I work in (or near) the industry.'], 'choose>', undefined, 'rows');
     prof.background = (['new', 'student', 'pro'] as const)[bg];
     await t.say(['Perfect. Everybody starts somewhere, and zero is a great place to start.', 'Great, then you know the basics. We can move fast and fill the gaps.', 'Excellent. Then I will skip the pleasantries and aim for the hard stuff.'][bg], 'happy');
     await t.say('And what do you want to become?');
-    const goal = await t.choose(['Digital design engineer (RTL)', 'Verification engineer (DV)', 'Physical design / timing engineer', 'Hardware / board engineer', 'Computer architect', 'A specialist: analog, RF, memory, AI chips, security, quantum...', 'Not sure yet, show me everything']);
+    const goal = await t.choose(['Digital design engineer (RTL)', 'Verification engineer (DV)', 'Physical design / timing engineer', 'Hardware / board engineer', 'Computer architect', 'A specialist: analog, RF, memory, AI chips, security, quantum...', 'Not sure yet, show me everything'], 'choose>', undefined, 'rows');
     prof.goal = (['design', 'verif', 'pd', 'board', 'arch', 'special', 'unsure'] as const)[goal];
     setProfile(prof);
-    await t.say(`Here is the plan. ${CORE_ACTS.length} core acts take you from electrons all the way up to out-of-order cores, and the last act covers the specialist roles, from analog and RF to quantum computers:`);
-    this.printActs();
+    // The whole curriculum as one line (U18); the full act table is for players who ask for the map.
     const act = ACTS[startAct()];
     const first = recommended()!;
-    await t.say(`Based on what you told me, start at **Act ${act.n}: ${act.name}**. You can jump anywhere, any time. First up: **${first.title}**.`);
-    await t.say('As we go I will open windows for you: labs, simulators, little games. Everything you finish lights up part of your chip on the map. If you get stuck, type `help`, or just ask me what something means, like `what is a flip-flop`.', 'excited');
-    const go = await t.choose(["Let's go.", 'Show me the map first.']);
+    await t.say(`Based on what you told me, start at **Act ${act.n}: ${act.name}**. First up: **${first.title}**.`);
+    await t.print(`${ALL_MODULES.length} modules across ${ACTS.length} acts. Type \`map\` to see them all.`, 'dim');
+    await t.say('I open windows for labs and games as we go. Stuck? Type `help`, or ask me `what is a flip-flop`.', 'excited');
+    const go = await t.choose(["Let's go.", 'Show me the map first.'], 'choose>', undefined, 'rows');
+    if (go === 1) this.printActs();
     this.queue.push(go === 0 ? 'next' : 'map');
   }
 
