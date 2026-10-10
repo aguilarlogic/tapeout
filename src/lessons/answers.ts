@@ -10,7 +10,9 @@ const clean = (s: string) => s.trim().toLowerCase().replace(/[\s_]/g, '');
 
 /** Parse an integer in any common notation: 42, 0x2A, 0b101010, 8'h2A, 'd42, -5. */
 export function parseInteger(input: string, defaultBase = 10): number | null {
-  let s = clean(input);
+  // 10,000 is the usual grouping; "1,5" is not an integer, so only the three-digit groups count.
+  const raw = input.trim();
+  let s = clean(/^-?\d{1,3}(,\d{3})+$/.test(raw) ? raw.replace(/,/g, '') : raw);
   let neg = false;
   if (s.startsWith('-')) { neg = true; s = s.slice(1); }
   let base = defaultBase;
@@ -21,6 +23,9 @@ export function parseInteger(input: string, defaultBase = 10): number | null {
   } else if (s.startsWith('0x')) { base = 16; s = s.slice(2); }
   else if (s.startsWith('0b')) { base = 2; s = s.slice(2); }
   else if (s.endsWith('h') && base === 16) s = s.slice(0, -1);
+  // 1e4 is 10000 when it is a whole number (decimal only: "1e4" is a hex word otherwise).
+  const e = base === 10 ? s.match(/^(\d+)e(\d+)$/) : null;
+  if (e) { const n = Number(e[1]) * 10 ** Number(e[2]); return neg ? -n : n; }
   const digits = { 2: /^[01]+$/, 8: /^[0-7]+$/, 10: /^\d+$/, 16: /^[0-9a-f]+$/ }[base];
   if (!digits || !digits.test(s)) return null;
   const n = parseInt(s, base);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { qty, parseQuantity } from './answers';
+import { bin, hexa, num, qty, parseQuantity } from './answers';
 
 // The forgiving parser: what engineers actually type. Each case was probed against the real checkers.
 describe('quantities', () => {
@@ -26,6 +26,24 @@ describe('quantities', () => {
     expect(qty(1e-12, 'F').check('1 pH')).toBe(false);
     expect(qty(1e-6, 'A').check('1 mA')).toBe(false);
     expect(qty(5, 'V').check('5 mV')).toBe(false);
+  });
+});
+
+describe('integers', () => {
+  it('accepts thousands separators in the usual grouping, as quantities already do', () => {
+    expect(num(10000).check('10,000')).toBe(true);
+    expect(num(1234567).check('1,234,567')).toBe(true);
+    expect(num(1).check('1,5')).toBe(false);
+  });
+  it('accepts a decimal exponent that lands on a whole number', () => {
+    expect(num(10000).check('1e4')).toBe(true);
+    expect(num(10).check('1e1')).toBe(true);
+    expect(num(10).check('1e0')).toBe(false);
+  });
+  it('keeps the base rules: a bare hex-looking word is not a decimal', () => {
+    expect(num(31).check('1f')).toBe(false);
+    expect(hexa(31).check('1F')).toBe(true);
+    expect(bin(5, 4).check('0101')).toBe(true);
   });
 });
 
