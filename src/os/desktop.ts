@@ -1,6 +1,6 @@
 // TAPE-OS: the desktop the whole game lives in. The terminal (TAPEOUT) is always there; labs, minigames,
 // the map and flashcards open as windows. URLs (#/rtl/fifo, #/learn/cache...) open the matching window.
-import { findModule, KIND_APP } from '../curriculum';
+import { ACTS, type Act, findModule, KIND_APP } from '../curriculum';
 import { drillsPage } from '../games/drills/page';
 import { skillsApp } from '../mastery/app';
 import { MINIGAMES } from '../minigames/apps';
@@ -11,7 +11,8 @@ import { h } from '../ui/dom';
 import { avatar } from './avatar';
 import { activatesIcon } from './keys';
 import { launchGame } from './launch';
-import { mapApp } from './map';
+import { dieWidget } from './die';
+import { mapApp, showAct } from './map';
 import { settingsApp } from './settings';
 import { bindMentorLog } from './mentor';
 import { checkRoute, type RouteCheck } from './route';
@@ -64,6 +65,13 @@ function openTerminal() {
 
 function openMap() {
   openWindow({ id: 'map', title: 'Map.app — campaign', icon: '◈', content: mapApp(), w: 980, h: 720, onClose: home, loading: getWindow('map') ? undefined : 'Map.app' });
+}
+
+/** The live die's blocks: open Map.app on that act (U17 jump). Reuses the Map window if it is already open. */
+function openMapAt(a: Act) {
+  showAct(ACTS.indexOf(a));
+  const w = getWindow('map');
+  if (w) w.setContent(mapApp()); else openMap();
 }
 
 function openSkills(focus?: string) {
@@ -209,7 +217,7 @@ async function bootScreen(first: boolean) {
 
 export async function bootDesktop() {
   const os = document.getElementById('os')!;
-  const desktop = h('main', { id: 'desktop', class: 'desktop' }, icons());
+  const desktop = h('main', { id: 'desktop', class: 'desktop' }, icons(), dieWidget(openMapAt, onChange));
   const bar = taskbar();
   os.replaceChildren(desktop, bar);
   initWM(desktop, bar.querySelector('.tasks') as HTMLElement);

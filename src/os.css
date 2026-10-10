@@ -530,3 +530,23 @@ a.tier:hover { border-color: var(--accent); text-decoration: none; }
 .touch-card { max-width: 520px; margin: 24px auto; display: grid; gap: 10px; text-align: left; }
 .touch-card h2 { margin: 0; font-size: 1.25rem; }
 .touch-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 6px; }
+
+/* ============================================================================================
+   DESKTOP CHIP DIE (U16, owner decision: a live die in the wallpaper). Reuses the Map die's
+   classes from styles.css; this section only places it, sizes it and adds the glow.
+   Hidden on phones, like the desktop icons, so it never covers them or the terminal.
+   ============================================================================================ */
+.die-widget { position: absolute; top: 16px; right: 120px; width: 320px; z-index: 0; }
+.die-widget .die { width: 320px; height: 320px; max-width: none; }
+/* 11 px in the die's own units, so the label is at least 11 px on screen at this size. */
+.die-widget .blk-label { font-size: 11px; }
+.die-widget .region:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+@media (prefers-reduced-motion: no-preference) {
+  .die-widget .region.glow .blk { animation: die-glow 1.4s ease-out 1; }
+}
+@keyframes die-glow {
+  0% { filter: drop-shadow(0 0 0 var(--accent)); }
+  30% { filter: drop-shadow(0 0 10px var(--accent)); }
+  100% { filter: drop-shadow(0 0 0 transparent); }
+}
+@media (max-width: 760px) { .die-widget { display: none; } }
