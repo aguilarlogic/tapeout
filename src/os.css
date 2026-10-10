@@ -471,3 +471,9 @@ a.tier:hover { border-color: var(--accent); text-decoration: none; }
 .import-preview h4 { margin: 0 0 6px; font-size: 0.95rem; }
 .import-preview ul { margin: 0 0 8px; padding-left: 18px; }
 .progress-summary { font-variant-numeric: tabular-nums; }
+
+/* ---------------------------------------------------------------- reference solution panel (read only) */
+.solution { margin-bottom: 10px; border: 1px dashed var(--border); border-radius: 8px; padding: 8px 10px; background: var(--panel-2); }
+.solution[hidden] { display: none; }
+.solution-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+.solution-code { margin: 0; max-height: 240px; overflow: auto; white-space: pre; font-size: 0.85rem; line-height: 1.45; color: var(--text); }

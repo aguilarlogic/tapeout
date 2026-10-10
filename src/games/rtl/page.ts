@@ -2,6 +2,7 @@ import { mentorSay } from '../../os/mentor';
 import { run, RunResult } from '../../sim/harness';
 import { levelRecord, saveDraft } from '../../state';
 import { h } from '../../ui/dom';
+import { highlight } from '../../ui/editor';
 import { levelHeader } from '../../ui/layout';
 import { askConfirm } from '../../ui/modal';
 import { waveform } from '../../ui/waveform';
@@ -76,20 +77,30 @@ export function rtlPage(id: string): HTMLElement {
     renderWave();
   };
 
+  // The reference goes in a read-only panel: the player's draft is never overwritten. Looking at it costs a star.
+  const solution = h('section', { class: 'solution', 'aria-label': 'Reference solution, read only' },
+    h('div', { class: 'solution-head' }, h('b', null, 'Reference solution'), h('span', { class: 'dim small' }, 'Read only. Your code is untouched.'), h('span', { class: 'spacer' }),
+      h('button', { class: 'btn ghost small', onclick: () => { solution.hidden = true; } }, 'Hide')),
+    h('pre', { class: 'solution-code', tabindex: '0', html: highlight(level.golden) }));
+  solution.hidden = true;
+  const solutionBtn = h('button', {
+    class: 'btn ghost',
+    onclick: () => {
+      if (solution.hidden === false) { solution.hidden = true; return; }
+      if (usage.solution) { solution.hidden = false; return; }
+      void askConfirm({ title: 'Show the solution?', body: 'You can still finish the level, but it counts for 1 star.', confirm: 'Show it' }).then((ok) => {
+        if (!ok) return;
+        usage.solution = true;
+        saveUsage();
+        solution.hidden = false;
+      });
+    },
+  }, 'Show solution');
+
   const toolbar = h('div', { class: 'toolbar' },
     h('button', { class: 'btn primary', onclick: doRun, title: 'Ctrl+Enter' }, '▶ Run simulation'),
     resetButton(ed, level.starter, draftKey, 'the starter code', 'Reset code'),
-    h('button', {
-      class: 'btn ghost',
-      onclick: () => {
-        void askConfirm({ title: 'Show the solution?', body: 'You can still finish the level, but it counts for 1 star.', confirm: 'Show it' }).then((ok) => {
-          if (!ok) return;
-          usage.solution = true;
-          saveUsage();
-          ed.value = level.golden;
-        });
-      },
-    }, 'Show solution'),
+    solutionBtn,
     h('span', { class: 'spacer' }),
     h('label', { class: 'check' }, internalsToggle, ' internal signals'),
   );
@@ -98,7 +109,7 @@ export function rtlPage(id: string): HTMLElement {
 
   return h('div', { class: 'level' },
     levelHeader(level.title, level.id, levelRecord(level.id)?.stars ?? 0, level.xp),
-    h('div', { class: 'level-grid' }, brief, h('section', { class: 'work panel' }, toolbar, ed.el)),
+    h('div', { class: 'level-grid' }, brief, h('section', { class: 'work panel' }, toolbar, solution, ed.el)),
     results,
   );
 }
