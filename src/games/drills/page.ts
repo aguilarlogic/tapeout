@@ -5,19 +5,18 @@ import { pace } from '../../term/terminal';
 import { typeOnPage } from '../../term/typewriter';
 import { h } from '../../ui/dom';
 import { Card, CARDS, DECKS } from './cards';
+import { deckRows, deckStats } from './stats';
 
 const SESSION = 10;
 
 export function drillsPage(deckParam?: string): HTMLElement {
   const root = h('div', { class: 'level drills' });
 
-  const mastery = (deck?: string) => {
-    const p = load();
-    const cards = CARDS.filter((c) => !deck || c.deck === deck);
-    const mastered = cards.filter((c) => (p.cards[c.id]?.box ?? 0) >= 3).length;
-    const due = cards.filter((c) => (p.cards[c.id]?.due ?? 0) <= Date.now()).length;
-    return { total: cards.length, mastered, due };
-  };
+  const mastery = (deck?: string) => deckStats(CARDS.filter((c) => !deck || c.deck === deck), load().cards, Date.now());
+
+  // "due" only for cards whose review time has come; cards never shown are "new".
+  const summary = (m: ReturnType<typeof mastery>) =>
+    [m.due ? `${m.due} due` : null, m.fresh ? `${m.fresh} new` : null, `${m.mastered}/${m.total} mastered`].filter(Boolean).join(' · ');
 
   const home = () => {
     const all = mastery();
@@ -27,16 +26,19 @@ export function drillsPage(deckParam?: string): HTMLElement {
         h('div', { class: 'title-row' }, h('h2', null, 'Interview Gauntlet'))),
       h('p', { class: 'lede' }, 'Spaced repetition: cards you miss come back in a minute, cards you know come back in 1, 3, 7, then 21 days. A card counts as mastered after three correct answers in a row.'),
       h('div', { class: 'deck-grid' },
-        deckCard('Mixed session', `${all.due} due · ${all.mastered}/${all.total} mastered`, all.mastered / all.total, () => start()),
-        ...DECKS.map((d) => {
+        deckCard('Mixed session', summary(all), all.mastered / all.total, () => start()),
+        // Decks for topics the player has not met yet go last, marked as previews. They still open.
+        ...deckRows(DECKS, (id) => mastery(id).seen > 0).map(({ d, preview }) => {
           const m = mastery(d.id);
-          return deckCard(d.name, `${m.due} due · ${m.mastered}/${m.total} mastered`, m.mastered / m.total, () => start(d.id));
+          return preview
+            ? deckCard(d.name, `preview · ${m.fresh} new`, 0, () => start(d.id), true)
+            : deckCard(d.name, summary(m), m.mastered / m.total, () => start(d.id));
         })),
     );
   };
 
-  const deckCard = (name: string, sub: string, frac: number, onclick: () => void) =>
-    h('button', { class: 'deck', onclick },
+  const deckCard = (name: string, sub: string, frac: number, onclick: () => void, preview = false) =>
+    h('button', { class: `deck${preview ? ' preview' : ''}`, onclick },
       h('b', null, name), h('span', { class: 'dim' }, sub),
       h('div', { class: 'track' }, h('div', { class: 'fill', style: `width:${Math.round(frac * 100)}%` })));
 
@@ -80,6 +82,7 @@ export function drillsPage(deckParam?: string): HTMLElement {
   const ask = (card: Card, done: (ok: boolean) => void, n: number, total: number, deck?: string) => {
     const order = card.c.map((_, j) => j).sort(() => Math.random() - 0.5);
     const deckName = DECKS.find((d) => d.id === card.deck)!.name;
+    const fresh = !load().cards[card.id];
     const explain = h('div', { class: 'explain' });
     const nextBtn = h('button', { class: 'btn primary', style: 'display:none' }, n + 1 < total ? 'Next question →' : 'Finish');
     let answered = false;
@@ -110,7 +113,7 @@ export function drillsPage(deckParam?: string): HTMLElement {
     root.replaceChildren(
       h('header', { class: 'level-head' },
         h('nav', { class: 'crumbs' }, h('a', { href: '#/map' }, 'Map'), ' / ', h('a', { href: '#/drills', onclick: (e: Event) => { e.preventDefault(); home(); } }, 'Interview Gauntlet'), ` / ${deck ? DECKS.find((d) => d.id === deck)!.name : 'Mixed'}`),
-        h('div', { class: 'title-row' }, h('h2', null, `Question ${n + 1} of ${total}`), h('span', { class: 'tag' }, deckName))),
+        h('div', { class: 'title-row' }, h('h2', null, `Question ${n + 1} of ${total}`), h('span', { class: 'tag' }, fresh ? `${deckName} · new` : deckName))),
       h('div', { class: 'panel card-q' }, posed, explain, h('div', { class: 'modal-actions' }, nextBtn)),
     );
     void typeOnPage(posed, pace(), root);
