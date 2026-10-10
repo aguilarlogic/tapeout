@@ -7,6 +7,7 @@ import { Circuit, counts, Kind, Part, PINS, Sim, SIZE, starsFor, V, verify } fro
 import { CANVAS, findLogicLevel, starter } from './levels';
 import { briefPanel, finish, hintNote, useHints } from '../../ui/labkit';
 import { askConfirm } from '../../ui/modal';
+import { touchGate } from '../../ui/touch';
 
 const GRID = 10;
 const snap = (v: number) => Math.round(v / GRID) * GRID;
@@ -69,7 +70,12 @@ const vertical = (p: Part, pin: string) => {
   return d.dy === 0 || d.dy === SIZE[p.kind][1];
 };
 
+/** Drag-to-wire needs a mouse: on a phone the lab opens behind an honest card (see ui/touch.ts). */
 export function logicPage(id: string): HTMLElement {
+  return touchGate('logic', () => buildLogic(id));
+}
+
+function buildLogic(id: string): HTMLElement {
   const level = findLogicLevel(id);
   if (!level) return h('p', null, 'Unknown level.');
   const key = `logic.${level.id}`;
@@ -299,7 +305,7 @@ export function logicPage(id: string): HTMLElement {
 
   const palette = h('div', { class: 'palette' }, ...level.palette.map((k) => h('button', { class: 'chip', onclick: () => addPart(k), title: `Add a ${k}` }, `+ ${k}`)));
   const brief = briefPanel({ tag: level.concept, html: level.brief, hintBox }, h('h4', null, 'Parts bin'), palette,
-    h('p', { class: 'dim small' }, 'Drag parts to move them. Drag from pin to pin (or click one pin, then another) to wire. Click an input switch to toggle it. Select + Delete removes; double-click a wire to cut it.'));
+    h('p', { class: 'dim small' }, 'Drag parts to move them. Drag from pin to pin (or click one pin, then another) to wire. Click an input switch to toggle it. ', h('span', { class: 'kbd-hint' }, 'Select + Delete removes; '), 'double-click a wire to cut it.'));
 
   resim(true);
   draw();

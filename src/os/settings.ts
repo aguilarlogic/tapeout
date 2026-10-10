@@ -210,7 +210,7 @@ export function settingsApp(): HTMLElement {
       h('p', { class: 'dim' }, 'A backup is one file with your XP, ranks, flashcards, high scores and lab drafts. Keep it somewhere safe: the game lives in this browser, and clearing the site data loses it.'),
       h('div', { class: 'import-actions' }, exportBtn, h('button', { class: 'btn', onclick: () => fileInput.click() }, 'Import progress…'), fileInput),
       importBox),
-    h('section', { class: 'panel' },
+    h('section', { class: 'panel kbd-hint' },
       h('h3', null, 'Keyboard shortcuts'),
       h('dl', { class: 'keys' }, ...KEYS.flatMap(([k, what]) => [h('dt', null, h('kbd', null, k)), h('dd', { class: 'dim' }, what)]))),
     h('section', { class: 'panel danger-zone' },

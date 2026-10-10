@@ -8,11 +8,17 @@ import {
 import { PCB_LEVELS } from './levels';
 import { briefPanel, finish } from '../../ui/labkit';
 import { askConfirm } from '../../ui/modal';
+import { touchGate } from '../../ui/touch';
 
 type Tool = 'route' | 'via' | 'erase' | 'move';
 const CELL = 34;
 
+/** Routing traces needs a mouse: on a phone the board opens behind an honest card (see ui/touch.ts). */
 export function pcbPage(id: string): HTMLElement {
+  return touchGate('pcb', () => buildPcb(id));
+}
+
+function buildPcb(id: string): HTMLElement {
   const level = PCB_LEVELS.find((l) => l.id === id);
   if (!level) return h('p', null, 'Unknown board.');
   const draftKey = `pcb.${level.id}`;
@@ -381,7 +387,7 @@ export function pcbPage(id: string): HTMLElement {
     levelHeader(level.title, level.id, levelRecord(level.id)?.stars ?? 0, level.xp),
     h('div', { class: 'level-grid pcb-grid' },
       briefPanel({ tag: level.concept, html: level.brief },
-        h('p', { class: 'dim small' }, 'Keys: R route · V via · E erase · L switch layer · Ctrl+Z undo. Click a DRC message to highlight it.')),
+        h('p', { class: 'dim small' }, h('span', { class: 'kbd-hint' }, 'Keys: R route · V via · E erase · L switch layer · Ctrl+Z undo. '), 'Click a DRC message to highlight it.')),
       h('section', { class: 'work panel' }, toolbar, h('div', { class: 'pcb-wrap' }, canvas), legend),
       h('aside', { class: 'panel drc' }, h('h4', null, 'Nets'), statsEl, h('h4', null, 'Design rule check'), issuesEl),
     ),

@@ -47,11 +47,11 @@ export function shellPage(id: string): HTMLElement {
   let buffer = '';
   let cursor = history.length;
 
-  const addLine = (text: string, cls = '') => { screen.append(h('pre', { class: `sh-line ${cls}` }, text)); screen.scrollTop = screen.scrollHeight; };
+  const addLine = (text: string | Node, cls = '') => { screen.append(h('pre', { class: `sh-line ${cls}` }, text)); screen.scrollTop = screen.scrollHeight; };
   const refreshPrompt = () => { promptLabel.textContent = buffer ? '>' : prompt(); };
   const echoHistory = () => {
     screen.replaceChildren();
-    addLine('Type commands and press Enter. Shift+Enter adds a line. Up/Down recall history. "help" lists what is available.', 'dim');
+    addLine(h('span', null, 'Type commands and press Enter. ', h('span', { class: 'kbd-hint' }, 'Shift+Enter adds a line. Up/Down recall history. '), '"help" lists what is available.'), 'dim');
     m = replay(inst, history);
     // show the output of replayed commands so the session looks continuous
     history.forEach((c, i) => { addLine(`$ ${c}`, 'cmd'); const o = m.hist[i]?.out ?? ''; if (o) addLine(o.replace(/\n$/, ''), 'out'); });
@@ -91,7 +91,7 @@ export function shellPage(id: string): HTMLElement {
       if (incomplete(full)) {
         addLine(`${buffer ? '>' : prompt()} ${line}`, 'cmd');
         // The bare ">" prompt means "still waiting": say why, once, and how to get out.
-        if (!buffer) addLine('The line is not finished (an open quote, a trailing \\, or a heredoc without its end word). Keep typing, or press Ctrl+C to cancel.', 'dim');
+        if (!buffer) addLine(h('span', null, 'The line is not finished (an open quote, a trailing \\, or a heredoc without its end word). Keep typing', h('span', { class: 'kbd-hint' }, ', or press Ctrl+C to cancel'), '.'), 'dim');
         buffer = full; refreshPrompt(); return;
       }
       buffer = '';

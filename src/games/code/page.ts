@@ -31,7 +31,7 @@ export function codePage(id: string): HTMLElement {
   const brief = briefPanel({ tag: `${langName} · ${level.concept}`, ticket: level.ticket, model: level.lang === 'tcl' ? TCL_NOTE : MODEL_NOTE, html: inst.brief, note: tierNote, hintBox });
 
   // --- results
-  const status = h('div', { class: 'status idle' }, 'Run (Ctrl+Enter) tries the example cases. Submit checks everything, including the hidden cases.');
+  const status = h('div', { class: 'status idle' }, 'Run ', h('span', { class: 'kbd-hint' }, '(Ctrl+Enter) '), 'tries the example cases. Submit checks everything, including the hidden cases.');
   const rules = h('ul', { class: 'goals' });
   const table = h('div', { class: 'case-table' });
   const consoleBox = h('pre', { class: 'console' });

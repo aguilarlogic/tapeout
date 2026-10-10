@@ -24,7 +24,7 @@ export function rtlPage(id: string): HTMLElement {
   const brief = briefPanel({ tag: level.concept, html: level.brief, model: MODEL_NOTE, hintBox });
 
   // --- results area
-  const status = h('div', { class: 'status idle' }, 'Press Run (Ctrl+Enter) to simulate your design against the golden model.');
+  const status = h('div', { class: 'status idle' }, 'Press Run ', h('span', { class: 'kbd-hint' }, '(Ctrl+Enter) '), 'to simulate your design against the golden model.');
   const messages = h('ul', { class: 'messages' });
   const waveHost = h('div', { class: 'wave-host' });
   const internalsToggle = h('input', { type: 'checkbox', id: 'internals' }) as HTMLInputElement;

@@ -523,3 +523,10 @@ a.tier:hover { border-color: var(--accent); text-decoration: none; }
 .progress-summary { font-variant-numeric: tabular-nums; }
 .danger-zone { border-color: var(--err); }
 .danger-zone h3 { color: var(--err); }
+
+/* ---------------------------------------------------------------- touch: key hints go, and drag labs get a card (U22) */
+/* Keyboard hints are for keyboards. On a coarse pointer they go everywhere, by this one rule. */
+@media (pointer: coarse) { .kbd-hint { display: none !important; } }
+.touch-card { max-width: 520px; margin: 24px auto; display: grid; gap: 10px; text-align: left; }
+.touch-card h2 { margin: 0; font-size: 1.25rem; }
+.touch-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 6px; }
