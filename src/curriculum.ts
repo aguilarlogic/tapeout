@@ -211,6 +211,15 @@ export const ACTS: Act[] = [
 
 export const ALL_MODULES: Module[] = ACTS.flatMap((a) => a.chapters.flatMap((c) => c.modules));
 
+// Player copy counts acts from here, never from a typed number. The last act is the specialist roles.
+export const CORE_ACTS: Act[] = ACTS.filter((a) => a.id !== 'roles');
+
+/** The chapter part of a breadcrumb. "Logic · Logic lab" and "Verilog · Verilog" say one thing twice, so the kind is dropped. */
+export function crumbChapter(chapter: string, kind: string): string {
+  const name = (s: string) => s.toLowerCase().replace(/\s+labs?$/, '');
+  return name(chapter) === name(kind) ? chapter : `${chapter} · ${kind}`;
+}
+
 export interface Found { act: Act; chapter: Chapter; module: Module; index: number }
 
 export function findModule(id: string): Found | undefined {

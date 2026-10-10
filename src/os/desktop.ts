@@ -96,7 +96,7 @@ function route() {
     return;
   }
   if (section === 'drills') {
-    openWindow({ id: 'drills', title: 'Flashcards.app — interview gauntlet', icon: '?!', content: drillsPage(id), w: 860, h: 680, onClose: home, loading: 'Flashcards.app' });
+    openWindow({ id: 'drills', title: 'Flashcards.app — Interview Gauntlet', icon: '?!', content: drillsPage(id), w: 860, h: 680, onClose: home, loading: 'Flashcards.app' });
     return;
   }
   if (section === 'play') {
@@ -146,7 +146,7 @@ function taskbar(): HTMLElement {
     item('›_', 'Terminal (TAPEOUT)', () => { (getWindow('term') ?? openTerminal()).focus(); term.focus(); }),
     item('◈', 'Campaign map', () => (location.hash = '#/map')),
     item('◉', 'Skills & job readiness', () => (location.hash = '#/skills')),
-    item('?!', 'Interview flashcards', () => (location.hash = '#/drills')),
+    item('?!', 'Interview Gauntlet', () => (location.hash = '#/drills')),
     item('⚙', 'Settings: typing speed', () => (location.hash = '#/settings')),
     h('div', { class: 'start-sep' }, 'Arcade'),
     ...MINIGAMES.map((g) => item(g.icon, g.title, () => void launchGame(g.id))),

@@ -31,17 +31,17 @@ opens in your browser, works offline, and saves your progress in that browser.
 (Maintainers: to publish a release, open the **Actions** tab, pick **Release**, and click **Run workflow**. Or push a tag
 such as `v0.2.0`. Every CI run also uploads the playable file as an artifact named `tapeout-game`.)
 
-## The curriculum: seven acts, 110 modules
+## The curriculum: seven acts, 572 modules
 
-| Act | Covers | You do |
-| --- | --- | --- |
-| **1 · Foundations** | binary, two's complement, Ohm's law, RC, multivariable calculus, linear algebra, differential equations, band gaps, PN junctions, MOSFET physics, short-channel effects, leakage, CMOS | 10 lessons, 5 transistor-level labs (build an inverter, NAND, NOR, AND, AOI21 from NMOS/PMOS) |
-| **2 · Systems & Software** | C, C++, data structures and algorithms, assembly, compilers, linkers and loaders, operating systems | 5 lessons |
-| **3 · Digital Design** | Boolean algebra, combinational and sequential logic, FSMs, Verilog, ALUs, fast adders, multipliers, pipelines, clocks, resets, CDC, async FIFOs | 6 lessons, 9 gate-level labs, 14 Verilog labs on a built-in simulator |
-| **4 · VLSI & Implementation** | STA (setup/hold, skew, jitter, false/multicycle paths), inverter VTC, parasitics, Elmore delay, logical effort, low power (clock/power gating, voltage domains, DVFS), boards | 4 lessons, 5 timing-closure labs, 5 PCB routing labs |
-| **5 · Verification & Test** | testbenches, constrained random, coverage, UVM, SVA, formal, DFT (scan, ATPG, BIST, JTAG) | 6 lessons, 7 bug hunts, 2 coverage labs, 3 UVM labs |
-| **6 · Architecture** | superscalar/OoO, register renaming, branch prediction, speculation, caches, TLBs, MESI/MOESI, consistency, DDR5/HBM, buses, NoCs, PCIe/CXL, gem5, Amdahl, roofline | 9 lessons, a 60-card interview gauntlet, and a final review |
-| **7 · Specializations** | what each role does, and the core ideas and numbers it uses. Covered: analog/mixed-signal, RF, power electronics, SI/PI, physical design, memory design, process and yield, packaging and chiplets, post-silicon validation, test engineering, FPGAs and emulation, AI accelerators, hardware security, functional safety, silicon photonics, quantum hardware, quantum control electronics | 17 lessons |
+| Act | Covers | Modules | You do |
+| --- | --- | --- | --- |
+| **1 · Foundations** | binary, two's complement, Ohm's law, RC, multivariable calculus, linear algebra, differential equations, band gaps, PN junctions, MOSFET physics, short-channel effects, leakage, CMOS | 81 | 19 lessons, 19 practice sets, 14 circuit labs, 14 boss fights, 6 signal labs, 5 transistor-level labs (build an inverter, NAND, NOR, AND, AOI21 from NMOS/PMOS), 4 code labs |
+| **2 · Systems & Software** | C, C++, data structures and algorithms, assembly, compilers, linkers and loaders, operating systems | 111 | 9 lessons, 9 practice sets, 38 code labs, 25 shell labs, 21 assembly labs, 9 boss fights |
+| **3 · Digital Design** | Boolean algebra, combinational and sequential logic, FSMs, Verilog, ALUs, fast adders, multipliers, pipelines, clocks, resets, CDC, async FIFOs | 52 | 7 lessons, 7 practice sets, 14 Verilog labs on a built-in simulator, 9 gate-level labs, 6 clock-crossing labs, 5 RISC-V core projects, 4 boss fights |
+| **4 · VLSI & Implementation** | STA (setup/hold, skew, jitter, false/multicycle paths), inverter VTC, parasitics, Elmore delay, logical effort, low power (clock/power gating, voltage domains, DVFS), boards | 42 | 4 lessons, 4 practice sets, 10 timing labs, 6 physical-design labs, 5 layout labs, 5 PCB routing labs, 2 circuit labs, 5 boss fights, 1 incident |
+| **5 · Verification & Test** | testbenches, constrained random, coverage, UVM, SVA, formal, DFT (scan, ATPG, BIST, JTAG) | 80 | 6 lessons, 7 practice sets, 23 testbench labs, 16 assertion labs, 7 bug hunts, 6 DFT labs, 3 UVM labs, 2 coverage labs, 2 code labs, 8 boss fights |
+| **6 · Architecture** | superscalar/OoO, register renaming, branch prediction, speculation, caches, TLBs, MESI/MOESI, consistency, DDR5/HBM, buses, NoCs, PCIe/CXL, gem5, Amdahl, roofline | 41 | 9 lessons, 9 practice sets, 16 architecture labs, 5 boss fights, the Interview Gauntlet (60 cards), and a final review |
+| **7 · Specializations** | what each role does, and the core ideas and numbers it uses. Covered: analog/mixed-signal, RF, power electronics, SI/PI, physical design, memory design, process and yield, packaging and chiplets, post-silicon validation, test engineering, FPGAs and emulation, AI accelerators, hardware security, functional safety, silicon photonics, quantum hardware, quantum control electronics | 165 | 27 lessons, 26 practice sets, 25 specialist labs, 10 circuit labs, 4 code labs, 15 incidents, and 58 boss fights (including a hiring panel for each role) |
 
 How deep does it go? [docs/CURRICULUM-AUDIT.md](docs/CURRICULUM-AUDIT.md) compares the curriculum with what the industry
 expects, topic by topic, and lists what to build next.
@@ -75,10 +75,10 @@ No backend, no accounts: progress is saved in your browser's localStorage.
 ## What's inside
 
 - **The terminal mentor** (`src/term/`): an async terminal (`await term.say(...)`, `await term.ask(...)`), the shell,
-  onboarding and the lesson runner, plus a glossary of 180+ terms TAPEOUT can define.
+  onboarding and the lesson runner, plus a glossary of 280+ terms TAPEOUT can define.
 - **TAPE-OS** (`src/os/`): a window manager (drag, resize, minimize, taskbar), the TAPEOUT avatar with moods, the
   campaign map and a URL router (`#/learn/cache`, `#/rtl/fifo`, `#/play/mesi`...).
-- **58 lessons** (`src/lessons/`) with randomized questions, checked by tests across 60 seeds each.
+- **81 lessons** (`src/lessons/`) with randomized questions, checked by tests across 60 seeds each.
 - **Logic Lab** (`src/games/logic/`): a schematic editor with a 4-state net solver that handles gates, flip-flops,
   feedback and switch-level CMOS (shorts and floating nodes are detected).
 - **A Verilog simulator written from scratch** (`src/sim/`), a **mini static timing analyzer**, a **PCB router with

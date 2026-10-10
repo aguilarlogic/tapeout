@@ -1,4 +1,4 @@
-import { findModule, KIND_LABEL, neighbours } from '../curriculum';
+import { crumbChapter, findModule, KIND_LABEL, neighbours } from '../curriculum';
 import { avatar, setMood } from '../os/avatar';
 import type { Award } from '../mastery/promotion';
 import { mentorSay } from '../os/mentor';
@@ -15,7 +15,7 @@ export function levelHeader(title: string, levelId: string, stars: number, xp: n
   return h('header', { class: 'level-head' },
     h('nav', { class: 'crumbs', 'aria-label': 'Breadcrumb' },
       h('a', { href: '#/map' }, 'Map'),
-      f ? ` / Act ${f.act.n} · ${f.act.name} / ${f.chapter.name} · ${KIND_LABEL[f.module.kind]}` : null),
+      f ? ` / Act ${f.act.n} · ${f.act.name} / ${crumbChapter(f.chapter.name, KIND_LABEL[f.module.kind])}` : null),
     h('div', { class: 'title-row' },
       h('h2', null, title),
       starEls(stars),

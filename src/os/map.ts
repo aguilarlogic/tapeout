@@ -1,5 +1,5 @@
 // Map.app: the campaign as a chip. Each act is a block of the die; every module is a node on a trace.
-import { ACTS, Act, actProgress, KIND_LABEL, ModKind, readiness, recommended } from '../curriculum';
+import { ACTS, Act, actProgress, CORE_ACTS, KIND_LABEL, ModKind, readiness, recommended } from '../curriculum';
 import { levelRecord, rank, RANKS, totalXp } from '../state';
 import { h, stars, svg } from '../ui/dom';
 
@@ -65,7 +65,7 @@ export function mapApp(): HTMLElement {
       h('div', { class: 'map-summary' },
         h('p', { class: 'kicker' }, `Tapeout readiness ${readiness()}%`),
         h('h2', null, 'From electrons to architecture'),
-        h('p', { class: 'dim' }, 'Six core acts and a block of specialist roles, each a region of your chip. Lessons run in the terminal with TAPEOUT; labs open their own windows. Everything is open: skip ahead whenever you like.'),
+        h('p', { class: 'dim' }, `${CORE_ACTS.length} core acts and a block of specialist roles, each a region of your chip. Lessons run in the terminal with TAPEOUT; labs open their own windows. Everything is open: skip ahead whenever you like.`),
         next ? h('a', { class: 'btn primary', href: next.route }, `▶ Next: ${next.title}`) : h('p', { class: 'promo' }, 'Everything signed off. Your chip is ready to tape out.'),
         h('div', { class: 'ranks' }, ...RANKS.map((rk, i) => h('span', { class: `rank${i === r.index ? ' on' : i < r.index ? ' past' : ''}`, title: `${rk.xp} XP` }, rk.title))))),
     ...acts,

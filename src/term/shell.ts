@@ -1,6 +1,6 @@
 // TAPEOUT's brain: onboarding, the command shell, and the lesson runner.
 import { award, promotionLine, withPromotion, type Award } from '../mastery/promotion';
-import { ACTS, actProgress, ALL_MODULES, findModule, KIND_APP, KIND_LABEL, Module, neighbours, readiness, recommended, startAct } from '../curriculum';
+import { ACTS, actProgress, ALL_MODULES, CORE_ACTS, findModule, KIND_APP, KIND_LABEL, Module, neighbours, readiness, recommended, startAct } from '../curriculum';
 import { CARDS, DECKS } from '../games/drills/cards';
 import { GLOSSARY, lookup } from '../glossary';
 import { findIncident, INCIDENTS } from '../incidents';
@@ -107,7 +107,7 @@ export class Shell {
     const goal = await t.choose(['Digital design engineer (RTL)', 'Verification engineer (DV)', 'Physical design / timing engineer', 'Hardware / board engineer', 'Computer architect', 'A specialist: analog, RF, memory, AI chips, security, quantum...', 'Not sure yet, show me everything']);
     prof.goal = (['design', 'verif', 'pd', 'board', 'arch', 'special', 'unsure'] as const)[goal];
     setProfile(prof);
-    await t.say('Here is the plan. Six core acts take you from electrons all the way up to out-of-order cores, and a seventh covers the specialist roles, from analog and RF to quantum computers:');
+    await t.say(`Here is the plan. ${CORE_ACTS.length} core acts take you from electrons all the way up to out-of-order cores, and the last act covers the specialist roles, from analog and RF to quantum computers:`);
     this.printActs();
     const act = ACTS[startAct()];
     const first = recommended()!;
@@ -236,7 +236,7 @@ export class Shell {
       ['learn <name>', 'open any lesson or lab (e.g. `learn cache`)'],
       ['play [game]', 'the arcade: minigames TAPEOUT built'],
       ['quiz', 'a quick interview question'],
-      ['practice [skill]', 'endless generated problems; no argument = a daily mix'],
+      ['practice [skill]', `${PRACTICE_COUNT} scored problems per set; no argument = a daily mix; --endless keeps going`],
       ['skills [role]', 'your skill matrix: every topic, levels 0-3'],
       ['roles [role]', 'job readiness for every role (DV, PD, quantum…)'],
       ['boss [name]', 'list or start boss fights (no hints)'],
@@ -303,7 +303,7 @@ export class Shell {
     t.print(`readiness ${bar(readiness() / 100)} ${readiness()}%`);
     for (const a of ACTS) { const pr = actProgress(a); t.print(`act ${a.n} ${bar(pr.frac, 12)} ${pr.done}/${pr.total}  ${a.name}`, 'mono'); }
     const mastered = CARDS.filter((c) => (load().cards[c.id]?.box ?? 0) >= 3).length;
-    t.print(`interview cards mastered: ${mastered}/${CARDS.length}`, 'dim');
+    t.print(`Interview Gauntlet cards mastered: ${mastered}/${CARDS.length}`, 'dim');
   }
 
   private async define(q: string) {

@@ -23,8 +23,8 @@ export function drillsPage(deckParam?: string): HTMLElement {
     const all = mastery();
     root.replaceChildren(
       h('header', { class: 'level-head' },
-        h('nav', { class: 'crumbs' }, h('a', { href: '#/map' }, 'Map'), ' / Interview Prep'),
-        h('div', { class: 'title-row' }, h('h2', null, 'Interview Prep'))),
+        h('nav', { class: 'crumbs' }, h('a', { href: '#/map' }, 'Map'), ' / Interview Gauntlet'),
+        h('div', { class: 'title-row' }, h('h2', null, 'Interview Gauntlet'))),
       h('p', { class: 'lede' }, 'Spaced repetition: cards you miss come back in a minute, cards you know come back in 1, 3, 7, then 21 days. A card counts as mastered after three correct answers in a row.'),
       h('div', { class: 'deck-grid' },
         deckCard('Mixed session', `${all.due} due · ${all.mastered}/${all.total} mastered`, all.mastered / all.total, () => start()),
@@ -63,7 +63,7 @@ export function drillsPage(deckParam?: string): HTMLElement {
       mentorSay(frac >= 0.9 ? `${right} of ${session.length}. Interviewers would be impressed, {name}.` : `${right} of ${session.length}. The misses come back soon: that is how they stick.`, frac >= 0.9 ? 'proud' : 'happy');
       if (aw.promotedTo) mentorSay(promotionLine(aw.promotedTo), 'excited');
       root.replaceChildren(
-        h('header', { class: 'level-head' }, h('nav', { class: 'crumbs' }, h('a', { href: '#/map' }, 'Map'), ' / ', h('a', { href: '#/drills', onclick: (e: Event) => { e.preventDefault(); home(); } }, 'Interview Prep')),
+        h('header', { class: 'level-head' }, h('nav', { class: 'crumbs' }, h('a', { href: '#/map' }, 'Map'), ' / ', h('a', { href: '#/drills', onclick: (e: Event) => { e.preventDefault(); home(); } }, 'Interview Gauntlet')),
           h('div', { class: 'title-row' }, h('h2', null, 'Session complete'))),
         h('div', { class: 'panel center' },
           h('p', { class: 'big' }, `${right} / ${session.length} correct`),
@@ -109,7 +109,7 @@ export function drillsPage(deckParam?: string): HTMLElement {
     const posed = h('div', null, h('p', { class: 'q' }, card.q), h('div', { class: 'choices' }, ...buttons));
     root.replaceChildren(
       h('header', { class: 'level-head' },
-        h('nav', { class: 'crumbs' }, h('a', { href: '#/map' }, 'Map'), ' / ', h('a', { href: '#/drills', onclick: (e: Event) => { e.preventDefault(); home(); } }, 'Interview Prep'), ` / ${deck ? DECKS.find((d) => d.id === deck)!.name : 'Mixed'}`),
+        h('nav', { class: 'crumbs' }, h('a', { href: '#/map' }, 'Map'), ' / ', h('a', { href: '#/drills', onclick: (e: Event) => { e.preventDefault(); home(); } }, 'Interview Gauntlet'), ` / ${deck ? DECKS.find((d) => d.id === deck)!.name : 'Mixed'}`),
         h('div', { class: 'title-row' }, h('h2', null, `Question ${n + 1} of ${total}`), h('span', { class: 'tag' }, deckName))),
       h('div', { class: 'panel card-q' }, posed, explain, h('div', { class: 'modal-actions' }, nextBtn)),
     );
