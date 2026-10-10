@@ -1,4 +1,4 @@
-import { crumbChapter, findModule, KIND_LABEL, neighbours } from '../curriculum';
+import { crumbChapter, findModule, KIND_LABEL, pathNeighbours } from '../curriculum';
 import { avatar, setMood } from '../os/avatar';
 import type { Award } from '../mastery/promotion';
 import { mentorSay } from '../os/mentor';
@@ -6,12 +6,12 @@ import { rich } from '../term/terminal';
 import { h, stars as starEls } from './dom';
 
 export function nextHref(levelId: string): string {
-  return neighbours(levelId).next?.route ?? '#/map';
+  return pathNeighbours(levelId).next?.route ?? '#/map';
 }
 
 export function levelHeader(title: string, levelId: string, stars: number, xp: number): HTMLElement {
   const f = findModule(levelId);
-  const { prev, next } = neighbours(levelId);
+  const { prev, next } = pathNeighbours(levelId);
   return h('header', { class: 'level-head' },
     h('nav', { class: 'crumbs', 'aria-label': 'Breadcrumb' },
       h('a', { href: '#/map' }, 'Map'),

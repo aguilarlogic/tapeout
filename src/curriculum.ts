@@ -331,6 +331,14 @@ export function nextInPath(id: string): Module | undefined {
   return i >= 0 ? order[i + 1] : undefined;
 }
 
+/** The modules either side of `id` on the player's path (lesson pages and "Continue" use this, so they agree with `next`). */
+export function pathNeighbours(id: string, p: Profile | undefined = profile()): { prev?: Module; next?: Module } {
+  const order = learningOrder(p);
+  const i = order.findIndex((m) => m.id === id);
+  return { prev: i > 0 ? order[i - 1] : undefined, next: i >= 0 ? order[i + 1] : undefined };
+}
+
+/** The curriculum order, either side of `id` (the map's own order; the player's path is `pathNeighbours`). */
 export function neighbours(id: string): { prev?: Module; next?: Module } {
   const i = ALL_MODULES.findIndex((m) => m.id === id);
   return { prev: ALL_MODULES[i - 1], next: ALL_MODULES[i + 1] };

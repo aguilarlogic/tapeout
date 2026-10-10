@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ACTS, ALL_MODULES, goalRole, learningOrder, planSentence, setGoalRole, startAct, type Module } from './curriculum';
+import { ACTS, ALL_MODULES, goalRole, learningOrder, neighbours, pathNeighbours, planSentence, setGoalRole, startAct, type Module } from './curriculum';
 import { career } from './mastery/career';
 import { SKILLS, type RoleId } from './mastery/skills';
 import type { Profile } from './state';
@@ -140,5 +140,22 @@ describe('the career view follows the goal', () => {
     expect(career('dv').closest[0].role.id).toBe('dv');
     expect(career().goal).toBeUndefined();
     expect(career().closest.length).toBe(3);
+  });
+});
+
+describe('lesson pages follow the path', () => {
+  it('prev and next are the neighbours on the player\'s path, not in the curriculum', () => {
+    for (const g of ROLE_GOALS) {
+      const p = prof('student', g);
+      const order = learningOrder(p);
+      order.forEach((m, i) => {
+        const n = pathNeighbours(m.id, p);
+        expect(n.prev?.id, `${g} prev of ${m.id}`).toBe(order[i - 1]?.id);
+        expect(n.next?.id, `${g} next of ${m.id}`).toBe(order[i + 1]?.id);
+      });
+    }
+    // the path differs from the curriculum order somewhere, so this is not a no-op
+    const p = prof('student', 'verif');
+    expect(learningOrder(p).some((m) => pathNeighbours(m.id, p).next?.id !== neighbours(m.id).next?.id)).toBe(true);
   });
 });
