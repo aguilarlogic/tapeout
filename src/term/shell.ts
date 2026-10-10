@@ -110,6 +110,8 @@ export class Shell {
     setProfile(prof);
     // The goal shapes the path (U7): one sentence on how, then the start. The whole curriculum is one line (U18).
     await t.say(planSentence(prof), 'happy');
+    // A new player's path opens with five quick wins before the normal order (U19).
+    if (prof.background === 'new') await t.say("We'll start with five quick wins: from a single bit to your first Verilog module.", 'excited');
     const act = ACTS[startAct()];
     const first = recommended()!;
     await t.say(`Start at **Act ${act.n}: ${act.name}**. First up: **${first.title}**.`);

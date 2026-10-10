@@ -296,13 +296,27 @@ function pathActs(p: Profile | undefined): Act[] {
 }
 
 /** Every module, in the order TAPEOUT leads the player through them (see pathActs). */
+/**
+ * A new player's first five wins, in order: from one bit to the first Verilog module (U19). Only the order changes,
+ * so the heavy maths comes after them, in the normal order. There is no prerequisite data, so nothing else is pulled in.
+ */
+export const FIRST_SESSION = ['bits', 'ohm', 'cmos-inv', 'logic-not', 'gates'];
+
 export function learningOrder(p: Profile | undefined = profile()): Module[] {
-  return pathActs(p).flatMap((a) => a.chapters.flatMap((c) => c.modules));
+  const order = pathActs(p).flatMap((a) => a.chapters.flatMap((c) => c.modules));
+  if (p?.background !== 'new') return order;
+  const first = FIRST_SESSION.map((id) => ALL_MODULES.find((m) => m.id === id)!);
+  return [...first, ...order.filter((m) => !FIRST_SESSION.includes(m.id))];
 }
 
 /** The next unfinished module on the player's path. */
 export function recommended(): Module | undefined {
-  return learningOrder().find((m) => !isDone(m));
+  return recommendedFor(profile(), (id) => !!levelRecord(id));
+}
+
+/** The first module on the player's path that is not done (`done` says which are). */
+export function recommendedFor(p: Profile | undefined, done: (id: string) => boolean): Module | undefined {
+  return learningOrder(p).find((m) => !done(m.id));
 }
 
 /** One sentence on how the player's goal shaped the path: the first chapters it puts forward after the entry act. */

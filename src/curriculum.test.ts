@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ACTS, ALL_MODULES, goalRole, learningOrder, neighbours, pathNeighbours, planSentence, setGoalRole, startAct, type Module } from './curriculum';
+import { ACTS, ALL_MODULES, FIRST_SESSION, goalRole, learningOrder, neighbours, pathNeighbours, planSentence, recommendedFor, setGoalRole, startAct, type Module } from './curriculum';
 import { career } from './mastery/career';
 import { SKILLS, type RoleId } from './mastery/skills';
 import type { Profile } from './state';
@@ -10,6 +10,9 @@ const ROLE_GOALS = ['design', 'verif', 'pd', 'board', 'arch'] as const;
 const prof = (background: Profile['background'], goal: Profile['goal'], role?: string): Profile =>
   ({ name: 'Ada', background, goal, since: 0, ...(role ? { role } : {}) });
 const actIds = (n: number) => ACTS[n].chapters.flatMap((c) => c.modules).map((m) => m.id);
+/** A new player's order begins with the first session (U19); students and pros have none. */
+const withFirstSession = (b: Profile['background'], list: string[]) =>
+  b === 'new' ? [...FIRST_SESSION, ...list.filter((id) => !FIRST_SESSION.includes(id))] : list;
 const ids = (ms: Module[]) => ms.map((m) => m.id);
 /** The modules a role's skills use: skills that name the role, and skills every role needs. */
 const usedBy = (role: RoleId) => new Set(SKILLS.filter((s) => s.roles === 'all' || s.roles.includes(role))
@@ -42,7 +45,7 @@ describe('the path', () => {
   it('opens with the entry act, in its own order', () => {
     for (const b of BACKGROUNDS) for (const g of GOALS) {
       const p = prof(b, g);
-      expect(ids(learningOrder(p)).slice(0, actIds(startAct(p)).length), `${b}/${g}`).toEqual(actIds(startAct(p)));
+      expect(ids(learningOrder(p)).slice(0, actIds(startAct(p)).length), `${b}/${g}`).toEqual(withFirstSession(b, actIds(startAct(p))).slice(0, actIds(startAct(p)).length));
     }
   });
   it('a new player gets the same entry act for every goal, then a goal-shaped order', () => {
@@ -64,7 +67,8 @@ describe('the path', () => {
     for (const b of BACKGROUNDS) {
       const start = startAct(prof(b, 'unsure'));
       const natural = [...ACTS.slice(start), ...ACTS.slice(0, start)].flatMap((a) => a.chapters.flatMap((c) => c.modules.map((m) => m.id)));
-      expect(ids(learningOrder(prof(b, 'unsure'))), b).toEqual(natural);
+      // a new player's first five wins come first (U19); the rest is the curriculum order
+      expect(ids(learningOrder(prof(b, 'unsure'))), b).toEqual(withFirstSession(b, natural));
     }
   });
   it('after the entry act, a role\'s chapters come before the chapters it does not use, in every act', () => {
@@ -73,7 +77,8 @@ describe('the path', () => {
     ACTS.forEach((a, ai) => a.chapters.forEach((c, ci) => c.modules.forEach((m) => chapterOf.set(m.id, `${ai}:${ci}`))));
     for (const b of BACKGROUNDS) for (const g of ROLE_GOALS) {
       const p = prof(b, g), used = usedBy(goalRole(p)!), start = startAct(p);
-      const seq = [...new Set(learningOrder(p).map((m) => chapterOf.get(m.id)!))];
+      // a new player's first session is taken out of its chapters (U19), so check the normal order after it
+      const seq = [...new Set(learningOrder(p).filter((m) => !(b === 'new' && FIRST_SESSION.includes(m.id))).map((m) => chapterOf.get(m.id)!))];
       for (let ai = start + 1; ai < ACTS.length; ai++) {
         const flags = seq.filter((k) => k.startsWith(`${ai}:`)).map((k) => {
           const [, ci] = k.split(':').map(Number);
@@ -157,5 +162,38 @@ describe('lesson pages follow the path', () => {
     // the path differs from the curriculum order somewhere, so this is not a no-op
     const p = prof('student', 'verif');
     expect(learningOrder(p).some((m) => pathNeighbours(m.id, p).next?.id !== neighbours(m.id).next?.id)).toBe(true);
+  });
+});
+
+describe('the first session for a new player (U19)', () => {
+  /** Walk the recommendations, marking each one done, as a player would. */
+  const walk = (p: Profile, n: number) => {
+    const done = new Set<string>(), got: string[] = [];
+    for (let i = 0; i < n; i++) {
+      const m = recommendedFor(p, (id) => done.has(id));
+      if (!m) break;
+      got.push(m.id); done.add(m.id);
+    }
+    return got;
+  };
+  it('the five first wins exist, and are the owner\'s path: binary, Ohm\'s law, CMOS inverter, NAND, Hello Silicon', () => {
+    expect(FIRST_SESSION).toEqual(['bits', 'ohm', 'cmos-inv', 'logic-not', 'gates']);
+    for (const id of FIRST_SESSION) expect(ALL_MODULES.some((m) => m.id === id), id).toBe(true);
+  });
+  it('a new player\'s first five recommendations are that path, in order', () => {
+    for (const g of GOALS) expect(walk(prof('new', g), 5), g).toEqual(FIRST_SESSION);
+  });
+  it('finishing them moves on to the normal order, which starts from the entry act', () => {
+    const p = prof('new', 'unsure');
+    const after = walk(p, 6)[5];
+    const done = new Set(FIRST_SESSION);
+    expect(after).toBe(learningOrder(p).find((m) => !done.has(m.id))!.id);
+    expect(FIRST_SESSION).not.toContain(after);
+  });
+  it('students and pros are unaffected: no first session in their path', () => {
+    for (const b of ['student', 'pro'] as const) for (const g of GOALS) {
+      expect(walk(prof(b, g), 5), `${b}/${g}`).not.toEqual(FIRST_SESSION);
+      expect(learningOrder(prof(b, g)).slice(0, 5).map((m) => m.id), `${b}/${g}`).not.toEqual(FIRST_SESSION);
+    }
   });
 });
