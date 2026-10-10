@@ -442,7 +442,7 @@ export class Shell {
     const lv = [0, 0, 0, 0];
     SKILLS.forEach((s) => lv[skillLevel(s)]++);
     t.print(`${SKILLS.length} skills · ${lv[3]} job-ready · ${lv[2]} practised · ${lv[1]} aware · ${lv[0]} not started`, 'hl');
-    await t.say('Opening **Skills.app**: every row of the curriculum audit, with your level in each. Level 3 means job-ready. Type `skill <name>` for one skill\'s ladder, or `roles` to see how ready you are for each job.', 'happy');
+    await t.say('Opening **Skills.app**: every skill, with your level in each. Level 3 means job-ready. Type `skill <name>` for one skill\'s ladder, or `roles` to see how ready you are for each job.', 'happy');
   }
 
   private printSkill(id: string) {
@@ -450,7 +450,7 @@ export class Shell {
     const s = findSkill(id)!;
     const lv = skillLevel(s);
     t.print(`SKILL · ${s.name}`, 'hl');
-    t.print(`level ${lv}/3 ${'●'.repeat(lv)}${'○'.repeat(3 - lv)} ${LEVEL_NAME[lv]}${skillCeiling(s) < 3 ? ` · levels above ${skillCeiling(s)} are still being built (${s.plan ?? 'planned'})` : ''}`, 'dim');
+    t.print(`level ${lv}/3 ${'●'.repeat(lv)}${'○'.repeat(3 - lv)} ${LEVEL_NAME[lv]}${skillCeiling(s) < 3 ? ` · levels above ${skillCeiling(s)} are coming soon${s.plan ? ` (${s.plan})` : ''}` : ''}`, 'dim');
     const tiers: ['learn' | 'practice' | 'boss', string][] = [['learn', '1 · Learn'], ['practice', '2 · Practice'], ['boss', '3 · Boss']];
     for (const [k, label] of tiers) {
       const ids = s[k];
@@ -458,7 +458,7 @@ export class Shell {
         const f = findModule(mid), rec = levelRecord(mid);
         return h('button', { class: `term-mod${rec ? ' done' : ''}`, onclick: () => this.run(`learn ${mid}`) },
           h('span', { class: 'chk' }, rec ? '✓' : '·'), h('span', null, f?.module.title ?? mid), h('span', { class: 'dim' }, f ? ` ${KIND_LABEL[f.module.kind].toLowerCase()}` : ''), rec ? starEls(rec.stars) : null);
-      }) : [h('div', { class: 'dim' }, `    in development: ${s.plan ?? 'coming soon'}`)])));
+      }) : [h('div', { class: 'dim' }, `    coming soon${s.plan ? `: ${s.plan}` : ''}`)])));
     }
     const nx = nextStep(s);
     if (nx) t.line(h('button', { class: 'term-chip inline', onclick: () => this.run(`learn ${nx.id}`) }, `next step: ${findModule(nx.id)?.module.title ?? nx.id} →`));

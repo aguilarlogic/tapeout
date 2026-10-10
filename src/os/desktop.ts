@@ -64,7 +64,7 @@ function openMap() {
 }
 
 function openSkills(focus?: string) {
-  openWindow({ id: 'skills', title: 'Skills.app — the audit, live', icon: '◉', content: skillsApp(focus), w: 1040, h: 740, onClose: home, loading: getWindow('skills') ? undefined : 'Skills.app' });
+  openWindow({ id: 'skills', title: 'Skills.app — your skill matrix', icon: '◉', content: skillsApp(focus), w: 1040, h: 740, onClose: home, loading: getWindow('skills') ? undefined : 'Skills.app' });
 }
 
 function home() {

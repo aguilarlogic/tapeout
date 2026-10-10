@@ -1,4 +1,4 @@
-// Skills.app: the curriculum audit as a live screen. Every skill, your level in it (0-3), and what to do next.
+// Skills.app: the skill matrix as a live screen. Every skill, your level in it (0-3), and what to do next.
 import { findModule, KIND_LABEL } from '../curriculum';
 import { levelRecord, profile } from '../state';
 import { capstoneId, isHired } from './career';
@@ -7,12 +7,12 @@ import { AREAS, findRole, LEVEL_NAME, nextStep, roleReadiness, ROLES, SKILLS, sk
 
 const GOAL_ROLE: Record<string, RoleId | undefined> = { design: 'rtl', verif: 'dv', pd: 'pd', board: 'board', arch: 'arch' };
 
-const pips = (lv: number, ceil: number) => h('span', { class: 'pips', title: `${LEVEL_NAME[lv]}${ceil < 3 ? ` · levels above ${ceil} in development` : ''}` },
+const pips = (lv: number, ceil: number) => h('span', { class: 'pips', title: `${LEVEL_NAME[lv]}${ceil < 3 ? ` · levels above ${ceil} coming soon` : ''}` },
   ...[1, 2, 3].map((i) => h('span', { class: `pip${i <= lv ? ' on' : ''}${i > ceil ? ' wip' : ''}` })));
 
 function tierButton(s: Skill, tier: 'learn' | 'practice' | 'boss', label: string): HTMLElement {
   const ids = s[tier];
-  if (!ids.length) return h('span', { class: 'tier wip', title: s.plan ? `In development: ${s.plan}` : 'In development' }, label);
+  if (!ids.length) return h('span', { class: 'tier wip', title: s.plan ? `Coming soon: ${s.plan}` : 'Coming soon' }, label);
   const done = ids.every((id) => !!levelRecord(id));
   const target = ids.find((id) => !levelRecord(id)) ?? ids[0];
   const f = findModule(target);
@@ -25,7 +25,6 @@ export function skillsApp(focus?: string): HTMLElement {
   const list = role ? skillsFor(role.id) : SKILLS;
   const counts = [0, 0, 0, 0];
   list.forEach((s) => counts[skillLevel(s)]++);
-  const built = list.filter((s) => skillCeiling(s) === 3).length;
 
   // the most useful next step: lowest level first, then curriculum order
   const suggestion = [...list].map((s) => ({ s, lv: skillLevel(s), nx: nextStep(s) })).filter((x) => x.nx).sort((a, b) => a.lv - b.lv)[0];
@@ -36,12 +35,11 @@ export function skillsApp(focus?: string): HTMLElement {
 
   const head = h('div', { class: 'skills-head' },
     h('div', null,
-      h('p', { class: 'kicker' }, role ? `${role.name} · ${Math.round(roleReadiness(role.id) * 100)}% job-ready${isHired(role) ? ' · hired ✓' : ''}` : `${SKILLS.length} skills · the curriculum audit, live`),
+      h('p', { class: 'kicker' }, role ? `${role.name} · ${Math.round(roleReadiness(role.id) * 100)}% job-ready${isHired(role) ? ' · hired ✓' : ''}` : `${SKILLS.length} skills · see how close you are to each role`),
       h('h2', null, role ? role.name : 'Your skill matrix'),
-      h('p', { class: 'dim' }, role ? role.blurb : 'Every row is a skill from the curriculum audit. Level 1 · Aware: you did the lesson. Level 2 · Practised: you passed the practice. Level 3 · Job-ready: you beat the boss, with no hints.'),
+      h('p', { class: 'dim' }, role ? role.blurb : 'Every row is a skill you can build. Level 1 · Aware: you did the lesson. Level 2 · Practised: you passed the practice. Level 3 · Job-ready: you beat the boss, with no hints.'),
       h('div', { class: 'skills-counts' },
-        ...[3, 2, 1, 0].map((lv) => h('span', { class: `cnt l${lv}` }, h('b', null, String(counts[lv])), ` ${LEVEL_NAME[lv].toLowerCase()}`)),
-        h('span', { class: 'cnt dim' }, `${built}/${list.length} skills fully built`)),
+        ...[3, 2, 1, 0].map((lv) => h('span', { class: `cnt l${lv}` }, h('b', null, String(counts[lv])), ` ${LEVEL_NAME[lv].toLowerCase()}`))),
       role && !isHired(role) && roleReadiness(role.id) >= 0.6 ? h('a', { class: 'btn', href: `#/learn/${capstoneId(role)}` }, '♛ Take the hiring panel') : null,
       suggestion ? h('a', { class: 'btn primary', href: findModule(suggestion.nx!.id)?.module.route ?? '#/' }, `▶ Next: ${findModule(suggestion.nx!.id)?.module.title ?? suggestion.nx!.id}`) : null),
     h('div', { class: 'skills-role' }, h('label', { class: 'dim' }, 'Show skills for'), select));
@@ -51,7 +49,7 @@ export function skillsApp(focus?: string): HTMLElement {
     h('table', { class: 'skill-table' }, ...list.filter((s) => s.area === area).map((s) => {
       const lv = skillLevel(s), ceil = skillCeiling(s);
       return h('tr', { class: `lv${lv}` },
-        h('td', { class: 'sk-name' }, h('span', null, s.name), ceil < 3 ? h('span', { class: 'wip-note' }, ` · ${s.plan ?? 'in development'}`) : null),
+        h('td', { class: 'sk-name' }, h('span', null, s.name), ceil < 3 ? h('span', { class: 'wip-note' }, ` · ${s.plan ? `coming soon: ${s.plan}` : 'coming soon'}`) : null),
         h('td', null, pips(lv, ceil)),
         h('td', { class: 'tiers' }, tierButton(s, 'learn', 'Learn'), tierButton(s, 'practice', 'Practice'), tierButton(s, 'boss', 'Boss')));
     }))));
