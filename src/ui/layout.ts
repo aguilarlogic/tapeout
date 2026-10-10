@@ -2,7 +2,7 @@ import { crumbChapter, findModule, KIND_LABEL, neighbours } from '../curriculum'
 import { avatar, setMood } from '../os/avatar';
 import type { Award } from '../mastery/promotion';
 import { mentorSay } from '../os/mentor';
-import { playerName } from '../state';
+import { rich } from '../term/terminal';
 import { h, stars as starEls } from './dom';
 
 export function nextHref(levelId: string): string {
@@ -35,7 +35,7 @@ const PRAISE: Record<number, string[]> = {
 export function celebrate(stars: number, aw: Award, notes: string[], nextRoute: string) {
   const { gained, promotedTo } = aw;
   const promoted = !!promotedTo;
-  const line = (PRAISE[stars] ?? PRAISE[1])[Math.floor(Math.random() * (PRAISE[stars] ?? PRAISE[1]).length)].replace(/\{name\}/g, playerName());
+  const line = (PRAISE[stars] ?? PRAISE[1])[Math.floor(Math.random() * (PRAISE[stars] ?? PRAISE[1]).length)]; // {name} is filled in by rich(), which keeps $ and markup in a name literal (U12)
   setMood(stars === 3 ? 'proud' : 'happy');
   mentorSay(promotedTo ? `${line} And you just got promoted to ${promotedTo.title}! ${promotedTo.story}` : line, promoted ? 'excited' : stars === 3 ? 'proud' : 'happy');
   const close = () => overlay.remove();
@@ -44,7 +44,7 @@ export function celebrate(stars: number, aw: Award, notes: string[], nextRoute: 
       h('div', { class: 'modal-av' }, avatar(64)),
       h('div', { class: 'modal-kicker' }, 'Signoff passed'),
       starEls(stars),
-      h('p', { class: 'modal-say' }, line),
+      h('p', { class: 'modal-say' }, ...rich(line)),
       h('p', { class: 'gain' }, gained > 0 ? `+${gained} XP` : 'No new XP (you already have a better result)'),
       promoted ? h('p', { class: 'promo' }, `Promoted to ${promotedTo!.title}!`) : null,
       ...notes.map((n) => h('p', { class: 'dim' }, n)),
