@@ -88,7 +88,12 @@ export function shellPage(id: string): HTMLElement {
       input.rows = 1;
       const full = buffer ? `${buffer}\n${line}` : line;
       if (!full.trim()) { addLine(prompt(), 'cmd'); return; }
-      if (incomplete(full)) { addLine(`${buffer ? '>' : prompt()} ${line}`, 'cmd'); buffer = full; refreshPrompt(); return; }
+      if (incomplete(full)) {
+        addLine(`${buffer ? '>' : prompt()} ${line}`, 'cmd');
+        // The bare ">" prompt means "still waiting": say why, once, and how to get out.
+        if (!buffer) addLine('The line is not finished (an open quote, a trailing \\, or a heredoc without its end word). Keep typing, or press Ctrl+C to cancel.', 'dim');
+        buffer = full; refreshPrompt(); return;
+      }
       buffer = '';
       run(full);
       refreshPrompt();
