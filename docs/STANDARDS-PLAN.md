@@ -19,7 +19,7 @@ The plan has seven parts, done in this order:
 | **G** | New material for coverage gaps, in three tiers | G1 (must), G2 (should), G3 (nice) | large |
 | **V** | Final verification, then the maintenance schedule | V1–V4, M1–M3 | small |
 
-## Status (v0.10.2)
+## Status (v0.10.3)
 
 All items are implemented on `claude/loving-allen-pvuv7h`. The content lint (`src/standards/`) keeps the wrong
 statements out; every item has at least one rule or regression test.
