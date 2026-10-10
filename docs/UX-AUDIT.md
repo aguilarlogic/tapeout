@@ -353,7 +353,7 @@ Lesson 1 then puts every paragraph behind a `continue ↵` press.
 - Measure again and report the before and after times.
 - Keep every animation skippable, as it is now.
 
-### U19 · Beginners face about 180 modules before their first logic gate (Sev 3, Pri 3) · Decision
+### U19 · Beginners face about 180 modules before their first logic gate (Sev 3, Pri 3) · Decision ✅ done (option b: five quick wins first; just-in-time prerequisites need prerequisite data, not added)
 
 **Confirmed in code.** A player who picks "Nothing yet" starts at Act 1 (81 modules: calculus, linear algebra, ODEs,
 probability, numerics, signals and EM) and continues into Act 2 (98 modules of software) before Act 3's first gate.
