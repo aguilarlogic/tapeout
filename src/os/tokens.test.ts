@@ -22,3 +22,25 @@ describe('CSS custom properties', () => {
     expect(missing).toEqual([]);
   });
 });
+
+// U16 (1/4): the window chrome reads its colours from --os-* tokens, so the TAPE-OS theme can restyle it in one place.
+describe('TAPE-OS chrome tokens', () => {
+  const os = CSS_FILES[1];
+  const rule = (sel: string) => {
+    const m = os.match(new RegExp(`(?:^|\\n)${sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} \\{([^}]*)\\}`));
+    return m ? m[1] : '';
+  };
+  it('window, taskbar and start menu rules use --os tokens, not the page palette', () => {
+    for (const sel of ['.win', '.win-bar', '.taskbar', '.start-menu']) {
+      expect(rule(sel), sel).toMatch(/var\(--os-/);
+      expect(rule(sel), sel).not.toMatch(/var\(--(bg|panel|panel-2|border|text|text-dim|accent|taskbar|win-shadow)\)/);
+    }
+  });
+
+  it('every --os-* token used anywhere is defined in os.css or styles.css', () => {
+    const defined = new Set([...CSS_FILES.join('\n').matchAll(/--(os-[a-z0-9-]+)\s*:/g)].map((m) => m[1]));
+    const used = new Set([...[...CSS_FILES, ...Object.values(TS)].join('\n').matchAll(/var\(--(os-[a-z0-9-]+)/g)].map((m) => m[1]));
+    expect(used.size).toBeGreaterThan(0);
+    expect([...used].filter((n) => !defined.has(n))).toEqual([]);
+  });
+});
