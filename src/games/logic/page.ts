@@ -84,7 +84,20 @@ export function logicPage(id: string): HTMLElement {
 
   const W = CANVAS.w, H = CANVAS.h;
   const canvas = svg('svg', { viewBox: `0 0 ${W} ${H}`, class: 'logic-svg', tabindex: 0, role: 'application', 'aria-label': 'Schematic editor' });
-  const persist = () => saveDraft(key, circ);
+  // Undo (U41): every saved change keeps the state it replaced, so deleting a gate or wire, or clearing the board, can be taken back.
+  const history: string[] = [];
+  let saved = JSON.stringify(circ);
+  const persist = () => {
+    const now = JSON.stringify(circ);
+    if (now !== saved) { history.push(saved); if (history.length > 100) history.shift(); saved = now; }
+    saveDraft(key, circ);
+  };
+  const undo = () => {
+    const prev = history.pop();
+    if (prev === undefined) { toast('Nothing to undo.', 'info'); return; }
+    circ = JSON.parse(prev) as Circuit; saved = prev; selected = {}; pending = null;
+    saveDraft(key, circ); resim(true); draw();
+  };
   const partOf = (idp: string) => circ.parts.find((p) => p.id === idp)!;
 
   const resim = (fresh: boolean) => {
@@ -226,6 +239,7 @@ export function logicPage(id: string): HTMLElement {
   canvas.addEventListener('keydown', (e) => {
     if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); deleteSelected(); }
     if (e.key === 'Escape') { pending = null; selected = {}; draw(); }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); }
   });
 
   // ---- side panel: live truth table / sequence
@@ -261,8 +275,9 @@ export function logicPage(id: string): HTMLElement {
     hasClock ? h('button', { class: 'btn ghost', onclick: () => { resim(true); clockInfo.textContent = 'flops reset to 0'; draw(); } }, 'Reset flops') : null,
     clockInfo,
     h('span', { class: 'spacer' }),
+    h('button', { class: 'btn ghost small', onclick: undo, title: 'Ctrl+Z' }, 'Undo'),
     h('button', { class: 'btn ghost small', onclick: deleteSelected, title: 'Delete / Backspace' }, 'Delete selected'),
-    h('button', { class: 'btn ghost small', onclick: () => void askConfirm({ title: 'Clear the board?', body: 'Every gate and wire goes, and the level starts again.', confirm: 'Clear', danger: true }).then((ok) => { if (ok) { circ = starter(level); clearDraft(key); resim(true); draw(); } }) }, 'Clear'),
+    h('button', { class: 'btn ghost small', onclick: () => void askConfirm({ title: 'Clear the board?', body: 'Every gate and wire goes, and the level starts again. You can undo it with Ctrl+Z.', confirm: 'Clear', danger: true }).then((ok) => { if (!ok) return; history.push(JSON.stringify(circ)); if (history.length > 100) history.shift(); circ = starter(level); saved = JSON.stringify(circ); clearDraft(key); resim(true); draw(); }) }, 'Clear'),
   );
 
   const doVerify = () => {
