@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bin, hexa, num, qty, parseQuantity } from './answers';
+import { bin, compileBool, expr, hexa, num, parseQuantity, qty } from './answers';
 
 // The forgiving parser: what engineers actually type. Each case was probed against the real checkers.
 describe('quantities', () => {
@@ -47,3 +47,26 @@ describe('integers', () => {
   });
 });
 
+describe('boolean expressions', () => {
+  const xor = expr('a^b', ['a', 'b'], (v) => v.a !== v.b);
+  it('reads the word XOR as ^', () => {
+    expect(xor.check('a XOR b')).toBe(true);
+    expect(xor.check('a xor b')).toBe(true);
+  });
+  it('reads the XOR symbol and middle dot / times as operators', () => {
+    expect(xor.check('a⊕b')).toBe(true);
+    const and = expr('a·b', ['a', 'b'], (v) => v.a && v.b);
+    expect(and.check('a·b')).toBe(true);
+    expect(and.check('a⋅b')).toBe(true);
+    expect(and.check('a×b')).toBe(true);
+  });
+  it('reads the words and / or / not', () => {
+    expect(expr('a&b', ['a', 'b'], (v) => v.a && v.b).check('a and b')).toBe(true);
+    expect(expr('a|b', ['a', 'b'], (v) => v.a || v.b).check('a or b')).toBe(true);
+    expect(expr('!a', ['a'], (v) => !v.a).check('not a')).toBe(true);
+  });
+  it('still rejects a wrong formula', () => {
+    expect(expr('x', ['a', 'b'], (v) => v.a !== v.b).check("a'b")).toBe(false);
+    expect(compileBool('a b c', ['a', 'b', 'c'])).not.toBeNull(); // adjacency still means AND
+  });
+});

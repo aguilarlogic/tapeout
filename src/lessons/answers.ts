@@ -173,7 +173,11 @@ export function expr(canonical: string, vars: string[], fn: (v: Record<string, b
  */
 export function compileBool(src: string, vars: string[]): ((env: Record<string, boolean>) => boolean) | null {
   const names = [...vars].sort((x, y) => y.length - x.length);
-  const s = src.replace(/\s+/g, '').toLowerCase().replace(/\band\b/g, '&').replace(/\bor\b/g, '|').replace(/\bnot\b/g, '!');
+  // Words and symbols are rewritten before the spaces go, or "a XOR b" would read as "aXORb".
+  const s = src.toLowerCase()
+    .replace(/\bxor\b/g, '^').replace(/\band\b/g, '&').replace(/\bor\b/g, '|').replace(/\bnot\b/g, '!')
+    .replace(/[⊕]/g, '^').replace(/[·⋅×]/g, '*')
+    .replace(/\s+/g, '');
   let i = 0;
   const peek = () => s[i];
   type F = (e: Record<string, boolean>) => boolean;
