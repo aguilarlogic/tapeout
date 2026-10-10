@@ -25,14 +25,25 @@ export function busy(status: HTMLElement, work: (onCancel: (fn: () => void) => v
 import { h } from './dom';
 import { award } from '../mastery/promotion';
 import { mentorSay } from '../os/mentor';
-import { clearDraft, levelRecord, loadDraft, saveDraft } from '../state';
+import { actProgress, findModule } from '../curriculum';
+import { backupDue, clearDraft, levelRecord, loadDraft, noteNudge, saveDraft } from '../state';
 import { editor, type Editor, type EditorOptions } from './editor';
 import { celebrate, levelHeader, nextHref } from './layout';
 import { askConfirm } from './modal';
 
 /** Bank a solve and show the celebration: the last step of every lab page. */
 export function finish(levelId: string, xp: number, stars: number, notes: string[] = []) {
-  celebrate(stars, award(levelId, xp, stars), notes, nextHref(levelId));
+  const aw = award(levelId, xp, stars);
+  celebrate(stars, aw, [...notes, ...backupNote(levelId, !!aw.promotedTo)], nextHref(levelId));
+}
+
+/** After a rank-up or a finished act, suggest a backup if the last one is old (see backupDue). */
+function backupNote(levelId: string, ranked: boolean): string[] {
+  const f = findModule(levelId);
+  const actDone = !!f && actProgress(f.act).done === actProgress(f.act).total;
+  if (!(ranked || actDone) || !backupDue()) return [];
+  noteNudge();
+  return ['Worth a backup: Settings, then Your progress. It has been a while since your last export.'];
 }
 
 /** The note that goes with a star lost to hints. */

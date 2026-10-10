@@ -1,5 +1,5 @@
-// Settings.app: how fast TAPEOUT types, with a live preview.
-import { backupFileName, exportBackup, markExported, prefs, profile, resetAll, setPrefs, type Prefs } from '../state';
+// Settings.app: how TAPEOUT types, your saved progress (backup and restore), and the danger zone.
+import { applyBackup, backupFileName, exportBackup, load, markExported, onChange, prefs, profile, rank, readBackup, resetAll, setPrefs, totalXp, type Backup, type Prefs } from '../state';
 import { pace, rich } from '../term/terminal';
 import { PACES, prefersReducedMotion, type Token, typeInto } from '../term/typewriter';
 import { h, toast } from '../ui/dom';
@@ -35,22 +35,30 @@ function fullReset() {
   location.reload();
 }
 
-/** The danger zone: a full reset asks for the player's name (or RESET), and offers an export first. */
-function resetFlow() {
-  const name = profile()?.name;
-  const phrases = [name, 'RESET'].filter((x): x is string => !!x);
-  void askConfirm({
-    title: 'Erase all progress?',
-    body: 'This clears your name, XP, rank, flashcards, lab work and high scores from this browser. It cannot be undone.',
-    confirm: 'Erase everything', danger: true, typeToConfirm: phrases,
-    extra: h('button', { class: 'btn ghost', onclick: downloadBackup }, 'Export first'),
-  }).then((ok) => { if (ok) fullReset(); });
+const when = (iso: string) => {
+  const t = Date.parse(iso);
+  return Number.isNaN(t) ? 'an unknown date' : new Date(t).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+};
+
+/** One row of radio-style buttons. */
+function choice<T extends string>(label: string, items: { id: T; name: string; blurb?: string }[], current: () => T, pick: (id: T) => void): HTMLElement {
+  const group = h('div', { class: 'speed-options', role: 'radiogroup', 'aria-label': label });
+  const render = () => {
+    const cur = current();
+    group.replaceChildren(...items.map((s) => h('button', {
+      class: `speed-option${s.id === cur ? ' on' : ''}`, role: 'radio', 'aria-checked': String(s.id === cur),
+      onclick: () => { pick(s.id); render(); },
+    }, h('b', null, s.name), s.blurb ? h('span', { class: 'dim' }, s.blurb) : null)));
+  };
+  render();
+  return group;
 }
 
 export function settingsApp(): HTMLElement {
   const root = h('div', { class: 'level settings' });
   let tk: Token = { skip: true };
 
+  // ---- typing speed, with a live preview
   const preview = h('div', { class: 'settings-preview term' });
   const play = () => {
     tk.skip = true; // stop the previous preview
@@ -61,26 +69,90 @@ export function settingsApp(): HTMLElement {
     void typeInto(body, pace(), mine);
   };
   preview.addEventListener('click', () => (tk.skip = true));
+  const speedOptions = choice('TAPEOUT typing speed', SPEEDS, () => prefs().speed, (id) => { setPrefs({ speed: id }); play(); });
 
-  const options = h('div', { class: 'speed-options', role: 'radiogroup', 'aria-label': 'TAPEOUT typing speed' });
-  const render = () => {
-    const cur = prefs().speed;
-    options.replaceChildren(...SPEEDS.map((s) => h('button', {
-      class: `speed-option${s.id === cur ? ' on' : ''}`, role: 'radio', 'aria-checked': String(s.id === cur),
-      onclick: () => { setPrefs({ speed: s.id }); render(); play(); },
-    }, h('b', null, s.name), h('span', { class: 'dim' }, s.blurb))));
+  // ---- your progress: a summary that stays live, then export and import
+  const summary = h('p', { class: 'dim progress-summary' });
+  const renderSummary = () => {
+    const r = rank(), n = Object.keys(load().levels).length, last = load().lastExport;
+    summary.textContent = `${totalXp()} XP · ${r.title} · ${n} ${n === 1 ? 'module' : 'modules'} with results · ${last ? `last exported ${when(new Date(last).toISOString())}` : 'never exported'}`;
   };
-  render();
+  renderSummary();
+  const exportBtn = h('button', { class: 'btn primary', onclick: downloadBackup }, 'Export progress');
+  const importBox = h('div', { class: 'import-box', role: 'status', 'aria-live': 'polite' });
+  const fileInput = h('input', { type: 'file', accept: '.json,application/json', hidden: true, 'aria-label': 'Choose a TAPEOUT backup file' }) as HTMLInputElement;
+  let pending: Backup | null = null;
+
+  const apply = (mode: 'merge' | 'replace') => {
+    if (!pending) return;
+    applyBackup(pending, mode);
+    pending = null;
+    importBox.replaceChildren();
+    toast(mode === 'merge' ? 'Progress merged into your save.' : 'Progress replaced from the file.', 'ok');
+  };
+  const importPreview = (s: Extract<ReturnType<typeof readBackup>, { ok: true }>) => {
+    const m = s.summary;
+    return h('div', { class: 'import-preview' },
+      h('h4', null, 'This file holds'),
+      h('ul', { class: 'dim small' },
+        h('li', null, m.name ? `Player: ${m.name}` : 'No player name'),
+        h('li', null, `${m.xp} XP across ${m.levels} ${m.levels === 1 ? 'module' : 'modules'}`),
+        h('li', null, `${m.cards} flashcard ${m.cards === 1 ? 'record' : 'records'}, ${m.best} high ${m.best === 1 ? 'score' : 'scores'}, ${m.drafts} lab ${m.drafts === 1 ? 'draft' : 'drafts'}`),
+        h('li', null, `Exported ${when(m.exported)}`)),
+      h('p', { class: 'dim small' }, 'Merge keeps the better result for each module and keeps any lab drafts you already have open. Replace swaps your whole save for the file.'),
+      h('div', { class: 'import-actions' },
+        h('button', { class: 'btn primary', onclick: () => apply('merge') }, 'Merge into my save'),
+        h('button', { class: 'btn danger', onclick: () => void askConfirm({ title: 'Replace your progress?', body: 'Your current save is overwritten by this file. Export first if you might want it back.', confirm: 'Replace', danger: true, extra: h('button', { class: 'btn ghost', onclick: downloadBackup }, 'Export current first') }).then((ok) => { if (ok) apply('replace'); }) }, 'Replace my save'),
+        h('button', { class: 'btn ghost', onclick: () => { pending = null; importBox.replaceChildren(); } }, 'Cancel')));
+  };
+  fileInput.addEventListener('change', () => {
+    const f = fileInput.files?.[0];
+    fileInput.value = '';
+    if (!f) return;
+    void f.text().then((text) => {
+      const r = readBackup(text);
+      if (!r.ok) {
+        pending = null;
+        importBox.replaceChildren(h('p', { class: 'note', role: 'alert' }, r.error, ' Your save has not changed.'));
+        return;
+      }
+      pending = r.backup;
+      importBox.replaceChildren(importPreview(r));
+    }, () => importBox.replaceChildren(h('p', { class: 'note', role: 'alert' }, 'That file could not be read. Your save has not changed.')));
+  });
+
+  // ---- the danger zone: a full reset asks for the player's name (or RESET), and offers an export first
+  const resetFlow = () => {
+    const name = profile()?.name;
+    const phrases = [name, 'RESET'].filter((x): x is string => !!x);
+    void askConfirm({
+      title: 'Erase all progress?',
+      body: 'This clears your name, XP, rank, flashcards, lab work and high scores from this browser. It cannot be undone.',
+      confirm: 'Erase everything', danger: true, typeToConfirm: phrases,
+      extra: h('button', { class: 'btn ghost', onclick: downloadBackup }, 'Export first'),
+    }).then((ok) => { if (ok) fullReset(); });
+  };
+
+  const unsubscribe = onChange(() => {
+    if (!root.isConnected) { unsubscribe(); return; }
+    renderSummary();
+  });
 
   root.append(
     h('header', { class: 'level-head' }, h('div', { class: 'title-row' }, h('h2', null, 'Settings'))),
     h('section', { class: 'panel' },
       h('h3', null, 'TAPEOUT typing speed'),
       h('p', { class: 'dim' }, ...rich('How fast TAPEOUT types in the terminal, the flashcards and its speech bubbles. You can also type `speed slow` (or `normal`, `fast`, `instant`) in the terminal.')),
-      options,
+      speedOptions,
       prefersReducedMotion() ? h('p', { class: 'note' }, 'Your system asks for reduced motion, so typing and loading animations are off whatever you pick here.') : null,
       h('div', { class: 'preview-head' }, h('span', { class: 'dim' }, 'Preview'), h('button', { class: 'btn ghost', onclick: play }, '↻ Replay')),
       preview),
+    h('section', { class: 'panel' },
+      h('h3', null, 'Your progress'),
+      summary,
+      h('p', { class: 'dim' }, 'A backup is one file with your XP, ranks, flashcards, high scores and lab drafts. Keep it somewhere safe: the game lives in this browser, and clearing the site data loses it.'),
+      h('div', { class: 'import-actions' }, exportBtn, h('button', { class: 'btn', onclick: () => fileInput.click() }, 'Import progress…'), fileInput),
+      importBox),
     h('section', { class: 'panel danger-zone' },
       h('h3', null, 'Danger zone'),
       h('p', { class: 'dim' }, 'Erase everything in this browser. You will be asked to type your name, or RESET, and offered an export first.'),
