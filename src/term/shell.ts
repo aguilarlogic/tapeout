@@ -255,7 +255,7 @@ export class Shell {
       ['clear', 'clear the screen'],
     ];
     this.term.block(h('table', { class: 'term-table' }, ...rows.map(([c, d]) => h('tr', null, h('td', null, h('code', null, c)), h('td', null, ...rich(d))))));
-    this.term.print('During lessons: `hint`, `skip` (reveal the answer), `quit`.', 'dim');
+    this.term.print('During lessons: `hint`, `teach me` (walk through the method), `skip` (reveal the answer), `quit`.', 'dim');
   }
 
   private printActs() {
@@ -594,6 +594,8 @@ export class Shell {
       h('span', { class: 'dim' }, bossDef ? `BOSS · no hints · one attempt per question · ${Math.round(bossDef.pass * 100)}% to win` : f ? `ACT ${f.act.n} · ${f.chapter.name.toUpperCase()}` : 'LESSON'),
       h('b', null, l.title), h('span', { class: 'dim' }, l.concept)), 'type', 2.5);
     const rnd = Math.random;
+    // The practice set that drills this lesson's skill, so "teach me" can point at it.
+    const topic = SKILLS.find((s) => s.learn.includes(l.id))?.id;
     let asked = 0, firstTry = 0;
     for (let i = 0; i < l.steps.length; i++) {
       const s = l.steps[i];
@@ -614,7 +616,7 @@ export class Shell {
       } else {
         const q = s.t === 'gen' ? s.make(rnd) : s;
         asked++;
-        if (await this.question(q, exam)) firstTry++;
+        if (await this.question(q, exam, topic)) firstTry++;
       }
     }
     // grading
@@ -666,16 +668,22 @@ export class Shell {
   }
 
   /** Ask one question. Returns true if answered correctly on the first attempt. Sets `taught` if it was walked through. */
-  private async question(q: Question, exam: boolean): Promise<boolean> {
+  private async question(q: Question, exam: boolean, topic?: string): Promise<boolean> {
     const t = this.term;
     this.taught = false;
     const teach = !exam && q.teach ? q.teach : undefined;
+    let noWalk = 0;
     if (q.t === 'mc') {
       await this.pose(q.q);
       // Shuffle the display order so the answer's position gives nothing away (unless options refer to each other).
       const order = this.order(q.options);
       const labels = order.map((j) => q.options[j]);
-      const i = await t.choose(teach ? [...labels, TEACH_OPTION] : labels, 'answer>');
+      // Typed "teach me" on a choice with no walkthrough: say so, and it is not a pick.
+      const i = await t.choose(teach ? [...labels, TEACH_OPTION] : labels, 'answer>', undefined, 'type', async (v) => {
+        if (exam || teach || !TEACH_WORDS.test(v.toLowerCase())) return false;
+        await this.noWalkthrough(topic);
+        return true;
+      });
       if (teach && i === labels.length) { await this.walkThrough(q); return false; }
       const ok = order[i] === q.a;
       if (exam) { t.print(ok ? '✓' : `✗ answer: ${q.options[q.a]}`, ok ? 'ok' : 'err'); return ok; }
@@ -690,6 +698,12 @@ export class Shell {
       const v = (await t.ask({ prompt: 'answer>', chips: exam ? [] : [...(q.hint ? ['hint'] : []), ...(teach ? [{ label: 'teach me how', value: 'teach me' }] : []), 'skip'] })).trim();
       const lc = v.toLowerCase();
       if (teach && TEACH_WORDS.test(lc)) { await this.walkThrough(q); return false; }
+      // No walkthrough for this question yet: that is not an attempt. Say so; the worked answer comes on a second ask.
+      if (!exam && !teach && TEACH_WORDS.test(lc)) {
+        if (noWalk++ === 0) { await this.noWalkthrough(topic, q.hint); k--; continue; }
+        await t.say(`The answer is **${q.a.canonical}**. ${q.why}`, 'concerned');
+        return false;
+      }
       if (!exam && (lc === 'hint' || lc === 'h' || lc === '?')) {
         first = false;
         await t.say(q.hint ? `Hint: ${q.hint}${teach ? ' (Still stuck? Type `teach me` and I will walk you through it.)' : ''}` : 'No hint for this one, sorry. Give it your best guess.', 'thinking');
@@ -719,6 +733,12 @@ export class Shell {
     if (teach) { await this.offerWalk(q); if (this.taught) return false; }
     await t.say(`The answer is **${q.a.canonical}**. ${q.why}`, 'concerned');
     return false;
+  }
+
+  /** A "teach me" on a question with no walkthrough: be honest, give the hint, and point at a practice set that has one. */
+  private async noWalkthrough(topic?: string, hint?: string) {
+    const where = topic ? `\`practice ${topic}\`` : '`practice`';
+    await this.term.say(`I have no walkthrough for this one yet, sorry.${hint ? ` Hint: ${hint}` : ''} ${where} has problems I do teach step by step.`, 'thinking');
   }
 
   /** Display order for options: shuffled, unless the options refer to each other ("both of the above"). */

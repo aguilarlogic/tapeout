@@ -316,8 +316,11 @@ export class Terminal {
   }
 
   /** Numbered choices, typed out; answer by number, by clicking, or by typing the option text. */
-  /** `passthrough`: called with anything typed that is not an option (then the menu is abandoned via Redirect). */
-  async choose(options: string[], prompt = 'choose>', passthrough?: (text: string) => void, mode: BlockMode = 'type'): Promise<number> {
+  /**
+   * `passthrough`: called with anything typed that is not an option (then the menu is abandoned via Redirect).
+   * `other`: answers typed text that is not an option. Returns true if it did; otherwise the player gets "Pick 1-N".
+   */
+  async choose(options: string[], prompt = 'choose>', passthrough?: (text: string) => void, mode: BlockMode = 'type', other?: (text: string) => Promise<boolean>): Promise<number> {
     const list = h('ol', { class: 'term-choices' }, ...options.map((o, i) => h('li', null, h('button', { class: 'term-opt', onclick: () => this.submit(String(i + 1)) }, ...rich(o)))));
     void this.block(list, mode, 1.6);
     for (;;) {
@@ -336,6 +339,7 @@ export class Terminal {
         passthrough(v);
         throw new Redirect();
       }
+      if (other && await other(v)) continue;
       void this.print(`Pick 1-${options.length}.`, 'dim');
     }
   }
