@@ -12,7 +12,7 @@ import { MINIGAMES } from '../minigames/apps';
 import { BOSSES, findBoss, findPractice, PRACTICE, problem } from '../practice';
 import { gradePractice, nextDifficulty, PRACTICE_COUNT, PRACTICE_HARD, PRACTICE_PASS, PRACTICE_START, type Boss, type Difficulty, type PracticeSet } from '../practice/types';
 import { setMood } from '../os/avatar';
-import { launchGame, randomGame } from '../os/launch';
+import { focusGame, launchGame, randomGame, skipGame } from '../os/launch';
 import { best, levelRecord, load, playerName, prefs, Prefs, Profile, profile, rank, RANKS, recordBest, recordMix, resetAll, setPrefs, setProfile, totalXp, updateCard } from '../state';
 import { h, stars as starEls } from '../ui/dom';
 import { runIncident } from './incident';
@@ -583,7 +583,9 @@ export class Shell {
       } else if (s.t === 'app') {
         await t.say(s.text, 'excited');
         t.print(`▣ opening ${s.game}.app ...`, 'dim');
-        const res = await launchGame(s.game, { rounds: s.rounds, fromLesson: true });
+        // The lesson waits on the game window; "open it" and "skip the game" always work (U8).
+        const title = MINIGAMES.find((g) => g.id === s.game)?.title ?? s.game;
+        const res = await t.waitOn(title, launchGame(s.game, { rounds: s.rounds, fromLesson: true }), { open: focusGame, skip: skipGame });
         await t.say(res ? `Back to it. (${res.score}/${res.max} in the game.)` : 'Skipped the game? No problem, you can play it later with `play`.', res ? 'happy' : 'neutral');
       } else {
         const q = s.t === 'gen' ? s.make(rnd) : s;

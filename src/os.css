@@ -122,6 +122,9 @@ body { display: block; }
 .term-line { display: flex; align-items: center; gap: 8px; padding-top: 6px; border-top: 1px solid #10202a; }
 .term-input { flex: 1; min-width: 0; font: inherit; font-size: 16px; background: transparent; border: 0; outline: 0; color: var(--term-you); caret-color: var(--term-ai); padding: 2px 0; }
 .term:not(.waiting) .term-line { opacity: 0.45; }
+.term.paused .term-line { opacity: 0.35; }
+.term.paused .term-input { caret-color: transparent; }
+.term-wait { margin: 4px 0; font-size: 0.9rem; }
 .term-chips { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 6px; min-height: 8px; }
 .term-chip, .term-opt, .term-act, .term-mod { font: inherit; font-size: 0.85rem; cursor: pointer; color: var(--term-fg); background: #0d1a21; border: 1px solid #1d3441; border-radius: 6px; padding: 3px 10px; text-align: left; }
 .term-chip:hover, .term-opt:hover:not(:disabled), .term-act:hover, .term-mod:hover { border-color: var(--term-ai); color: #fff; }

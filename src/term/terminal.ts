@@ -318,6 +318,26 @@ export class Terminal {
     this.spoke = false;
   }
 
+  /**
+   * A lesson waits on a window (a minigame) for a while. The answer line is greyed out, so it does not look typeable,
+   * and a status line with two buttons says what the lesson is waiting for. Clears itself when `done` settles.
+   */
+  async waitOn<T>(label: string, done: Promise<T>, actions: { open: () => void; skip: () => void }): Promise<T> {
+    this.el.classList.add('paused');
+    this.promptEl.textContent = '…';
+    this.input.placeholder = `waiting for ${label}`;
+    this.chipsEl.replaceChildren(h('div', { class: 'term-wait', role: 'status' },
+      h('span', { class: 'dim' }, `waiting for ${label} · `),
+      h('button', { class: 'term-chip inline', onclick: actions.open }, 'open it'), ' ',
+      h('button', { class: 'term-chip inline', onclick: actions.skip }, 'skip the game')));
+    try { return await done; } finally {
+      this.el.classList.remove('paused');
+      this.promptEl.textContent = '';
+      this.input.placeholder = '';
+      this.chipsEl.replaceChildren();
+    }
+  }
+
   /** Abort whatever the terminal is waiting for (used when the player navigates elsewhere). */
   interrupt() {
     this.q.skipAll();

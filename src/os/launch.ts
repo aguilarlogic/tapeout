@@ -4,11 +4,24 @@ import { findGame, MINIGAMES, STARS_AT } from '../minigames/apps';
 import { recordBest } from '../state';
 import { h, stars } from '../ui/dom';
 import { mentorSay } from './mentor';
-import { openWindow } from './wm';
+import { getWindow, openWindow } from './wm';
 
 export const MINI_XP = 40;
 
 export interface GameResult { score: number; max: number }
+
+/** The game window a lesson may be waiting on, and how to end that wait early. Only one game window exists at a time. */
+let endCurrent: (() => void) | null = null;
+
+/** Bring the game window back (it may be minimised). */
+export function focusGame() {
+  getWindow('mini')?.focus();
+}
+
+/** End the lesson's wait on the game: close its window, which settles the launch as "skipped" (or with the last score). */
+export function skipGame() {
+  endCurrent?.();
+}
 
 export function launchGame(id: string, opts: { rounds?: number; fromLesson?: boolean } = {}): Promise<GameResult | null> {
   const game = findGame(id);
@@ -16,7 +29,8 @@ export function launchGame(id: string, opts: { rounds?: number; fromLesson?: boo
   return new Promise((resolve) => {
     let settled = false;
     let last: GameResult | null = null;
-    const settle = (r: GameResult | null) => { if (!settled) { settled = true; resolve(r); } };
+    let end = (): void => {};
+    const settle = (r: GameResult | null) => { if (!settled) { settled = true; if (endCurrent === end) endCurrent = null; resolve(r); } };
     const host = h('div', { class: 'mg-host' });
     const content = h('div', { class: 'mg-window' },
       h('div', { class: 'mg-intro' }, h('span', { class: 'mg-icon' }, game.icon), h('div', null, h('b', null, game.title), h('p', { class: 'dim' }, game.blurb))),
@@ -25,6 +39,9 @@ export function launchGame(id: string, opts: { rounds?: number; fromLesson?: boo
       id: 'mini', title: `${game.title}.app`, icon: game.icon, content, w: 620, h: 600, loading: `${game.title}.app`,
       onClose: () => settle(last),
     });
+    // Skipping closes the window; wm's close() does not call onClose, so settle here too.
+    end = () => { win.close(); settle(last); };
+    endCurrent = end;
     const run = () => game.play({
       host,
       r: Math.random,
