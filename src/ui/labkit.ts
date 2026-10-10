@@ -53,12 +53,15 @@ export const hintNote = (hintsUsed: number) => (hintsUsed ? ['Solve it without h
 function briefBody(html: string): HTMLElement {
   const body = h('div', { class: 'brief-body', html });
   body.querySelectorAll('pre').forEach((p) => p.setAttribute('tabindex', '0'));
+  // The brief's sub-headings are h4 for the look, but they sit under the lab's h2: say level 3, so the outline does not skip.
+  body.querySelectorAll('h4').forEach((x) => { x.setAttribute('role', 'heading'); x.setAttribute('aria-level', '3'); });
   return body;
 }
 
 /** The left-hand panel of a lab: tag, optional ticket line, the brief, any extras, an optional note (boss rules), then the hint box. */
 export function briefPanel(o: { tag: string; ticket?: string; html: string; note?: string; model?: string; hintBox?: Node | string }, ...extra: (Node | string | false | undefined)[]) {
-  return h('aside', { class: 'brief panel' },
+  // Named, so that a screen reader's landmark list tells the lab brief from the rest of the page.
+  return h('aside', { class: 'brief panel', 'aria-label': 'Lab brief' },
     h('div', { class: 'tag' }, o.tag),
     o.ticket ? h('p', { class: 'dim small' }, o.ticket) : '',
     // where the lab simplifies reality, say so: a professional would notice
