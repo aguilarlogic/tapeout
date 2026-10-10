@@ -179,7 +179,24 @@ body { display: block; }
 .map { display: flex; flex-direction: column; gap: 14px; }
 .map-top { display: grid; grid-template-columns: minmax(200px, 300px) minmax(0, 1fr); gap: 22px; align-items: center; }
 .map-summary h2 { font-size: 1.6rem; }
-.map-summary .btn { margin: 8px 0 12px; }
+/* The pinned bar: Next, search and filters stay at the top of the window while the acts scroll. */
+.map-bar { position: sticky; top: -14px; z-index: 3; display: grid; gap: 8px; margin: -14px -16px 0; padding: 14px 16px 10px; background: var(--panel); border-bottom: 1px solid var(--border); }
+.map-next { justify-self: start; }
+.map-tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.map-search { flex: 1 1 220px; min-width: 0; font: inherit; font-size: 0.9rem; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel-2); color: var(--text); }
+.map-filters { display: flex; flex-wrap: wrap; gap: 6px; }
+.filter { font: inherit; font-size: 0.8rem; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--panel-2); color: var(--text-dim); cursor: pointer; }
+.filter[aria-pressed="true"] { border-color: var(--accent); color: var(--text); box-shadow: inset 0 0 0 1px var(--accent); }
+.filter:disabled { opacity: 0.45; cursor: not-allowed; }
+.map-count { margin: 0; font-size: 0.8rem; }
+.map-acts { display: flex; flex-direction: column; gap: 10px; }
+.map-empty { padding: 16px 0; }
+/* Acts fold: the header is the summary, with a chevron. */
+.act > summary { list-style: none; cursor: pointer; }
+.act > summary::-webkit-details-marker { display: none; }
+.act > summary.act-head::after { content: '▸'; color: var(--text-dim); margin-left: 4px; }
+.act[open] > summary.act-head::after { content: '▾'; }
+.act:not([open]) > .act-head { margin-bottom: 0; }
 .die .region { cursor: pointer; outline: none; }
 .die .region:hover .blk, .die .region:focus-visible .blk { stroke: var(--accent); }
 .act { border: 1px solid var(--border); border-radius: 14px; padding: 12px 14px; background: var(--panel); }
