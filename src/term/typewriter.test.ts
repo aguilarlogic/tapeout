@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { animate, type Clock, duration, heldKey, INSTANT, Output, paceFor, PACES, revealSteps, timeline, type Token, typeText, visibleAt } from './typewriter';
+import { animate, type Clock, duration, heldKey, INSTANT, Output, paceFor, PACES, revealPre, revealSteps, timeline, type Token, typeText, visibleAt } from './typewriter';
 
 /** A clock that only moves when the test says so. */
 function manualClock() {
@@ -133,6 +133,32 @@ describe('revealSteps', () => {
     c.advance(100);
     await p;
     expect(k).toBe(4);
+  });
+  it('at instant speed (interval 0) shows everything at once, not NaN-sliced to nothing', async () => {
+    const shown: number[] = [];
+    await revealSteps(4, 0, (n) => shown.push(n), { skip: false }, manualClock());
+    expect(shown[shown.length - 1]).toBe(4);
+    expect(shown.every((n) => Number.isFinite(n))).toBe(true);
+  });
+  it('a skipped reveal shows everything at once', async () => {
+    const shown: number[] = [];
+    await revealSteps(4, 50, (n) => shown.push(n), { skip: true }, manualClock());
+    expect(shown).toEqual([4]);
+  });
+});
+
+describe('revealPre', () => {
+  // Only textContent is used, so a plain object stands in for the <pre>.
+  const pre = (text: string) => ({ textContent: text }) as unknown as HTMLElement;
+  it('at instant speed leaves the full diagram in place', async () => {
+    const el = pre('a\nb\nc');
+    await revealPre(el, INSTANT, { skip: false });
+    expect(el.textContent).toBe('a\nb\nc');
+  });
+  it('at instant speed, with reduced motion, leaves the full diagram in place', async () => {
+    const el = pre('+---+\n| 0 |\n+---+');
+    await revealPre(el, paceFor('normal', true), { skip: false });
+    expect(el.textContent).toBe('+---+\n| 0 |\n+---+');
   });
 });
 

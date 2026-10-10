@@ -131,7 +131,9 @@ export function typeText(targets: { node: TextSink; full: string }[], p: Pace, t
 
 /** Reveal `count` items one per `interval` ms (lines of code, menu rows). `show(k)` shows the first k. */
 export function revealSteps(count: number, interval: number, show: (k: number) => void, tk: Token, clock?: Clock): Promise<void> {
-  show(tk.skip || interval <= 0 ? count : Math.min(count, 1));
+  // Instant (or skipped): show everything now. Stopping here matters: with interval 0, step(0) would be 0/0 = NaN.
+  if (tk.skip || interval <= 0) { show(count); return Promise.resolve(); }
+  show(Math.min(count, 1));
   if (count <= 1) return Promise.resolve();
   return animate((count - 1) * interval, (ms) => show(Math.min(count, 1 + Math.floor(ms / interval))), tk, clock);
 }
