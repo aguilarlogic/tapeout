@@ -4,6 +4,7 @@ import { pace, rich } from '../term/terminal';
 import { PACES, prefersReducedMotion, type Token, typeInto } from '../term/typewriter';
 import { h, toast } from '../ui/dom';
 import { askConfirm } from '../ui/modal';
+import { radioStep } from './keys';
 
 const SPEEDS: { id: Prefs['speed']; name: string; blurb: string }[] = [
   { id: 'slow', name: 'Slow', blurb: `about ${PACES.slow.cps} characters a second, with long pauses: plenty of time to read` },
@@ -69,16 +70,26 @@ const when = (iso: string) => {
   return Number.isNaN(t) ? 'an unknown date' : new Date(t).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 };
 
-/** One row of radio-style buttons: used for speed, text size and motion. */
+/** One row of radio buttons: used for speed, text size and motion. One Tab stop (the chosen option), and arrow keys move. */
 function choice<T extends string>(label: string, items: { id: T; name: string; blurb?: string }[], current: () => T, pick: (id: T) => void): HTMLElement {
   const group = h('div', { class: 'speed-options', role: 'radiogroup', 'aria-label': label });
   const render = () => {
     const cur = current();
     group.replaceChildren(...items.map((s) => h('button', {
       class: `speed-option${s.id === cur ? ' on' : ''}`, role: 'radio', 'aria-checked': String(s.id === cur),
+      tabindex: s.id === cur ? '0' : '-1',
       onclick: () => { pick(s.id); render(); },
     }, h('b', null, s.name), s.blurb ? h('span', { class: 'dim' }, s.blurb) : null)));
   };
+  group.addEventListener('keydown', (e) => {
+    const radios = [...group.querySelectorAll<HTMLElement>('[role="radio"]')];
+    const next = radioStep(e.key, radios.indexOf(document.activeElement as HTMLElement), items.length);
+    if (next === undefined) return;
+    e.preventDefault();
+    pick(items[next].id);
+    render();
+    group.querySelectorAll<HTMLElement>('[role="radio"]')[next].focus();
+  });
   render();
   return group;
 }

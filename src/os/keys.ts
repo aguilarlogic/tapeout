@@ -10,6 +10,16 @@ export function ownsKeys(target: { closest(selector: string): unknown } | null):
   return !!target?.closest(OWN_KEYS);
 }
 
+/** Arrow keys, Home and End inside a radio group: the option to move to, or undefined for any other key. */
+export function radioStep(key: string, index: number, count: number): number | undefined {
+  if (index < 0 || count < 1) return undefined;
+  if (key === 'ArrowRight' || key === 'ArrowDown') return (index + 1) % count;
+  if (key === 'ArrowLeft' || key === 'ArrowUp') return (index - 1 + count) % count;
+  if (key === 'Home') return 0;
+  if (key === 'End') return count - 1;
+  return undefined;
+}
+
 /** Alt+` cycles through the open windows in taskbar order; Shift reverses. */
 export function nextWindowId(ids: string[], current: string | undefined, reverse = false): string | undefined {
   if (!ids.length) return undefined;
