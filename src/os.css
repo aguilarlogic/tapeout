@@ -255,8 +255,11 @@ table.tt th.exp, table.tt td.exp { color: var(--wave-exp); }
 .mg-intro p { margin: 0; font-size: 0.88rem; }
 .mg-icon { width: 44px; height: 44px; flex: none; display: grid; place-items: center; border-radius: 12px; background: var(--term-bg); color: var(--term-ai); font-family: var(--mono); font-weight: 800; }
 .mg { display: flex; flex-direction: column; gap: 12px; }
-.mg-head { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 0.8rem; color: var(--text-dim); }
+.mg-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; font-family: var(--mono); font-size: 0.8rem; color: var(--text-dim); }
 .mg-score { color: var(--accent); font-weight: 700; }
+.mg-star-rule { margin-left: auto; }
+.mg-clock { display: flex; align-items: center; gap: 12px; width: 100%; max-width: 420px; font-family: var(--mono); font-size: 0.85rem; }
+.mg-clock .track { flex: 1; }
 .mg-stage { display: flex; flex-direction: column; gap: 12px; align-items: flex-start; }
 .mg-target { font-size: 1.05rem; }
 .mg-target b { font-family: var(--mono); font-size: 1.25rem; color: var(--accent); }

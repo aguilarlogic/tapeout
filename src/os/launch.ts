@@ -1,6 +1,6 @@
 // Opening minigame windows. Lessons await the result; the arcade just lets you play.
 import { award, promotionLine } from '../mastery/promotion';
-import { findGame, MINIGAMES } from '../minigames/apps';
+import { findGame, MINIGAMES, STARS_AT } from '../minigames/apps';
 import { recordBest } from '../state';
 import { h, stars } from '../ui/dom';
 import { mentorSay } from './mentor';
@@ -33,7 +33,7 @@ export function launchGame(id: string, opts: { rounds?: number; fromLesson?: boo
       finish: (score, max) => {
         last = { score, max };
         const frac = max ? score / max : 0;
-        const st = frac >= 0.9 ? 3 : frac >= 0.6 ? 2 : 1;
+        const st = frac >= STARS_AT.three ? 3 : frac >= STARS_AT.two ? 2 : 1;
         const aw = award(`mini.${game.id}`, MINI_XP, st);
         const gained = aw.gained;
         const best = recordBest(game.id, Math.round(frac * 100));

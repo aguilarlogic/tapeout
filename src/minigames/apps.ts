@@ -29,6 +29,9 @@ const fmtC = (c: number) => (c >= 1e-6 ? `${+(c * 1e6).toPrecision(3)}µ` : `${+
 const fmtT = (t: number) => (t >= 1e-3 ? `${+(t * 1e3).toPrecision(3)} ms` : `${+(t * 1e6).toPrecision(3)} µs`);
 const fmtF = (f: number) => (f >= 1000 ? `${+(f / 1000).toPrecision(3)} kHz` : `${+f.toPrecision(3)} Hz`);
 
+/** Share of the points needed for 2 and 3 stars. launch.ts awards the stars with the same numbers. */
+export const STARS_AT = { two: 0.6, three: 0.9 };
+
 /** Shared chrome: round counter, score, a stage for the round, and a footer for buttons/feedback. */
 function frame(ctx: GameCtx, max: number) {
   const round = h('span', null);
@@ -36,7 +39,8 @@ function frame(ctx: GameCtx, max: number) {
   const stage = h('div', { class: 'mg-stage' });
   const feedback = h('div', { class: 'mg-feedback' });
   const actions = h('div', { class: 'mg-actions' });
-  ctx.host.replaceChildren(h('div', { class: 'mg' }, h('div', { class: 'mg-head' }, round, scoreEl), stage, feedback, actions));
+  const starRule = h('span', { class: 'dim mg-star-rule' }, `3 stars at ${Math.round(STARS_AT.three * 100)}%, 2 at ${Math.round(STARS_AT.two * 100)}%`);
+  ctx.host.replaceChildren(h('div', { class: 'mg' }, h('div', { class: 'mg-head' }, round, scoreEl, starRule), stage, feedback, actions));
   let score = 0;
   const api = {
     stage, feedback, actions,
@@ -54,9 +58,12 @@ function frame(ctx: GameCtx, max: number) {
 const btn = (label: string, onclick: () => void, cls = 'btn small') => h('button', { class: cls, onclick }, label);
 
 // ---------------------------------------------------------------- bit flipper
+/** A round scores only if the byte matches within this many seconds. */
+export const BITFLIP_LIMIT_S = 15;
+
 const bitflip: MiniGame = {
   id: 'bitflip', title: 'Bit Flipper', icon: '01', lesson: 'bits', rounds: 5,
-  blurb: 'Flip the switches until the byte matches the target. Beat the clock for points.',
+  blurb: `Flip the switches until the byte matches the target. Beat the clock: match within ${BITFLIP_LIMIT_S} seconds to score a point.`,
   play(ctx) {
     const f = frame(ctx, ctx.rounds);
     let n = 0;
@@ -70,14 +77,29 @@ const bitflip: MiniGame = {
       const bits = Array.from({ length: 8 }, (_, i) => 7 - i);
       const cells = bits.map((b) => h('button', { class: 'bit', onclick: () => { v ^= 1 << b; render(); } }));
       const readout = h('div', { class: 'mg-readout' });
+      // The clock is on screen, so the points rule is visible: the bar drains over the limit, and a match before it empties scores.
+      const fill = h('div', { class: 'fill', style: 'width:100%' });
+      const clockTxt = h('span', { class: 'dim' }, `${BITFLIP_LIMIT_S} s to score`);
+      const clock = h('div', { class: 'mg-clock' }, h('div', { class: 'track' }, fill), clockTxt);
+      const tick = () => {
+        // Stop when the window has closed; otherwise the interval would outlive the game.
+        if (!ctx.host.isConnected) return clearInterval(timer);
+        const left = Math.max(0, BITFLIP_LIMIT_S - (performance.now() - t0) / 1000);
+        fill.style.width = `${(left / BITFLIP_LIMIT_S) * 100}%`;
+        clockTxt.textContent = left > 0 ? `${left.toFixed(1)} s left to score` : 'out of time: no point this round, keep going';
+        if (left <= 0) clearInterval(timer);
+      };
+      const timer = setInterval(tick, 100);
       const render = () => {
         cells.forEach((c, i) => { const on = (v >> bits[i]) & 1; c.textContent = String(on); c.classList.toggle('on', !!on); });
         readout.textContent = `= ${v}  ·  0x${v.toString(16).toUpperCase().padStart(2, '0')}`;
         if (v === target) {
+          clearInterval(timer);
           const secs = (performance.now() - t0) / 1000;
-          const fast = secs < 15;
+          const fast = secs < BITFLIP_LIMIT_S;
           if (fast) f.point();
-          f.note(fast ? `Match in ${secs.toFixed(1)} s!` : `Match, but ${secs.toFixed(1)} s. Under 15 s scores.`, fast ? 'ok' : '');
+          clockTxt.textContent = `matched in ${secs.toFixed(1)} s`;
+          f.note(fast ? `Match in ${secs.toFixed(1)} s!` : `Match, but ${secs.toFixed(1)} s. Under ${BITFLIP_LIMIT_S} s scores.`, fast ? 'ok' : '');
           cells.forEach((c) => ((c as HTMLButtonElement).disabled = true));
           n++;
           setTimeout(next, 900);
@@ -85,6 +107,7 @@ const bitflip: MiniGame = {
       };
       f.stage.replaceChildren(
         h('div', { class: 'mg-target' }, 'target ', h('b', null, asHex ? `0x${target.toString(16).toUpperCase().padStart(2, '0')}` : String(target))),
+        clock,
         h('div', { class: 'bits' }, ...bits.map((b, i) => h('div', { class: 'bitcol' }, h('small', null, String(1 << b)), cells[i]))),
         readout,
       );
@@ -140,7 +163,7 @@ const truth: MiniGame = {
 // ---------------------------------------------------------------- voltage divider
 const divider: MiniGame = {
   id: 'divider', title: 'Divider Designer', icon: 'R', lesson: 'ohm', rounds: 3,
-  blurb: 'Pick standard E12 resistors to hit a target voltage within 2%.',
+  blurb: 'Pick standard E12 resistors to hit a target voltage within 2%. Each target you hit is a point.',
   play(ctx) {
     const f = frame(ctx, ctx.rounds);
     const targets = [...DIV_TARGETS].sort(() => ctx.r() - 0.5).slice(0, ctx.rounds);
@@ -202,7 +225,7 @@ function schematic(vin: number, r1: string, r2: string, vo: number): SVGSVGEleme
 // ---------------------------------------------------------------- RC scope
 const rcscope: MiniGame = {
   id: 'rcscope', title: 'RC Scope', icon: '∿', lesson: 'rc', rounds: 3,
-  blurb: 'Choose R and C so the step response hits the spec. The dashed trace is the target.',
+  blurb: 'Choose R and C so the step response hits the spec. The dashed trace is the target. Within 6% of spec scores a point.',
   play(ctx) {
     const f = frame(ctx, ctx.rounds);
     const targets = [...RC_TARGETS].sort(() => ctx.r() - 0.5).slice(0, ctx.rounds);
@@ -269,7 +292,7 @@ function scope(tauTarget: number, tau: number): SVGSVGElement {
 // ---------------------------------------------------------------- flip-flop trace
 const fftrace: MiniGame = {
   id: 'fftrace', title: 'Flip-Flop Trace', icon: 'FF', lesson: 'seq', rounds: 4,
-  blurb: 'Predict Q after every rising clock edge. Click Q\'s segments to set them.',
+  blurb: 'Predict Q after every rising clock edge. Click Q\'s segments to set them. A point if every edge is right on your first check.',
   play(ctx) {
     const f = frame(ctx, ctx.rounds);
     const kinds = ['dff', 'dff', 'enable', 'reset', 'enable'] as const;
@@ -354,7 +377,7 @@ function timing(rd: ReturnType<typeof ffRound>, guess: number[], toggle: (i: num
 // ---------------------------------------------------------------- cache
 const cache: MiniGame = {
   id: 'cache', title: 'Cache Sim', icon: '$', lesson: 'cache', rounds: 8,
-  blurb: 'A 4-line direct-mapped cache with 16-byte lines. Call every access: hit or miss?',
+  blurb: 'A 4-line direct-mapped cache with 16-byte lines. Call every access: hit or miss? A point for each right call.',
   play(ctx) {
     const f = frame(ctx, ctx.rounds);
     const addrs = cacheStream(ctx.r, ctx.rounds);
@@ -391,7 +414,7 @@ const cache: MiniGame = {
 // ---------------------------------------------------------------- branch predictor
 const branch: MiniGame = {
   id: 'branch', title: 'Branch Predictor', icon: 'BP', lesson: 'ooo', rounds: 6,
-  blurb: 'Step a 2-bit saturating counter. After each branch resolves, click the counter\'s new state.',
+  blurb: 'Step a 2-bit saturating counter. After each branch resolves, click the counter\'s new state. A point for each correct new state.',
   play(ctx) {
     const f = frame(ctx, ctx.rounds);
     const stream = bpStream(ctx.r, ctx.rounds);
@@ -430,7 +453,7 @@ const branch: MiniGame = {
 // ---------------------------------------------------------------- MESI
 const mesi: MiniGame = {
   id: 'mesi', title: 'Coherence Lab', icon: 'M', lesson: 'coherence', rounds: 6,
-  blurb: 'Two cores share one cache line. After each access, set both caches\' MESI states.',
+  blurb: 'Two cores share one cache line. After each access, set both caches\' MESI states. A point for each access you get right.',
   play(ctx) {
     const f = frame(ctx, ctx.rounds);
     const ops = mesiOps(ctx.r, ctx.rounds);
@@ -469,7 +492,7 @@ const mesi: MiniGame = {
 // ---------------------------------------------------------------- VALID/READY
 const handshake: MiniGame = {
   id: 'handshake', title: 'Handshake', icon: '⇄', lesson: 'bus', rounds: 4,
-  blurb: 'Click every clock cycle where a VALID/READY transfer happens.',
+  blurb: 'Click every clock cycle where a VALID/READY transfer happens. A point if you get it right on your first check.',
   play(ctx) {
     const f = frame(ctx, ctx.rounds);
     let n = 0;
