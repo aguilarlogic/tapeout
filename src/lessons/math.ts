@@ -2,6 +2,7 @@
 // Every concept is tied to where a chip engineer actually meets it.
 import { num, qty } from './answers';
 import { art, ask, between, gen, Lesson, mc, pick, say } from './types';
+import { calc as calcStep, choice, count, walk } from './teach';
 
 export const calc: Lesson = {
   id: 'calc',
@@ -20,22 +21,22 @@ export const calc: Lesson = {
       const V = pick(r, [0.7, 0.8, 0.9, 1.0]);
       const f = pick(r, [1, 2, 3]);
       const d = 2 * C * V * f;
-      return ask(`With C = ${C} nF, f = ${f} GHz and V = ${V} V, what is ∂P/∂V in **W/V**? (nF × GHz cancels to 1)`, qty(d, 'W/V', 0.02, `${+d.toFixed(3)} W/V`), `∂P/∂V = 2CVf = 2 × ${C} × ${V} × ${f} = ${+d.toFixed(3)} W/V. So raising the supply by 10 mV costs about ${+(d * 10).toFixed(1)} mW. Voltage is the strongest knob on power.`, 'Differentiate V² to 2V and keep C and f as constants.');
+      return walk(ask(`With C = ${C} nF, f = ${f} GHz and V = ${V} V, what is ∂P/∂V in **W/V**? (nF × GHz cancels to 1)`, qty(d, 'W/V', 0.02, `${+d.toFixed(3)} W/V`), `∂P/∂V = 2CVf = 2 × ${C} × ${V} × ${f} = ${+d.toFixed(3)} W/V. So raising the supply by 10 mV costs about ${+(d * 10).toFixed(1)} mW. Voltage is the strongest knob on power.`, 'Differentiate V² to 2V and keep C and f as constants.'), 'a partial derivative of a power law', 'Differentiate with respect to one variable and treat the others as constants. P = α·C·V²·f, so ∂P/∂V = 2·α·C·V·f: the power 2 comes down and V drops by one.', choice('What is d(V²)/dV?', '2V', ['V', 'V²/2', '2V²'], 'The power comes down and the power drops by one.'), calcStep('∂P/∂V = 2 × C × V × f, in W/V:', `2 * ${C} * ${V} * ${f}`, d, 'W/V', `${+d.toFixed(3)}`, 0.02));
     }),
     say('Stack all the partials into a vector and you get the **gradient** ∇f, which points uphill in the steepest direction. Optimizers walk **against** it. Analytical placers do exactly this: they minimize a smooth wirelength function by gradient descent over millions of cell coordinates.'),
     gen((r) => {
       const a = between(r, 1, 4), b = between(r, 1, 4), x = between(r, 1, 3), y = between(r, 1, 3);
       // f = a x^2 + b x y ; df/dx = 2 a x + b y ; df/dy = b x
       const gx = 2 * a * x + b * y;
-      return ask(`f(x, y) = ${a}x² + ${b}xy. What is ∂f/∂x at (x, y) = (${x}, ${y})?`, num(gx), `∂f/∂x = ${2 * a}x + ${b}y = ${2 * a}·${x} + ${b}·${y} = ${gx}. (The full gradient there is (${gx}, ${b * x}).)`, 'Treat y as a constant: d/dx of x² is 2x, of xy is y.');
+      return walk(ask(`f(x, y) = ${a}x² + ${b}xy. What is ∂f/∂x at (x, y) = (${x}, ${y})?`, num(gx), `∂f/∂x = ${2 * a}x + ${b}y = ${2 * a}·${x} + ${b}·${y} = ${gx}. (The full gradient there is (${gx}, ${b * x}).)`, 'Treat y as a constant: d/dx of x² is 2x, of xy is y.'), 'a partial derivative of a polynomial', 'To take ∂f/∂x, treat y as a constant and differentiate with respect to x only. The term ax² gives 2ax, and the term bxy gives by, since y is held constant.', choice('Treating y as a constant, what is ∂(x²)/∂x?', '2x', ['x', '2', 'x²'], 'Power rule: d(x²)/dx = 2x.'), count('∂f/∂x = 2a·x + b·y, with the numbers:', `${2 * a} * ${x} + ${b} * ${y}`, gx));
     }),
     say('**Multiple integrals** add things up over areas and volumes: total charge from a charge density, total current through a wire\'s cross-section from current density, total heat from a power map.'),
-    ask('Current density J = 2 mA/µm² flows uniformly through a wire 0.5 µm wide and 0.2 µm thick. What is the current in **mA**?', qty(0.2, 'mA'), 'I = ∬ J dA = J × area = 2 × (0.5 × 0.2) = 0.2 mA. Too much current density moves metal atoms over time, called electromigration, and it is a real signoff check.', 'For a uniform density the double integral is just density × area.'),
+    walk(ask('Current density J = 2 mA/µm² flows uniformly through a wire 0.5 µm wide and 0.2 µm thick. What is the current in **mA**?', qty(0.2, 'mA'), 'I = ∬ J dA = J × area = 2 × (0.5 × 0.2) = 0.2 mA. Too much current density moves metal atoms over time, called electromigration, and it is a real signoff check.', 'For a uniform density the double integral is just density × area.'), 'current from a uniform density', 'For a uniform current density J through a cross-section of area A, the total current is I = J × A. The double integral of a constant density over an area is just the density times the area.', calcStep('Cross-section area, width × thickness, in µm²:', '0.5 * 0.2', 0.1, ''), calcStep('I = J × A, in mA:', '2 * 0.1', 0.2, 'mA', '0.2', 0.03)),
     say('Now **vector calculus**, the language of Maxwell\'s equations. **Divergence** ∇·F measures how much a field spreads out of a point (sources). **Curl** ∇×F measures how much it circulates.'),
     gen((r) => {
       const a = between(r, 1, 5), b = between(r, 1, 5), c = between(r, 1, 5);
       const sb = pick(r, [1, -1]);
-      return ask(`F(x, y, z) = (${a}x, ${sb * b}y, ${c}z). What is ∇·F?`, num(a + sb * b + c), `∇·F = ∂(${a}x)/∂x + ∂(${sb * b}y)/∂y + ∂(${c}z)/∂z = ${a} ${sb > 0 ? '+' : '-'} ${b} + ${c} = ${a + sb * b + c}.`, 'Sum ∂Fx/∂x + ∂Fy/∂y + ∂Fz/∂z.');
+      return walk(ask(`F(x, y, z) = (${a}x, ${sb * b}y, ${c}z). What is ∇·F?`, num(a + sb * b + c), `∇·F = ∂(${a}x)/∂x + ∂(${sb * b}y)/∂y + ∂(${c}z)/∂z = ${a} ${sb > 0 ? '+' : '-'} ${b} + ${c} = ${a + sb * b + c}.`, 'Sum ∂Fx/∂x + ∂Fy/∂y + ∂Fz/∂z.'), 'divergence', 'The divergence ∇·F = ∂Fx/∂x + ∂Fy/∂y + ∂Fz/∂z measures how much the field spreads out at a point. Each component contributes its own partial derivative, and a term like a·x has partial derivative a.', choice(`What is ∂(${a}x)/∂x?`, `${a}`, ['0', `${a}x`, `${a + 1}`], 'Only the x is differentiated, so the term leaves its coefficient.'), count('Add the three partial derivatives:', `${a} ${sb > 0 ? '+' : '-'} ${b} + ${c}`, a + sb * b + c));
     }),
     say('**Stokes\' theorem** says the circulation around a loop equals the flux of the curl through any surface bounded by it. Pair it with Faraday\'s law, ∇×E = -∂B/∂t, and you get: the voltage induced around a loop is proportional to the changing magnetic flux through the **area** of that loop.'),
     mc('Why do board designers obsess over keeping current loops (like a decoupling cap to its chip pin) **small**?', ['Smaller loops use less copper, which keeps the board cost down', 'Noise and inductance scale with loop area (Faraday, Stokes)', 'Large loops violate DRC', 'Small loops have lower resistance, and that is the only effect'], 1, 'Circulation of E around the loop = rate of change of flux through its area. Small area means low inductance and less coupled noise. It is the same reason the return-path level in the board lab punishes slots in the ground plane.'),
@@ -43,7 +44,7 @@ export const calc: Lesson = {
     gen((r) => {
       const F = pick(r, [16, 36, 64, 100, 144]);
       const x = Math.sqrt(F);
-      return ask(`Two inverter stages drive a load ${F}× larger than the first input. The delay is proportional to x + ${F}/x, where x is the size of the middle stage. What x minimizes it?`, num(x), `d/dx (x + ${F}/x) = 1 - ${F}/x² = 0, so x = √${F} = ${x}. Each stage then has the same "effort" of ${x}. This is the core of logical effort, which you will meet in the VLSI chapter.`, 'Differentiate and set to zero.');
+      return walk(ask(`Two inverter stages drive a load ${F}× larger than the first input. The delay is proportional to x + ${F}/x, where x is the size of the middle stage. What x minimizes it?`, num(x), `d/dx (x + ${F}/x) = 1 - ${F}/x² = 0, so x = √${F} = ${x}. Each stage then has the same "effort" of ${x}. This is the core of logical effort, which you will meet in the VLSI chapter.`, 'Differentiate and set to zero.'), 'minimizing with a derivative', "A minimum of a smooth function is where its slope is zero. Differentiate the delay with respect to x, set it to zero, and solve. The second derivative is positive there, so it really is a minimum.", choice('At a minimum, the slope (the derivative) is:', 'Zero', ['Positive', 'Negative', 'Infinite'], 'The bottom of a valley is flat.'), count('Solve x² = F for x, so x = √F =', `√${F}`, x));
     }),
     mc('You want to minimize power subject to a delay constraint. Which tool is designed for "optimize f subject to g = 0"?', ['Taylor series', 'Lagrange multipliers', 'Fourier transform', 'Integration by parts'], 1, 'Lagrange: ∇f = λ∇g at the optimum. Gate sizing, voltage selection and even placement are constrained optimization problems.'),
   ],
@@ -71,7 +72,7 @@ export const linalg: Lesson = {
       const a = between(r, 2, 4), c = between(r, 2, 4);
       const b = -1;
       const i1 = a * v1 + b * v2, i2 = b * v1 + c * v2;
-      return ask(`Solve G·v = i with G = [[${a}, -1], [-1, ${c}]] and i = [${i1}, ${i2}]. What is v1?`, num(v1), `From the second row, v1 = ${c}·v2 - ${i2}. Substituting into the first gives v2 = ${v2} and v1 = ${v1}. Check: ${a}·${v1} - ${v2} = ${i1}. ✓`, 'Use the second equation to express v1 in terms of v2, then substitute.');
+      return walk(ask(`Solve G·v = i with G = [[${a}, -1], [-1, ${c}]] and i = [${i1}, ${i2}]. What is v1?`, num(v1), `From the second row, v1 = ${c}·v2 - ${i2}. Substituting into the first gives v2 = ${v2} and v1 = ${v1}. Check: ${a}·${v1} - ${v2} = ${i1}. ✓`, 'Use the second equation to express v1 in terms of v2, then substitute.'), "solving a 2 by 2 system", "Solve G·v = i by Cramer's rule: replace one column of G with i, and divide the determinant of that matrix by the determinant of G. For G = [[a, −1], [−1, c]], det G = a·c − 1.", count('det G = a·c − 1 =', `${a} * ${c} - 1`, a * c - 1), count('Numerator, i1·c + i2 =', `${i1} * ${c} + ${i2}`, i1 * c + i2), count('v1 = numerator ÷ det =', `${i1 * c + i2} / ${a * c - 1}`, v1));
     }),
     say('A matrix is a **transformation**: it stretches, rotates and shears space. The **determinant** tells you how much it scales area. Determinant zero means it squashes space flat, so there is no unique solution.'),
     mc('SPICE stops with "singular matrix". In circuit terms, what usually happened?', ['The circuit is too big for the matrix to be stored in memory', 'A node has no DC path to ground, so its voltage is undefined', 'The resistors are too small, so the conductances underflow', 'The clock is missing, so the transient run cannot start up'], 1, 'It floats. A floating node adds a row of G that is not independent of the others: det(G) = 0, and there is no unique solution. Add a path to ground or fix the connection.'),
@@ -80,7 +81,7 @@ export const linalg: Lesson = {
     say('**Eigenvectors** are directions a matrix only stretches, never rotates: A·x = λ·x. The **eigenvalues** λ tell you the stretch. In a linear system dx/dt = A·x, the eigenvalues decide stability: all negative real parts means it settles; any positive one means it blows up.'),
     gen((r) => {
       const a = between(r, 2, 6), b = between(r, 1, a - 1);
-      return ask(`What is the **largest** eigenvalue of [[${a}, ${b}], [${b}, ${a}]]?`, num(a + b), `For [[a, b], [b, a]] the eigenvectors are (1, 1) and (1, -1), with eigenvalues a + b = ${a + b} and a - b = ${a - b}.`, 'Try multiplying the matrix by (1, 1).');
+      return walk(ask(`What is the **largest** eigenvalue of [[${a}, ${b}], [${b}, ${a}]]?`, num(a + b), `For [[a, b], [b, a]] the eigenvectors are (1, 1) and (1, -1), with eigenvalues a + b = ${a + b} and a - b = ${a - b}.`, 'Try multiplying the matrix by (1, 1).'), 'largest eigenvalue of a symmetric 2 by 2', 'For the matrix [[a, b], [b, a]], the vector (1, 1) is an eigenvector: multiplying by it gives (a + b) times (1, 1). The vector (1, −1) gives the eigenvalue a − b. The larger of the two is the largest eigenvalue.', choice('Which is larger, a + b or a − b?', `${a} + ${b}`, [`${a} − ${b}`], `${b} is positive, so adding it makes the result bigger.`), count('The eigenvalue for (1, 1): a + b =', `${a} + ${b}`, a + b));
     }),
     mc('A feedback loop (a PLL, a voltage regulator) is modelled as dx/dt = A·x. When is it stable?', ['When det(A) is positive, whatever the eigenvalues turn out to be', 'When every eigenvalue of A has a negative real part', 'When A is symmetric, since all its eigenvalues are then real', 'When the eigenvalues are complex, since they make it oscillate'], 1, 'Each mode evolves like e^(λt). A negative real part decays; a positive one grows. Complex eigenvalues mean ringing, which is fine as long as it decays.'),
     say('The **SVD** writes any matrix as A = U·Σ·Vᵀ: an orthogonal transformation (a rotation or reflection), a scaling by the singular values, another orthogonal transformation. Keep only the largest singular values and you get the best low-rank approximation of A.'),
@@ -109,7 +110,7 @@ export const ode: Lesson = {
       const k = pick(r, [1, 2, 3]);
       const Vin = pick(r, [1, 1.8, 3.3]);
       const v = Vin * (1 - Math.exp(-k));
-      return ask(`Vin = ${Vin} V, RC = 1 ns. What is v at t = ${k} ns?`, qty(v, 'V', 0.02), `v = ${Vin}·(1 - e^-${k}) = ${v.toFixed(3)} V.`, 'Plug t/RC into 1 - e^(-t/RC).');
+      return walk(ask(`Vin = ${Vin} V, RC = 1 ns. What is v at t = ${k} ns?`, qty(v, 'V', 0.02), `v = ${Vin}·(1 - e^-${k}) = ${v.toFixed(3)} V.`, 'Plug t/RC into 1 - e^(-t/RC).'), 'RC step response', 'After a step, an RC node charges towards Vin as v = Vin × (1 − e^(−t/RC)). After one time constant it has reached about 63%, and after five it is essentially done. Here RC = 1 ns, so t/RC is just t in nanoseconds.', count('t / RC, with t in ns and RC = 1 ns:', `${k} / 1`, k), calcStep('e^(−t/RC) =', `exp(-${k})`, Math.exp(-k), ''), calcStep('v = Vin × (1 − e^(−t/RC)), in volts:', `${Vin} * (1 - exp(-${k}))`, v, 'V', undefined, 0.02));
     }),
     say('Add an inductor and you get a **second-order** equation. The package pins and board traces of every chip have inductance, and together with the decoupling capacitance they form an RLC circuit.'),
     art(`
@@ -124,7 +125,7 @@ export const ode: Lesson = {
       const L = pick(r, [0.5, 1, 2]); // nH
       const C = pick(r, [10, 100, 1000]); // nF
       const f = 1 / (2 * Math.PI * Math.sqrt(L * 1e-9 * C * 1e-9)) / 1e6;
-      return ask(`A package has ${L} nH of inductance and the chip has ${C} nF of decoupling. What is the resonant frequency, in **MHz**?`, qty(f, 'MHz', 0.03), `f0 = 1/(2π√(LC)) = 1/(2π√(${L}e-9 × ${C}e-9)) ≈ ${f.toPrecision(3)} MHz. Power-delivery engineers work hard to damp this resonance, because the supply noise peaks there.`, 'f0 = 1 / (2π √(L·C)), with L in henries and C in farads.');
+      return walk(ask(`A package has ${L} nH of inductance and the chip has ${C} nF of decoupling. What is the resonant frequency, in **MHz**?`, qty(f, 'MHz', 0.03), `f0 = 1/(2π√(LC)) = 1/(2π√(${L}e-9 × ${C}e-9)) ≈ ${f.toPrecision(3)} MHz. Power-delivery engineers work hard to damp this resonance, because the supply noise peaks there.`, 'f0 = 1 / (2π √(L·C)), with L in henries and C in farads.'), 'LC resonant frequency', 'An LC circuit resonates at f0 = 1 / (2π√(LC)), with L in henries and C in farads. Convert nH and nF to base units, multiply, take the square root, then convert hertz to MHz (1 MHz = 10⁶ Hz).', calcStep('The product L × C, in base units:', `${L}e-9 * ${C}e-9`, L * 1e-9 * C * 1e-9, ''), calcStep('f0 = 1 / (2π√(LC)), in MHz:', `1 / (2 * 3.14159 * √(${L}e-9 * ${C}e-9)) / 1e6`, f, 'MHz', undefined, 0.03));
     }),
     gen((r) => {
       const z = pick(r, [0.2, 0.5, 1, 2.5]);

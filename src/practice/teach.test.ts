@@ -1,4 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { CIRCUIT_LESSONS } from '../lessons/circuits';
+import { FOUNDATION_LESSONS } from '../lessons/foundations';
+import { MATH_LESSONS } from '../lessons/math';
+import { PHYSICS_LESSONS } from '../lessons/physics';
 import type { Question } from '../lessons/types';
 import { rng } from '../sim/harness';
 import { BOSSES, PRACTICE } from './index';
@@ -36,6 +40,22 @@ describe('practice walkthroughs', () => {
       for (const d of [1, 2, 3] as Difficulty[]) for (let seed = 1; seed <= 25; seed++) {
         p.gens.forEach((g, i) => checkWalk(g(rng(seed * 7 + i), d), `${p.id} gen${i} d${d} seed${seed}`));
       }
+    });
+  }
+});
+
+// Act 1 lessons: every typed question teaches the same way. Multiple choice stays as it is (no walkthrough is required).
+const ACT1 = [...FOUNDATION_LESSONS, ...CIRCUIT_LESSONS, ...MATH_LESSONS, ...PHYSICS_LESSONS];
+describe('lesson walkthroughs (Act 1)', () => {
+  for (const l of ACT1) {
+    it(`${l.id}: every typed question can be taught step by step`, () => {
+      l.steps.forEach((s, i) => {
+        if (s.t === 'ask') checkWalk(s, `${l.id} step ${i}`);
+        if (s.t === 'gen') for (let seed = 1; seed <= 25; seed++) {
+          const q = s.make(rng(seed * 7 + i));
+          if (q.t === 'ask') checkWalk(q, `${l.id} step ${i} seed${seed}`);
+        }
+      });
     });
   }
 });
