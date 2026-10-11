@@ -156,7 +156,7 @@ const pllJitter: ArchLevel = {
       let cand: { fref: number; bw: number; tot: number } | undefined;
       const perRef = JIT_FREFS.map((fref) => { let m = Infinity; for (const bw of grid) if (bw <= fref / 10) m = Math.min(m, jitter(j, fref, bw).tot); return m; });
       for (const fref of JIT_FREFS) for (const bw of grid) if (bw <= fref / 10) { const t = jitter(j, fref, bw).tot; if (!cand || t < cand.tot) cand = { fref, bw, tot: t }; }
-      spec = Math.ceil(cand!.tot * 1.08);
+      spec = Math.ceil(cand!.tot * 1.01 * 10) / 10;
       const failing = perRef.filter((m) => m > spec).length;
       const defOk = jitter(j, 25, 1).tot <= spec;
       if (failing >= 1 && !defOk) best = cand;
@@ -168,7 +168,7 @@ const pllJitter: ArchLevel = {
 <ul><li><b>Reference + charge-pump noise</b> pass through the loop: σ² = ${j.a}·N²·BW (fs², BW in MHz). A higher reference frequency lowers N and so this term.</li>
 <li><b>VCO noise</b> is suppressed inside the loop bandwidth: σ² = ${j.b}/BW² (fs²).</li></ul>
 <p>The loop bandwidth may not exceed f<sub>ref</sub>/10. Reach an RMS jitter of at most <b>${spec} fs</b>.</p>`,
-      hints: ['Total σ² = a·N²·BW + b/BW². At the minimum, the two terms are in a ratio of 1 : 2 (the derivative is zero).', 'Try each reference frequency at its own optimum bandwidth: the smallest f<sub>ref</sub> can force the optimum above f<sub>ref</sub>/10.', 'The best bandwidth moves with N: halve N and the optimum moves up by 2<sup>2/3</sup>.'],
+      hints: ['Total σ² = a·N²·BW + b/BW². At the minimum, the reference term is twice the VCO term (the derivative is zero).', 'Try each reference frequency at its own optimum bandwidth: the smallest f<sub>ref</sub> can force the optimum above f<sub>ref</sub>/10.', 'The best bandwidth moves with N: halve N and the optimum moves up by 2<sup>2/3</sup>.'],
       controls: [
         { id: 'fref', kind: 'select', label: 'Reference', options: JIT_FREFS.map((x) => ({ value: String(x), label: `${x} MHz` })), value: '25' },
         { id: 'bw', kind: 'number', label: 'Loop bandwidth (MHz)', min: 0.25, max: 12, step: 0.25, value: 1 },

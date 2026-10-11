@@ -59,7 +59,7 @@ const fpgaFmax: ArchLevel = {
       levels = between(r, 8, 16); W = pick(r, [24, 32, 48]); target = pick(r, [150, 200, 250, 300]);
       for (let S = 1; S <= 10; S++) for (const dspreg of [false, true]) { const e = evalCfg(S, dspreg); if (e.fmax >= target && (!best || e.ff < best.ff)) best = { S, dspreg, ff: e.ff }; }
     }
-    const b = best!, ffBudget = b.ff + W, latBudget = evalCfg(b.S, b.dspreg).lat + 1;
+    const b = best!, ffBudget = b.ff, latBudget = evalCfg(b.S, b.dspreg).lat;
     return {
       brief: `<p>A datapath of <b>${levels} LUT levels</b> followed by a DSP multiply must run at <b>${target} MHz</b>. Each LUT level costs ${LEVEL_NS} ns including routing; the DSP block costs ${DSP_NS} ns, or ${DSP_PIPED} ns if its internal pipeline registers are enabled (that adds 2 cycles of latency and 2×${W} flip-flops). Clock-to-Q plus setup is ${OVH} ns. The datapath is ${W} bits wide.</p>
 <p>Cut the logic into S stages with S − 1 register banks (each ${W} FFs); the cuts are not perfectly balanced, so every stage carries ${IMBALANCE} ns of imbalance when S > 1. A stage can never be faster than the DSP's own delay if the DSP registers are off.</p>
@@ -162,7 +162,7 @@ const aiBoss: ArchLevel = {
     return {
       brief: `<p>The layer is a ${inn}×${out} matrix applied to a batch of B input vectors: <b>ops = 2·B·in·out</b>; bytes moved from DRAM = (in·out + B·(in + out)) × bytes per element (the weights are read once per batch, so batching reuses them).</p>
 <p>The accelerator is a P×P MAC array at 1 GHz (peak = 2·P² GOPS) with <b>${bw} GB/s</b> of DRAM bandwidth. Execution time = max(ops / peak, bytes / bandwidth): the <b>roofline</b>. Area ∝ P² × (int8 1, fp16 2.5, fp32 6).</p>
-<ul><li>Throughput (samples/s) = B / time must be at least <b>${tput}</b>.</li><li>The batch's latency must be at most <b>${latCap} ms</b>.</li><li>The model needs at least <b>${minPrec === 'int8' ? 'int8' : 'fp16'}</b> precision${minPrec === 'int8' ? '' : ' (int8 loses too much accuracy)'}.</li><li>Area at most <b>${b.area}</b> units (the smallest design that does it).</li></ul>`,
+<ul><li>Throughput (samples/s) = B / time must be at least <b>${tput}</b>.</li><li>The batch's latency must be at most <b>${latCap} ms</b>.</li><li>The model needs at least <b>${minPrec === 'int8' ? 'int8' : 'fp16'}</b> precision${minPrec === 'int8' ? '' : ' (int8 loses too much accuracy)'}.</li><li>Area at most <b>${b.area}</b> units (the smallest design that does it).</li><li>Batch: use the <b>smallest batch</b> that meets the throughput. A bigger batch only adds latency.</li></ul>`,
       hints: [],
       controls: [
         { id: 'p', kind: 'select', label: 'Array size P', options: [8, 16, 32, 64, 128].map((p) => ({ value: String(p), label: `${p}×${p}` })), value: '8' },
@@ -178,6 +178,7 @@ const aiBoss: ArchLevel = {
           { label: `latency ≤ ${latCap} ms`, ok: e.latencyMs <= latCap, note: `${r2(e.latencyMs)} ms` },
           { label: 'precision is enough for the model', ok: okPrec },
           { label: `area ≤ ${b.area}`, ok: e.area <= b.area, note: String(e.area) },
+          { label: `batch no larger than needed (${b.acc.batch})`, ok: acc.batch <= b.acc.batch, note: `batch ${acc.batch}` },
         ];
         return { goals, metrics: [['peak', `${e.peakG} GOPS`], ['arithmetic intensity', `${r1(e.ai)} ops/B`], ['bound by', e.bound], ['throughput', `${Math.round(e.throughput)}/s`]], view: { kind: 'plot', caption: 'Roofline: attainable GOPS vs arithmetic intensity', xlabel: 'ops/byte', ylabel: 'GOPS', series: [{ label: 'roof', xs: Array.from({ length: 41 }, (_, i) => i * 8), ys: Array.from({ length: 41 }, (_, i) => Math.min(e.peakG, bw * i * 8)) }, { label: 'your layer', xs: [Math.min(e.ai, 320)], ys: [Math.min(e.peakG, bw * e.ai)], stem: true }] } };
       },

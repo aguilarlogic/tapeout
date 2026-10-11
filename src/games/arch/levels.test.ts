@@ -31,10 +31,6 @@ describe('architecture missions', () => {
   }
 });
 
-// Labs outside src/games/arch that fail the random-settings bar today (A7 reports them). They are left for their own
-// folders to fix; everything else in ARCH_LEVELS that is scriptable must meet the bar.
-const OUTSIDE_ARCH_SCOPE = new Set(['sig-fft', 'pll-jitter', 'fpga-fmax', 'ai-boss']);
-
 const randomSetting = (c: Control, r: () => number): string | number | boolean => {
   if (c.kind === 'select') return c.options[Math.floor(r() * c.options.length)].value;
   if (c.kind === 'toggle') return r() < 0.5;
@@ -46,7 +42,7 @@ const randomSetting = (c: Control, r: () => number): string | number | boolean =
 };
 
 describe('random settings rarely pass a lab (A7)', () => {
-  const scriptable = ARCH_LEVELS.filter((l) => !OUTSIDE_ARCH_SCOPE.has(l.id) && l.build(rng(1)).controls.every((c) => c.kind !== 'text'));
+  const scriptable = ARCH_LEVELS.filter((l) => l.build(rng(1)).controls.every((c) => c.kind !== 'text'));
   it('covers the scriptable labs', () => {
     expect(scriptable.length).toBeGreaterThan(30);
   });

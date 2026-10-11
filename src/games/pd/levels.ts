@@ -126,7 +126,7 @@ const pdCts: ArchLevel = {
     const budget = Math.ceil(powers[Math.floor(powers.length * 0.6)]);
     const feasible = configs.filter((c) => c.power <= budget);
     const best = feasible.reduce((a, b) => (b.skew < a.skew ? b : a));
-    const target = Math.max(best.skew * 1.1, best.skew + 0.05);
+    const target = Math.ceil(best.skew * 100) / 100;
     return {
       brief: `<p>A flop sees the clock after a delay (<b>latency</b>); the difference between the earliest and latest arrival is the <b>skew</b>, and it eats into setup and hold margins. A single buffer driving all ${sinks.length} sinks gives wildly different wire delays (RC delay grows with the <i>square</i> of the length). <b>Clock tree synthesis</b> splits the sinks into balanced clusters and inserts buffers: each extra level of buffering shortens the final wires and equalises the paths, at the cost of <b>buffers</b> (power, area) and added latency. Bigger buffers drive their load faster but burn more power.</p>
 <p>Sinks are at the coordinates listed (a 16×16 die, clock source at (8, 8)). Choose the number of <b>buffer levels</b> (0 = one buffer for everything) and the <b>buffer size</b> to reach <b>skew ≤ ${f2(target)}</b> with <b>power ≤ ${budget}</b>.</p>`,
