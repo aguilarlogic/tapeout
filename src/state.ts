@@ -23,6 +23,7 @@ export interface Profile {
 
 export interface Prefs {
   speed: 'slow' | 'normal' | 'fast' | 'instant';
+  muted: boolean; // true silences the synthesized sound cues (see ui/sound.ts); sound is on by default
 }
 
 export interface Progress {
@@ -38,7 +39,7 @@ const KEY = 'tapeout.progress.v1';
 let cache: Progress | null = null;
 
 function blank(): Progress {
-  return { levels: {}, cards: {}, prefs: { speed: 'normal' }, best: {}, daily: emptyDaily() };
+  return { levels: {}, cards: {}, prefs: { speed: 'normal', muted: false }, best: {}, daily: emptyDaily() };
 }
 
 export function load(): Progress {

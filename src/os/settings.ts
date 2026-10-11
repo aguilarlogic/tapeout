@@ -3,6 +3,7 @@ import { prefs, setPrefs, type Prefs } from '../state';
 import { pace, rich } from '../term/terminal';
 import { PACES, prefersReducedMotion, type Token, typeInto } from '../term/typewriter';
 import { h } from '../ui/dom';
+import { playCue } from '../ui/sound';
 
 const SPEEDS: { id: Prefs['speed']; name: string; blurb: string }[] = [
   { id: 'slow', name: 'Slow', blurb: `about ${PACES.slow.cps} characters a second, with long pauses: plenty of time to read` },
@@ -38,6 +39,21 @@ export function settingsApp(): HTMLElement {
   };
   render();
 
+  // Sound: a mute switch. Turning it on plays the pass chime, which also starts audio after this click.
+  const soundBtn = h('button', { class: 'btn ghost', role: 'switch', onclick: () => {
+    const on = prefs().muted;
+    setPrefs({ muted: !on });
+    renderSound();
+    if (on) playCue('pass');
+  } }) as HTMLButtonElement;
+  const renderSound = () => {
+    const on = !prefs().muted;
+    soundBtn.textContent = on ? 'Sound on' : 'Sound off';
+    soundBtn.setAttribute('aria-checked', String(on));
+    soundBtn.classList.toggle('on', on);
+  };
+  renderSound();
+
   root.append(
     h('header', { class: 'level-head' }, h('div', { class: 'title-row' }, h('h2', null, 'Settings'))),
     h('section', { class: 'panel' },
@@ -47,6 +63,10 @@ export function settingsApp(): HTMLElement {
       prefersReducedMotion() ? h('p', { class: 'note' }, 'Your system asks for reduced motion, so typing and loading animations are off whatever you pick here.') : null,
       h('div', { class: 'preview-head' }, h('span', { class: 'dim' }, 'Preview'), h('button', { class: 'btn ghost', onclick: play }, '↻ Replay')),
       preview),
+    h('section', { class: 'panel' },
+      h('h3', null, 'Sound'),
+      h('p', { class: 'dim' }, 'Short synthesized chimes when a check passes or fails, and a brighter jingle on promotion. They are quiet, and they stop when you mute them here.'),
+      h('div', { class: 'speed-options' }, soundBtn)),
   );
   requestAnimationFrame(play);
   return root;

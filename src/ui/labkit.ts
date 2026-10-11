@@ -4,6 +4,7 @@ import { award } from '../mastery/promotion';
 import { levelRecord, loadDraft, saveDraft } from '../state';
 import { type Child, h } from './dom';
 import { celebrate, levelHeader, nextHref } from './layout';
+import { playCue } from './sound';
 
 /** Hints cap a lab at 2 stars. */
 export const starsFor = (hintsUsed: number) => (hintsUsed > 0 ? 2 : 3);
@@ -77,6 +78,7 @@ export const goalItems = (goals: LabGoal[]) => goals.map((g) => h('li', { class:
  * attempt passed and should be banked.
  */
 export function report(status: HTMLElement, ev: { error?: { message: string; line?: number }; passed: boolean; goals: LabGoal[] }, submit: boolean): boolean {
+  if (ev.error || !ev.passed) playCue('fail'); // the one hook for the fail blip: every checked lab that reports through here
   if (ev.error) {
     status.className = 'status err';
     status.textContent = ev.error.message + (ev.error.line ? ` (line ${ev.error.line})` : '');

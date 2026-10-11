@@ -4,6 +4,7 @@ import { type Promotion, promotionLine } from '../mastery/promotion';
 import { mentorSay } from '../os/mentor';
 import { playerName } from '../state';
 import { h, stars as starEls } from './dom';
+import { playCue } from './sound';
 
 export function nextHref(levelId: string): string {
   return neighbours(levelId).next?.route ?? '#/map';
@@ -45,6 +46,7 @@ export function celebrate(stars: number, gained: number, notes: string[], nextRo
   const lines = praise(stars, baseXp);
   const line = lines[Math.floor(Math.random() * lines.length)].replace(/\{name\}/g, playerName());
   setMood(stars === 3 ? 'proud' : 'happy');
+  playCue(promoted ? 'promote' : 'pass');
   mentorSay(promoted ? `${line} ${promotionLine(promoted)}` : line, promoted ? 'excited' : stars === 3 ? 'proud' : 'happy');
   const close = () => overlay.remove();
   const overlay = h('div', { class: 'modal-bg', onclick: (e: Event) => { if (e.target === overlay) close(); } },
