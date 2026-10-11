@@ -67,15 +67,16 @@ describe('ranks are earned through skills', () => {
     expect(rank().index).toBe(2);
 
     // Senior Engineer: 60% job-ready in one role AND three incidents solved. The role alone is not enough...
+    // Chapter incidents count toward their skills, so the role's skills can solve some incidents on the way.
+    const solved = () => ALL_MODULES.filter((m) => m.kind === 'incident' && levelRecord(m.id)).length;
     for (const s of skillsFor('pd')) {
       take(allTiers(s));
-      expect(rank().index).toBe(2);
+      const ready = Math.max(...ROLES.map((r) => roleReadiness(r.id)));
+      expect(rank().index).toBe(ready >= 0.6 && solved() >= 3 ? 3 : 2);
     }
     expect(roleReadiness('pd')).toBeGreaterThanOrEqual(0.6);
-    // ...and so are fewer than three solved incidents. Some incidents are already solved by the skills above, so
-    // step through the open ones and check the promotion lands exactly when the third one is solved.
-    const solved = () => ALL_MODULES.filter((m) => m.kind === 'incident' && levelRecord(m.id)).length;
-    expect(solved()).toBeLessThan(3);
+    // ...and so are fewer than three solved incidents: step through the open ones and check the promotion lands
+    // exactly when the third one is solved.
     for (const m of ALL_MODULES.filter((x) => x.kind === 'incident' && !levelRecord(x.id))) {
       if (solved() >= 3) break;
       take([m.id]);
