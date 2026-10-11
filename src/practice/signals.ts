@@ -82,25 +82,25 @@ export const signalsPractice = practice('practice-signals', 'Signals Drills', 's
     const poles = pick(r, [['-2', '-5'], ['-1 ± 3j'], ['+1', '-4'], ['±2j'], ['-3 ± 1j', '+0.5']]);
     const stable = poles.every((p) => p.startsWith('-'));
     const marginal = poles.some((p) => p.startsWith('±'));
-    const right = marginal ? 'Marginally stable: it oscillates forever at constant amplitude' : stable ? 'Stable: every mode decays' : 'Unstable: some mode grows';
-    return walk(mcs(r, `A system has poles at ${poles.join(', ')}. What is its behaviour?`, right, ['Stable: every mode decays', 'Unstable: some mode grows', 'Marginally stable: it oscillates forever at constant amplitude'].filter((o) => o !== right), 'Left half-plane poles decay, right half-plane poles grow, poles on the imaginary axis oscillate forever. An oscillator is designed to sit right there.'),
+    const right = marginal ? 'Marginal: oscillates forever' : stable ? 'Stable: all modes decay away' : 'Unstable: some mode blows up';
+    return walk(mcs(r, `A system has poles at ${poles.join(', ')}. What is its behaviour?`, right, ['Stable: all modes decay away', 'Unstable: some mode blows up', 'Marginal: oscillates forever'].filter((o) => o !== right), 'Left half-plane poles decay, right half-plane poles grow, poles on the imaginary axis oscillate forever at constant amplitude (marginally stable). An oscillator is designed to sit right there.'),
       'stability from pole positions', 'Each pole p gives a mode e^(p·t). Its REAL part decides the fate: negative decays, positive grows, zero neither grows nor decays (a pure oscillation from the imaginary part). One growing mode makes the whole system unstable.',
-      choice('Is any pole\'s real part positive (a "+" pole)?', poles.some((p) => p.startsWith('+')) ? 'Yes' : 'No', [poles.some((p) => p.startsWith('+')) ? 'No' : 'Yes']),
-      choice('Is any pole exactly on the imaginary axis (real part 0, like ±2j)?', marginal ? 'Yes' : 'No', [marginal ? 'No' : 'Yes']));
+      choice('Is any pole\'s real part positive (a "+" pole)?', poles.some((p) => p.startsWith('+')) ? 'Yes, one is' : 'No, none is', [poles.some((p) => p.startsWith('+')) ? 'No, none is' : 'Yes, one is']),
+      choice('Is any pole exactly on the imaginary axis (real part 0, like ±2j)?', marginal ? 'Yes, one is' : 'No, none is', [marginal ? 'No, none is' : 'Yes, one is']));
   },
   (r) => concept(r, [
-    ['What fully describes a linear time-invariant (LTI) system?', 'Its impulse response (equivalently its transfer function)', ['Its DC gain', 'Its step response at one amplitude only', 'Its maximum output'],
+    ['What fully describes a linear time-invariant (LTI) system?', 'Its impulse response, h(t)', ['Its DC gain and bandwidth', 'Its step response at one amplitude only', 'Its maximum output swing'],
       'the impulse response', 'Any input signal can be written as a sum of scaled, shifted impulses. A linear, time-invariant system answers each one with a scaled, shifted copy of its impulse response, so knowing that one response lets you compute the output for any input (by convolution).',
-      ['Any input can be built from:', 'Scaled, shifted impulses', ['A single step', 'Only sine waves at DC']]],
-    ['Multiplication in the time domain corresponds to what in the frequency domain?', 'Convolution', ['Multiplication', 'Differentiation', 'Nothing'],
+      ['Any input can be built from:', 'Scaled, shifted impulses', ['Ramps of different slopes', 'A single step']], 'Equivalently, its transfer function (the transform of h).'],
+    ['Multiplication in the time domain corresponds to what in the frequency domain?', 'Convolution', ['Multiplication', 'Differentiation', 'A phase shift'],
       'time-frequency duality', 'The Fourier transform swaps the two operations: convolution in one domain is multiplication in the other, in both directions. A filter convolves in time and multiplies in frequency; mixing (multiplying two signals in time) convolves their spectra.',
-      ['A filter convolves in time. In frequency, it:', 'Multiplies the spectrum by its response', ['Convolves the spectrum', 'Adds a constant']]],
-    ['Sampling a signal makes its spectrum…', 'Repeat at every multiple of the sample rate', ['Disappear above fs', 'Shift to DC', 'Double in amplitude'],
+      ['A filter convolves in time. In frequency, it:', 'Multiplies the spectrum', ['Convolves the spectrum', 'Shifts the spectrum']], 'It multiplies the spectrum by its frequency response.'],
+    ['Sampling a signal makes its spectrum…', 'Repeat at every multiple of fs', ['Vanish above fs', 'Shift down to DC', 'Double in amplitude'],
       'sampling in the frequency domain', 'Sampling multiplies the signal by a train of impulses spaced 1/fs apart. That impulse train\'s spectrum is itself impulses every fs, and multiplying in time convolves in frequency, so copies of the spectrum appear around every multiple of fs.',
-      ['Sampling multiplies the signal in time by:', 'A train of impulses', ['A single sine wave', 'A constant']]],
-    ['An ideal brick-wall low-pass filter has what impulse response?', 'A sinc, infinitely long and non-causal', ['A single impulse', 'A decaying exponential', 'A square pulse'],
+      ['Sampling multiplies the signal in time by:', 'A train of impulses', ['A single sine wave at fs', 'A constant gain of fs']]],
+    ['An ideal brick-wall low-pass filter has what impulse response?', 'A sinc (non-causal)', ['A single impulse', 'A decaying exponential', 'A square pulse'],
       'the brick-wall filter', 'A perfect low-pass is a rectangle in frequency. The inverse Fourier transform of a rectangle is sin(x)/x, the sinc, which ripples on forever in both directions. You cannot build it: real filters approximate it with a truncated, windowed version.',
-      ['The shape of a brick-wall filter in the frequency domain is:', 'A rectangle', ['A triangle', 'A single spike']]],
+      ['The shape of a brick-wall filter in the frequency domain is:', 'A rectangle', ['A triangle', 'A single spike']], 'The sinc is infinitely long in both directions, so real filters only approximate it.'],
   ], (right) => `${right}. These dualities are why engineers switch between time and frequency so freely.`),
 ]);
 
@@ -127,9 +127,9 @@ export const dspPractice = practice('practice-dsp', 'DSP Drills', 'FIR/IIR, z-do
         calc('1 - a:', `1 - ${a}`, 1 - a, '', sig(1 - a), 0.001),
         calc('y = x / (1 - a):', `${X} / ${sig(1 - a)}`, X / (1 - a), '', sig(X / (1 - a)), 0.01));
     }
-    return walk(mc(`IIR y[n] = ${a}·y[n-1] + x[n]. Stable?`, ['Stable', 'Unstable'], Math.abs(a) < 1 ? 0 : 1, `The pole is at z = ${a}. Stability needs |z| < 1 (inside the unit circle): ${Math.abs(a) < 1 ? `yes, though at ${a} it decays very slowly and needs many bits to avoid limit cycles` : 'no, the output grows without bound'}.`),
+    return walk(mc(`IIR y[n] = ${a}·y[n-1] + x[n]. Stable?`, ['Yes, it settles', 'No, it diverges'], Math.abs(a) < 1 ? 0 : 1, `The pole is at z = ${a}. Stability needs |z| < 1 (inside the unit circle): ${Math.abs(a) < 1 ? `yes, though at ${a} it decays very slowly and needs many bits to avoid limit cycles` : 'no, the output grows without bound'}.`),
       'IIR stability', idea,
-      choice(`The pole is at z = ${a}. Is |${a}| less than 1?`, Math.abs(a) < 1 ? 'Yes' : 'No', [Math.abs(a) < 1 ? 'No' : 'Yes'], 'Each step multiplies the feedback by a; |a| ≥ 1 never shrinks.'));
+      choice(`The pole is at z = ${a}. Is |${a}| less than 1?`, Math.abs(a) < 1 ? 'Yes, smaller' : 'No, not less', [Math.abs(a) < 1 ? 'No, not less' : 'Yes, smaller'], 'Each step multiplies the feedback by a; |a| ≥ 1 never shrinks.'));
   },
   (r, d) => {
     const fs = pick(r, [48e3, 1e6, 100e6]), N = pick(r, [256, 1024, 4096]);
@@ -179,18 +179,18 @@ export const dspPractice = practice('practice-dsp', 'DSP Drills', 'FIR/IIR, z-do
       calc('10 × log10(M):', `10 × log10(${M})`, gain, '', sig(gain), 0.02));
   },
   (r) => concept(r, [
-    ['Why do FIR filters stay popular in hardware despite needing more taps?', 'They are always stable and can have exactly linear phase', ['They need no multipliers', 'They have infinite memory', 'They are always shorter than IIRs'],
+    ['Why do FIR filters stay popular in hardware despite needing more taps?', 'They are stable and can be linear phase', ['They need no multipliers at all', 'Their feedback gives them infinite memory', 'They are always shorter than IIRs'],
       'FIR versus IIR', 'An FIR filter has no feedback: its output depends only on a finite window of inputs, so it can never blow up. With symmetric coefficients, every frequency is delayed by the same amount (linear phase), which keeps pulse shapes intact. IIRs use feedback: fewer taps, but stability and phase need care.',
-      ['An FIR filter has feedback from its output:', 'No, never', ['Yes, always']]],
-    ['What reduces spectral leakage when a tone is not on a bin?', 'A window (Hann, Blackman) or coherent sampling', ['Fewer FFT points', 'A higher clock frequency', 'Removing the DC offset'],
+      ['An FIR filter has feedback from its output:', 'No, never', ['Yes, some']], 'They are always stable, and symmetric coefficients give exactly linear phase.'],
+    ['What reduces spectral leakage when a tone is not on a bin?', 'A window or coherent sampling', ['Fewer FFT points per capture', 'A faster sample clock', 'Removing the DC offset first'],
       'spectral leakage', 'The FFT assumes the capture repeats forever. If the tone does not fit a whole number of cycles, the repeat has a jump at the seam, and that jump spreads energy into every bin. Fix it by making it fit (coherent sampling) or by tapering the ends to zero (a window).',
-      ['Leakage comes from:', 'A discontinuity where the capture wraps around', ['Too many FFT points', 'The DC offset']]],
-    ['What does a CIC (cascaded integrator-comb) filter avoid, making it ideal for decimation in hardware?', 'Multipliers: it uses only adders, subtractors and registers', ['Registers', 'Adders', 'Clocks'],
+      ['Leakage comes from:', 'A jump where the capture wraps', ['Too many points in the FFT', 'ADC quantization noise']], 'A window (Hann, Blackman) tapers that jump away; coherent sampling removes it.'],
+    ['What does a CIC (cascaded integrator-comb) filter avoid, making it ideal for decimation in hardware?', 'Multipliers', ['Registers', 'Adders and subtractors', 'Clock dividers'],
       'the CIC filter', 'A CIC is a moving average built cleverly: integrators (running sums) at the high rate, then combs (differences) at the low rate. All coefficients are 1, so there is nothing to multiply: just adders, subtractors and registers, which is cheap in silicon.',
-      ['A CIC filter\'s coefficients are all:', '1', ['Random', 'Powers of π']]],
-    ['A fixed-point IIR filter with poles close to z = 1 needs…', 'More internal bits, because small coefficient and rounding errors move the poles a lot', ['Fewer bits', 'No saturation logic', 'A lower sample rate only'],
+      ['A CIC filter\'s coefficients are all:', '1', ['1/N', 'Powers of two']], 'It uses only adders, subtractors and registers.'],
+    ['A fixed-point IIR filter with poles close to z = 1 needs…', 'More internal bits', ['Fewer bits, to save area', 'No saturation logic', 'A lower sample rate only'],
       'IIR precision', 'A pole near z = 1 means feedback of almost exactly 1: the filter remembers for a very long time and its DC gain 1/(1 - a) is huge. A tiny rounding of a changes 1 - a by a large fraction, and internal values grow big, so it needs extra bits.',
-      ['If a = 0.999, the DC gain 1/(1 - a) is:', '1000', ['1', '0.999']]],
+      ['If a = 0.999, the DC gain 1/(1 - a) is:', '1000', ['1', '0.999']], 'Small coefficient and rounding errors move the poles a lot.'],
   ], (right) => `${right}.`),
 ]);
 
@@ -255,18 +255,18 @@ export const controlPractice = practice('practice-control', 'Loop Drills', 'loop
   },
   (r, d) => {
     if (d < 3) return concept(r, [
-      ['Which PID term removes steady-state error?', 'I (integral)', ['P (proportional)', 'D (derivative)', 'None of them'],
+      ['Which PID term removes steady-state error?', 'I (integral)', ['P (proportional)', 'D (derivative)', 'None of the three'],
         'the three PID terms', 'P reacts to the error now, I to the error accumulated over time, D to how fast the error is changing. A P controller needs some error to keep pushing; an integrator keeps growing as long as ANY error is left, so it only stops when the error is exactly zero.',
         ['An integrator\'s output keeps changing while the error is:', 'Anything but zero', ['Exactly zero', 'Negative only']]],
       ['Which PID term adds phase lead to damp overshoot, but amplifies noise?', 'D (derivative)', ['I (integral)', 'P (proportional)', 'The setpoint'],
         'the three PID terms', 'P reacts to the error now, I to the accumulated error, D to its rate of change. Reacting to the rate of change anticipates overshoot (phase lead), but a derivative multiplies each frequency by f, so high-frequency noise gets amplified.',
         ['A derivative multiplies a signal at frequency f by a factor proportional to:', 'f', ['1/f', 'Nothing: it is flat']]],
-      ['Phase margin is measured where?', 'At the frequency where loop gain magnitude = 1 (0 dB)', ['At DC', 'Where phase = -90°', 'At the highest pole'],
+      ['Phase margin is measured where?', 'Where |loop gain| = 1 (0 dB)', ['At DC, where the gain is largest', 'Where the phase reaches -90°', 'At the second pole frequency'],
         'phase margin', 'A feedback loop oscillates if a signal can go around it and come back with the same size (|gain| = 1) and inverted twice (-180°). Phase margin asks: at the frequency where |gain| = 1, how far is the phase from -180°?',
-        ['Oscillation needs a loop gain magnitude of:', '1 (0 dB) with -180° of phase', ['0', '1000']]],
-      ['A loop has 10° of phase margin. Its step response will…', 'Ring heavily with large overshoot', ['Be perfectly flat', 'Be overdamped and slow', 'Have no output'],
+        ['Oscillation needs a loop gain magnitude of:', '1, at -180°', ['0, at -180°', '1000, at -90°']]],
+      ['A loop has 10° of phase margin. Its step response will…', 'Ring with large overshoot', ['Settle with no overshoot', 'Be overdamped and slow', 'Oscillate and grow'],
         'phase margin and damping', 'Phase margin maps to damping: roughly ζ ≈ PM/100 below about 70°. Low margin means the loop is close to oscillating, so a step makes it overshoot and ring before settling.',
-        ['10° of phase margin corresponds to a damping ratio ζ of about:', '0.1 (very lightly damped)', ['1 (critically damped)', '5 (overdamped)']]],
+        ['10° of phase margin corresponds to a damping ratio ζ of about:', '0.1 (lightly damped)', ['1 (critically damped)', '0.7 (well damped)']]],
     ], (right) => `${right}. PM ≈ 100·ζ for ζ below ~0.7: low margin means low damping.`);
     const pm = pick(r, [30, 45, 60, 70]);
     const z = pm / 100;
@@ -417,7 +417,7 @@ export const signalsBoss = boss({
     { t: 'gen', make: (r) => { const f = pick(r, [12e3, 16e3]); const fc = 2e3; const att = -10 * Math.log10(1 + (f / fc) ** 2); return ask(`The existing RC filter has fc = 2 kHz (first order). How much does it attenuate the ${eng(f, 'Hz')} whine, in dB?`, qty(att, '', 0.02, sig(att)), `-10·log10(1 + (${f / fc})²) = ${sig(att)} dB. The 12-bit ADC has ~74 dB of range, so the alias is still clearly visible.`); } },
     { t: 'gen', make: () => ask('What ideal SQNR does the 12-bit ADC offer, in dB?', qty(74, '', 0.01, '74'), '6.02 × 12 + 1.76 = 74.0 dB.') },
     { t: 'gen', make: (r) => { const b = [0.25, 0.25, 0.25, 0.25]; const x = Array.from({ length: 4 }, () => between(r, -4, 8)); const y = b.reduce((a, c, k) => a + c * x[3 - k], 0); return ask(`The FIR is a 4-tap moving average. The last four samples were [${x.join(', ')}]. Output now?`, qty(y, '', 0.001, String(y)), `Average of the four: ${y}. A moving average has nulls at fs/4 and fs/2: great for killing specific tones, weak as an anti-alias filter (it runs after sampling!).`); } },
-    mc('Why can\'t the digital FIR remove the alias?', ['After sampling, the alias sits at a legitimate in-band frequency; no digital filter can tell it from a real signal', 'The FIR is too short', 'The FIR runs too slowly', 'It can, with more taps'], 0, 'Aliasing is irreversible. Filtering must happen before the sampler (or you oversample so the analog filter can be gentle).'),
+    mc('Why can\'t the digital FIR remove the alias?', ['The alias is now a legitimate in-band tone', 'The FIR has too few taps to reach it', 'The FIR clock is too slow for the alias', 'It can, if the stopband is made steep enough'], 0, 'After sampling, the alias sits at a legitimate in-band frequency; no digital filter can tell it from a real signal. Aliasing is irreversible. Filtering must happen before the sampler (or you oversample so the analog filter can be gentle).'),
     { t: 'gen', make: (r) => { const ov = pick(r, [4, 16]); return ask(`Your fix: sample at ${ov}× the rate with a sigma-delta and decimate digitally. Plain oversampling alone improves in-band SNR by how much, in dB?`, qty(10 * Math.log10(ov), '', 0.02, sig(10 * Math.log10(ov))), `10·log10(${ov}) = ${sig(10 * Math.log10(ov))} dB, and the alias band moves ${ov}× further away, so a simple RC now attenuates it by far more.`); } },
   ],
   recap: ['Aliases fold around fs/2 and cannot be removed afterwards.', 'Anti-alias filtering is analog; oversampling relaxes it.', 'Bin width = fs/N; SQNR = 6.02N + 1.76.'],
@@ -437,7 +437,7 @@ export const controlBoss = boss({
     { t: 'gen', make: (r) => { const pm = pick(r, [35, 40]); const z = pm / 100; return ask(`With ${pm}° of margin, ζ ≈ ${z}. Predicted overshoot, in %?`, qty(Math.exp((-Math.PI * z) / Math.sqrt(1 - z * z)) * 100, '%', 0.05, sig(Math.exp((-Math.PI * z) / Math.sqrt(1 - z * z)) * 100)), `e^(-π·${z}/√(1 - ${z}²)) = ${sig(Math.exp((-Math.PI * z) / Math.sqrt(1 - z * z)) * 100)}%, which matches the scope within the approximation.`); } },
     { t: 'gen', make: (r) => { const p2 = pick(r, [3e6, 4e6, 5e6]); const target = p2 / 2; const p1new = target / 1000; return ask(`Compensation plan: move p1 down so the loop crosses unity at p2/2 = ${eng(target, 'Hz')} (≈ 63° margin). New p1, in kHz? (A0 × p1 = crossover)`, qty(p1new / 1e3, 'kHz', 0.01), `p1 = ${eng(target, 'Hz')}/1000 = ${eng(p1new, 'Hz')}. The cost: a slower loop, so worse transient response. That is the classic LDO trade.`); } },
     { t: 'gen', make: (r) => { const K = pick(r, [1000, 500]); return ask(`What DC line/load regulation error does a loop gain of ${K} leave, in %?`, qty(100 / (1 + K), '%', 0.02, sig(100 / (1 + K))), `1/(1 + ${K}) = ${sig(100 / (1 + K))}%. High DC gain for accuracy; a well-placed pole for stability.`); } },
-    mc('The customer insists on a tiny ceramic output cap with almost no ESR. Which compensation style suits that?', ['Internal (dominant-pole or Miller) compensation that keeps the loop stable regardless of the output cap', 'Rely on the cap\'s ESR zero', 'Remove the feedback', 'Raise A0 to 10⁶'], 0, 'Older LDOs needed the output cap\'s ESR zero for phase margin. Modern "cap-less" LDOs compensate internally.'),
+    mc('The customer insists on a tiny ceramic output cap with almost no ESR. Which compensation style suits that?', ['Internal dominant-pole or Miller', 'Rely on the cap\'s ESR zero', 'Raise the error-amp gain A0 to 10⁶', 'Make the output pole dominant'], 0, 'Internal (dominant-pole or Miller) compensation keeps the loop stable regardless of the output cap. Older LDOs needed the output cap\'s ESR zero for phase margin. Modern "cap-less" LDOs compensate internally.'),
   ],
   recap: ['Crossover ≈ A0·p1 for a dominant-pole loop.', 'PM from pole phase lags at crossover; ζ ≈ PM/100.', 'Dominant-pole compensation trades speed for stability.'],
 });
@@ -457,7 +457,7 @@ export const emBoss = boss({
     { t: 'gen', make: (r) => { const len = pick(r, [0.8, 1.5]); const er = 3.8; const t = ((len * 1e-3) / (3e8 / Math.sqrt(er))) * 1e12; return ask(`The via has a ${len} mm unused stub below the signal layer (εr = 3.8). One-way delay down the stub, in ps?`, qty(t, 'ps', 0.02), `v = c/√3.8 = ${sig(3 / Math.sqrt(3.8))}e8 m/s; t = ${len} mm / v = ${sig(t)} ps.`); } },
     { t: 'gen', make: (r) => { const len = pick(r, [0.8, 1.5]); const t = (len * 1e-3) / (3e8 / Math.sqrt(3.8)); const f = 1 / (4 * t); return ask(`A stub is a quarter-wave resonator: it notches the channel at f = 1/(4·t_stub). With the ${len} mm stub, where is the notch, in GHz?`, qty(f / 1e9, 'GHz', 0.02, sig(f / 1e9)), `1/(4 × ${sig(t * 1e12)} ps) = ${eng(f, 'Hz')}. 16 Gb/s NRZ has its Nyquist at 8 GHz, so a notch near there closes the eye. Back-drill the stub.`); } },
     { t: 'gen', make: () => { const d8 = Math.sqrt(1.68e-8 / (Math.PI * 8e9 * 4 * Math.PI * 1e-7)); return ask('Skin depth of copper at the 8 GHz Nyquist frequency, in µm?', qty(d8 * 1e6, 'um', 0.02, sig(d8 * 1e6)), `δ = √(ρ/(πfµ₀)) = ${sig(d8 * 1e6)} µm. The copper roughness (1-3 µm) is comparable, adding loss: use smooth (HVLP) copper.`); } },
-    mc('A neighbouring aggressor line runs parallel for 20 cm. The victim sees noise at the near end during every aggressor edge. What is this, and one fix?', ['Near-end crosstalk (NEXT); increase spacing (3W rule) or route over an unbroken reference plane', 'Skin effect; use thicker copper', 'Reflection; add a series resistor at the aggressor', 'Jitter; lower the data rate'], 0, 'Coupled capacitance and inductance inject noise; spacing and solid return paths reduce it.'),
+    mc('A neighbouring aggressor line runs parallel for 20 cm. The victim sees noise at the near end during every aggressor edge. What is this, and one fix?', ['Near-end crosstalk; increase spacing', 'Skin effect; use thicker copper', 'Reflection; add a series resistor at the aggressor', 'Ground bounce; add more decoupling caps'], 0, 'Near-end crosstalk (NEXT): increase spacing (3W rule) or route over an unbroken reference plane. Coupled capacitance and inductance inject noise; spacing and solid return paths reduce it.'),
   ],
   recap: ['TDR: V = V_inc(1 + Γ) reveals impedance along the path.', 'Stubs resonate at quarter wavelength: back-drill them.', 'Skin depth and roughness set loss at Nyquist.', 'Crosstalk: spacing and return paths.'],
 });

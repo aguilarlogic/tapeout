@@ -163,7 +163,7 @@ export const twosPractice = practice('practice-twos', 'Signed Number Drills', "t
     return walk(ask(`8-bit signed addition: ${a} + ${b}. What value does the 8-bit result hold (as signed decimal)?`, num(res), `The true sum ${a + b} ${a + b > 127 || a + b < -128 ? `does not fit in -128..127, so it wraps to ${res}: signed overflow. Two operands of the same sign gave a result of the other sign.` : `fits, so the result is ${res}.`}`, 'Compute the true sum; if it is outside -128..127, add or subtract 256.'),
       'check the range, then wrap', 'An 8-bit signed number holds -128..127. The hardware adds normally, but only 8 bits survive, so a result outside the range wraps around by 256, like an odometer rolling over. That wrap is called overflow.',
       count('First the true sum, as if you had unlimited bits:', `${a} + ${b}`, a + b),
-      choice(`Does ${a + b} fit in -128..127?`, fits ? 'Yes' : 'No', [fits ? 'No' : 'Yes']),
+      choice(`Does ${a + b} fit in -128..127?`, fits ? 'Yes, inside' : 'No, outside', [fits ? 'No, outside' : 'Yes, inside']),
       fits ? step('Then the result is simply the sum:', num(res))
         : count(`It does not fit, so it wraps by 256 (${a + b > 0 ? 'subtract' : 'add'} 256):`, `${a + b} ${a + b > 0 ? '-' : '+'} 256`, res));
   },
@@ -440,10 +440,10 @@ export const mosPractice = practice('practice-mos', 'Transistor Drills', 'NMOS/P
     const g = pick(r, ['NAND', 'NOR']);
     const net = pick(r, ['pull-down (NMOS)', 'pull-up (PMOS)']);
     const series = (g === 'NAND') === net.startsWith('pull-down');
-    return walk(mc(`In a CMOS ${g} gate, how are the transistors of the ${net} network connected?`, ['In series', 'In parallel'], series ? 0 : 1, `${g}: output low only when ${g === 'NAND' ? 'all inputs are 1 (series NMOS)' : 'any input is 1 (parallel NMOS)'}; the PMOS network is always the dual.`),
+    return walk(mc(`In a CMOS ${g} gate, how are the transistors of the ${net} network connected?`, ['In series: each must be on', 'In parallel: one is enough'], series ? 0 : 1, `${g}: output low only when ${g === 'NAND' ? 'all inputs are 1 (series NMOS)' : 'any input is 1 (parallel NMOS)'}; the PMOS network is always the dual.`),
       'series = AND, parallel = OR', 'Transistors are switches. Switches in series conduct only if ALL are on (AND); in parallel if ANY is on (OR). Ask when the output is pulled low: that condition is the NMOS network. The PMOS network is always the opposite arrangement (the dual).',
-      choice(`When is a ${g}'s output 0?`, g === 'NAND' ? 'Only when all inputs are 1' : 'When any input is 1', [g === 'NAND' ? 'When any input is 1' : 'Only when all inputs are 1']),
-      choice('So the NMOS pull-down network (an NMOS is on when its input is 1) is:', g === 'NAND' ? 'In series' : 'In parallel', [g === 'NAND' ? 'In parallel' : 'In series'], 'Series needs all switches on; parallel needs any one.'),
+      choice(`When is a ${g}'s output 0?`, g === 'NAND' ? 'When every input is 1' : 'When any input is a 1', [g === 'NAND' ? 'When any input is a 1' : 'When every input is 1']),
+      choice('So the NMOS pull-down network (an NMOS is on when its input is 1) is:', g === 'NAND' ? 'In series: each must be on' : 'In parallel: one is enough', [g === 'NAND' ? 'In parallel: one is enough' : 'In series: each must be on'], 'Series needs all switches on; parallel needs any one.'),
       'And the PMOS pull-up network is always the opposite of the NMOS one.');
   },
   (r, d) => {
@@ -470,12 +470,12 @@ export const mosPractice = practice('practice-mos', 'Transistor Drills', 'NMOS/P
     const vs = typ === 'NMOS' ? 0 : vdd;
     const on = typ === 'NMOS' ? vg - vs > vt : vs - vg > vt;
     const ov = typ === 'NMOS' ? vg - vs : vs - vg;
-    return walk(mc(`${typ}, source at ${vs} V, |Vt| = ${vt} V, gate at ${vg} V (Vdd = ${vdd}). Is the channel on?`, ['On', 'Off'], on ? 0 : 1, `${typ === 'NMOS' ? `Vgs = ${+(vg - vs).toFixed(2)} V` : `Vsg = ${+(vs - vg).toFixed(2)} V`} ${on ? '>' : '≤'} ${vt} V, so it is ${on ? 'on' : 'off (only subthreshold leakage flows)'}.${d === 3 ? ' In between, the transistor is partially on: that is where both networks conduct and short-circuit current flows.' : ''}`),
+    return walk(mc(`${typ}, source at ${vs} V, |Vt| = ${vt} V, gate at ${vg} V (Vdd = ${vdd}). Is the channel on?`, ['Yes, it is on', 'No, it is off'], on ? 0 : 1, `${typ === 'NMOS' ? `Vgs = ${+(vg - vs).toFixed(2)} V` : `Vsg = ${+(vs - vg).toFixed(2)} V`} ${on ? '>' : '≤'} ${vt} V, so it is ${on ? 'on' : 'off (only subthreshold leakage flows)'}.${d === 3 ? ' In between, the transistor is partially on: that is where both networks conduct and short-circuit current flows.' : ''}`),
       'compare the gate drive with Vt', typ === 'NMOS'
         ? 'An NMOS turns on when its gate is at least a threshold voltage Vt ABOVE its source: Vgs = Vg - Vs > Vt.'
         : 'A PMOS is the mirror image: it turns on when its gate is at least |Vt| BELOW its source: Vsg = Vs - Vg > |Vt|. Its source usually sits at Vdd.',
       calc(`Compute the gate drive, ${typ === 'NMOS' ? 'Vgs = Vg - Vs' : 'Vsg = Vs - Vg'}:`, typ === 'NMOS' ? `${vg} - ${vs}` : `${vs} - ${vg}`, ov, 'V', String(+ov.toFixed(2)), 0.001),
-      choice(`Is ${+ov.toFixed(2)} V more than |Vt| = ${vt} V?`, on ? 'Yes' : 'No', [on ? 'No' : 'Yes']));
+      choice(`Is ${+ov.toFixed(2)} V more than |Vt| = ${vt} V?`, on ? 'Yes, above it' : 'No, not above', [on ? 'No, not above' : 'Yes, above it']));
   },
 ]);
 
@@ -513,7 +513,7 @@ export const circuitsBoss = boss({
     { t: 'gen', make: (r) => { const r1 = 100e3, r2 = 33e3; const rin = pick(r, [100e3, 50e3]); const r2e = (r2 * rin) / (r2 + rin); const v = (12 * r2e) / (r1 + r2e); return ask(`R1 = 100 kΩ, R2 = 33 kΩ, but the ADC input looks like ${eng(rin, 'Ω')} to ground. At 12 V, what voltage does the ADC actually see?`, qty(v, 'V', 0.02), `R2 ∥ R_in = ${eng(r2e, 'Ω')}, so Vout = 12 × ${eng(r2e, 'Ω')}/(100k + ${eng(r2e, 'Ω')}) = ${v.toFixed(2)} V instead of 2.98 V: a big gain error. Buffer it or use much smaller resistors.`); } },
     { t: 'gen', make: (r) => { const rth = pick(r, [25e3, 33e3]); const fc = pick(r, [10, 100]); const c = 1 / (2 * Math.PI * rth * fc); return ask(`The divider's Thevenin resistance is ${eng(rth, 'Ω')}. You add a capacitor to ground for a ${fc} Hz low-pass. What C, in nF?`, qty(c * 1e9, 'nF', 0.02), `C = 1/(2π × ${eng(rth, 'Ω')} × ${fc}) = ${eng(c, 'F')}. The source resistance of a divider is R1 ∥ R2: exactly the R in the filter.`); } },
     { t: 'gen', make: (r) => { const tau = pick(r, [1, 5, 16]); return ask(`After power-up, the filtered node needs to settle within 0.1% before the first reading. With τ = ${tau} ms, how long must firmware wait, in ms?`, qty(tau * Math.log(1000), 'ms', 0.03), `ln(1000) ≈ 6.9 τ = ${(tau * Math.log(1000)).toFixed(1)} ms.`); } },
-    { t: 'mc', q: 'The ADC samples by briefly connecting a 10 pF capacitor. Why does a big filter capacitor on the input help?', options: ['It raises the input voltage', 'It acts as a charge reservoir, so the sampling cap is charged from it instead of through the 25 kΩ source, avoiding a sampling error', 'It lowers the noise of the ADC reference', 'It does not help'], a: 1, why: 'Charge sharing: a 100 nF reservoir barely moves when a 10 pF sampler connects. Without it, the high source impedance could not recharge the sampler in time.' },
+    { t: 'mc', q: 'The ADC samples by briefly connecting a 10 pF capacitor. Why does a big filter capacitor on the input help?', options: ['It raises the voltage the ADC sees', 'It is a charge reservoir for the sampler', 'It lowers the noise of the ADC reference', 'It speeds up the divider settling'], a: 1, why: 'The sampling cap is charged from the reservoir instead of through the 25 kΩ source, avoiding a sampling error. Charge sharing: a 100 nF reservoir barely moves when a 10 pF sampler connects. Without it, the high source impedance could not recharge the sampler in time.' },
   ],
   recap: ['Divider design + loading + Thevenin resistance + RC settling.'],
 });
