@@ -382,18 +382,35 @@ table.tt th.exp, table.tt td.exp { color: var(--wave-exp); }
   .win-bar { cursor: default; }
   .win-btn[title='Maximize'] { display: none; }
   .desk-icons { display: none; }
-  .term-side { display: none; }
+  .term-side, .mentor-region .term-side { display: none; }
   .term { font-size: 13.5px; padding: 10px; }
   .tray .track, .tray .dim, .clock { display: none; }
-  .task-label { max-width: 90px; }
+  .task { padding: 5px 9px; }
+  .task-label { display: none; }
   .map-top { grid-template-columns: minmax(0, 1fr); }
-  .map-die { max-width: 240px; }
+  .map-die { max-width: 420px; }
   .chapter { grid-template-columns: minmax(0, 1fr); }
   .ch-name { padding-top: 0; }
   .node { width: 100%; }
   .logic-grid { grid-template-columns: minmax(0, 1fr); }
   .term-act { grid-template-columns: 50px minmax(0, 1fr) 36px; }
   .term-act .bar { display: none; }
+}
+/* A phone on its side is too short to stack: the mentor column docks on the left again, narrower, without its
+   header, and windows fill the workspace beside it as they do on a phone held upright. */
+@media (max-width: 959px) and (max-height: 540px) and (orientation: landscape) {
+  .desktop { grid-template-columns: minmax(240px, 40%) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+  .mentor-region { border-bottom: 0; border-right: 1px solid #13232b; }
+  .mentor-region .term-side { display: none; }
+  .mentor-region .term { font-size: 13px; padding: 8px 10px; }
+  .win { left: 0 !important; top: 0 !important; width: 100% !important; height: 100% !important; border-radius: 0; resize: none; border-width: 0; }
+  .win-bar { cursor: default; }
+  .win-btn[title='Maximize'] { display: none; }
+  .desk-icons { display: none; }
+  .tray .track, .tray .dim, .clock { display: none; }
+  .task { padding: 5px 9px; }
+  .task-label { display: none; }
+  .map-top { grid-template-columns: minmax(0, 1fr); }
 }
 @media (prefers-reduced-motion: reduce) {
   .win, .mentor-bubble, .node.next, .av-eyes, .avatar.talking .av-mouth, .desk-grid { animation: none !important; }
