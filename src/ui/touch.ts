@@ -31,16 +31,34 @@ function rememberTry(lab: string) {
 const coarse = () => typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 
 /**
+ * What each card says. The Logic lab works by touch now (tap to wire, zoom), so its card says so and that a mouse is still
+ * easier (U22). The Board Router card is unchanged.
+ */
+export function cardCopy(lab: DragLab): { tag: string; title: string; body: string } {
+  if (lab === 'logic') return {
+    tag: 'Works by touch',
+    title: 'You can wire this one by touch',
+    body: 'Tap one pin, then another, to wire them, and use the zoom buttons to reach the small parts. A mouse is still easier for dragging parts about.',
+  };
+  return {
+    tag: 'Needs a mouse',
+    title: 'This lab is for a bigger screen',
+    body: 'This lab needs a mouse and a wider screen: the pins are too small to wire by touch. Lessons, practice and the arcade work fine here.',
+  };
+}
+
+/**
  * Wrap a drag lab: returns the lab itself, or the card when the rule says so. "Try it anyway" swaps the card for the lab
  * and remembers the choice. `build` runs only when the lab is shown.
  */
 export function touchGate(lab: DragLab, build: () => HTMLElement): HTMLElement {
   const width = typeof window !== 'undefined' ? window.innerWidth : 1440;
   if (!needsWiderScreen({ lab, width, coarse: coarse(), tried: triedThisSession(lab) })) return build();
-  const card = h('section', { class: 'touch-card panel', 'aria-label': 'This lab needs a mouse' },
-    h('div', { class: 'tag' }, 'Needs a mouse'),
-    h('h2', null, 'This lab is for a bigger screen'),
-    h('p', null, 'This lab needs a mouse and a wider screen: the pins are too small to wire by touch. Lessons, practice and the arcade work fine here.'),
+  const copy = cardCopy(lab);
+  const card = h('section', { class: 'touch-card panel', 'aria-label': lab === 'logic' ? copy.title : 'This lab needs a mouse' },
+    h('div', { class: 'tag' }, copy.tag),
+    h('h2', null, copy.title),
+    h('p', null, copy.body),
     h('div', { class: 'touch-actions' },
       h('a', { class: 'btn ghost', href: '#/map' }, 'Back to the map'),
       h('button', { class: 'btn primary', onclick: () => { rememberTry(lab); card.replaceWith(build()); } }, 'Try it anyway')));

@@ -1,5 +1,23 @@
 import { describe, expect, it } from 'vitest';
-import { DRAG_LABS, needsWiderScreen } from './touch';
+import { cardCopy, DRAG_LABS, needsWiderScreen } from './touch';
+
+describe('the wider-screen card says what works by touch (U22)', () => {
+  it('the logic card says touch works: tap to wire, zoom; a mouse is still easier', () => {
+    const c = cardCopy('logic');
+    expect(c.title).toMatch(/touch/i);
+    expect(c.body).toMatch(/tap/i);
+    expect(c.body).toMatch(/zoom/i);
+    expect(c.body).toMatch(/mouse/i);
+    expect(c.body).toMatch(/easier/i);
+  });
+  it('the Board Router card is unchanged', () => {
+    expect(cardCopy('pcb')).toEqual({
+      tag: 'Needs a mouse',
+      title: 'This lab is for a bigger screen',
+      body: 'This lab needs a mouse and a wider screen: the pins are too small to wire by touch. Lessons, practice and the arcade work fine here.',
+    });
+  });
+});
 
 describe('which labs get the wider-screen card', () => {
   it('the two drag labs get it on a coarse pointer, at any width', () => {
