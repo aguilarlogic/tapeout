@@ -509,7 +509,7 @@ This pass covered every area in Part B with four agents. The ids run U24 to U56.
 **Code.** `src/lessons/answers.ts` (`compileBool`).
 **Fix.** Words and symbols are now rewritten before the spaces are stripped.
 
-### U27 · Wrong answers get one generic line, with no near-miss help (Sev 3, Pri 3) · Decision
+### U27 · Wrong answers get one generic line, with no near-miss help (Sev 3, Pri 3) · Decision ✅ done (names the kind of slip — prefix, sign, unit kind, off-by-one, base — never the value)
 **Seen.** `question()` answers every miss with "Not quite." or the hint. `4.7` for a 4.7k answer gets the same reply as `5k`.
 **Proposed fix.** Add an optional `near(input)` to Answer. For a quantity, say when the prefix is off by a power of 1000, and say when the unit is missing.
 **Owner's call.** Naming the prefix gives away part of the answer.
