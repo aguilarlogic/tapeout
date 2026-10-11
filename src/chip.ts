@@ -33,7 +33,7 @@ export const CHIPS: Chip[] = [
           { name: 'bit 0', what: 'a half adder: sum and carry', modules: ['logic-half', 'half-adder-v'] },
           { name: 'bit 1', what: 'a full adder takes the carry from bit 0', modules: ['logic-full'] },
           { name: 'bits 2 and 3', what: 'chain full adders into a 4-bit adder', modules: ['adder4'], bits: 2 },
-          { name: 'bits 4 to 7', what: 'widen the adder to eight bits without losing a carry', modules: ['bug-width'], bits: 4 },
+          { name: 'bits 4 to 7', what: 'widen the adder to eight bits without losing a carry', modules: ['adder8', 'bug-width'], bits: 4 },
         ],
       },
       {
@@ -41,6 +41,7 @@ export const CHIPS: Chip[] = [
           { name: 'or', what: 'an OR for every bit', modules: ['logic-or'] },
           { name: 'xor', what: 'an XOR for every bit', modules: ['logic-xor'] },
           { name: 'select', what: 'a multiplexer picks which result comes out', modules: ['logic-mux', 'mux2'] },
+          { name: 'the whole ALU', what: 'add, subtract and logic, with zero and carry flags', modules: ['alu8'] },
         ],
       },
       {
@@ -49,6 +50,7 @@ export const CHIPS: Chip[] = [
           { name: 'memory cell', what: 'one bit that remembers', modules: ['logic-latch'] },
           { name: 'read port', what: 'pick one register to read', modules: ['mux4'] },
           { name: 'write strobe', what: 'write only on a clock edge', modules: ['edge'] },
+          { name: 'register file', what: 'four registers, one write port, two read ports', modules: ['regfile4'] },
         ],
       },
       {
@@ -56,6 +58,7 @@ export const CHIPS: Chip[] = [
           { name: 'count', what: 'count clock edges', modules: ['logic-counter'] },
           { name: 'wrap', what: 'count to nine, then start again', modules: ['bcd'] },
           { name: 'off by one', what: 'fix a counter that stops one step early', modules: ['bug-mod10'] },
+          { name: 'program counter', what: 'step through the program, or jump', modules: ['pc8'] },
         ],
       },
       {
@@ -85,6 +88,8 @@ export const CHIPS: Chip[] = [
           { name: 'reset', what: 'start the chip in a known state', modules: ['bug-reset'] },
           { name: 'clocking', what: 'make simulation match the chip', modules: ['bug-sens'] },
           { name: 'review', what: 'review the code before it runs on the board', modules: ['boss-hdl'] },
+          { name: 'decode', what: 'turn each instruction into control signals', modules: ['cpu-decode'] },
+          { name: 'run a program', what: 'count to ten on the demo board', modules: ['cpu-tiny'] },
         ],
       },
     ],
