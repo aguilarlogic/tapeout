@@ -5,6 +5,7 @@ import { normaliseTheme } from './theme';
 const fsName = 'node:fs';
 const { readFileSync } = (await import(/* @vite-ignore */ fsName)) as { readFileSync(path: URL, encoding: 'utf8'): string };
 const osCss = readFileSync(new URL('../os.css', import.meta.url), 'utf8');
+const stylesCss = readFileSync(new URL('../styles.css', import.meta.url), 'utf8');
 
 /** The --os-* values declared in the block that matches `selector`. */
 function block(selector: string): Record<string, string> {
@@ -62,6 +63,27 @@ describe('text on the TAPE-OS and Light surfaces meets WCAG AA (4.5:1)', () => {
         expect(contrast(t['os-accent'], bg), `accent on ${bg}`).toBeGreaterThanOrEqual(4.5);
       }
       expect(contrast(t['os-accent-ink'], t['os-accent']), 'button ink on accent').toBeGreaterThanOrEqual(4.5);
+    });
+  }
+});
+
+// U16 (3/4): the page palette the labs use is set by the theme, not by the OS, and reads at AA on its own surfaces.
+describe('lab palette (styles.css) meets WCAG AA in both themes', () => {
+  const decls = (src: string) => Object.fromEntries([...src.matchAll(/--([a-z0-9-]+):\s*(#[0-9a-fA-F]{6})\b/g)].map((x) => [x[1], x[2]]));
+  const base = decls(stylesCss.slice(0, stylesCss.indexOf('}')));
+  const light = decls(stylesCss.slice(stylesCss.indexOf("[data-theme='light']")));
+  it('the light palette is set by [data-theme=light], not by the OS setting', () => {
+    expect(stylesCss).toContain(":root[data-theme='light']");
+    expect(stylesCss).not.toContain('prefers-color-scheme');
+  });
+  for (const [name, t] of Object.entries({ tapeout: base, light })) {
+    it(`${name}: text, dim text and accent on the panels; button ink on accent`, () => {
+      for (const bg of [t.bg, t.panel, t['panel-2'], t['code-bg']]) {
+        expect(contrast(t.text, bg), `text on ${bg}`).toBeGreaterThanOrEqual(4.5);
+        expect(contrast(t['text-dim'], bg), `dim on ${bg}`).toBeGreaterThanOrEqual(4.5);
+        expect(contrast(t.accent, bg), `accent on ${bg}`).toBeGreaterThanOrEqual(4.5);
+      }
+      expect(contrast(t['accent-ink'], t.accent), 'ink on accent').toBeGreaterThanOrEqual(4.5);
     });
   }
 });

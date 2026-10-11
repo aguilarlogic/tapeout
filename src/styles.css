@@ -1,20 +1,21 @@
 :root {
-  --bg: #0b0f14;
-  --bg-2: #111821;
-  --panel: #131b25;
-  --panel-2: #1a2430;
-  --border: #243140;
-  --text: #dbe4ee;
-  --text-dim: #8a9aab;
-  --accent: #14b8a6;
-  --accent-2: #0e8f82;
-  --accent-text: #14b8a6; /* accent as text on tinted chips: AA on the chip background */
+  /* The page palette, TAPE-OS (the default): the dark terminal look, with the phosphor teal accent. */
+  --bg: #0a1015;
+  --bg-2: #0e1820;
+  --panel: #0e1820;
+  --panel-2: #16262f;
+  --border: #1f3742;
+  --text: #d4e8e2;
+  --text-dim: #8ea6a3;
+  --accent: #5eead4;
+  --accent-2: #2dd4bf;
+  --accent-text: #5eead4; /* accent as text on tinted chips: AA on the chip background */
   --accent-ink: #04201d;
-  --ok: #34d399;
+  --ok: #4ade80;
   --warn: #fbbf24;
   --err: #f87171;
   --gold: #fbbf24;
-  --code-bg: #0d131a;
+  --code-bg: #070d12;
   --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
 
   --wave-grid: #1c2632;
@@ -43,8 +44,9 @@
   --mono: ui-monospace, SFMono-Regular, 'JetBrains Mono', Menlo, Consolas, monospace;
 }
 
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme='dark']) {
+/* Light: the page palette for Settings > Theme "Light" (set on <html>). The base :root above is TAPE-OS, the default,
+   so the system's colour scheme no longer decides the look. */
+:root[data-theme='light'] {
     --bg: #f5f7fa;
     --bg-2: #eef2f6;
     --panel: #ffffff;
@@ -73,7 +75,6 @@
     --tk-com: #7b8a99;
     --tk-sys: #1d4ed8;
     color-scheme: light;
-  }
 }
 
 * { box-sizing: border-box; }
