@@ -9,6 +9,10 @@ import { briefPanel, finish, hintNote, useHints } from '../../ui/labkit';
 import { askConfirm } from '../../ui/modal';
 import { touchGate } from '../../ui/touch';
 import { displayNames, nearestTarget, wireStep, type Dir, type Target, type WireState } from './wiring';
+import { hitRadius, zoomTo } from './view';
+import { NARROW_PX } from '../../ui/touch';
+
+const coarse = () => typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 
 const GRID = 10;
 const snap = (v: number) => Math.round(v / GRID) * GRID;
@@ -94,9 +98,26 @@ function buildLogic(id: string): HTMLElement {
   const live = h('p', { class: 'kbd-live dim small', role: 'status', 'aria-live': 'polite' });
   const say = (m: string) => { live.textContent = m; };
   const paletteHost = h('div', { class: 'kbd-menu-host' });
-
   const W = CANVAS.w, H = CANVAS.h;
   const canvas = svg('svg', { viewBox: `0 0 ${W} ${H}`, class: 'logic-svg', tabindex: 0, role: 'application', 'aria-label': 'Schematic editor' });
+  /** Zoom: null fits the schematic to the window; a number is screen pixels per unit. Narrow screens start at 1:1 (U52). */
+  let zoomPx: number | null = window.innerWidth < NARROW_PX ? 1 : null;
+  const wrap = h('div', { class: 'logic-wrap' }, canvas);
+  const applyZoom = () => {
+    if (zoomPx === null) { canvas.style.width = ''; canvas.style.height = ''; }
+    else { canvas.style.width = `${Math.round(W * zoomPx)}px`; canvas.style.height = `${Math.round(H * zoomPx)}px`; }
+    requestAnimationFrame(() => draw());
+  };
+  const zoomBy = (action: 'in' | 'out' | 'fit') => {
+    zoomPx = zoomTo(zoomPx, action, wrap.clientWidth / W);
+    applyZoom();
+    say(zoomPx === null ? 'The schematic fits the window.' : `Zoom ${Math.round(zoomPx * 100)}%.`);
+  };
+  const zoomBar = h('div', { class: 'zoom-bar', role: 'group', 'aria-label': 'Zoom the schematic' },
+    h('button', { class: 'btn ghost small', onclick: () => zoomBy('out'), 'aria-label': 'Zoom out' }, '−'),
+    h('button', { class: 'btn ghost small', onclick: () => zoomBy('fit'), 'aria-label': 'Fit the schematic to the window' }, 'Fit'),
+    h('button', { class: 'btn ghost small', onclick: () => zoomBy('in'), 'aria-label': 'Zoom in' }, '+'));
+
   // Undo (U41): every saved change keeps the state it replaced, so deleting a gate or wire, or clearing the board, can be taken back.
   const history: string[] = [];
   let saved = JSON.stringify(circ);
@@ -121,6 +142,7 @@ function buildLogic(id: string): HTMLElement {
   // ---- rendering
   const draw = () => {
     canvas.replaceChildren();
+    const hit = hitRadius(coarse(), canvas.getScreenCTM()?.a ?? 1);
     for (let x = GRID * 2; x < W; x += GRID * 2) for (let y = GRID * 2; y < H; y += GRID * 2) canvas.append(svg('circle', { cx: x, cy: y, r: 0.8, class: 'dot' }));
     circ.wires.forEach((w, i) => {
       const [pa, na] = w.a.split('.'), [pb, nb] = w.b.split('.');
@@ -147,6 +169,8 @@ function buildLogic(id: string): HTMLElement {
         const c = svg('circle', { cx: pin.dx, cy: pin.dy, r: 5, class: `pin ${vcls(sim.pin(ref))}${wire.from === ref ? ' pending' : ''}`, 'data-pin': ref });
         c.append(svg('title', {}, `${p.label ?? p.kind} ${pin.name}`));
         g.append(c);
+        // an invisible, larger target for a finger or a loose mouse (U52); the drawn pin does not change
+        g.append(svg('circle', { cx: pin.dx, cy: pin.dy, r: hit, class: 'pin-hit', 'data-pin': ref }));
       }
       g.addEventListener('pointerdown', (e) => partDown(e as PointerEvent, p));
       canvas.append(g);
@@ -210,6 +234,17 @@ function buildLogic(id: string): HTMLElement {
     return pid;
   };
 
+  /** The pin nearest a point (canvas units), if one is within its hit area. */
+  const pinNear = (cx: number, cy: number): string | undefined => {
+    const r = hitRadius(coarse(), canvas.getScreenCTM()?.a ?? 1);
+    let best: string | undefined, bestD = r * r;
+    for (const p of circ.parts) for (const pin of PINS[p.kind]) {
+      const d = (p.x + pin.dx - cx) ** 2 + (p.y + pin.dy - cy) ** 2;
+      if (d <= bestD) { bestD = d; best = `${p.id}.${pin.name}`; }
+    }
+    return best;
+  };
+
   // ---- wiring by pin (mouse, touch and keyboard share this, U51)
   /** A pin in words for announcements: "NAND1.y", or just "OUT" for an input, output or rail. */
   const labelOf = (ref: string) => {
@@ -235,6 +270,14 @@ function buildLogic(id: string): HTMLElement {
     ];
   });
   const describeTarget = (t: Target) => (t.ref ? labelOf(t.ref) : `the ${displayNames(circ.parts).get(t.part!) ?? 'part'} body`);
+  /** Scroll a zoomed window so the cursor is on screen (U52). */
+  const revealCursor = () => {
+    if (!cursor) return;
+    const k = canvas.getScreenCTM()?.a ?? 1;
+    const x = cursor.x * k, y = cursor.y * k;
+    if (x < wrap.scrollLeft + 24 || x > wrap.scrollLeft + wrap.clientWidth - 24) wrap.scrollLeft = x - wrap.clientWidth / 2;
+    if (y < wrap.scrollTop + 24 || y > wrap.scrollTop + wrap.clientHeight - 24) wrap.scrollTop = y - wrap.clientHeight / 2;
+  };
   const moveCursor = (dir: Dir) => {
     const ts = targets();
     if (!ts.length) return;
@@ -244,6 +287,7 @@ function buildLogic(id: string): HTMLElement {
     cursor = next;
     say(`Cursor on ${describeTarget(cursor)}.`);
     draw();
+    revealCursor();
   };
   const pressCursor = () => {
     if (!cursor) { say('Move the cursor first with the arrow keys.'); return; }
@@ -282,7 +326,8 @@ function buildLogic(id: string): HTMLElement {
     e.stopPropagation();
     const pinEl = (e.target as Element).closest('[data-pin]');
     if (pinEl) {
-      const ref = pinEl.getAttribute('data-pin')!;
+      // the pin nearest the finger or pointer, not just the one on top: neighbouring hit areas overlap (U52)
+      const ref = pinNear(...toLocal(e)) ?? pinEl.getAttribute('data-pin')!;
       // A pin that is already chosen, or a second pin after one was chosen, follows the wiring rules (U51, U52).
       if (wire.from) { pinAction(ref); return; }
       const [x, y] = toLocal(e);
@@ -294,10 +339,10 @@ function buildLogic(id: string): HTMLElement {
         canvas.removeEventListener('pointermove', move);
         canvas.removeEventListener('pointerup', up);
         rubber = null;
-        const target = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('[data-pin]')?.getAttribute('data-pin');
+        const target = pinNear(...toLocal(ev));
         if (target && target !== ref) { wire = {}; connect(ref, target); say(`Wired ${labelOf(ref)} to ${labelOf(target)}`); draw(); return; }
         // a tap, not a drag: it picks the pin (or cancels, if it was the chosen one)
-        if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < 5) { pinAction(ref); return; }
+        if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < (coarse() ? 12 : 5)) { pinAction(ref); return; }
         draw();
       };
       canvas.addEventListener('pointermove', move);
@@ -322,7 +367,15 @@ function buildLogic(id: string): HTMLElement {
     canvas.addEventListener('pointerup', up);
     draw();
   };
-  canvas.addEventListener('pointerdown', () => { selected = {}; wire = {}; draw(); });
+  canvas.addEventListener('pointerdown', (e) => {
+    selected = {}; wire = {}; draw();
+    // a drag on empty canvas pans a zoomed schematic (U52): it scrolls the window around it
+    const sx = e.clientX, sy = e.clientY, left = wrap.scrollLeft, top = wrap.scrollTop;
+    const move = (ev: PointerEvent) => { wrap.scrollLeft = left - (ev.clientX - sx); wrap.scrollTop = top - (ev.clientY - sy); };
+    const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  });
   const ARROWS: Record<string, Dir> = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' };
   canvas.addEventListener('keydown', (e) => {
     const dir = ARROWS[e.key];
@@ -404,9 +457,12 @@ function buildLogic(id: string): HTMLElement {
 
   resim(true);
   draw();
+  applyZoom();
+  // redraw when the window changes size: hit areas and the fit scale depend on it
+  if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => draw()).observe(wrap);
   return h('div', { class: 'level' },
     levelHeader(level.title, level.id, levelRecord(level.id)?.stars ?? 0, level.xp),
     h('div', { class: 'level-grid logic-grid' }, brief,
-      h('section', { class: 'work panel' }, toolbar, h('div', { class: 'logic-wrap' }, canvas), live, paletteHost),
+      h('section', { class: 'work panel' }, toolbar, zoomBar, wrap, live, paletteHost),
       h('aside', { class: 'panel' }, side)));
 }
