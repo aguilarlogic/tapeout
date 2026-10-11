@@ -199,10 +199,10 @@ export class Shell {
         return this.careerCmd();
       case 'roles': case 'role': case 'careers': case 'jobs':
         return this.rolesCmd(arg);
-      case 'boss': case 'bosses': {
+      case 'checkpoint': case 'checkpoints': case 'boss': case 'bosses': {
         if (!arg) return this.printBosses();
         const b = findBoss(arg) ?? findBoss(`boss-${arg}`);
-        if (!b) return t.print(`No boss "${arg}". Type \`boss\` to list them.`, 'err');
+        if (!b) return t.print(`No checkpoint "${arg}". Type \`checkpoints\` to list them.`, 'err');
         return this.runLesson(b.id);
       }
       case 'incident': case 'incidents': case 'pager': case 'oncall': {
@@ -285,7 +285,7 @@ export class Shell {
       ['practice [skill]', 'endless generated problems; no argument = a daily mix'],
       ['skills [role]', 'your skill matrix: every topic, levels 0-3'],
       ['roles [role]', 'job readiness for every role (DV, PD, quantum…)'],
-      ['boss [name]', 'list or start boss fights (no hints)'],
+      ['checkpoint [name]', 'list or start checkpoint quizzes (no hints)'],
       ['incidents [name]', 'on-call investigations: find the root cause against the clock'],
       ['what is <term>', `look up any of ${GLOSSARY.length} terms`],
       ['status', 'your rank, XP and progress'],
@@ -504,7 +504,7 @@ export class Shell {
     const lv = skillLevel(s);
     t.print(`SKILL · ${s.name}`, 'hl');
     t.print(`level ${lv}/3 ${'●'.repeat(lv)}${'○'.repeat(3 - lv)} ${LEVEL_NAME[lv]}${skillCeiling(s) < 3 ? ` · levels above ${skillCeiling(s)} are still being built (${s.plan ?? 'planned'})` : ''}`, 'dim');
-    const tiers: ['learn' | 'practice' | 'boss', string][] = [['learn', '1 · Learn'], ['practice', '2 · Practice'], ['boss', '3 · Boss']];
+    const tiers: ['learn' | 'practice' | 'boss', string][] = [['learn', '1 · Learn'], ['practice', '2 · Practice'], ['boss', '3 · Checkpoint']];
     for (const [k, label] of tiers) {
       const ids = s[k];
       this.term.block(h('div', { class: 'term-ch' }, h('div', { class: 'dim' }, `  ${label}`), ...(ids.length ? ids.map((mid) => {
@@ -560,7 +560,7 @@ export class Shell {
   }
 
   private printBosses() {
-    this.term.print('BOSS FIGHTS · realistic tasks, no hints, one attempt per question', 'hl');
+    this.term.print('CHECKPOINTS · realistic tasks, no hints, one attempt per question', 'hl');
     this.term.block(h('div', { class: 'term-ch' }, ...BOSSES.map((b) => {
       const rec = levelRecord(b.id);
       return h('button', { class: `term-mod${rec ? ' done' : ''}`, onclick: () => this.run(`learn ${b.id}`) },
@@ -583,6 +583,7 @@ export class Shell {
     return this.guarded(async () => {
       void t.progress(`paging you in: ${inc.title}`);
       const res = await runIncident(t, inc, { define: (q) => this.define(q) });
+      if (res.checkpoint) { this.queue.push(`learn ${res.checkpoint}`); return; }
       const next = res.solved ? neighbours(id).next : undefined;
       const opts = [...(next ? [`Continue: **${next.title}** (${KIND_LABEL[next.kind].toLowerCase()})`] : []), res.solved ? 'Replay (a different root cause)' : 'Try again (a different root cause)', 'Back to the shell'];
       const pick = await t.choose(opts, 'next>', (v) => this.queue.push(v));
@@ -620,7 +621,7 @@ export class Shell {
     if (bossDef) void t.bossIntro(l.title);
     else void t.progress(mode === 'final' ? 'assembling the tapeout review' : `loading level: ${l.title}`);
     void t.block(h('div', { class: `term-banner${bossDef ? ' boss' : ''}` },
-      h('span', { class: 'dim' }, bossDef ? `BOSS · no hints · one attempt per question · ${Math.round(bossDef.pass * 100)}% to win` : f ? `ACT ${f.act.n} · ${f.chapter.name.toUpperCase()}` : 'LESSON'),
+      h('span', { class: 'dim' }, bossDef ? `${l.id.startsWith('cap-') ? 'HIRING PANEL' : 'CHECKPOINT'} · no hints · one attempt per question · ${Math.round(bossDef.pass * 100)}% to win` : f ? `ACT ${f.act.n} · ${f.chapter.name.toUpperCase()}` : 'LESSON'),
       h('b', null, l.title), h('span', { class: 'dim' }, l.concept)), 'type', 2.5);
     const rnd = Math.random;
     let asked = 0, firstTry = 0;
@@ -656,7 +657,7 @@ export class Shell {
       st = pct >= 0.95 ? 3 : pct >= bossDef.pass - 1e-9 ? 2 : 0;
       t.print(`score: ${firstTry}/${asked} (${Math.round(pct * 100)}%) · need ${Math.round(bossDef.pass * 100)}%`, 'hl');
       if (!st) {
-        await t.say(pickOne(['The boss wins this round. Every miss above tells you exactly what to practise; come back when you are ready.', 'Not this time. That is normal for a boss: go run the practice sets, then come back and take it down.']), 'concerned');
+        await t.say(pickOne(['The checkpoint wins this round. Every miss above tells you exactly what to practise; come back when you are ready.', 'Not this time. That is normal for a checkpoint: go run the practice sets, then come back and take it down.']), 'concerned');
         return;
       }
     } else if (exam) {
@@ -667,13 +668,13 @@ export class Shell {
     } else st = misses === 0 ? 3 : misses <= 2 ? 2 : 1;
     const { gained, promotedTo } = award(l.id, l.xp, st);
     const card = h('div', { class: 'term-done' },
-      h('div', null, h('b', null, bossDef ? 'BOSS DEFEATED' : exam ? 'TAPEOUT REVIEW PASSED' : 'LESSON COMPLETE'), ' ', starEls(st)),
+      h('div', null, h('b', null, bossDef ? (l.id.startsWith('cap-') ? 'PANEL PASSED' : 'CHECKPOINT PASSED') : exam ? 'TAPEOUT REVIEW PASSED' : 'LESSON COMPLETE'), ' ', starEls(st)),
       h('div', { class: 'dim' }, `${firstTry}/${asked} first try · ${gained ? `+${gained} XP` : 'no new XP (you already did better)'}`),
       l.recap.length ? h('ul', { class: 'recap' }, ...l.recap.map((r) => h('li', null, ...rich(r)))) : null);
     void t.block(card, 'type', 1.6);
     const mood: Mood = st === 3 ? 'proud' : st === 2 ? 'happy' : 'neutral';
     if (promotedTo) await t.say(promotionLine(promotedTo), 'excited');
-    if (bossDef) await t.say(pickOne(['Boss down. That is job-level work, {name}: no hints, no second tries.', 'Defeated. Somewhere a senior engineer just nodded approvingly.', 'That is the real thing. You earned that level.']), 'proud');
+    if (bossDef) await t.say(pickOne(['Checkpoint passed. That is job-level work, {name}: no hints, no second tries.', 'Defeated. Somewhere a senior engineer just nodded approvingly.', 'That is the real thing. You earned that level.']), 'proud');
     else if (mode === 'final') await t.say('That is it. Every block signed off, every question answered. Your chip is ready for tapeout. For real next steps: put a design on silicon with Tiny Tapeout, and bring these answers to your interviews. I am proud of you, {name}.', 'proud');
     else await t.say(st === 3 ? pickOne(['Flawless. Onward.', 'Perfect run. You make this look easy.', 'Every question first try. Nice.']) : st === 2 ? 'Good work. A couple of stumbles, which is exactly how learning is supposed to feel.' : 'Done. This one was tough; come back and replay it for more stars later.', mood);
     const nx = neighbours(l.id).next;
