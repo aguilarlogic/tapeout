@@ -27,7 +27,9 @@ function floorplan(chip: Chip): SVGSVGElement {
     const cls = ['chip-blk', p.done ? 'done' : '', p.built + p.half === 0 ? 'dim' : ''].filter(Boolean).join(' ');
     const g = svg('g', { class: cls });
     g.append(svg('rect', { x, y, width: bw, height: rowH, rx: 6, class: 'chip-box' }));
-    g.append(svg('text', { x: x + 8, y: y + 19, class: 'chip-blk-name' }, b.name));
+    // Long names shrink to fit their block instead of running into the next one (about 0.58em per character).
+    const size = Math.min(14, Math.floor(((bw - 16) / (b.name.length * 0.58)) * 2) / 2);
+    g.append(svg('text', { x: x + 8, y: y + 19, class: 'chip-blk-name', 'font-size': size }, b.name));
     // The slots sit in a small grid under the block name.
     const ax = x + 8, ay = y + 30, aw = bw - 16, ah = rowH - 38, k = b.slots.length;
     const sc = Math.min(k, Math.ceil(Math.sqrt((k * aw) / ah)));
