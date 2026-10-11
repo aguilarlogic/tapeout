@@ -99,7 +99,7 @@ function archView(pz: ArchPuzzle, miss: () => void, finish: () => void): HTMLEle
   };
   renderPalette();
   renderDiagram();
-  return h('div', null, h('h4', null, 'Components'), palette, info, diagram);
+  return h('div', null, h('h3', { class: 'sub-head' }, 'Components'), palette, info, diagram);
 }
 
 function orderView(pz: OrderPuzzle, miss: () => void, finish: () => void): HTMLElement {
@@ -125,7 +125,7 @@ function orderView(pz: OrderPuzzle, miss: () => void, finish: () => void): HTMLE
     }));
   };
   render();
-  return h('div', null, h('h4', null, 'Phases (click in execution order)'), pool, list);
+  return h('div', null, h('h3', { class: 'sub-head' }, 'Phases (click in execution order)'), pool, list);
 }
 
 function codeView(pz: CodePuzzle, miss: () => void, finish: () => void): HTMLElement {

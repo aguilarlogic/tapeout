@@ -50,7 +50,7 @@ function backupNote(levelId: string, ranked: boolean): string[] {
 export const hintNote = (hintsUsed: number) => (hintsUsed ? ['Solve it without hints for another star.'] : []);
 
 /** The brief's HTML. A scrolling block (a code sample, a waveform) takes focus, so a keyboard user can scroll it. */
-function briefBody(html: string): HTMLElement {
+export function briefBody(html: string): HTMLElement {
   const body = h('div', { class: 'brief-body', html });
   body.querySelectorAll('pre').forEach((p) => p.setAttribute('tabindex', '0'));
   // The brief's sub-headings are h4 for the look, but they sit under the lab's h2: say level 3, so the outline does not skip.

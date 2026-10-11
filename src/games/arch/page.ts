@@ -57,7 +57,7 @@ function plotEl(v: Extract<View, { kind: 'plot' }>): HTMLElement {
   if (v.xlabel) svg.append(el('text', { x: (W + L) / 2, y: H - 2, class: 'tick', 'text-anchor': 'middle' }, v.xlabel));
   if (v.ylabel) svg.append(el('text', { x: 4, y: 10, class: 'tick' }, v.ylabel));
   const legend = h('div', { class: 'arch-legend' }, ...v.series.map((s, k) => h('span', null, h('i', { style: `background:${s.color ?? PLOT_COLORS[k % PLOT_COLORS.length]}` }), s.label)));
-  return h('div', { class: 'arch-view' }, v.caption ? h('h4', null, v.caption) : '', svg as unknown as HTMLElement, legend);
+  return h('div', { class: 'arch-view' }, v.caption ? h('h3', { class: 'sub-head' }, v.caption) : '', svg as unknown as HTMLElement, legend);
 }
 
 function viewEl(v: View): HTMLElement {
@@ -65,14 +65,14 @@ function viewEl(v: View): HTMLElement {
     const width = Math.max(0, ...v.rows.map((r) => r.stages.length));
     const head = h('tr', null, h('th', null, 'instruction'), ...Array.from({ length: width - 1 }, (_, i) => h('th', null, String(i + 1))));
     const body = v.rows.map((r) => h('tr', { title: r.note || undefined }, h('td', { class: 'pipe-ins' }, r.text), ...Array.from({ length: width - 1 }, (_, i) => { const s = r.stages[i + 1] ?? ''; return h('td', { class: `pipe-st ${s ? 'st-' + s : ''}` }, s); })));
-    return h('div', { class: 'arch-view' }, v.caption ? h('h4', null, v.caption) : '', h('div', { class: 'arch-scroll' }, h('table', { class: 'pipe' }, h('thead', null, head), h('tbody', null, ...body))));
+    return h('div', { class: 'arch-view' }, v.caption ? h('h3', { class: 'sub-head' }, v.caption) : '', h('div', { class: 'arch-scroll' }, h('table', { class: 'pipe' }, h('thead', null, head), h('tbody', null, ...body))));
   }
   if (v.kind === 'table') {
-    return h('div', { class: 'arch-view' }, v.caption ? h('h4', null, v.caption) : '', h('div', { class: 'arch-scroll' }, h('table', { class: 'arch-table' }, h('thead', null, h('tr', null, ...v.head.map((x) => h('th', null, x)))), h('tbody', null, ...v.rows.map((r, i) => h('tr', { class: v.classes?.[i] ?? '' }, ...r.map((c) => h('td', null, String(c)))))))));
+    return h('div', { class: 'arch-view' }, v.caption ? h('h3', { class: 'sub-head' }, v.caption) : '', h('div', { class: 'arch-scroll' }, h('table', { class: 'arch-table' }, h('thead', null, h('tr', null, ...v.head.map((x) => h('th', null, x)))), h('tbody', null, ...v.rows.map((r, i) => h('tr', { class: v.classes?.[i] ?? '' }, ...r.map((c) => h('td', null, String(c)))))))));
   }
-  if (v.kind === 'grid') return h('div', { class: 'arch-view' }, v.caption ? h('h4', null, v.caption) : '', h('div', { class: 'arch-scroll' }, h('table', { class: 'arch-grid' }, h('tbody', null, ...v.cells.map((row) => h('tr', null, ...row.map((c) => h('td', { class: c.c ?? '' }, c.t))))))));
+  if (v.kind === 'grid') return h('div', { class: 'arch-view' }, v.caption ? h('h3', { class: 'sub-head' }, v.caption) : '', h('div', { class: 'arch-scroll' }, h('table', { class: 'arch-grid' }, h('tbody', null, ...v.cells.map((row) => h('tr', null, ...row.map((c) => h('td', { class: c.c ?? '' }, c.t))))))));
   if (v.kind === 'plot') return plotEl(v);
-  return h('div', { class: 'arch-view' }, v.caption ? h('h4', null, v.caption) : '', ...v.items.map((it) => h('div', { class: 'arch-bar' }, h('span', { class: 'lbl' }, it.label), h('span', { class: 'track' }, h('span', { class: 'fill', style: `width:${Math.min(100, (100 * it.value) / Math.max(1, it.of))}%` })), h('span', { class: 'num dim small' }, String(it.value)))));
+  return h('div', { class: 'arch-view' }, v.caption ? h('h3', { class: 'sub-head' }, v.caption) : '', ...v.items.map((it) => h('div', { class: 'arch-bar' }, h('span', { class: 'lbl' }, it.label), h('span', { class: 'track' }, h('span', { class: 'fill', style: `width:${Math.min(100, (100 * it.value) / Math.max(1, it.of))}%` })), h('span', { class: 'num dim small' }, String(it.value)))));
 }
 
 export function archPage(id: string): HTMLElement {

@@ -258,9 +258,9 @@ function buildLogic(id: string): HTMLElement {
       h('div', { class: 'kpis' },
         h('div', { class: `kpi ${cnt <= level.par ? 'good' : ''}` }, h('small', null, unit), h('b', null, `${cnt} / par ${level.par}`)),
         h('div', { class: `kpi ${v.ok ? 'good' : 'bad'}` }, h('small', null, 'rows passing'), h('b', null, `${v.rows.filter((r) => r.ok).length}/${v.rows.length}`))),
-      h('h4', null, level.spec.kind === 'table' ? 'Truth table (live)' : 'Test sequence (live)'),
+      h('h3', { class: 'sub-head' }, level.spec.kind === 'table' ? 'Truth table (live)' : 'Test sequence (live)'),
       h('table', { class: 'tt logic-tt' },
-        h('tr', null, ...(level.spec.kind === 'seq' ? [h('th', null, 'step')] : []), ...level.inputs.map((n) => h('th', null, n)), ...level.outputs.map((n) => h('th', { class: 'exp' }, n)), ...level.outputs.map((n) => h('th', null, `your ${n}`)), h('th', null, '')),
+        h('tr', null, ...(level.spec.kind === 'seq' ? [h('th', null, 'step')] : []), ...level.inputs.map((n) => h('th', null, n)), ...level.outputs.map((n) => h('th', { class: 'exp' }, n)), ...level.outputs.map((n) => h('th', null, `your ${n}`)), h('th', null, h('span', { class: 'sr-only' }, 'Result'))),
         ...v.rows.map((r, i) => h('tr', { class: r.ok ? 'ok' : 'bad' },
           ...(level.spec.kind === 'seq' ? [h('td', null, `${r.tick ? 'clk↑ ' : ''}${r.note ?? i + 1}`)] : []),
           ...level.inputs.map((n) => h('td', null, String(r.inputs[n]))),
@@ -304,7 +304,7 @@ function buildLogic(id: string): HTMLElement {
   };
 
   const palette = h('div', { class: 'palette' }, ...level.palette.map((k) => h('button', { class: 'chip', onclick: () => addPart(k), title: `Add a ${k}` }, `+ ${k}`)));
-  const brief = briefPanel({ tag: level.concept, html: level.brief, hintBox }, h('h4', null, 'Parts bin'), palette,
+  const brief = briefPanel({ tag: level.concept, html: level.brief, hintBox }, h('h3', { class: 'sub-head' }, 'Parts bin'), palette,
     h('p', { class: 'dim small' }, 'Drag parts to move them. Drag from pin to pin (or click one pin, then another) to wire. Click an input switch to toggle it. ', h('span', { class: 'kbd-hint' }, 'Select + Delete removes; '), 'double-click a wire to cut it.'));
 
   resim(true);

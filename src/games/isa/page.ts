@@ -123,7 +123,7 @@ export function isaPage(id: string): HTMLElement {
     h('summary', null, 'Debugger'),
     h('div', { class: 'toolbar' }, caseSel, h('button', { class: 'btn small', onclick: load }, 'Load'), h('button', { class: 'btn small', onclick: () => stepN(1) }, 'Step'), h('button', { class: 'btn small', onclick: () => stepN(10) }, 'Step ×10'), h('button', { class: 'btn small', onclick: runAll }, 'Run to end')),
     dbgStatus, regBox,
-    h('div', { class: 'isa-cols' }, h('div', null, h('h4', null, 'Machine code'), listBox), h('div', null, h('h4', null, 'Last instructions'), traceBox)),
+    h('div', { class: 'isa-cols' }, h('div', null, h('h3', { class: 'sub-head' }, 'Machine code'), listBox), h('div', null, h('h3', { class: 'sub-head' }, 'Last instructions'), traceBox)),
     outBox,
     h('div', { class: 'dim small' }, 'Memory at ', memAddr, ' (hex): ', memBox),
     h('div', { class: 'dim small' }, `Memory is 64 KiB: code at 0, data at 0x2000, stack top ${hx(STACK_TOP)}.`),

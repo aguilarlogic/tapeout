@@ -1,5 +1,5 @@
 // Circuit Lab page: a netlist editor, a simulator, goal checks and plots.
-import { busy, draftEditor, finish, hintNote, labPage, loadSeed, newVariantButton, resetButton, setStatus, useHints } from '../../ui/labkit';
+import { briefBody, busy, draftEditor, finish, hintNote, labPage, loadSeed, newVariantButton, resetButton, setStatus, useHints } from '../../ui/labkit';
 import { mentorSay } from '../../os/mentor';
 import { rng } from '../../sim/harness';
 import { saveDraft } from '../../state';
@@ -46,7 +46,7 @@ export function circuitPage(id: string): HTMLElement {
   const brief = h('aside', { class: 'brief panel' },
     h('div', { class: 'tag' }, level.concept),
     h('p', { class: 'dim small' }, level.ticket),
-    h('div', { class: 'brief-body', html: inst.brief }),
+    briefBody(inst.brief),
     inst.hints.length ? h('div', { class: 'hint-box' }, hintBtn, hintList) : h('p', { class: 'dim small' }, 'Boss mission: no hints. Standard parts only.'),
     h('details', { class: 'cheat' }, h('summary', null, 'Netlist cheat-sheet'), h('pre', null, CHEATS)),
   );
@@ -86,7 +86,7 @@ export function circuitPage(id: string): HTMLElement {
     const rows = nodes.map((n) => h('tr', null, h('td', null, nodeLabel(n)), h('td', null, `${fmtValue(op.v[n], 4)} V`)));
     const branch = l.circuit.elems.filter((e) => !e.name.includes('.') && 'RVLDMQ'.includes(e.name[0].toUpperCase()));
     const irows = branch.map((e) => h('tr', null, h('td', null, `I(${e.name.toUpperCase()})`), h('td', null, `${fmtValue(op.i[e.name], 4)} A`), h('td', { class: 'dim' }, `${fmtValue(op.p[e.name], 3)} W`)));
-    opHost.append(h('h4', null, 'Operating point'), h('table', { class: 'optable' }, h('tbody', null, ...rows, ...irows)));
+    opHost.append(h('h3', { class: 'sub-head' }, 'Operating point'), h('table', { class: 'optable' }, h('tbody', null, ...rows, ...irows)));
 
     for (const a of l.circuit.analyses) {
       if (a.type === 'dc') {
