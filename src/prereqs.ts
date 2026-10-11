@@ -21,7 +21,8 @@ export const PREREQS: Record<string, string[]> = {
   // Signals and systems use convolution and Laplace integrals; filters and the FFT build on the signal material.
   'signals': ['calc'], 'practice-signals': ['signals'],
   'dsp': ['signals'], 'practice-dsp': ['dsp'],
-  'sig-alias': ['signals'], 'sig-fir': ['signals', 'dsp'], 'sig-fft': ['signals'], 'sig-adc': ['signals'],
+  // FFT bins and leakage, and quantisation noise, are taught in the DSP lesson (U19 review: added dsp to both).
+  'sig-alias': ['signals'], 'sig-fir': ['signals', 'dsp'], 'sig-fft': ['signals', 'dsp'], 'sig-adc': ['signals', 'dsp'],
   'boss-signals': ['signals', 'dsp', 'sig-fft'], 'sig-boss': ['signals', 'sig-alias'],
   // Feedback is analysed with Laplace transforms and Bode plots, which are the signals material.
   'control': ['signals'], 'practice-control': ['control'], 'sig-pid': ['control'], 'boss-control': ['control'],
@@ -63,7 +64,7 @@ export const PREREQS: Record<string, string[]> = {
   'pmic': ['control'], 'boss-pmic': ['control'], 'inc-rail': ['control'],
   'clab-buck': ['ode'], 'clab-boss-buck': ['ode'],
   // PLLs are feedback loops; their jitter is a noise statistic.
-  'clocking': ['control'], 'pll-loop': ['control'], 'pll-jitter': ['control', 'prob'], 'boss-clocking': ['control'],
+  'clocking': ['control'], 'pll-loop': ['control'], 'pll-jitter': ['control', 'prob'], 'boss-clocking': ['control', 'prob'],
   // Photon shot noise is Poisson statistics: the best SNR is the square root of the electron count.
   'sensors': ['prob'], 'boss-sensors': ['prob'],
   // MEMS resonators and their boss exam are second-order systems (ODE).
@@ -84,6 +85,22 @@ export const PREREQS: Record<string, string[]> = {
   'fusa': ['prob'], 'fusa-campaign': ['prob'],
   // A power-analysis attack is a correlation over noisy traces.
   'sec-dpa': ['prob'],
+
+  // ---- U19 review: Act 4, 6 and 7 practice sets and lessons that use the same maths (added in the review) -------------
+  // Impedance, reflection and wavelength are electromagnetic (transmission lines); the PDN target impedance and its
+  // decoupling resonance are RLC behaviour (ODE).
+  'sipi': ['em', 'ode'], 'practice-pcb': ['em', 'ode'], 'boss-board': ['em'], 'practice-rf': ['em'],
+  // Negative-feedback gain and the gm of a saturated MOSFET are the feedback and device material; PLL ratios are a loop.
+  'practice-analog': ['control', 'mosphys'], 'practice-clocking': ['control'],
+  // Bit-error rates, jitter budgets, shot noise and yield models are probabilities; FIT rates are failure probabilities.
+  'practice-serdes': ['prob'], 'practice-sensors': ['prob'], 'practice-fab': ['prob'], 'practice-ate': ['prob'],
+  'practice-hwsec': ['prob'], 'practice-fusa': ['prob'], 'fusa-fmeda': ['prob'], 'practice-pkg': ['prob'],
+  // Resonance and ringdown are second-order systems; a crossbar column current is a dot product (linear algebra).
+  'practice-mems': ['ode'], 'practice-neuro': ['linalg', 'ode'],
+  // Upconversion and sidebands are signal material.
+  'practice-qctrl': ['signals'],
+  // Elmore delay of an RC ladder is a first-order response, the same material as the VLSI lesson.
+  'practice-eda': ['ode'], 'practice-vlsi': ['ode'], 'boss-circuit': ['ode'],
 };
 
 /** The direct prerequisites of a module that the player has not finished yet (advisory: nothing is blocked). */
