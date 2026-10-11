@@ -37,7 +37,7 @@ export interface Chapter { name: string; need?: string; modules: Module[] }
 export interface Act { id: string; n: number; kind: 'chip' | 'detour' | 'roles'; name: string; tagline: string; region: string; chapters: Chapter[] }
 
 export const KIND_LABEL: Record<ModKind, string> = {
-  lesson: 'Lesson', practice: 'Practice', boss: 'Boss', incident: 'Incident', logic: 'Logic lab', cmos: 'Transistor lab', rtl: 'Verilog', debug: 'Bug hunt', cov: 'Coverage',
+  lesson: 'Lesson', practice: 'Practice', boss: 'Checkpoint', incident: 'Boss incident', logic: 'Logic lab', cmos: 'Transistor lab', rtl: 'Verilog', debug: 'Bug hunt', cov: 'Coverage',
   uvm: 'UVM', clab: 'Circuit Lab', code: 'Code Lab', shell: 'Shell Lab', sva: 'Assertions', tb: 'Testbench', cdc: 'Clock crossing', isa: 'Assembly', arch: 'Architecture lab', rv: 'Core project', dft: 'DFT Lab', pd: 'PD Lab', sta2: 'STA Lab', layout: 'Layout Lab', sig: 'Signals Lab', spec: 'Specialty Lab', sta: 'Timing', pcb: 'Board', drills: 'Interview', final: 'Final review',
 };
 

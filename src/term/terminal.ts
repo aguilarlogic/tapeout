@@ -242,9 +242,9 @@ export class Terminal {
     return this.push(async (tk) => {
       this.afterInput = false;
       const p = pace();
-      const rows = ['loading boss.ko ............ ok', 'hints ...................... disabled', 'second attempts ............ disabled', 'grader ..................... armed']
+      const rows = ['loading checkpoint.ko ...... ok', 'hints ...................... disabled', 'second attempts ............ disabled', 'grader ..................... armed']
         .map((t) => h('div', null, `> ${t}`));
-      const enter = h('div', { class: 'enter' }, `ENTERING BOSS: ${title.toUpperCase()}`);
+      const enter = h('div', { class: 'enter' }, `ENTERING CHECKPOINT: ${title.toUpperCase()}`);
       const box = h('div', { class: 'boss-intro' }, ...rows, enter);
       this.append(box);
       await revealRows([...rows, enter], { ...p, line: p.load / 5 }, tk, this.step);

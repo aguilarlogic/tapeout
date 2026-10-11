@@ -3,6 +3,7 @@
 import { INCIDENTS } from '../incidents';
 import { Investigation, key } from '../incidents/engine';
 import { HINT_COST, type Incident, type Instrument, WRONG_COST } from '../incidents/types';
+import { findModule, type Module } from '../curriculum';
 import { levelRecord } from '../state';
 import { h, stars as starEls } from '../ui/dom';
 import { Interrupted, rich, type Terminal } from './terminal';
@@ -21,7 +22,23 @@ export interface IncidentHooks {
   define: (q: string) => Promise<void>;
 }
 
-export interface IncidentResult { solved: boolean; stars: number }
+export interface IncidentResult {
+  solved: boolean;
+  stars: number;
+  /** Set when the player chose to take the chapter's checkpoint first: the shell should open it (`learn <id>`) instead. */
+  checkpoint?: string;
+}
+
+/**
+ * The checkpoint an incident is gated on: the first unpassed 'boss' module earlier in the same chapter. Undefined when
+ * the module is not an incident, its chapter has no checkpoint before it, or the player has passed them all.
+ */
+export function checkpointFor(incidentId: string): Module | undefined {
+  const f = findModule(incidentId);
+  if (!f || f.module.kind !== 'incident') return undefined;
+  const before = f.chapter.modules.slice(0, f.chapter.modules.indexOf(f.module));
+  return before.find((m) => m.kind === 'boss' && !levelRecord(m.id));
+}
 
 const COMMANDS: [string, string][] = [
   ['<instrument> [arg]', 'take a reading (costs lab time; repeats are free)'],
@@ -38,6 +55,13 @@ export async function runIncident(t: Terminal, inc: Incident, hooks: IncidentHoo
   const coach = !INCIDENTS.some((i) => levelRecord(i.id));
   const struck = new Set<string>();
   const causeName = (id: string) => inc.causes.find((c) => c.id === id)!.name;
+
+  // ---- the gate: the chapter's checkpoint comes first, but the player may go ahead anyway
+  const cp = checkpointFor(inc.id);
+  if (cp) {
+    await t.say(`Pass the checkpoint first: **${cp.title}** is the quiz that gets you ready for this one. Or go ahead anyway, your call.`, 'thinking');
+    if ((await t.choose(['Start the checkpoint', 'Go ahead anyway'], 'incident?>')) === 0) return { solved: false, stars: 0, checkpoint: cp.id };
+  }
 
   // ---- the page
   const [tag, sev, ...body] = inc.pager.split(' · ');

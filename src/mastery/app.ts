@@ -38,7 +38,7 @@ export function skillsApp(focus?: string): HTMLElement {
     h('div', null,
       h('p', { class: 'kicker' }, role ? `${role.name} · ${Math.round(roleReadiness(role.id) * 100)}% job-ready${isHired(role) ? ' · hired ✓' : ''}` : `${SKILLS.length} skills · the curriculum audit, live`),
       h('h2', null, role ? role.name : 'Your skill matrix'),
-      h('p', { class: 'dim' }, role ? role.blurb : 'Every row is a skill from the curriculum audit. Level 1 · Aware: you did the lesson. Level 2 · Practised: you passed the practice. Level 3 · Job-ready: you beat the boss, with no hints.'),
+      h('p', { class: 'dim' }, role ? role.blurb : 'Every row is a skill from the curriculum audit. Level 1 · Aware: you did the lesson. Level 2 · Practised: you passed the practice. Level 3 · Job-ready: you pass the checkpoints and beat the bosses.'),
       h('div', { class: 'skills-counts' },
         ...[3, 2, 1, 0].map((lv) => h('span', { class: `cnt l${lv}` }, h('b', null, String(counts[lv])), ` ${LEVEL_NAME[lv].toLowerCase()}`)),
         h('span', { class: 'cnt dim' }, `${built}/${list.length} skills fully built`)),
@@ -53,7 +53,7 @@ export function skillsApp(focus?: string): HTMLElement {
       return h('tr', { class: `lv${lv}` },
         h('td', { class: 'sk-name' }, h('span', null, s.name), ceil < 3 ? h('span', { class: 'wip-note' }, ` · ${s.plan ?? 'in development'}`) : null),
         h('td', null, pips(lv, ceil)),
-        h('td', { class: 'tiers' }, tierButton(s, 'learn', 'Learn'), tierButton(s, 'practice', 'Practice'), tierButton(s, 'boss', 'Boss')));
+        h('td', { class: 'tiers' }, tierButton(s, 'learn', 'Learn'), tierButton(s, 'practice', 'Practice'), tierButton(s, 'boss', 'Job-ready')));
     }))));
 
   const roles = h('aside', { class: 'role-list' },
