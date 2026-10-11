@@ -153,6 +153,11 @@ function taskbar(): HTMLElement {
   return h('footer', { class: 'taskbar' }, start, menu, h('div', { class: 'tasks' }), tray);
 }
 
+// The retrowave scene behind everything: a striped sun on the horizon over a neon grid floor. Purely decorative.
+function wallpaper(): HTMLElement {
+  return h('div', { class: 'desk-bg', 'aria-hidden': 'true' }, h('div', { class: 'desk-sun' }), h('div', { class: 'desk-floor' }, h('div', { class: 'desk-grid' })));
+}
+
 function icons(): HTMLElement {
   const icon = (glyph: string, label: string, fn: () => void) => h('button', { class: 'desk-icon', ondblclick: fn, onclick: (e: MouseEvent) => { if (e.detail === 1 && matchMedia('(pointer: coarse)').matches) fn(); } },
     h('span', { class: 'di-glyph' }, glyph), h('span', { class: 'di-label' }, label));
@@ -182,7 +187,7 @@ async function bootScreen(first: boolean) {
 
 export async function bootDesktop() {
   const os = document.getElementById('os')!;
-  const desktop = h('main', { id: 'desktop', class: 'desktop' }, icons());
+  const desktop = h('main', { id: 'desktop', class: 'desktop' }, wallpaper(), icons());
   const bar = taskbar();
   os.replaceChildren(desktop, bar);
   initWM(desktop, bar.querySelector('.tasks') as HTMLElement);
