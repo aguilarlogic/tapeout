@@ -72,7 +72,7 @@ export const sensorsPractice = practice('practice-sensors', 'Image Sensor Drills
 
 export const sensorsBoss = bossOf(sensorsPractice, 'boss-sensors', 'The Camera Spec Review', 'collected charge, SNR, dynamic range and readout rate', 200,
   'Boss fight, {name}. A phone maker wants a new camera sensor. Charge, noise, dynamic range and the interface they need. Exam rules.', [0, 1, 2, 3],
-  [mc('A fast-moving object looks skewed in video from a phone. What is the cause?', ['Lens distortion only', 'Rolling shutter: rows are exposed and read one after another, so each row sees the scene at a slightly different time; a global shutter exposes all rows at once', 'Too many megapixels', 'A noisy ADC'], 1, 'Rolling shutter is smaller and quieter; global shutter costs pixel area for a storage node.')]);
+  [mc('A fast-moving object looks skewed in video from a phone. What is the cause?', ['Lens distortion at the edges of the frame', 'Rolling shutter: rows are read at different times', 'Motion blur from a long exposure time', 'Barrel distortion from the wide-angle lens at the edges'], 1, 'Rows are exposed and read one after another, so each row sees the scene at a slightly different time; a global shutter exposes all rows at once. Rolling shutter is smaller and quieter; global shutter costs pixel area for a storage node.')]);
 
 // ------------------------------------------------------------------ MEMS
 
@@ -128,7 +128,7 @@ export const memsPractice = practice('practice-mems', 'MEMS Drills', 'resonance,
 
 export const memsBoss = bossOf(memsPractice, 'boss-mems', 'The Sensor Teardown', 'resonance, deflection, capacitive readout and Q', 200,
   'Boss fight, {name}. Teardown of a competitor\'s MEMS accelerometer. What is it, and how does its readout work? Exam rules.', [0, 1, 2, 3],
-  [mc('Why do MEMS gyroscopes sit in a vacuum cavity while accelerometers often do not?', ['A vacuum is cheaper', 'A gyroscope wants a very high Q for sensitivity and low drive power; an accelerometer wants damping near critical so it does not ring after a shock', 'They need different wafer sizes', 'The vacuum reduces temperature'], 1, 'Damping is a design choice: gas in the cavity sets it.')]);
+  [mc('Why do MEMS gyroscopes sit in a vacuum cavity while accelerometers often do not?', ['A vacuum cavity is cheaper to make', 'A gyro wants high Q; an accelerometer wants damping', 'Gyroscopes need a lower die temperature', 'Accelerometers need gas to carry heat away from the proof mass'], 1, 'A gyroscope wants a very high Q for sensitivity and low drive power; an accelerometer wants damping near critical so it does not ring after a shock. Damping is a design choice: gas in the cavity sets it.')]);
 
 // ------------------------------------------------------------------ neuromorphic
 
@@ -180,7 +180,7 @@ export const neuroPractice = practice('practice-neuro', 'Neuromorphic Drills', '
 
 export const neuroBoss = bossOf(neuroPractice, 'boss-neuro', 'The In-Memory Accelerator', 'crossbar currents, energy, LIF neurons and conductance levels', 200,
   'Boss fight, {name}. A startup pitches an analog in-memory inference chip. Check their numbers. Exam rules.', [0, 1, 2, 3],
-  [mc('Which limits the usable precision of an analog crossbar most?', ['The package', 'Device variability, conductance drift, read noise, wire IR drop and ADC resolution: networks are trained with that noise in the loop to tolerate about 4-8 effective bits', 'The clock only', 'The number of columns only'], 1, 'Noise-aware training makes networks robust to analog errors.')]);
+  [mc('Which limits the usable precision of an analog crossbar most?', ['The package\'s thermal resistance', 'Analog device noise, drift and variability', 'The clock frequency of the digital control', 'The bit width of the host CPU\'s floating point'], 1, 'Device variability, conductance drift, read noise, wire IR drop and ADC resolution limit it; networks are trained with that noise in the loop to tolerate about 4-8 effective bits. Noise-aware training makes networks robust to analog errors.')]);
 
 // ------------------------------------------------------------------ emerging devices
 
@@ -234,7 +234,7 @@ export const emergingPractice = practice('practice-emerging', 'Emerging Device D
 
 export const emergingBoss = bossOf(emergingPractice, 'boss-emerging', 'The Roadmap Review', 'subthreshold leakage, MRAM margins, cell area and scaling', 200,
   'Boss fight, {name}. The technology roadmap meeting: leakage, memory margin, area and density claims. Exam rules.', [0, 1, 2, 3],
-  [mc('Why can a 2D semiconductor channel keep good gate control at very short channel lengths?', ['It is a better conductor', 'It is only a few atoms thick, so the gate controls the whole channel and short-channel leakage is suppressed; contacts, defects and wafer-scale growth are the hard problems', 'It needs no gate', 'It is cooler'], 1, 'Electrostatic control scales with channel thickness.')]);
+  [mc('Why can a 2D semiconductor channel keep good gate control at very short channel lengths?', ['It is a better conductor than silicon', 'It is so thin the gate controls the whole channel', 'It runs cooler, so leakage stays low', 'Its higher mobility lets the channel switch off faster'], 1, 'A channel only a few atoms thick suppresses short-channel leakage; contacts, defects and wafer-scale growth are the hard problems. Electrostatic control scales with channel thickness.')]);
 
 // ------------------------------------------------------------------ applications engineering & TPM
 
@@ -290,7 +290,7 @@ export const aetpmPractice = practice('practice-ae-tpm', 'AE & TPM Drills', 'cri
 
 export const aetpmBoss = bossOf(aetpmPractice, 'boss-ae-tpm', 'The Launch Review', 'critical path, die cost, NRE and slip', 200,
   'Boss fight, {name}. The launch review with the VP: schedule, cost and risk. Exam rules.', [0, 1, 2, 3],
-  [mc('A customer reports that your chip does not boot on their board. What is the best first step?', ['Replace the chip', 'Ask for their schematic and power-up scope captures (supplies, reset, clock, boot straps) and compare them with the evaluation board that is known to work', 'Escalate immediately', 'Update the firmware'], 1, 'The known-good evaluation board is your control experiment; most boot failures are board-level.')]);
+  [mc('A customer reports that your chip does not boot on their board. What is the best first step?', ['Send a replacement chip right away', 'Get their schematic and power-up scope captures', 'Escalate to the design team immediately', 'Ship them a new firmware image and ask them to retry the boot'], 1, 'Ask for the schematic and power-up scope captures (supplies, reset, clock, boot straps) and compare them with the evaluation board that is known to work. The known-good evaluation board is your control experiment; most boot failures are board-level.')]);
 
 export const FRONTIER_PRACTICE_B = [sensorsPractice, memsPractice, neuroPractice, emergingPractice, aetpmPractice];
 export const FRONTIER_BOSSES_B = [sensorsBoss, memsBoss, neuroBoss, emergingBoss, aetpmBoss];

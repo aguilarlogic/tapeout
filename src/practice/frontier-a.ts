@@ -63,7 +63,7 @@ export const edaPractice = practice('practice-eda', 'EDA Drills', 'wirelength, E
 
 export const edaBoss = bossOf(edaPractice, 'boss-eda', 'The Placer Review', 'wirelength, Elmore delay, arrival times and scaling', 200,
   'Boss fight, {name}. The CAD team is reviewing your new placer\'s cost functions and its timing engine. Four numbers and a design question. Exam rules.', [0, 1, 2, 3],
-  [mc('The placer\'s inner loop is O(n²) and a design grows 8×. What do you do first?', ['Buy 64× more machines', 'Replace the all-pairs step with a spatial data structure (grid or tree) so it scales near n·log n', 'Ask the designers to shrink the chip', 'Ignore it'], 1, 'Changing the algorithm beats throwing hardware at a quadratic, because the next chip grows again.')]);
+  [mc('The placer\'s inner loop is O(n²) and a design grows 8×. What do you do first?', ['Buy 64× more machines', 'Replace the all-pairs step with a spatial grid or tree', 'Ask the designers to shrink the chip by 8×', 'Parallelize the all-pairs loop across 64 threads on each machine'], 1, 'A spatial data structure makes it scale near n·log n. Changing the algorithm beats throwing hardware at a quadratic, because the next chip grows again.')]);
 
 // ------------------------------------------------------------------ library characterization
 
@@ -129,7 +129,7 @@ export const libcharPractice = practice('practice-libchar', 'Characterization Dr
 
 export const libcharBoss = bossOf(libcharPractice, 'boss-libchar', 'Signing Off a Library', 'interpolation, push-out criteria, power and workload', 200,
   'Boss fight, {name}. A customer\'s STA team questions your library\'s numbers. Defend each one. Exam rules.', [0, 1, 2, 3],
-  [mc('Setup checks use the slow corner and hold checks use the fast corner. Why?', ['Convention', 'Setup fails when data is too slow, so the slowest silicon is the worst case; hold fails when data is too fast, so the fastest silicon is the worst case', 'Hold needs more voltage', 'Setup only matters when cold'], 1, 'Each check has a failure direction; the opposite corner would be optimistic.')]);
+  [mc('Setup checks use the slow corner and hold checks use the fast corner. Why?', ['It is a convention from older libraries', 'Slow data breaks setup; fast data breaks hold', 'Hold checks need the higher voltage of the fast corner', 'Setup only matters when the silicon is cold'], 1, 'Setup fails when data is too slow, so the slowest silicon is the worst case; hold fails when data is too fast, so the fastest silicon is the worst case. Each check has a failure direction; the opposite corner would be optimistic.')]);
 
 // ------------------------------------------------------------------ I/O and ESD
 
@@ -185,7 +185,7 @@ export const ioesdPractice = practice('practice-io-esd', 'I/O & ESD Drills', 'HB
 
 export const ioesdBoss = bossOf(ioesdPractice, 'boss-io-esd', 'The Pad Ring Review', 'ESD current, clamp size, supply bounce and termination', 200,
   'Boss fight, {name}. A customer\'s pad ring review. Your protection, drivers and termination all get questioned. Exam rules.', [0, 1, 2, 3],
-  [mc('A pin driven above its supply while the chip is off may cause what?', ['Nothing', 'Current through the ESD diode into the unpowered rail (backpowering, possible latch-up), so power sequencing and power-on-control matter', 'A faster clock', 'A lower threshold voltage'], 1, 'Protection diodes conduct when a pin is driven beyond the rail it is clamped to.')]);
+  [mc('A pin driven above its supply while the chip is off may cause what?', ['Nothing, since the pad drivers are switched off', 'Backpowering through the ESD diode', 'A lower input threshold on that pin', 'A faster edge rate on that pin'], 1, 'Current flows through the ESD diode into the unpowered rail (backpowering, possible latch-up), so power sequencing and power-on-control matter. Protection diodes conduct when a pin is driven beyond the rail it is clamped to.')]);
 
 // ------------------------------------------------------------------ SoC integration
 
@@ -243,7 +243,7 @@ export const socintPractice = practice('practice-soc-int', 'SoC Integration Dril
 
 export const socintBoss = bossOf(socintPractice, 'boss-soc-int', 'The Integration Review', 'address windows, bandwidth, interrupt latency and register maps', 220,
   'Boss fight, {name}. First silicon is back and the top-level checklist is open. Every number must be defensible. Exam rules.', [0, 1, 2, 3],
-  [mc('The chip hangs on a read from a peripheral. What do you check first?', ['The compiler', 'That the peripheral\'s clock is enabled, its reset is released and its address window is not overlapped, and that the interconnect has a default slave or timeout so a mistake gives an error rather than a hang', 'The case colour', 'The boot ROM size only'], 1, 'Hangs are almost always an unanswered bus transaction.')]);
+  [mc('The chip hangs on a read from a peripheral. What do you check first?', ['The compiler\'s optimization flags', 'Its clock enable, reset and address window', 'The boot ROM size and its checksum', 'The interrupt priority set for that peripheral'], 1, 'Check that the peripheral\'s clock is enabled, its reset is released and its address window is not overlapped, and that the interconnect has a default slave or timeout so a mistake gives an error rather than a hang. Hangs are almost always an unanswered bus transaction.')]);
 
 // ------------------------------------------------------------------ clocking and PLLs
 
@@ -303,7 +303,7 @@ const sci3 = (x: number) => x.toExponential(2).replace('e-', 'e-');
 
 export const clockingBoss = bossOf(clockingPractice, 'boss-clocking', 'The Clock Tree Review', 'PLL ratios, ring oscillators and jitter', 220,
   'Boss fight, {name}. The SerDes team needs a clock. Divider, oscillator and jitter budget. Exam rules.', [0, 1, 2, 2],
-  [mc('Why must a PLL\'s supply be especially quiet?', ['It does not need to be', 'The VCO turns any supply or control-line noise into frequency and so into phase noise: PLLs use dedicated regulators, heavy decoupling and isolation from digital switching', 'Because of the crystal', 'Only the divider cares'], 1, 'Supply noise modulates the oscillator directly.')]);
+  [mc('Why must a PLL\'s supply be especially quiet?', ['It does not need to be quieter than logic', 'The VCO turns supply noise into phase noise', 'The divider fails if its supply droops', 'Supply noise shifts the reference frequency of the crystal'], 1, 'Any supply or control-line noise becomes frequency and so phase noise, so PLLs use dedicated regulators, heavy decoupling and isolation from digital switching. Supply noise modulates the oscillator directly.')]);
 
 export const FRONTIER_PRACTICE_A = [edaPractice, libcharPractice, ioesdPractice, socintPractice, clockingPractice];
 export const FRONTIER_BOSSES_A = [edaBoss, libcharBoss, ioesdBoss, socintBoss, clockingBoss];
