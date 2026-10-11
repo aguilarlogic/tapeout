@@ -526,7 +526,7 @@ This pass covered every area in Part B with four agents. The ids run U24 to U56.
 **Proposed fix.** Make `runCode` a job kind in the eval worker. Add an empty-editor message.
 **Size.** Medium.
 
-### U29 · A reload in the middle of a lesson drops the lesson with no resume (Sev 2, Pri 2) · open
+### U29 · A reload in the middle of a lesson drops the lesson with no resume (Sev 2, Pri 2) ✅ done (TAPEOUT offers `resume` after a reload; the lesson replays to the question you were on)
 **Seen.** Reloading during lesson 1 brings the terminal back at the menu ("Next up: … Type next"). Nothing says the lesson was interrupted. No XP is lost, and lab drafts survive the reload.
 **Code.** `src/term/shell.ts` (the lesson run does not keep its position).
 **Proposed fix.** Store the lesson id and step. On boot, offer: "You were in the middle of X. Type `resume`, or `next` to start it again."
