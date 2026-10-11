@@ -1,10 +1,12 @@
+import { mentorSay } from '../../os/mentor';
 import { run, RunResult } from '../../sim/harness';
-import { clearDraft, complete, levelRecord, loadDraft, saveDraft } from '../../state';
+import { clearDraft, levelRecord, loadDraft, saveDraft } from '../../state';
 import { h } from '../../ui/dom';
 import { editor } from '../../ui/editor';
-import { celebrate, levelHeader, nextHref } from '../../ui/layout';
+import { levelHeader } from '../../ui/layout';
 import { waveform } from '../../ui/waveform';
 import { ALL_RTL, RtlLevel } from './levels';
+import { finish, HINT_NOTE } from '../../ui/labkit';
 
 export function rtlPage(id: string): HTMLElement {
   const level = ALL_RTL.find((l) => l.id === id);
@@ -28,6 +30,7 @@ export function rtlPage(id: string): HTMLElement {
     usage.hints = Math.min(level.hints.length, usage.hints + 1);
     saveUsage();
     renderHints();
+    mentorSay(`Hint: ${level.hints[usage.hints - 1]}`, 'thinking');
   };
   renderHints();
 
@@ -66,12 +69,14 @@ export function rtlPage(id: string): HTMLElement {
     ed.markLines(errLines, res.lints.map((l) => l.line));
 
     if (res.error) {
+      mentorSay(res.error.phase === 'compile' ? `The compiler stopped${res.error.line ? ` at line ${res.error.line}` : ''}: ${res.error.message}` : res.error.phase === 'ports' ? `Your ports do not match the spec: ${res.error.message}` : `Simulation stopped: ${res.error.message}`, 'concerned');
       status.className = 'status err';
       status.textContent = res.error.phase === 'compile' ? 'Design did not compile.' : res.error.phase === 'ports' ? 'Your ports don\'t match the spec.' : 'Simulation stopped.';
     } else if (!res.ok) {
       const m = res.mismatches[0];
       const clk = stim.clock ? 'cycle' : 'sample';
       status.className = 'status err';
+      mentorSay(`'${m.signal}' is ${fmt(m.got)} at ${stim.clock ? 'cycle' : 'vector'} ${m.step}, but I expected ${fmt(m.expected)}. The yellow trace in the waveform is the expected one; walk backwards from there.`, 'concerned');
       status.textContent = `FAIL - ${res.mismatches.length} mismatch${res.mismatches.length > 1 ? 'es' : ''}. First at ${clk} ${m.step}: '${m.signal}' is ${fmt(m.got)} but the spec says ${fmt(m.expected)}.`;
     } else {
       status.className = 'status ok';
@@ -80,13 +85,11 @@ export function rtlPage(id: string): HTMLElement {
       if (res.lints.length) stars--;
       if (usage.hints > 0) stars--;
       if (usage.solution) stars = 1;
-      const gained = complete(level.id, level.xp, stars);
-      const notes = [
+      finish(level.id, level.xp, stars, [
         res.lints.length ? 'Clean up the lint warnings for another star.' : '',
-        usage.hints ? 'Solve it without hints for another star.' : '',
+        usage.hints ? HINT_NOTE : '',
         usage.solution ? 'You viewed the solution, so this counts for 1 star.' : '',
-      ].filter(Boolean);
-      celebrate(stars, gained, notes, nextHref(level.id));
+      ]);
     }
     renderWave();
   };

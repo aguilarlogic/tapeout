@@ -1,45 +1,88 @@
 # Tapeout
 
-**A browser game that trains you to be a competitive semiconductor engineer.** Take a chip from RTL to silicon: write
-and debug real Verilog, close functional coverage, fix timing, and route the bring-up board. Every region of your
-chip's die fills in as you master it.
+**A game where an AI mentor in a retro terminal trains you to be a semiconductor engineer, from electrons to
+out-of-order cores, and on into analog, RF, AI chips, security and quantum hardware.**
 
-| Track | Role | What you actually do |
+You boot into **TAPE-OS**, a little desktop. **TAPEOUT**, the AI that lives in the workstation, greets you:
+
+```
+tapeout› Hello. My name is TAPEOUT.
+tapeout› What's your name?
+name> Ada
+tapeout› Nice to meet you, Ada. How much do you already know about electronics and computers?
+```
+
+From there it teaches you in the terminal: short explanations, ASCII diagrams, and questions you answer by typing
+(any notation works: `0x1F`, `8'h1f`, `4.7k`, `a^b`...). When it's time to practise, it opens windows on the desktop:
+labs, simulators and minigames. Everything you finish lights up a block of your chip on the map.
+
+Stuck on a practice question? Type `teach me how` (on multiple choice, pick the lifebuoy option) and TAPEOUT walks you
+through the method one small step at a time, then gives you a fresh problem to try it on.
+
+TAPEOUT types everything it says, with short pauses between sentences, so you can read along. Press any key or click
+to finish a line early. Pick slow, normal, fast or instant in **Settings.app** on the desktop (or type `speed fast`);
+instant, and your system's reduced-motion setting, turn the typing and loading animations off.
+
+## Play it
+
+**No install needed.** Download `Tapeout.html` from the [latest release](https://github.com/aguilarlogic/tapeout/releases/latest) and double-click it. It
+opens in your browser, works offline, and saves your progress in that browser.
+
+(Maintainers: to publish a release, open the **Actions** tab, pick **Release**, and click **Run workflow**. Or push a tag
+such as `v0.2.0`. Every CI run also uploads the playable file as an artifact named `tapeout-game`.)
+
+## The curriculum: seven acts, 110 modules
+
+| Act | Covers | You do |
 | --- | --- | --- |
-| **RTL Design** (14 levels) | Design engineer | Write Verilog/SystemVerilog that's simulated cycle-by-cycle against a golden model, with lint and a waveform viewer |
-| **Verification** (12 levels) | DV engineer | Fix buggy RTL from failing regressions, close coverage with constrained-random `dist` weights, build UVM testbenches |
-| **Timing Closure** (5 levels) | Physical design / STA | Close setup and hold with sizing, Vt swaps, useful skew, hold buffers and pipelining; read `report_timing` |
-| **Board Design** (5 levels) | Hardware / PCB | Route a 2-layer board: vias, decoupling placement, ground-plane return paths, differential pairs |
-| **Interview Prep** (60 cards) | Everyone | Spaced-repetition questions on CDC, Verilog, UVM/SVA, STA, CMOS, SI/PI and AXI |
+| **1 · Foundations** | binary, two's complement, Ohm's law, RC, multivariable calculus, linear algebra, differential equations, band gaps, PN junctions, MOSFET physics, short-channel effects, leakage, CMOS | 10 lessons, 5 transistor-level labs (build an inverter, NAND, NOR, AND, AOI21 from NMOS/PMOS) |
+| **2 · Systems & Software** | C, C++, data structures and algorithms, assembly, compilers, linkers and loaders, operating systems | 5 lessons |
+| **3 · Digital Design** | Boolean algebra, combinational and sequential logic, FSMs, Verilog, ALUs, fast adders, multipliers, pipelines, clocks, resets, CDC, async FIFOs | 6 lessons, 9 gate-level labs, 14 Verilog labs on a built-in simulator |
+| **4 · VLSI & Implementation** | STA (setup/hold, skew, jitter, false/multicycle paths), inverter VTC, parasitics, Elmore delay, logical effort, low power (clock/power gating, voltage domains, DVFS), boards | 4 lessons, 5 timing-closure labs, 5 PCB routing labs |
+| **5 · Verification & Test** | testbenches, constrained random, coverage, UVM, SVA, formal, DFT (scan, ATPG, BIST, JTAG) | 6 lessons, 7 bug hunts, 2 coverage labs, 3 UVM labs |
+| **6 · Architecture** | superscalar/OoO, register renaming, branch prediction, speculation, caches, TLBs, MESI/MOESI, consistency, DDR5/HBM, buses, NoCs, PCIe/CXL, gem5, Amdahl, roofline | 9 lessons, a 60-card interview gauntlet, and a final review |
+| **7 · Specializations** | what each role does, and the core ideas and numbers it uses. Covered: analog/mixed-signal, RF, power electronics, SI/PI, physical design, memory design, process and yield, packaging and chiplets, post-silicon validation, test engineering, FPGAs and emulation, AI accelerators, hardware security, functional safety, silicon photonics, quantum hardware, quantum control electronics | 17 lessons |
 
-See [docs/DESIGN.md](docs/DESIGN.md) for the full game design, mechanics and roadmap.
+How deep does it go? [docs/CURRICULUM-AUDIT.md](docs/CURRICULUM-AUDIT.md) compares the curriculum with what the industry
+expects, topic by topic, and lists what to build next.
 
-## Run it
+TAPEOUT also runs nine **minigames** it pops open mid-lesson or on demand (`play`): Bit Flipper, Truth Table, Divider
+Designer, RC Scope, Flip-Flop Trace, Cache Sim, Branch Predictor, Coherence Lab (MESI) and Handshake (AXI
+VALID/READY).
+
+Things to type in the terminal: `next`, `map`, `ls 3`, `learn cache`, `play`, `quiz`, `what is metastability`,
+`status`, `speed fast`, `settings`, `help`.
+
+See [docs/DESIGN.md](docs/DESIGN.md) for the full design.
+
+## Develop it
 
 ```bash
 npm install
 npm run dev      # http://localhost:5173
-npm test         # engine + level-solvability tests
-npm run build    # static site in dist/ (works from any static host)
+npm test         # engines, lessons, levels, minigames
+npm run build    # dist/index.html: the whole game in one file (host it anywhere, or double-click it)
 ```
 
 No backend, no accounts: progress is saved in your browser's localStorage.
 
 ## What's inside
 
-- **A Verilog simulator written from scratch** (`src/sim/`): parser, elaboration, Verilog's expression-sizing rules,
-  blocking/non-blocking scheduling, `casez`, memories, parameters, SystemVerilog `always_ff`/`always_comb`/`logic`, and
-  lint for latches, blocking-in-clocked-blocks and incomplete sensitivity lists.
-- **A miniature static timing analyzer** (`src/games/timing/sta.ts`) with setup/hold corners, load-dependent delays and
-  pipeline balance checking.
-- **A PCB router and DRC** (`src/games/pcb/board.ts`) with ground-pour flood fill, return-path checks, diff-pair
-  skew/coupling and decoupling-loop rules.
-- **A coverage-closure sandbox** (`src/games/coverage/`) with model DUTs hiding planted bugs.
+- **The terminal mentor** (`src/term/`): an async terminal (`await term.say(...)`, `await term.ask(...)`), the shell,
+  onboarding and the lesson runner, plus a glossary of 180+ terms TAPEOUT can define.
+- **TAPE-OS** (`src/os/`): a window manager (drag, resize, minimize, taskbar), the TAPEOUT avatar with moods, the
+  campaign map and a URL router (`#/learn/cache`, `#/rtl/fifo`, `#/play/mesi`...).
+- **58 lessons** (`src/lessons/`) with randomized questions, checked by tests across 60 seeds each.
+- **Logic Lab** (`src/games/logic/`): a schematic editor with a 4-state net solver that handles gates, flip-flops,
+  feedback and switch-level CMOS (shorts and floating nodes are detected).
+- **A Verilog simulator written from scratch** (`src/sim/`), a **mini static timing analyzer**, a **PCB router with
+  DRC** and a **coverage-closure sandbox** (`src/games/`).
 
 Every level ships with a test proving its reference solution earns 3 stars and that the lesson can't be skipped.
 
 ## Beyond the game
 
-When you finish a track, do it for real: [Icarus Verilog](https://steveicarus.github.io/iverilog/) or
+When you finish, do it for real: [Icarus Verilog](https://steveicarus.github.io/iverilog/) or
 [Verilator](https://www.veripool.org/verilator/), [cocotb](https://www.cocotb.org/), [KiCad](https://www.kicad.org/),
-[OpenROAD](https://theopenroadproject.org/), and put your design on silicon with [Tiny Tapeout](https://tinytapeout.com).
+[OpenROAD](https://theopenroadproject.org/), [gem5](https://www.gem5.org/), and put your design on silicon with
+[Tiny Tapeout](https://tinytapeout.com).
