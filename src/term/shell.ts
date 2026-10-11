@@ -12,11 +12,15 @@ import { BOSSES, findBoss, findPractice, PRACTICE, problem } from '../practice';
 import { gradePractice, PRACTICE_COUNT, PRACTICE_HARD, PRACTICE_PASS, PRACTICE_START, rampStep, type Boss, type Difficulty, type PracticeSet } from '../practice/types';
 import { setMood } from '../os/avatar';
 import { launchGame, randomGame } from '../os/launch';
-import { best, levelRecord, load, playerName, prefs, Prefs, Profile, profile, rank, RANKS, recordBest, resetAll, setPrefs, setProfile, totalXp, updateCard } from '../state';
+import { best, dailyGoal, levelRecord, load, onChange, playerName, prefs, Prefs, Profile, profile, rank, RANKS, recordBest, resetAll, setPrefs, setProfile, totalXp, updateCard } from '../state';
 import { h, stars as starEls } from '../ui/dom';
 import { runIncident } from './incident';
 import { Interrupted, Redirect, rich, Terminal } from './terminal';
-import { award, promotionLine } from '../mastery/promotion';
+import { award, promotionLine, type Promotion } from '../mastery/promotion';
+import { finishGoal, type GoalResult } from '../daily';
+import { dayKey, MILESTONE_XP, MIX_RECORD, streakLine } from '../streak';
+import { signsOff } from './stakes';
+import { GOAL_CHOICES, progressReport, runWrap, wrapDue } from './wrap';
 
 const pickOne = <T>(xs: T[]) => xs[Math.floor(Math.random() * xs.length)];
 const PRAISE = ['Correct.', 'Yes.', 'Exactly.', 'Nice.', 'Right on.', 'That\'s it.'];
@@ -30,8 +34,18 @@ export class Shell {
   private busy = false;
   /** Set by `question()` when the player was walked through the problem instead of solving it. */
   private taught = false;
+  /** Set by `question()` when the player skipped the problem and did not walk through it. */
+  private skipped = false;
+  /** The shell is idle, waiting at its prompt. */
+  private atPrompt = false;
 
-  constructor(public term: Terminal, private go: (route: string) => void) {}
+  constructor(public term: Terminal, private go: (route: string) => void) {
+    // The chapter can end in another window (the Verilog lab) while the shell waits at its prompt: wake it, so the wrap
+    // shows up right away. Only at the prompt: never cut a lesson or practice run short.
+    // Clear the flag at once: one save often follows another (the level, then the rank), and a second interrupt would
+    // cut the wrap's first question short.
+    onChange(() => { if (this.atPrompt && wrapDue()) { this.atPrompt = false; this.term.interrupt(); } });
+  }
 
   /** Ask the shell to run a command as soon as it can, interrupting whatever it is waiting for. */
   run(cmd: string) {
@@ -46,7 +60,9 @@ export class Shell {
     }
     for (;;) {
       try {
-        const cmd = this.queue.shift() ?? (await this.term.ask({ prompt: `${playerName().toLowerCase().replace(/\s+/g, '')}@tapeout:~$`, chips: this.idleChips() }));
+        // The wrap goes before anything queued: the chapter's end card, then whatever the player picked next.
+        if (wrapDue()) await runWrap(this.term, (v) => this.queue.push(v));
+        const cmd = this.queue.shift() ?? (await this.prompt());
         await this.exec(cmd);
       } catch (e) {
         if (!(e instanceof Interrupted)) {
@@ -54,6 +70,15 @@ export class Shell {
           this.term.print(`kernel panic: ${(e as Error).message}. TAPEOUT recovered.`, 'err');
         }
       }
+    }
+  }
+
+  private async prompt(): Promise<string> {
+    this.atPrompt = true;
+    try {
+      return await this.term.ask({ prompt: `${playerName().toLowerCase().replace(/\s+/g, '')}@tapeout:~$`, chips: this.idleChips() });
+    } finally {
+      this.atPrompt = false;
     }
   }
 
@@ -99,13 +124,21 @@ export class Shell {
     const prof: Profile = { name, background: 'new', goal: 'unsure', since: Date.now() };
     setProfile(prof);
     await t.say(`Nice to meet you, ${name}.`, 'wink');
-    await t.say('How much do you already know about electronics and computers?');
-    const bg = await t.choose(['Nothing yet. Start me from zero.', "Some. I'm studying EE, CE or CS.", 'A lot. I work in (or near) the industry.']);
+    // One question for a total beginner, then straight to building something; the job question waits until they
+    // have seen the work. Players who already know some of it get the full set of questions and the plan.
+    await t.say('One question before we start: have you ever built a circuit or written code?');
+    if ((await t.choose(['Never. Start me from zero.', 'Yes, I have.'])) === 0) {
+      await t.say('Perfect. Zero is a great place to start, and you will not read a chapter first. In the next hour you build the first piece of your own chip. We start by lighting a lamp.', 'excited');
+      this.queue.push('next');
+      return;
+    }
+    await t.say('How much do you know?');
+    const bg = 1 + await t.choose(["Some. I'm studying EE, CE or CS.", 'A lot. I work in (or near) the industry.']);
     prof.background = (['new', 'student', 'pro'] as const)[bg];
-    await t.say(['Perfect. Everybody starts somewhere, and zero is a great place to start.', 'Great, then you know the basics. We can move fast and fill the gaps.', 'Excellent. Then I will skip the pleasantries and aim for the hard stuff.'][bg], 'happy');
+    await t.say(['Great, then you know the basics. We can move fast and fill the gaps.', 'Excellent. Then I will skip the pleasantries and aim for the hard stuff.'][bg - 1], 'happy');
     await t.say('And what do you want to become?');
-    const goal = await t.choose(['Digital design engineer (RTL)', 'Verification engineer (DV)', 'Physical design / timing engineer', 'Hardware / board engineer', 'Computer architect', 'A specialist: analog, RF, memory, AI chips, security, quantum...', 'Not sure yet, show me everything']);
-    prof.goal = (['design', 'verif', 'pd', 'board', 'arch', 'special', 'unsure'] as const)[goal];
+    const goal = await t.choose(GOAL_CHOICES.map(([label]) => label));
+    prof.goal = GOAL_CHOICES[goal][1];
     setProfile(prof);
     await t.say('Here is the plan. Six core acts take you from electrons all the way up to out-of-order cores, and a seventh covers the specialist roles, from analog and RF to quantum computers:');
     this.printActs();
@@ -123,6 +156,8 @@ export class Shell {
     const t = this.term;
     const line = raw.trim();
     if (!line) return;
+    // Hidden on purpose (not in help): the playtest report.
+    if (line.toLowerCase().split(/\s+/).join(' ') === 'log export') return this.logExport();
     const [cmd, ...rest] = line.split(/\s+/);
     const arg = rest.join(' ');
     switch (cmd.toLowerCase()) {
@@ -164,10 +199,10 @@ export class Shell {
         return this.careerCmd();
       case 'roles': case 'role': case 'careers': case 'jobs':
         return this.rolesCmd(arg);
-      case 'boss': case 'bosses': {
+      case 'checkpoint': case 'checkpoints': case 'boss': case 'bosses': {
         if (!arg) return this.printBosses();
         const b = findBoss(arg) ?? findBoss(`boss-${arg}`);
-        if (!b) return t.print(`No boss "${arg}". Type \`boss\` to list them.`, 'err');
+        if (!b) return t.print(`No checkpoint "${arg}". Type \`checkpoints\` to list them.`, 'err');
         return this.runLesson(b.id);
       }
       case 'incident': case 'incidents': case 'pager': case 'oncall': {
@@ -228,6 +263,17 @@ export class Shell {
     }
   }
 
+  /** `log export`: the progress report as JSON, copied to the clipboard when the browser allows it, else shown. */
+  private async logExport() {
+    const t = this.term;
+    const text = JSON.stringify(progressReport(), null, 2);
+    let copied = false;
+    try { await navigator.clipboard.writeText(text); copied = true; } catch { /* no clipboard here: show it below */ }
+    if (copied) return t.print(`Copied your progress log to the clipboard (${text.length} characters).`, 'dim');
+    void t.block(h('figure', { class: 'term-art' }, h('pre', null, text)), 'instant');
+    t.print('The clipboard is not available here. Copy the log above.', 'dim');
+  }
+
   private help() {
     const rows: [string, string][] = [
       ['next', 'continue where TAPEOUT recommends'],
@@ -239,7 +285,7 @@ export class Shell {
       ['practice [skill]', 'endless generated problems; no argument = a daily mix'],
       ['skills [role]', 'your skill matrix: every topic, levels 0-3'],
       ['roles [role]', 'job readiness for every role (DV, PD, quantum…)'],
-      ['boss [name]', 'list or start boss fights (no hints)'],
+      ['checkpoint [name]', 'list or start checkpoint quizzes (no hints)'],
       ['incidents [name]', 'on-call investigations: find the root cause against the clock'],
       ['what is <term>', `look up any of ${GLOSSARY.length} terms`],
       ['status', 'your rank, XP and progress'],
@@ -339,8 +385,9 @@ export class Shell {
     if (!q || q === 'mix' || q === 'daily') {
       const learned = PRACTICE.filter((p) => SKILLS.some((s) => s.practice.includes(p.id) && (skillLevel(s) >= 1 || !!levelRecord(p.id))));
       if (!learned.length) return t.say('The daily mix draws from topics you have already learned. Finish a lesson first (try `next`), then come back.', 'thinking');
-      const day = new Date().toISOString().slice(0, 10);
-      return this.guarded(() => this.practiceRun(learned, { id: `mix-${day}`, title: 'Daily Mix', concept: `${learned.length} topics you have learned`, xp: 40, endless, mix: true }));
+      // One record for every Daily Mix: it keeps the best result. The daily goal and its streak are shown up front.
+      if (!endless) t.print(streakLine(dailyGoal(), dayKey()), 'dim');
+      return this.guarded(() => this.practiceRun(learned, { id: MIX_RECORD, title: 'Daily Mix', concept: `${learned.length} topics you have learned`, xp: 40, endless, mix: true }));
     }
     const skill = findSkill(q);
     const set = findPractice(q) ?? findPractice(`practice-${q}`) ?? (skill ? skill.practice.map(findPractice).find(Boolean) : undefined);
@@ -414,10 +461,19 @@ export class Shell {
       return;
     }
     const grade = gradePractice(results);
-    const { gained, promotedTo } = grade ? award(o.id, o.xp, grade) : { gained: 0, promotedTo: undefined };
+    // A Daily Mix finishes the day's goal (the streak, and milestone bonuses) and banks its best result; other sets use award().
+    let gained = 0, promotedTo: Promotion | undefined, goal: GoalResult | undefined;
+    if (o.mix) {
+      goal = finishGoal(grade ? { xp: o.xp, stars: grade } : undefined);
+      ({ gained, promotedTo } = goal);
+    } else if (grade) ({ gained, promotedTo } = award(o.id, o.xp, grade));
     void t.block(h('div', { class: 'term-done' },
       h('div', null, h('b', null, grade ? 'PRACTICE PASSED' : 'PRACTICE RUN COMPLETE'), ' ', grade ? starEls(grade) : null),
       h('div', { class: 'dim' }, `${ok}/${PRACTICE_COUNT} first try · ${hard} at hard${grade ? ` · ${gained ? `+${gained} XP` : 'no new XP'}` : ` · need ${PRACTICE_PASS} with ${PRACTICE_HARD} hard to pass`}`)), 'type', 2);
+    if (goal) {
+      t.print(streakLine(dailyGoal(), dayKey()), 'dim');
+      for (const m of goal.reached) await t.say(`**${m} days played.** That is a milestone: +${MILESTONE_XP} XP, paid once.`, 'proud');
+    }
     if (promotedTo) await t.say(promotionLine(promotedTo), 'excited');
     await t.say(grade === 3 ? 'Near perfect at full difficulty. This topic is yours.' : grade ? 'Passed. That is practised, not just aware: it counts toward your skill level.' : ok >= 6 ? 'Close. The hard ones are where it counts; run it again.' : 'Keep at it. Every miss came with an explanation; a second run always goes better.', grade ? 'proud' : 'thinking');
     const next = grade && !o.mix ? neighbours(o.id).next : undefined;
@@ -448,7 +504,7 @@ export class Shell {
     const lv = skillLevel(s);
     t.print(`SKILL · ${s.name}`, 'hl');
     t.print(`level ${lv}/3 ${'●'.repeat(lv)}${'○'.repeat(3 - lv)} ${LEVEL_NAME[lv]}${skillCeiling(s) < 3 ? ` · levels above ${skillCeiling(s)} are still being built (${s.plan ?? 'planned'})` : ''}`, 'dim');
-    const tiers: ['learn' | 'practice' | 'boss', string][] = [['learn', '1 · Learn'], ['practice', '2 · Practice'], ['boss', '3 · Boss']];
+    const tiers: ['learn' | 'practice' | 'boss', string][] = [['learn', '1 · Learn'], ['practice', '2 · Practice'], ['boss', '3 · Checkpoint']];
     for (const [k, label] of tiers) {
       const ids = s[k];
       this.term.block(h('div', { class: 'term-ch' }, h('div', { class: 'dim' }, `  ${label}`), ...(ids.length ? ids.map((mid) => {
@@ -504,7 +560,7 @@ export class Shell {
   }
 
   private printBosses() {
-    this.term.print('BOSS FIGHTS · realistic tasks, no hints, one attempt per question', 'hl');
+    this.term.print('CHECKPOINTS · realistic tasks, no hints, one attempt per question', 'hl');
     this.term.block(h('div', { class: 'term-ch' }, ...BOSSES.map((b) => {
       const rec = levelRecord(b.id);
       return h('button', { class: `term-mod${rec ? ' done' : ''}`, onclick: () => this.run(`learn ${b.id}`) },
@@ -527,6 +583,7 @@ export class Shell {
     return this.guarded(async () => {
       void t.progress(`paging you in: ${inc.title}`);
       const res = await runIncident(t, inc, { define: (q) => this.define(q) });
+      if (res.checkpoint) { this.queue.push(`learn ${res.checkpoint}`); return; }
       const next = res.solved ? neighbours(id).next : undefined;
       const opts = [...(next ? [`Continue: **${next.title}** (${KIND_LABEL[next.kind].toLowerCase()})`] : []), res.solved ? 'Replay (a different root cause)' : 'Try again (a different root cause)', 'Back to the shell'];
       const pick = await t.choose(opts, 'next>', (v) => this.queue.push(v));
@@ -564,10 +621,11 @@ export class Shell {
     if (bossDef) void t.bossIntro(l.title);
     else void t.progress(mode === 'final' ? 'assembling the tapeout review' : `loading level: ${l.title}`);
     void t.block(h('div', { class: `term-banner${bossDef ? ' boss' : ''}` },
-      h('span', { class: 'dim' }, bossDef ? `BOSS · no hints · one attempt per question · ${Math.round(bossDef.pass * 100)}% to win` : f ? `ACT ${f.act.n} · ${f.chapter.name.toUpperCase()}` : 'LESSON'),
+      h('span', { class: 'dim' }, bossDef ? `${l.id.startsWith('cap-') ? 'HIRING PANEL' : 'CHECKPOINT'} · no hints · one attempt per question · ${Math.round(bossDef.pass * 100)}% to win` : f ? `ACT ${f.act.n} · ${f.chapter.name.toUpperCase()}` : 'LESSON'),
       h('b', null, l.title), h('span', { class: 'dim' }, l.concept)), 'type', 2.5);
     const rnd = Math.random;
     let asked = 0, firstTry = 0;
+    const skippedQs: { n: number; q: Question }[] = [];
     for (let i = 0; i < l.steps.length; i++) {
       const s = l.steps[i];
       const nextIsQuestion = (() => { const n = l.steps[i + 1]; return !n || n.t === 'ask' || n.t === 'mc' || n.t === 'gen' || n.t === 'app' || n.t === 'art'; })();
@@ -586,8 +644,11 @@ export class Shell {
         const q = s.t === 'gen' ? s.make(rnd) : s;
         asked++;
         if (await this.question(q, exam)) firstTry++;
+        else if (this.skipped) skippedQs.push({ n: asked, q });
       }
     }
+    // A lesson skipped by more than half stays unsigned: no level record, no XP, nothing lights on the chip.
+    if (mode === 'lesson' && !signsOff(asked, skippedQs.length)) return this.unsigned(l, asked, skippedQs);
     // grading
     const misses = asked - firstTry;
     let st: number;
@@ -596,7 +657,7 @@ export class Shell {
       st = pct >= 0.95 ? 3 : pct >= bossDef.pass - 1e-9 ? 2 : 0;
       t.print(`score: ${firstTry}/${asked} (${Math.round(pct * 100)}%) · need ${Math.round(bossDef.pass * 100)}%`, 'hl');
       if (!st) {
-        await t.say(pickOne(['The boss wins this round. Every miss above tells you exactly what to practise; come back when you are ready.', 'Not this time. That is normal for a boss: go run the practice sets, then come back and take it down.']), 'concerned');
+        await t.say(pickOne(['The checkpoint wins this round. Every miss above tells you exactly what to practise; come back when you are ready.', 'Not this time. That is normal for a checkpoint: go run the practice sets, then come back and take it down.']), 'concerned');
         return;
       }
     } else if (exam) {
@@ -607,19 +668,37 @@ export class Shell {
     } else st = misses === 0 ? 3 : misses <= 2 ? 2 : 1;
     const { gained, promotedTo } = award(l.id, l.xp, st);
     const card = h('div', { class: 'term-done' },
-      h('div', null, h('b', null, bossDef ? 'BOSS DEFEATED' : exam ? 'TAPEOUT REVIEW PASSED' : 'LESSON COMPLETE'), ' ', starEls(st)),
+      h('div', null, h('b', null, bossDef ? (l.id.startsWith('cap-') ? 'PANEL PASSED' : 'CHECKPOINT PASSED') : exam ? 'TAPEOUT REVIEW PASSED' : 'LESSON COMPLETE'), ' ', starEls(st)),
       h('div', { class: 'dim' }, `${firstTry}/${asked} first try · ${gained ? `+${gained} XP` : 'no new XP (you already did better)'}`),
       l.recap.length ? h('ul', { class: 'recap' }, ...l.recap.map((r) => h('li', null, ...rich(r)))) : null);
     void t.block(card, 'type', 1.6);
     const mood: Mood = st === 3 ? 'proud' : st === 2 ? 'happy' : 'neutral';
     if (promotedTo) await t.say(promotionLine(promotedTo), 'excited');
-    if (bossDef) await t.say(pickOne(['Boss down. That is job-level work, {name}: no hints, no second tries.', 'Defeated. Somewhere a senior engineer just nodded approvingly.', 'That is the real thing. You earned that level.']), 'proud');
+    if (bossDef) await t.say(pickOne(['Checkpoint passed. That is job-level work, {name}: no hints, no second tries.', 'Defeated. Somewhere a senior engineer just nodded approvingly.', 'That is the real thing. You earned that level.']), 'proud');
     else if (mode === 'final') await t.say('That is it. Every block signed off, every question answered. Your chip is ready for tapeout. For real next steps: put a design on silicon with Tiny Tapeout, and bring these answers to your interviews. I am proud of you, {name}.', 'proud');
     else await t.say(st === 3 ? pickOne(['Flawless. Onward.', 'Perfect run. You make this look easy.', 'Every question first try. Nice.']) : st === 2 ? 'Good work. A couple of stumbles, which is exactly how learning is supposed to feel.' : 'Done. This one was tough; come back and replay it for more stars later.', mood);
     const nx = neighbours(l.id).next;
     if (nx && mode !== 'final') {
       const pick = await t.choose([`Continue: **${nx.title}** (${KIND_LABEL[nx.kind].toLowerCase()})`, 'Back to the shell'], 'next>', (v) => this.queue.push(v));
       if (pick === 0) this.queue.push(`learn ${nx.id}`);
+    }
+  }
+
+  /** The sign-off card for a lesson skipped by more than half: how many were skipped, and a walkthrough for each one. */
+  private async unsigned(l: Lesson, asked: number, skipped: { n: number; q: Question }[]) {
+    const t = this.term;
+    void t.block(h('div', { class: 'term-done' },
+      h('div', null, h('b', null, 'LESSON NOT SIGNED OFF')),
+      h('div', { class: 'dim' }, `${skipped.length} of ${asked} questions skipped. Skipping more than half does not sign a lesson off: no level, no XP yet.`)), 'type', 1.6);
+    await t.say('Skipping is fine, but I cannot count a lesson you mostly skipped. Walk through the questions you skipped, then try it again.', 'concerned');
+    const open = skipped.filter((x) => x.q.teach);
+    for (const x of skipped.filter((y) => !y.q.teach)) t.print(`Question ${x.n} has no walkthrough. Its answer was shown when you skipped it.`, 'dim');
+    for (;;) {
+      const opts = [...open.map((x) => `Walk me through question ${x.n}`), 'Try this lesson again', 'Back to the shell'];
+      const pick = await t.choose(opts, 'next>', (v) => this.queue.push(v));
+      if (pick < open.length) { const [x] = open.splice(pick, 1); await this.walkThrough(x.q); continue; }
+      if (opts[pick] === 'Try this lesson again') this.queue.push(`learn ${l.id}`);
+      return;
     }
   }
 
@@ -639,6 +718,7 @@ export class Shell {
   private async question(q: Question, exam: boolean): Promise<boolean> {
     const t = this.term;
     this.taught = false;
+    this.skipped = false;
     const teach = !exam && q.teach ? q.teach : undefined;
     if (q.t === 'mc') {
       await this.pose(q.q);
@@ -655,7 +735,7 @@ export class Shell {
     }
     await this.pose(q.q);
     const tries = exam ? 1 : 3;
-    let first = true;
+    let first = true, gaveUp = false;
     for (let k = 0; k < tries; k++) {
       const v = (await t.ask({ prompt: 'answer>', chips: exam ? [] : [...(q.hint ? ['hint'] : []), ...(teach ? [{ label: 'teach me how', value: 'teach me' }] : []), 'skip'] })).trim();
       const lc = v.toLowerCase();
@@ -674,7 +754,7 @@ export class Shell {
         k--;
         continue;
       }
-      if (!exam && ['skip', 'idk', "i don't know", 'pass', 'give up'].includes(lc)) break;
+      if (!exam && ['skip', 'idk', "i don't know", 'pass', 'give up'].includes(lc)) { gaveUp = true; break; }
       if (!v) { k--; continue; }
       if (q.a.check(v)) {
         if (exam) t.print('✓', 'ok');
@@ -687,6 +767,7 @@ export class Shell {
     }
     if (exam) { t.print(`✗ answer: ${q.a.canonical}`, 'err'); return false; }
     if (teach) { await this.offerWalk(q); if (this.taught) return false; }
+    this.skipped = gaveUp;
     await t.say(`The answer is **${q.a.canonical}**. ${q.why}`, 'concerned');
     return false;
   }

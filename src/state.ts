@@ -1,4 +1,5 @@
 // Player progress, persisted in localStorage. Everything degrades gracefully if storage is unavailable.
+import { type DailyState, emptyDaily, foldLegacyMix } from './streak';
 
 export interface LevelRecord {
   stars: number; // 1..3
@@ -22,6 +23,7 @@ export interface Profile {
 
 export interface Prefs {
   speed: 'slow' | 'normal' | 'fast' | 'instant';
+  muted: boolean; // true silences the synthesized sound cues (see ui/sound.ts); sound is on by default
 }
 
 export interface Progress {
@@ -30,13 +32,14 @@ export interface Progress {
   profile?: Profile;
   prefs: Prefs;
   best: Record<string, number>; // minigame high scores
+  daily: DailyState; // the daily goal and its streak (see streak.ts)
 }
 
 const KEY = 'tapeout.progress.v1';
 let cache: Progress | null = null;
 
 function blank(): Progress {
-  return { levels: {}, cards: {}, prefs: { speed: 'normal' }, best: {} };
+  return { levels: {}, cards: {}, prefs: { speed: 'normal', muted: false }, best: {}, daily: emptyDaily() };
 }
 
 export function load(): Progress {
@@ -45,10 +48,26 @@ export function load(): Progress {
     const raw = localStorage.getItem(KEY);
     cache = raw ? { ...blank(), ...JSON.parse(raw) } : blank();
     cache!.prefs = { ...blank().prefs, ...cache!.prefs };
+    cache!.daily = { ...emptyDaily(), ...cache!.daily };
   } catch {
     cache = blank();
   }
+  foldOldMix();
   return cache!;
+}
+
+/** Old one-record-per-day Daily Mix history becomes one legacy record (see foldLegacyMix). A bad record must not
+ * throw away the rest of the save, so this has its own guard. */
+function foldOldMix() {
+  try {
+    const folded = foldLegacyMix(cache!.levels, cache!.daily);
+    if (!folded) return;
+    cache!.levels = folded.levels;
+    cache!.daily = folded.daily;
+    save();
+  } catch {
+    /* leave the old records as they are */
+  }
 }
 
 function save() {
@@ -107,7 +126,8 @@ export function totalXp(): number {
   return Math.round(xp);
 }
 
-/** Thresholds are set against the whole campaign (about 80,000 XP): a rank takes noticeably longer than the one before, and Fellow is reachable without finishing every last module. A test keeps them in step with the curriculum. */
+/** Rank titles, in order. Which rank a player holds is decided by skills (src/mastery/ranks.ts), never by XP.
+ * `xp` is the threshold the old XP rule used. It is only used to place saves made before ranks were stored, so nobody is demoted. */
 export const RANKS = [
   { xp: 0, title: 'Intern' },
   { xp: 1500, title: 'Junior Engineer' },
@@ -118,12 +138,32 @@ export const RANKS = [
   { xp: 62000, title: 'Fellow' },
 ];
 
-export function rank(xp = totalXp()) {
+/** A rank the player has earned: its index in RANKS, and 0..1 progress toward the next one. */
+export interface RankRecord { index: number; progress: number }
+type RankSave = { rank?: RankRecord };
+
+/** Saves made before ranks were stored: the rank the old XP rule gave them. Read before any new XP is banked (see promotion.ts). */
+function legacyRank(): RankRecord {
+  const xp = totalXp();
   let i = 0;
   while (i + 1 < RANKS.length && xp >= RANKS[i + 1].xp) i++;
-  const cur = RANKS[i];
   const next = RANKS[i + 1];
-  return { title: cur.title, index: i, next, progress: next ? (xp - cur.xp) / (next.xp - cur.xp) : 1 };
+  return { index: i, progress: next ? (xp - RANKS[i].xp) / (next.xp - RANKS[i].xp) : 1 };
+}
+
+/** The player's rank. Its argument is ignored: XP no longer decides rank. It stays so existing callers compile. */
+export function rank(_xp?: number) {
+  const r = (load() as Progress & RankSave).rank ?? legacyRank();
+  const next = RANKS[r.index + 1];
+  return { title: RANKS[r.index].title, index: r.index, next, progress: next ? r.progress : 1 };
+}
+
+/** Store the rank the player has earned. promotion.ts calls it after each result. A stored rank never goes down. */
+export function storeRank(index: number, progress: number) {
+  const s = load() as Progress & RankSave;
+  if (s.rank && s.rank.index > index) return;
+  s.rank = { index, progress };
+  save();
 }
 
 export function profile(): Profile | undefined {
@@ -161,9 +201,25 @@ export function recordBest(game: string, score: number): boolean {
   return true;
 }
 
+/** The daily goal and streak record. Read with dailyGoal(), written with setDailyGoal(). */
+export const dailyGoal = (): DailyState => load().daily;
+export function setDailyGoal(d: DailyState) {
+  load().daily = d;
+  save();
+}
+
 export function resetAll() {
   cache = blank();
   save();
+  // Lab drafts (saveDraft) live under their own keys; drop them too or old solutions reappear in the editors.
+  try {
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const k = localStorage.key(i);
+      if (k?.startsWith('tapeout.draft.')) localStorage.removeItem(k);
+    }
+  } catch {
+    /* storage unavailable - nothing persisted to clear */
+  }
 }
 
 // Per-level scratch storage (editor contents, board state...)

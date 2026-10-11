@@ -44,7 +44,7 @@ export const signals: Lesson = {
       const p = 1 / (rr * 1e3 * c * 1e-9);
       return ask(`Where is the pole of an RC low-pass with R = ${rr} kΩ and C = ${c} nF? Give its magnitude in rad/s.`, qty(p, '', 0.01, r3(p).toString()), `s = -1/RC = -1/(${rr} kΩ × ${c} nF) = -${r3(p)} rad/s (or ${r3(p / (2 * Math.PI))} Hz).`, 'Pole at s = -1/(RC).');
     }),
-    mc('A system\'s poles are at s = -2, and s = +1 ± 3j. Is it stable?', ['Yes, one pole is negative', 'No: poles in the right half-plane (positive real part) mean responses that grow forever', 'Only at low frequency', 'Poles do not affect stability'], 1, 'Every pole must be in the left half-plane. A pair with positive real part is an oscillation that grows: the math of a feedback loop gone wrong.'),
+    mc('A system\'s poles are at s = -2, and s = +1 ± 3j. Is it stable?', ['Yes, the pole at s = -2 keeps it stable', 'No, a pole pair is in the right half-plane', 'Only for low-frequency inputs', 'Yes, complex poles only ring, they never grow'], 1, 'Poles with a positive real part mean responses that grow forever. Every pole must be in the left half-plane. A pair with positive real part is an oscillation that grows: the math of a feedback loop gone wrong.'),
     say('Finally, **sampling**. To capture a signal digitally you need to sample faster than twice its highest frequency (the **Nyquist** rate). Anything above fs/2 does not disappear; it **aliases**, folding down to a false frequency.'),
     gen((r) => {
       const fs = pick(r, [10, 44.1, 100]);
@@ -87,7 +87,7 @@ export const dsp: Lesson = {
       const n = pick(r, [256, 1024, 4096]);
       return ask(`A direct DFT of N = ${n} points takes about N² operations; the FFT takes about N·log2(N). Roughly how many times faster is the FFT?`, qty(n / Math.log2(n), 'x', 0.02, r3(n / Math.log2(n)).toString()), `N² / (N log2 N) = ${n}/${Math.log2(n)} ≈ ${r3(n / Math.log2(n))}×. The FFT is one of the most important algorithms ever written, and FFT engines are common hardware blocks (Wi-Fi, 5G, radar).`, 'Divide N by log2(N).');
     }),
-    mc('You FFT a sine wave whose frequency is not exactly on a bin. The energy smears across many bins. What is this, and what reduces it?', ['Aliasing; sample faster', 'Spectral leakage; apply a window (Hann, Blackman) before the FFT', 'Quantization noise; use more bits', 'Jitter; use a better clock'], 1, 'Chopping a capture into a finite block adds sharp edges; windowing tapers them. ADC test benches use coherent sampling or windows for exactly this.'),
+    mc('You FFT a sine wave whose frequency is not exactly on a bin. The energy smears across many bins. What is this, and what reduces it?', ['Aliasing; add an anti-alias filter first', 'Spectral leakage; apply a window first', 'Quantization noise; use more ADC bits', 'Jitter; use a cleaner sampling clock'], 1, 'Chopping a capture into a finite block adds sharp edges; a window (Hann, Blackman) applied before the FFT tapers them. ADC test benches use coherent sampling or windows for exactly this.'),
     gen((r) => {
       const taps = pick(r, [16, 32, 64, 128]);
       const fs = pick(r, [100, 250, 1000]);
@@ -124,11 +124,11 @@ export const control: Lesson = {
       const kk = pick(r, [4, 9, 19, 99]);
       return ask(`A proportional controller with loop gain K = ${kk} tracks a step. What steady-state error remains, as a % of the step?`, qty(100 / (1 + kk), '%', 0.01), `e = 1/(1 + K) = 1/${1 + kk} = ${r3(100 / (1 + kk))}%. To drive it to zero, add integral action (a pole at DC): that is what the I in PID and the integrator in a PLL's loop filter do.`, 'e = 1 / (1 + K).');
     }),
-    mc('Which part of a PID controller removes steady-state error?', ['P', 'I', 'D', 'None of them'], 1, 'The integrator keeps growing as long as any error remains, so the loop can only settle when the error is exactly zero.'),
+    mc('Which part of a PID controller removes steady-state error?', ['P', 'I', 'D', 'P, with a high gain'], 1, 'The integrator keeps growing as long as any error remains, so the loop can only settle when the error is exactly zero.'),
     say('Feedback can turn into oscillation. At the frequency where the loop gain drops to 1, look at the phase. If it has shifted by 180°, negative feedback becomes positive. **Phase margin** is how far you are from that: 45° is acceptable, 60° is comfortable.'),
     gen((r) => {
       const pm = pick(r, [10, 30, 45, 60, 75]);
-      return mc(`A regulator loop has a phase margin of ${pm}°. How does it respond to a load step?`, ['Rings a lot, close to oscillating', 'Some overshoot, acceptable', 'Clean and well damped'], pm < 35 ? 0 : pm < 55 ? 1 : 2, `${pm}° is ${pm < 35 ? 'too little: expect heavy ringing, and a slow corner could make it oscillate' : pm < 55 ? 'acceptable: a little overshoot' : 'comfortable: well damped'}. Designers add compensation (a capacitor that moves a pole) to fix low margins.`);
+      return mc(`A regulator loop has a phase margin of ${pm}°. How does it respond to a load step?`, ['Rings a lot, near unstable', 'Some overshoot, acceptable', 'Clean settling, no ringing'], pm < 35 ? 0 : pm < 55 ? 1 : 2, `${pm}° is ${pm < 35 ? 'too little: expect heavy ringing, and a slow corner could make it oscillate' : pm < 55 ? 'acceptable: a little overshoot' : 'comfortable: well damped'}. Designers add compensation (a capacitor that moves a pole) to fix low margins.`);
     }),
     say('For a single-pole amplifier, gain × bandwidth is constant: the **gain-bandwidth product** (GBW). Close the loop for a gain G and the bandwidth becomes GBW / G.'),
     gen((r) => {
@@ -188,7 +188,7 @@ export const em: Lesson = {
       const m = pick(r, [4, 16, 100]);
       return ask(`The frequency rises ${m}×. By what factor does the skin depth shrink?`, qty(Math.sqrt(m), '', 0.01), `δ ∝ 1/√f, so ${m}× the frequency gives √${m} = ${Math.sqrt(m)}× thinner skin, and roughly ${Math.sqrt(m)}× the resistance. This, plus dielectric loss, is why high-speed channels lose more at high frequency.`, 'δ ∝ 1/√f.');
     }),
-    mc('A fast signal crosses a split in the ground plane under it. What happens?', ['Nothing, ground is ground', 'The return current must detour around the split, making a large loop: more inductance, crosstalk and radiated EMI', 'The signal gets faster', 'The trace impedance drops to zero'], 1, 'Return current follows the path of least inductance: directly under the trace. Break that path and you build an antenna. This is the Mind the Return Path board lab.'),
+    mc('A fast signal crosses a split in the ground plane under it. What happens?', ['Nothing, ground is ground everywhere', 'The return current detours, making a big loop', 'The signal speeds up over the gap', 'The split blocks DC current, but AC is unaffected'], 1, 'The return current must detour around the split, making a large loop: more inductance, crosstalk and radiated EMI. Return current follows the path of least inductance: directly under the trace. Break that path and you build an antenna. This is the Mind the Return Path board lab.'),
   ],
   recap: ['C = ε₀εr·A/d; L grows with loop area; V = L·di/dt.', 'Signals travel at c/√εr (≈15 cm/ns in FR4).', 'Z₀ = √(L\'/C\'); mismatches reflect with Γ.', 'TDR maps impedance: Z = Z₀(1 + Γ)/(1 - Γ).', 'Skin depth ∝ 1/√f: loss rises with frequency.', 'Keep return paths continuous.'],
 };

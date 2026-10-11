@@ -94,6 +94,32 @@ endmodule`,
     hints: ['NAND is just NOT applied to AND: ~(a & b).', 'Each output needs its own assign statement.'],
   },
   {
+    id: 'half-adder-v',
+    track: 'rtl',
+    title: 'Half Adder in Verilog',
+    concept: 'sum and carry with assign',
+    xp: 100,
+    brief: `
+      <p>You built a half adder from gates. Now describe the same circuit in Verilog. Adding two bits gives a <b>sum</b> bit and a <b>carry</b> bit.</p>
+      <p><code>assign y = ...;</code> means "y is always equal to this expression": it is a wire, not a one-time instruction.
+      <code>^</code> is XOR (1 when the bits differ) and <code>&amp;</code> is AND (1 only when both are 1).</p>
+      <h4>Spec</h4>
+      <ul><li><code>sum = a ^ b</code></li><li><code>carry = a &amp; b</code></li></ul>
+      <p class="note">Replace the two <code>TODO</code> comments with one <code>assign</code> line each.</p>`,
+    starter: `module half_adder(input a, input b, output sum, output carry);
+  // TODO sum: 1 when exactly one of a and b is 1
+  // TODO carry: 1 only when both a and b are 1
+
+endmodule
+`,
+    golden: `module half_adder(input a, input b, output sum, output carry);
+  assign sum = a ^ b;
+  assign carry = a & b;
+endmodule`,
+    stimulus: () => ({ vectors: exhaustive([['a', 1], ['b', 1]]) }),
+    hints: ['Each output gets its own assign line. Use ^ for sum and & for carry.', 'Try a = 1, b = 1: sum should be 0 and carry 1, because 1 + 1 = 10 in binary.'],
+  },
+  {
     id: 'mux2',
     track: 'rtl',
     title: 'Choose Wisely',
@@ -615,6 +641,414 @@ endmodule`,
     hints: [
       'Compute do_push = push && !full and do_pop = pop && !empty first, then use only those.',
       'count <= count + do_push - do_pop handles simultaneous push & pop.',
+    ],
+  },
+  {
+    id: 'adder8',
+    track: 'rtl',
+    title: 'Byte-Sized Math',
+    concept: 'wide adders & the carry out',
+    xp: 120,
+    brief: `
+      <p>A CPU works on <b>bytes</b>, so it needs an 8-bit adder. It's the same trick as the 4-bit adder, just wider:
+      put the carry out in front of the sum and let one <code>+</code> do the work.</p>
+      <p>Two 8-bit numbers plus a carry-in can need 9 bits. Verilog sizes the addition from the target, so
+      <code>{cout, sum}</code> is 9 bits wide and the extra bit lands in <code>cout</code>.</p>
+      <h4>Spec</h4>
+      <ul><li><code>{cout, sum} = a + b + cin</code> where <code>a</code> and <code>b</code> are 8-bit and <code>cin</code> is 1-bit</li>
+      <li><code>sum</code> is the low 8 bits; <code>cout</code> is bit 8</li></ul>
+      <p class="note">Check it by hand: 255 + 1 = 256, which is 1 0000 0000 in binary. So sum is 0 and cout is 1.</p>`,
+    starter: `module adder8(
+  input  [7:0] a,
+  input  [7:0] b,
+  input        cin,
+  output [7:0] sum,
+  output       cout
+);
+  // TODO: one assign statement is enough
+endmodule
+`,
+    golden: `module adder8(input [7:0] a, input [7:0] b, input cin, output [7:0] sum, output cout);
+  assign {cout, sum} = a + b + cin;
+endmodule`,
+    stimulus: () => ({ vectors: random(101, 300, [['a', 8], ['b', 8], ['cin', 1]]) }),
+    hints: [
+      'Try 255 + 1 by hand. The answer needs 9 bits, so the carry out is the 9th bit.',
+      'The left side {cout, sum} is 9 bits wide, so Verilog does the addition at 9 bits.',
+      'One line does it: assign {cout, sum} = a + b + cin;',
+    ],
+  },
+  {
+    id: 'alu8',
+    track: 'rtl',
+    title: 'The Little ALU',
+    concept: 'op codes, case & status flags',
+    xp: 150,
+    brief: `
+      <p>The <b>ALU</b> (arithmetic logic unit) is the part of the CPU that does the math. It takes two 8-bit inputs
+      and an operation code <code>op</code>, then picks one operation with a <code>case</code>.</p>
+      <table class="mini"><tr><th>op</th><th>result y</th><th>op</th><th>result y</th></tr>
+      <tr><td>0</td><td>a + b</td><td>3</td><td>a | b</td></tr>
+      <tr><td>1</td><td>a - b</td><td>4</td><td>a ^ b</td></tr>
+      <tr><td>2</td><td>a &amp; b</td><td>5, 6, 7</td><td>0</td></tr></table>
+      <h4>Spec</h4>
+      <ul><li><code>y</code>: the 8-bit result, from the table</li>
+      <li><code>zero</code>: 1 when <code>y</code> is 0, for every op</li>
+      <li><code>carry</code>: for add, the carry out of bit 7. For subtract, the <b>borrow</b>, which is 1 when a &lt; b.
+      It is 0 for the logic ops and for ops 5 to 7.</li></ul>
+      <p class="note">Hardware does a - b as a + (NOT b) + 1, which is two's complement. You don't need that trick in
+      Verilog: a 9-bit subtraction puts the borrow in bit 8.</p>`,
+    starter: `module alu8(
+  input      [7:0] a,
+  input      [7:0] b,
+  input      [2:0] op,
+  output reg [7:0] y,
+  output           zero,
+  output reg       carry
+);
+  // TODO: zero is one assign line
+  always @(*) begin
+    // TODO: a case on op, and carry for add and subtract
+  end
+endmodule
+`,
+    golden: `module alu8(input [7:0] a, input [7:0] b, input [2:0] op, output reg [7:0] y, output zero, output reg carry);
+  wire [8:0] sum = {1'b0, a} + {1'b0, b};
+  wire [8:0] dif = {1'b0, a} - {1'b0, b};
+  assign zero = (y == 8'd0);
+  always @(*) begin
+    y = 8'd0;
+    carry = 1'b0;
+    case (op)
+      3'd0: begin y = sum[7:0]; carry = sum[8]; end
+      3'd1: begin y = dif[7:0]; carry = dif[8]; end
+      3'd2: y = a & b;
+      3'd3: y = a | b;
+      3'd4: y = a ^ b;
+      default: y = 8'd0;
+    endcase
+  end
+endmodule`,
+    stimulus: () => {
+      const vectors = random(202, 300, [['a', 8], ['b', 8], ['op', 3]]);
+      for (let op = 0; op < 8; op++) vectors.push({ a: 77 + op, b: 77 + op, op }); // a == b: zero flag
+      vectors.push({ a: 255, b: 1, op: 0 }, { a: 3, b: 5, op: 1 }, { a: 5, b: 3, op: 1 }); // carry, borrow
+      return { vectors };
+    },
+    hints: [
+      "Give y and carry a default at the top of the always block, then let the case override them. That keeps the block free of latches.",
+      "For subtract, compute a 9-bit difference: {1'b0, a} - {1'b0, b}. Bit 8 is the borrow.",
+      "zero can be one line: assign zero = (y == 8'd0);",
+    ],
+  },
+  {
+    id: 'regfile4',
+    track: 'rtl',
+    title: 'Register Room',
+    concept: 'memories with two read ports & one write port',
+    xp: 180,
+    brief: `
+      <p>A CPU keeps its working values in a small set of <b>registers</b>, called a register file. It needs
+      one <b>write port</b>, which changes one register on a clock edge, and two <b>read ports</b>, which look at two
+      registers at once with no clock. Two read ports let the ALU get both operands in the same cycle.</p>
+      <pre>reg [7:0] regs [0:3];        // four 8-bit registers, picked by a 2-bit address
+assign x = regs[addr];       // a read is just wiring
+always @(posedge clk)
+  if (we) regs[addr] &lt;= d;  // a write waits for the clock edge</pre>
+      <h4>Spec</h4>
+      <ul><li>On each rising edge, if <code>we</code> is 1, register <code>waddr</code> gets <code>wdata</code>. Otherwise nothing changes.</li>
+      <li><code>rdata1</code> always shows register <code>raddr1</code>, and <code>rdata2</code> always shows register <code>raddr2</code></li>
+      <li>A write takes effect at the edge, so the new value is seen from the next cycle on</li></ul>
+      <p class="note">Reading and writing the same register in one cycle is fine. The read shows the old value.</p>`,
+    starter: `module regfile4(
+  input            clk,
+  input            we,
+  input      [1:0] waddr,
+  input      [7:0] wdata,
+  input      [1:0] raddr1,
+  input      [1:0] raddr2,
+  output     [7:0] rdata1,
+  output     [7:0] rdata2
+);
+  reg [7:0] regs [0:3];
+  // TODO: two assign lines for the reads, one clocked always block for the write
+endmodule
+`,
+    golden: `module regfile4(input clk, input we, input [1:0] waddr, input [7:0] wdata, input [1:0] raddr1, input [1:0] raddr2, output [7:0] rdata1, output [7:0] rdata2);
+  reg [7:0] regs [0:3];
+  assign rdata1 = regs[raddr1];
+  assign rdata2 = regs[raddr2];
+  always @(posedge clk) begin
+    if (we) regs[waddr] <= wdata;
+  end
+endmodule`,
+    stimulus: () => {
+      const r = rng(303);
+      const vectors: Vector[] = [];
+      for (let i = 0; i < 200; i++) {
+        vectors.push({ we: r() < 0.6 ? 1 : 0, waddr: randInt(r, 4), wdata: randInt(r, 256), raddr1: randInt(r, 4), raddr2: randInt(r, 4) });
+      }
+      return { clock: 'clk', vectors };
+    },
+    hints: [
+      'Use a non-blocking <= for the write, like the reg8 level.',
+      'The write needs both the clock edge and the enable: if (we) regs[waddr] <= wdata;',
+      'Reads have no clock: assign rdata1 = regs[raddr1]; and the same pattern for rdata2.',
+    ],
+  },
+  {
+    id: 'pc8',
+    track: 'rtl',
+    title: 'Next, Please',
+    concept: 'counters with a load input',
+    xp: 190,
+    brief: `
+      <p>The <b>program counter</b> (PC) holds the address of the next instruction. Most of the time it counts up by one.
+      When the program jumps, it loads a new address instead. A counter with a <b>load</b> input does both.</p>
+      <h4>Spec</h4>
+      <ul><li>Synchronous, active-high <code>rst</code> sets <code>pc</code> to 0</li>
+      <li>Otherwise, if <code>load</code> is 1, <code>pc</code> becomes <code>target</code> (a jump)</li>
+      <li>Otherwise <code>pc</code> goes up by one. 255 wraps to 0 by itself.</li></ul>
+      <p class="note">Priority order: reset first, then load, then count.</p>`,
+    starter: `module pc8(
+  input            clk,
+  input            rst,
+  input            load,
+  input      [7:0] target,
+  output reg [7:0] pc
+);
+  // TODO
+endmodule
+`,
+    golden: `module pc8(input clk, input rst, input load, input [7:0] target, output reg [7:0] pc);
+  always @(posedge clk) begin
+    if (rst) pc <= 8'd0;
+    else if (load) pc <= target;
+    else pc <= pc + 8'd1;
+  end
+endmodule`,
+    stimulus: () => ({ clock: 'clk', vectors: seq('rst', 1, 2, 300, (i, r) => ({ load: i === 5 || (i > 20 && r() < 0.06) ? 1 : 0, target: i === 5 ? 250 : randInt(r, 256) }), 13) }),
+    hints: [
+      'Use an if / else if / else chain: reset first, then load, then the count.',
+      "pc + 8'd1 wraps from 255 to 0 by itself, because pc is only 8 bits wide.",
+      'No extra logic is needed for a jump. A jump is just a load of a new address.',
+    ],
+  },
+  {
+    id: 'cpu-decode',
+    track: 'rtl',
+    title: 'Read the Instruction',
+    concept: 'instruction decoding & control signals',
+    xp: 220,
+    brief: `
+      <p>Now the CPU's brain: the <b>instruction decoder</b>. Each instruction is one byte. The top 4 bits are the
+      <b>opcode</b> (what to do). The bottom 4 bits hold the operands. The decoder turns the byte into
+      <b>control signals</b> that steer the datapath: the ALU, the registers and the program counter.</p>
+      <table class="mini"><tr><th>Instruction</th><th>Bits</th><th>Meaning</th></tr>
+      <tr><td>LDI rd, n</td><td><code>0001 dd nn</code></td><td>rd = n (n is 0 to 3)</td></tr>
+      <tr><td>ADD rd, rs</td><td><code>0010 dd ss</code></td><td>rd = rd + rs</td></tr>
+      <tr><td>SUB rd, rs</td><td><code>0011 dd ss</code></td><td>rd = rd - rs</td></tr>
+      <tr><td>AND rd, rs</td><td><code>0100 dd ss</code></td><td>rd = rd &amp; rs</td></tr>
+      <tr><td>OR rd, rs</td><td><code>0101 dd ss</code></td><td>rd = rd | rs</td></tr>
+      <tr><td>XOR rd, rs</td><td><code>0110 dd ss</code></td><td>rd = rd ^ rs</td></tr>
+      <tr><td>JMP t</td><td><code>1000 tttt</code></td><td>go to address t (0 to 15)</td></tr>
+      <tr><td>JZ t</td><td><code>1001 tttt</code></td><td>go to address t, but only if the zero flag is 1</td></tr>
+      <tr><td>OUT rs</td><td><code>1010 xx ss</code></td><td>show register rs on the OUT port</td></tr></table>
+      <h4>Spec</h4>
+      <p>Module <code>cpu_decode</code>. Inputs: <code>instr[7:0]</code> and <code>zero</code> (the zero flag).</p>
+      <ul><li><code>rd</code> and <code>rs</code> are always <code>instr[3:2]</code> and <code>instr[1:0]</code></li>
+      <li><code>reg_we</code>: 1 for LDI and the five ALU ops (register rd gets written)</li>
+      <li><code>alu_op[2:0]</code>: 0 for ADD, 1 SUB, 2 AND, 3 OR, 4 XOR. It is 0 for every other instruction.</li>
+      <li><code>use_imm</code>: 1 for LDI (the written value is the 2-bit number, not the ALU result)</li>
+      <li><code>flag_we</code>: 1 for the five ALU ops (the zero flag gets updated)</li>
+      <li><code>out_en</code>: 1 for OUT</li>
+      <li><code>pc_load</code>: 1 when the program jumps. JMP always does; JZ only when <code>zero</code> is 1.</li></ul>
+      <p class="note">Apart from rd and rs, every output is 0 unless the table says otherwise. Unused opcodes do nothing.</p>`,
+    starter: `module cpu_decode(
+  input      [7:0] instr,
+  input            zero,
+  output reg       reg_we,
+  output reg [2:0] alu_op,
+  output reg       use_imm,
+  output reg       flag_we,
+  output reg       out_en,
+  output reg       pc_load,
+  output     [1:0] rd,
+  output     [1:0] rs
+);
+  assign rd = instr[3:2];
+  assign rs = instr[1:0];
+  // TODO: an always @(*) block with a case on instr[7:4]
+endmodule
+`,
+    golden: `module cpu_decode(input [7:0] instr, input zero,
+  output reg reg_we, output reg [2:0] alu_op, output reg use_imm, output reg flag_we,
+  output reg out_en, output reg pc_load, output [1:0] rd, output [1:0] rs);
+  assign rd = instr[3:2];
+  assign rs = instr[1:0];
+  always @(*) begin
+    reg_we = 1'b0; alu_op = 3'd0; use_imm = 1'b0; flag_we = 1'b0; out_en = 1'b0; pc_load = 1'b0;
+    case (instr[7:4])
+      4'h1: begin reg_we = 1'b1; use_imm = 1'b1; end
+      4'h2: begin reg_we = 1'b1; flag_we = 1'b1; alu_op = 3'd0; end
+      4'h3: begin reg_we = 1'b1; flag_we = 1'b1; alu_op = 3'd1; end
+      4'h4: begin reg_we = 1'b1; flag_we = 1'b1; alu_op = 3'd2; end
+      4'h5: begin reg_we = 1'b1; flag_we = 1'b1; alu_op = 3'd3; end
+      4'h6: begin reg_we = 1'b1; flag_we = 1'b1; alu_op = 3'd4; end
+      4'h8: pc_load = 1'b1;
+      4'h9: pc_load = zero;
+      4'hA: out_en = 1'b1;
+    endcase
+  end
+endmodule`,
+    stimulus: () => ({ vectors: exhaustive([['instr', 8], ['zero', 1]]) }),
+    hints: [
+      'Set every output to its default at the top of the always block, then let the case override it. Same trick as the ALU.',
+      'Opcode 1 is LDI, 2 to 6 are the ALU ops (alu_op is opcode minus 2), 8 and 9 are jumps, and A is OUT.',
+      'For JZ, pc_load is just zero, so the jump happens only when the flag is 1.',
+    ],
+  },
+  {
+    id: 'cpu-tiny',
+    track: 'rtl',
+    title: 'Tiny CPU',
+    concept: 'datapath, control & a program in ROM',
+    xp: 250,
+    brief: `
+      <p>Time to wire the parts into a CPU. ADA-1 will run this tiny program on the demo board. Each instruction takes
+      one clock cycle: read the byte at <code>pc</code>, decode it, run it, and update the registers, the zero flag,
+      <code>out</code> and <code>pc</code> on the same edge.</p>
+      <p>The simulator needs one module, so paste the parts in: the decoder from the last level, the ALU from before,
+      the 4 registers, the program counter and a zero flag.</p>
+      <p>The program counts r0 up from 1 to 10. Each time, it shows r0 on OUT, then subtracts 1 from r3 (which
+      started at 10). When r3 reaches 0 the zero flag is set and the CPU jumps to the end and loops there.</p>
+      <table class="mini"><tr><th>addr</th><th>byte</th><th>instruction</th><th>addr</th><th>byte</th><th>instruction</th></tr>
+      <tr><td>0</td><td>15</td><td>LDI r1, 1</td><td>6</td><td>A0</td><td>OUT r0</td></tr>
+      <tr><td>1</td><td>1F</td><td>LDI r3, 3</td><td>7</td><td>3D</td><td>SUB r3, r1</td></tr>
+      <tr><td>2</td><td>2D</td><td>ADD r3, r1</td><td>8</td><td>9A</td><td>JZ 10</td></tr>
+      <tr><td>3</td><td>2D</td><td>ADD r3, r1</td><td>9</td><td>85</td><td>JMP 5</td></tr>
+      <tr><td>4</td><td>2F</td><td>ADD r3, r3</td><td>10</td><td>8A</td><td>JMP 10</td></tr>
+      <tr><td>5</td><td>21</td><td>ADD r0, r1</td><td></td><td></td><td></td></tr></table>
+      <h4>Spec</h4>
+      <ul><li>Ports: <code>clk</code>, <code>rst</code>, <code>pc[7:0]</code> (the current address) and <code>out[7:0]</code> (the OUT port)</li>
+      <li>Reset clears <code>pc</code>, the 4 registers, the zero flag and <code>out</code></li>
+      <li>The ROM is the <code>case</code> on <code>pc</code> in the starter. Any address past the end holds JMP 10 (8A).</li>
+      <li>OUT copies register rs into <code>out</code>. ALU ops set the zero flag.</li>
+      <li>If <code>pc_load</code> is 1, <code>pc</code> loads the jump address (the low 4 bits of the byte). Otherwise <code>pc</code> counts up.</li></ul>
+      <p class="note">The table lists addresses in decimal and bytes in hex. Each instruction is one cycle, so the demo board shows 1, 2, ... 10 and then stays on 10.</p>`,
+    starter: `module cpu_tiny(
+  input            clk,
+  input            rst,
+  output     [7:0] pc,
+  output reg [7:0] out
+);
+  // The program (ROM): the instruction byte at each address
+  reg [7:0] instr;
+  always @(*) begin
+    case (pc)
+      8'd0:  instr = 8'h15;  // LDI r1, 1
+      8'd1:  instr = 8'h1F;  // LDI r3, 3
+      8'd2:  instr = 8'h2D;  // ADD r3, r1
+      8'd3:  instr = 8'h2D;  // ADD r3, r1
+      8'd4:  instr = 8'h2F;  // ADD r3, r3
+      8'd5:  instr = 8'h21;  // loop: ADD r0, r1
+      8'd6:  instr = 8'hA0;  // OUT r0
+      8'd7:  instr = 8'h3D;  // SUB r3, r1
+      8'd8:  instr = 8'h9A;  // JZ 10
+      8'd9:  instr = 8'h85;  // JMP 5
+      8'd10: instr = 8'h8A;  // end: JMP 10
+      default: instr = 8'h8A;
+    endcase
+  end
+  wire [1:0] rd = instr[3:2];
+  wire [1:0] rs = instr[1:0];
+
+  // TODO: the decoder, the ALU, the registers, the zero flag, the PC and OUT
+endmodule
+`,
+    golden: `module cpu_tiny(input clk, input rst, output [7:0] pc, output reg [7:0] out);
+  reg [7:0] instr;
+  always @(*) begin
+    case (pc)
+      8'd0:  instr = 8'h15;
+      8'd1:  instr = 8'h1F;
+      8'd2:  instr = 8'h2D;
+      8'd3:  instr = 8'h2D;
+      8'd4:  instr = 8'h2F;
+      8'd5:  instr = 8'h21;
+      8'd6:  instr = 8'hA0;
+      8'd7:  instr = 8'h3D;
+      8'd8:  instr = 8'h9A;
+      8'd9:  instr = 8'h85;
+      8'd10: instr = 8'h8A;
+      default: instr = 8'h8A;
+    endcase
+  end
+  wire [1:0] rd = instr[3:2];
+  wire [1:0] rs = instr[1:0];
+
+  reg [7:0] pc_r;
+  reg [7:0] regs [0:3];
+  reg zf;
+  wire [7:0] a = regs[rd];
+  wire [7:0] b = regs[rs];
+  wire [8:0] sum = {1'b0, a} + {1'b0, b};
+  wire [8:0] dif = {1'b0, a} - {1'b0, b};
+  reg [7:0] alu;
+  reg [2:0] alu_op;
+  reg reg_we, use_imm, flag_we, out_en, pc_load;
+  wire [7:0] wdata = use_imm ? {6'd0, rs} : alu;
+  assign pc = pc_r;
+
+  // decoder (the cpu_decode level, with zero = zf)
+  always @(*) begin
+    reg_we = 1'b0; alu_op = 3'd0; use_imm = 1'b0; flag_we = 1'b0; out_en = 1'b0; pc_load = 1'b0;
+    case (instr[7:4])
+      4'h1: begin reg_we = 1'b1; use_imm = 1'b1; end
+      4'h2: begin reg_we = 1'b1; flag_we = 1'b1; alu_op = 3'd0; end
+      4'h3: begin reg_we = 1'b1; flag_we = 1'b1; alu_op = 3'd1; end
+      4'h4: begin reg_we = 1'b1; flag_we = 1'b1; alu_op = 3'd2; end
+      4'h5: begin reg_we = 1'b1; flag_we = 1'b1; alu_op = 3'd3; end
+      4'h6: begin reg_we = 1'b1; flag_we = 1'b1; alu_op = 3'd4; end
+      4'h8: pc_load = 1'b1;
+      4'h9: pc_load = zf;
+      4'hA: out_en = 1'b1;
+    endcase
+  end
+
+  // ALU
+  always @(*) begin
+    alu = 8'd0;
+    case (alu_op)
+      3'd0: alu = sum[7:0];
+      3'd1: alu = dif[7:0];
+      3'd2: alu = a & b;
+      3'd3: alu = a | b;
+      3'd4: alu = a ^ b;
+      default: alu = 8'd0;
+    endcase
+  end
+
+  // clocked state
+  always @(posedge clk) begin
+    if (rst) begin
+      pc_r <= 8'd0;
+      out <= 8'd0;
+      zf <= 1'b0;
+      regs[0] <= 8'd0; regs[1] <= 8'd0; regs[2] <= 8'd0; regs[3] <= 8'd0;
+    end else begin
+      pc_r <= pc_load ? {4'd0, instr[3:0]} : pc_r + 8'd1;
+      if (reg_we) regs[rd] <= wdata;
+      if (flag_we) zf <= (alu == 8'd0);
+      if (out_en) out <= b;
+    end
+  end
+endmodule`,
+    stimulus: () => ({ clock: 'clk', vectors: seq('rst', 1, 2, 80, () => ({}), 1) }),
+    hints: [
+      'Copy the decoder from the last level into an always @(*) block. Its zero input is your zero flag.',
+      'Use the ALU from the level before: a case on the op code. Then wdata = use_imm ? {6\'d0, rs} : alu; is the value written back.',
+      'On the clock edge: reset everything. Otherwise pc <= pc_load ? jump address : pc + 1, write the register if reg_we, set the flag if flag_we, and copy regs[rs] into out on OUT.',
     ],
   },
 ];

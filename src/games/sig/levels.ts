@@ -129,21 +129,21 @@ const sigFft: ArchLevel = {
   id: 'sig-fft', title: 'FFT: resolution and leakage', concept: 'bin width, spectral leakage, window choice, record length', xp: 170, lab: 'Signals', tier: 'guided',
   ticket: 'The test engineer is looking for a faint spur beside a strong tone and the FFT shows one wide skirt. Choose the record length and window that expose it, without recording longer than necessary.',
   build: (r) => {
-    let s: FftSpec = { f1: 200.37, f2: 224.9, db: 50 }, best: ReturnType<typeof fftSearch>;
+    let s: FftSpec = { f1: 200.37, f2: 224.9, db: 70 }, best: ReturnType<typeof fftSearch>;
     for (let tries = 0; tries < 60; tries++) {
-      s = { f1: 200 + between(r, 5, 95) / 100 * 1, f2: 0, db: pick(r, [40, 50, 60]) };
+      s = { f1: 200 + between(r, 5, 95) / 100 * 1, f2: 0, db: 70 };
       s.f2 = r1(s.f1 + between(r, 14, 40));
       best = fftSearch(s);
       if (best && best.n >= 128) break;
     }
-    if (!best || best.n < 128) { s = { f1: 200.37, f2: 224.9, db: 50 }; best = fftSearch(s); }
+    if (!best || best.n < 128) { s = { f1: 200.37, f2: 224.9, db: 70 }; best = fftSearch(s); }
     if (!best) throw new Error('no FFT configuration');
     const nBudget = best.n;
     return {
       brief: `<p>An N-point FFT of a signal sampled at fs = ${FS_FFT} Hz has bins <b>fs/N</b> apart. A tone that falls between bins leaks into its neighbours; the <b>window</b> sets how fast the skirt falls (rectangular: slowly; Blackman: very fast) and how wide the main lobe is (rectangular: narrow; Blackman: wide). Longer records narrow the bins but cost capture time.</p>
 <p>Two tones: a strong one at <b>${s.f1.toFixed(2)} Hz</b> and a weak one at <b>${s.f2} Hz</b>, <b>${s.db} dB</b> lower. The weak tone is <i>resolved</i> when it forms its own peak at least 6 dB above the valley between the two.</p>
 <p>Choose N and the window to resolve it with the shortest record (N ≤ ${nBudget}).</p>`,
-      hints: ['Count how many bins apart the tones are: spacing / (fs/N). The main lobe of the window must not cover both.', 'For a weak tone close to a strong one the skirt matters more than the main lobe: compare rect, Hann and Blackman at the same N.', 'Double N only if no window works: halving the bin width doubles the capture time.'],
+      hints: ['Count how many bins apart the tones are: spacing / (fs/N). The main lobe of the window must not cover both.', 'The weak tone must clear the strong tone’s skirt, but a window with a very deep skirt has a wide main lobe that smears the two tones together. Try the windows at the same N and watch the valley between the peaks.', 'Double N only if no window works: halving the bin width doubles the capture time.'],
       controls: [
         { id: 'n', kind: 'select', label: 'Record length N', options: [64, 128, 256, 512, 1024].map((n) => ({ value: String(n), label: String(n) })), value: '64' },
         { id: 'win', kind: 'select', label: 'Window', options: WINDOWS.map((w) => ({ value: w, label: w })), value: 'rect' },
@@ -242,20 +242,20 @@ const sigPid: ArchLevel = {
   ticket: 'The bias-voltage regulator rings like a bell when the load steps. Tune the controller so it settles quickly with no steady-state error and little overshoot.',
   build: (r) => {
     let plant: Plant = { wn: 6, zeta: 0.3, gain: 1, delay: 0.02 }, best: ReturnType<typeof pidSearch>;
-    const osLimit = 10;
+    const osLimit = 5;
     for (let tries = 0; tries < 20 && !best; tries++) {
       plant = { wn: pick(r, [4, 5, 6, 8]), zeta: pick(r, [0.25, 0.35, 0.5]), gain: 1, delay: pick(r, [0, 0.01, 0.02]) };
       best = pidSearch(plant, osLimit);
     }
     const b = best!;
-    const ts = Math.ceil(b.settle * 1.5 * 10) / 10;
+    const ts = Math.ceil(b.settle * 1.1 * 10) / 10;
     return {
       brief: `<p>The plant is a second-order, under-damped system (natural frequency ωn = ${plant.wn} rad/s, damping ζ = ${plant.zeta}, DC gain 1${plant.delay ? `, plus ${plant.delay * 1000} ms of dead time` : ''}). You close the loop with a PID controller on the error e = r − y:</p>
 <ul><li><b>P (Kp)</b> reacts to the error now: faster, but a pure P loop leaves a steady-state error of 1/(1+Kp).</li>
 <li><b>I (Ki)</b> accumulates the error: removes the steady-state error but adds lag and overshoot.</li>
 <li><b>D (Kd)</b> reacts to the error's slope: adds damping, but amplifies noise and delay turns it unstable.</li></ul>
 <p>Goal for a unit step: <b>overshoot ≤ ${osLimit}%</b>, <b>steady-state error ≤ 1%</b>, <b>2% settling time ≤ ${ts} s</b>, and stable.</p>`,
-      hints: ['With only Kp the output settles short of the target: you need Ki > 0. Start Ki around 1–4.', 'Overshoot too high? Add Kd (0.1–0.4) or lower Kp; the plant is under-damped on its own.', 'If settling is slow the integral is too weak; if it rings the integral is too strong. Alternate the two adjustments.'],
+      hints: ['With only Kp the output settles short of the target: you need Ki > 0. Start Ki around 4–8 and raise it while the settling is still slow.', 'Overshoot too high? Add Kd (0.2–0.8) or lower Kp; the plant is under-damped on its own.', 'If settling is slow the integral is too weak; if it rings the integral is too strong. Alternate the two adjustments.'],
       controls: [
         { id: 'kp', kind: 'number', label: 'Kp', min: 0, max: 30, step: 0.1, value: 1 },
         { id: 'ki', kind: 'number', label: 'Ki', min: 0, max: 60, step: 0.5, value: 0 },

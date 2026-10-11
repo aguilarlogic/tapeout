@@ -4,7 +4,7 @@ import { rng } from '../../sim/harness';
 import { clearDraft, loadDraft, saveDraft } from '../../state';
 import { h } from '../../ui/dom';
 import { editor, highlightSpice } from '../../ui/editor';
-import { finish, HINT_NOTE, hintBox, labFrame, useSeed, variantButton } from '../../ui/labkit';
+import { busyWhile, finish, HINT_NOTE, hintBox, labFrame, useSeed, variantButton } from '../../ui/labkit';
 import { bode } from './measure';
 import { checkGoals, findCircuitLevel, Instance, starsFor } from './levels';
 import { plot, Trace } from './plot';
@@ -38,7 +38,7 @@ export function circuitPage(id: string): HTMLElement {
   const inst: Instance = level.build(rng(seed));
   const draftKey = `clab.${level.id}.${seed}`;
 
-  const ed = editor(loadDraft<string>(draftKey) ?? inst.starter, (v) => saveDraft(draftKey, v), () => run(false), { highlight: highlightSpice, label: 'SPICE netlist' });
+  const ed = editor(loadDraft<string>(draftKey) ?? inst.starter, (v) => saveDraft(draftKey, v), () => void run(false), { highlight: highlightSpice, label: 'SPICE netlist' });
 
   // --- brief and hints
   const { usage, box: hintEl } = hintBox(inst.hints, `${draftKey}.usage`, false);
@@ -119,7 +119,8 @@ export function circuitPage(id: string): HTMLElement {
     if (!l.circuit.analyses.length) plotHost.append(h('p', { class: 'dim' }, 'Add a .tran, .ac or .dc line to see a plot.'));
   };
 
-  const run = (check: boolean) => {
+  // The simulation and the goal check run synchronously, so busyWhile yields once to let the busy state paint first.
+  const run = (check: boolean) => busyWhile({ buttons: [runBtn, checkBtn], status }, () => {
     messages.replaceChildren();
     ed.markLines([], []);
     let l: Lab;
@@ -155,7 +156,7 @@ export function circuitPage(id: string): HTMLElement {
       usage.hints ? HINT_NOTE : '',
       inst.par !== undefined && res.parts > inst.par ? `Use ${inst.par} parts or fewer for the third star (you used ${res.parts}).` : '',
     ]);
-  };
+  });
 
   // --- parts palette
   const insert = (tpl: string) => {
@@ -170,9 +171,11 @@ export function circuitPage(id: string): HTMLElement {
   const palette = h('div', { class: 'parts' }, h('span', { class: 'dim small' }, 'Add:'),
     ...PARTS.map(([name, tpl]) => h('button', { class: 'btn ghost small', title: tpl.replace('{n}', '1'), onclick: () => insert(tpl) }, name)));
 
+  const runBtn = h('button', { class: 'btn', onclick: () => void run(false), title: 'Ctrl+Enter' }, '▶ Run') as HTMLButtonElement;
+  const checkBtn = h('button', { class: 'btn primary', onclick: () => void run(true) }, '✔ Check design') as HTMLButtonElement;
   const toolbar = h('div', { class: 'toolbar' },
-    h('button', { class: 'btn', onclick: () => run(false), title: 'Ctrl+Enter' }, '▶ Run'),
-    h('button', { class: 'btn primary', onclick: () => run(true) }, '✔ Check design'),
+    runBtn,
+    checkBtn,
     h('button', { class: 'btn ghost', onclick: () => { if (confirm('Reset to the starter netlist?')) { ed.value = inst.starter; clearDraft(draftKey); } } }, 'Reset'),
     boss ? variantButton('Roll a new set of specs? This clears your current netlist.', seedKey, () => circuitPage(level.id)) : '',
   );

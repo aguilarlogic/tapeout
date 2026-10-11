@@ -31,11 +31,13 @@ export interface Module {
   xp: number;
   route: string;
 }
-export interface Chapter { name: string; modules: Module[] }
-export interface Act { id: string; n: number; name: string; tagline: string; region: string; chapters: Chapter[] }
+/** A chapter. A detour chapter names the main-path chapter (`need`) whose labs call it in. */
+export interface Chapter { name: string; need?: string; modules: Module[] }
+/** An act: one chip of the main path, a set of detours, or the role track. */
+export interface Act { id: string; n: number; kind: 'chip' | 'detour' | 'roles'; name: string; tagline: string; region: string; chapters: Chapter[] }
 
 export const KIND_LABEL: Record<ModKind, string> = {
-  lesson: 'Lesson', practice: 'Practice', boss: 'Boss', incident: 'Incident', logic: 'Logic lab', cmos: 'Transistor lab', rtl: 'Verilog', debug: 'Bug hunt', cov: 'Coverage',
+  lesson: 'Lesson', practice: 'Practice', boss: 'Checkpoint', incident: 'Boss incident', logic: 'Logic lab', cmos: 'Transistor lab', rtl: 'Verilog', debug: 'Bug hunt', cov: 'Coverage',
   uvm: 'UVM', clab: 'Circuit Lab', code: 'Code Lab', shell: 'Shell Lab', sva: 'Assertions', tb: 'Testbench', cdc: 'Clock crossing', isa: 'Assembly', arch: 'Architecture lab', rv: 'Core project', dft: 'DFT Lab', pd: 'PD Lab', sta2: 'STA Lab', layout: 'Layout Lab', sig: 'Signals Lab', spec: 'Specialty Lab', sta: 'Timing', pcb: 'Board', drills: 'Interview', final: 'Final review',
 };
 
@@ -117,74 +119,59 @@ const shell = (...ids: string[]): Module[] => ids.flatMap((id) => mods(SHELL_LEV
 /** Circuit Lab missions by id, in the order given. */
 const clab = (...ids: string[]): Module[] => ids.flatMap((id) => mods(CIRCUIT_LEVELS, 'clab', 'clab', (x) => x.id === id));
 
+/** The Verilog levels that belong to the first hour rather than the Verilog chapter. */
+const FIRST_RTL = ['gates', 'half-adder-v'];
+
 export const ACTS: Act[] = [
   {
-    id: 'foundations', n: 1, name: 'Foundations', tagline: 'Numbers, circuits, signals, the math and physics under every chip', region: 'STD CELLS',
+    id: 'ada1', n: 1, kind: 'chip', name: 'ADA-1: your first chip', tagline: 'An 8-bit chip from a single wire: bits, gates, an adder, memory and Verilog', region: 'ALU · REGS',
     chapters: [
-      { name: 'Numbers', modules: [...drill('bits', 'twos'), bossMod('boss-numbers')] },
-      { name: 'Circuits', modules: [...drill('ohm', 'rc'), ...clab('clab-divider', 'clab-led'), bossMod('boss-circuits1'), ...clab('clab-boss-ohm'), ...drill('kcl'), ...clab('clab-thevenin', 'clab-bridge'), bossMod('boss-kcl'), ...clab('clab-boss-kcl'), ...drill('ac'), ...clab('clab-lowpass'), bossMod('boss-ac'), ...clab('clab-boss-ac')] },
-      { name: 'Calculus & linear algebra', modules: [...drill('calc'), bossMod('boss-calc'), ...drill('linalg'), bossMod('boss-linalg')] },
-      { name: 'Differential equations', modules: [...drill('ode'), ...clab('clab-debounce', 'clab-rlc'), bossMod('boss-ode'), ...clab('clab-boss-ode')] },
-      { name: 'Probability & numerics', modules: [...drill('prob'), ...code('code-py-mc'), bossMod('boss-prob'), ...drill('numerics'), ...code('code-py-newton', 'code-py-simpson'), bossMod('boss-numerics'), ...code('code-boss-py-root')] },
-      { name: 'Signals & control', modules: [...drill('signals', 'dsp'), ...sig('sig-alias', 'sig-fir', 'sig-fft', 'sig-adc'), bossMod('boss-signals'), ...sig('sig-boss'), ...drill('control'), ...sig('sig-pid'), bossMod('boss-control')] },
-      { name: 'Physics', modules: [...drill('semi', 'mosphys', 'em'), bossMod('boss-em')] },
-      { name: 'Electronics', modules: [...drill('electronics'), ...clab('clab-rectifier', 'clab-bjt'), bossMod('boss-electronics'), ...clab('clab-boss-bjt')] },
-      { name: 'Transistors', modules: [...drill('mos'), ...logic(['cmos-inv', 'cmos-nand', 'cmos-nor', 'cmos-and', 'cmos-aoi']), bossMod('boss-devices')] },
+      // The first hour for a total beginner: light a lamp, bits, gates, a half adder (bit 0 of their chip's ALU),
+      // the first incident on that half adder, then the same half adder in Verilog. See the First Hour Spec.
+      {
+        name: 'Your first chip', modules: [...logic(['first-wire']), lesson('bits'), lesson('bool'), ...logic(['logic-not', 'logic-and', 'logic-half']),
+          incident('inc-demo-board'), ...mods(RTL_LEVELS, 'rtl', 'rtl', (x) => FIRST_RTL.includes(x.id))],
+      },
+      { name: 'Numbers', modules: [prac('practice-bits'), ...drill('twos'), bossMod('boss-numbers'), incident('inc-numbers')] },
+      { name: 'Logic', modules: [prac('practice-bool'), ...logic(['logic-or', 'logic-xor']), incident('inc-logic')] },
+      { name: 'Building blocks', modules: [...drill('comb'), ...logic(['logic-mux', 'logic-full']), incident('inc-adder')] },
+      { name: 'Memory & state', modules: [...drill('seq'), ...logic(['logic-latch', 'logic-counter']), ...drill('fsm'), bossMod('boss-logic'), incident('inc-controller')] },
+      { name: 'Verilog', modules: [...drill('verilog'), ...mods(RTL_LEVELS, 'rtl', 'rtl', (x) => !FIRST_RTL.includes(x.id)), bossMod('boss-hdl'), incident('inc-rtl')] },
     ],
   },
   {
-    id: 'systems', n: 2, name: 'Systems & Software', tagline: 'The shell, git, Python, C, C++, algorithms, compilers and operating systems', region: 'FIRMWARE',
+    id: 'ada2', n: 2, kind: 'chip', name: 'ADA-2: a RISC-V core', tagline: 'A 32-bit RISC-V core: assembly, a single-cycle datapath, clocks, then a pipeline', region: 'CPU CORE',
     chapters: [
-      { name: 'The shell', modules: [...drill('shell'), ...shell('sh-nav', 'sh-grep', 'sh-pipes', 'sh-find', 'sh-awk', 'sh-sed', 'sh-perm', 'sh-loop', 'sh-script'), bossMod('boss-shell'), ...shell('sh-boss-triage')] },
-      { name: 'Git', modules: [...drill('git'), ...shell('git-first', 'git-branch', 'git-undo', 'git-conflict', 'git-stash', 'git-bisect'), bossMod('boss-git'), ...shell('git-boss-merge', 'git-boss-bisect')] },
-      { name: 'Python', modules: [...drill('python'), ...code('code-py-parse', 'code-py-hist', 'code-py-regfield'), bossMod('boss-python'), ...code('code-boss-py-log')] },
-      { name: 'Flows & scripting', modules: [...drill('flows'), ...code('code-py-triage'), ...shell('sh-make', 'sh-make-hdr', 'sh-python'), bossMod('boss-flows'), ...shell('sh-boss-make')] },
-      { name: 'C', modules: [...drill('c'), ...code('code-c-swap', 'code-c-strings', 'code-c-array', 'code-c-bits', 'code-c-layout', 'code-c-list', 'code-c-vec', 'code-c-bug-overflow', 'code-c-bug-uaf', 'code-c-bug-leak', 'code-c-bug-dangling', 'code-c-bug-uninit'), bossMod('boss-c'), ...code('code-boss-c-ring', 'code-boss-c-split', 'code-boss-c-crc')] },
-      { name: 'C++', modules: [...drill('cpp'), bossMod('boss-cpp')] },
-      { name: 'Algorithms', modules: [...drill('dsa'), ...code('code-py-fibmemo', 'code-py-bsearch', 'code-py-bfs', 'code-py-topo', 'code-py-lru'), bossMod('boss-dsa'), ...code('code-boss-py-graph')] },
-      { name: 'Hardware/software interface', modules: [...drill('asm'), ...isa('isa-first', 'isa-branch', 'isa-loop', 'isa-array', 'isa-strlen', 'isa-popcount', 'isa-mul', 'isa-gcd', 'isa-copy', 'isa-reverse', 'isa-abi', 'isa-fix-signed', 'isa-fix-max', 'isa-fib', 'isa-sort'), bossMod('boss-asm'), ...isa('isa-boss-str', 'isa-boss-perf', 'isa-boss-rec')] },
-      { name: 'Operating systems', modules: [...drill('os'), ...code('code-os-rr', 'code-os-paging', 'code-os-deadlock', 'code-os-alloc'), bossMod('boss-os'), ...code('code-os-boss-sched')] },
+      { name: 'Hardware/software interface', modules: [...drill('asm'), ...isa('isa-first', 'isa-branch', 'isa-loop', 'isa-array', 'isa-strlen', 'isa-popcount', 'isa-mul', 'isa-gcd', 'isa-copy', 'isa-reverse', 'isa-abi', 'isa-fix-signed', 'isa-fix-max', 'isa-fib', 'isa-sort'), bossMod('boss-asm'), ...isa('isa-boss-str', 'isa-boss-perf', 'isa-boss-rec'), incident('inc-isa')] },
+      { name: 'Microarchitecture', modules: [...drill('alu'), ...rv('rv-alu', 'rv-branch', 'rv-mem', 'rv-mext'), bossMod('boss-uarch'), ...rv('rv-boss'), incident('inc-datapath')] },
+      { name: 'Clocks & resets', modules: [...drill('clk'), ...cdc('cdc-sync', 'cdc-pulse', 'cdc-gray', 'cdc-handshake'), bossMod('boss-cdc'), ...cdc('cdc-fifo'), incident('inc-crossing')] },
+      { name: 'Pipelines', modules: [...drill('pipe'), ...arch('pipe-fwd', 'pipe-branch', 'pipe-sched', 'pipe-unroll'), ...arch('pipe-boss'), incident('inc-pipeline')] },
     ],
   },
   {
-    id: 'digital', n: 3, name: 'Digital Design', tagline: 'Logic, state, Verilog, datapaths and clocking', region: 'CPU CORE',
+    id: 'ada3', n: 3, kind: 'chip', name: 'ADA-3: to silicon', tagline: 'Your core becomes silicon: transistors, timing, layout, placement, power, test and the board', region: 'CLOCKS · PHY',
     chapters: [
-      { name: 'Logic', modules: [...drill('bool'), ...logic(['logic-not', 'logic-and', 'logic-or', 'logic-xor'])] },
-      { name: 'Building blocks', modules: [...drill('comb'), ...logic(['logic-mux', 'logic-half', 'logic-full'])] },
-      { name: 'Memory & state', modules: [...drill('seq'), ...logic(['logic-latch', 'logic-counter']), ...drill('fsm'), bossMod('boss-logic')] },
-      { name: 'Verilog', modules: [...drill('verilog'), ...mods(RTL_LEVELS, 'rtl', 'rtl'), bossMod('boss-hdl')] },
-      { name: 'Microarchitecture', modules: [...drill('alu'), ...rv('rv-alu', 'rv-branch', 'rv-mem', 'rv-mext'), bossMod('boss-uarch'), ...rv('rv-boss')] },
-      { name: 'Clocks & resets', modules: [...drill('clk'), ...cdc('cdc-sync', 'cdc-pulse', 'cdc-gray', 'cdc-handshake'), bossMod('boss-cdc'), ...cdc('cdc-fifo')] },
-    ],
-  },
-  {
-    id: 'impl', n: 4, name: 'VLSI & Implementation', tagline: 'Timing, circuits, power and the board', region: 'CLOCKS · PHY',
-    chapters: [
-      { name: 'Static timing', modules: [...drill('sta'), ...mods(TIMING_LEVELS, 'sta', 'sta'), ...sta2('sta-report', 'sta-ocv', 'sta-mcp'), bossMod('boss-sta'), ...sta2('sta-eco')] },
-      { name: 'Circuit design', modules: [...drill('vlsi'), bossMod('boss-circuit')] },
-      { name: 'Layout', modules: [...layout('layout-drc', 'layout-inv', 'layout-lvs', 'layout-nand'), ...layout('layout-boss')] },
-      { name: 'Physical design', modules: [...pd('pd-place', 'pd-congestion', 'pd-cts', 'pd-ir', 'pd-floorplan'), ...pd('pd-boss')] },
-      { name: 'Low power', modules: [...drill('power'), bossMod('boss-lowpower'), bossMod('boss-upf')] },
+      { name: 'Transistors', modules: [...drill('mos'), ...logic(['cmos-inv', 'cmos-nand', 'cmos-nor', 'cmos-and', 'cmos-aoi']), bossMod('boss-devices'), incident('inc-cell')] },
+      { name: 'Circuit design', modules: [...drill('vlsi'), bossMod('boss-circuit'), incident('inc-bypass')] },
+      { name: 'Static timing', modules: [...drill('sta'), ...mods(TIMING_LEVELS, 'sta', 'sta'), ...sta2('sta-report', 'sta-ocv', 'sta-mcp'), bossMod('boss-sta'), ...sta2('sta-eco'), incident('inc-sta')] },
+      { name: 'Layout', modules: [...layout('layout-drc', 'layout-inv', 'layout-lvs', 'layout-nand'), ...layout('layout-boss'), incident('inc-drc')] },
+      { name: 'Physical design', modules: [...pd('pd-place', 'pd-congestion', 'pd-cts', 'pd-ir', 'pd-floorplan'), ...pd('pd-boss'), incident('inc-pdcore')] },
+      { name: 'Low power', modules: [...drill('power'), bossMod('boss-lowpower'), bossMod('boss-upf'), incident('inc-wake')] },
+      { name: 'Design for test', modules: [...drill('dft'), ...dft('dft-detect', 'dft-coverage', 'dft-redundant', 'dft-scan', 'dft-bist'), bossMod('boss-dft'), ...dft('dft-boss'), incident('inc-dft')] },
       { name: 'Board', modules: [...drill('pcb'), ...mods(PCB_LEVELS, 'pcb', 'pcb'), ...clab('clab-pdn'), bossMod('boss-board'), ...clab('clab-boss-pdn'), incident('inc-link')] },
     ],
   },
   {
-    id: 'verif', n: 5, name: 'Verification & Test', tagline: 'Debug, coverage, UVM, assertions, formal and DFT', region: 'DV SIGNOFF',
+    id: 'ada4', n: 4, kind: 'chip', name: 'ADA-4: multicore', tagline: 'A multicore chip signed off with UVM and formal: out-of-order cores, caches, coherence, interconnect', region: 'CACHE · NOC',
     chapters: [
-      { name: 'Testbenches & debug', modules: [...drill('dv'), ...code('code-py-lfsr', 'code-py-uart'), ...mods(DEBUG_LEVELS, 'debug', 'rtl'), bossMod('boss-tb'), ...tb('tb-class', 'tb-copy', 'tb-virtual', 'tb-iface', 'tb-fork', 'tb-layered', 'tb-fifo', 'tb-regmodel'), bossMod('boss-debug'), ...tb('tb-boss-debug', 'tb-boss-env')] },
-      { name: 'Random & coverage', modules: [...drill('crv'), ...tb('tb-rand', 'tb-rand-dist', 'tb-rand-arr'), bossMod('boss-crv'), ...tb('tb-cov', 'tb-cov-holes'), prac('practice-cov'), ...mods(SCENARIOS, 'cov', 'cov'), bossMod('boss-coverage')] },
-      { name: 'UVM', modules: [...drill('uvm'), ...mods(UVM_PUZZLES, 'uvm', 'uvm'), bossMod('boss-uvm'), ...tb('tbu-seq', 'tbu-driver', 'tbu-monsb', 'tbu-config', 'tbu-factory', 'tbu-cov', 'tbu-phases', 'tbu-boss')] },
-      { name: 'Assertions & formal', modules: [...drill('sva'), ...sva('sva-latency', 'sva-reg', 'sva-arbiter', 'sva-fifo', 'sva-valid-ready', 'sva-fsm', 'sva-repeat', 'sva-cover'), bossMod('boss-sva'), ...sva('sva-boss-burst'), ...drill('formal'), ...sva('formal-assume', 'formal-depth', 'formal-fix'), bossMod('boss-formal'), ...sva('formal-boss-wrap')] },
-      { name: 'Design for test', modules: [...drill('dft'), ...dft('dft-detect', 'dft-coverage', 'dft-redundant', 'dft-scan', 'dft-bist'), bossMod('boss-dft'), ...dft('dft-boss')] },
-    ],
-  },
-  {
-    id: 'arch', n: 6, name: 'Architecture', tagline: 'Out-of-order cores, memory systems, interconnect and modeling', region: 'CACHE · NOC',
-    chapters: [
-      { name: 'Cores', modules: [...drill('pipe'), ...arch('pipe-fwd', 'pipe-branch', 'pipe-sched', 'pipe-unroll'), ...drill('ooo'), ...arch('ooo-rename', 'ooo-window', 'ooo-diagnose'), bossMod('boss-cpu'), ...arch('pipe-boss', 'ooo-boss')] },
-      { name: 'Memory hierarchy', modules: [...drill('cache'), ...arch('cache-predict', 'cache-block', 'cache-conflict', 'cache-policy', 'cache-tile', 'cache-write'), ...drill('coherence', 'dram'), bossMod('boss-mem'), ...arch('cache-boss')] },
-      { name: 'Interconnect', modules: [...drill('bus'), bossMod('boss-protocols'), ...drill('noc', 'serdes'), bossMod('boss-interconnect')] },
-      { name: 'Modeling', modules: [...drill('perf'), bossMod('boss-perf')] },
+      { name: 'Testbenches & debug', modules: [...drill('dv'), ...code('code-py-lfsr', 'code-py-uart'), ...mods(DEBUG_LEVELS, 'debug', 'rtl'), bossMod('boss-tb'), ...tb('tb-class', 'tb-copy', 'tb-virtual', 'tb-iface', 'tb-fork', 'tb-layered', 'tb-fifo', 'tb-regmodel'), bossMod('boss-debug'), ...tb('tb-boss-debug', 'tb-boss-env'), incident('inc-tb')] },
+      { name: 'Random & coverage', modules: [...drill('crv'), ...tb('tb-rand', 'tb-rand-dist', 'tb-rand-arr'), bossMod('boss-crv'), ...tb('tb-cov', 'tb-cov-holes'), prac('practice-cov'), ...mods(SCENARIOS, 'cov', 'cov'), bossMod('boss-coverage'), incident('inc-cov')] },
+      { name: 'UVM', modules: [...drill('uvm'), ...mods(UVM_PUZZLES, 'uvm', 'uvm'), bossMod('boss-uvm'), ...tb('tbu-seq', 'tbu-driver', 'tbu-monsb', 'tbu-config', 'tbu-factory', 'tbu-cov', 'tbu-phases', 'tbu-boss'), incident('inc-uvm')] },
+      { name: 'Assertions & formal', modules: [...drill('sva'), ...sva('sva-latency', 'sva-reg', 'sva-arbiter', 'sva-fifo', 'sva-valid-ready', 'sva-fsm', 'sva-repeat', 'sva-cover'), bossMod('boss-sva'), ...sva('sva-boss-burst'), ...drill('formal'), ...sva('formal-assume', 'formal-depth', 'formal-fix'), bossMod('boss-formal'), ...sva('formal-boss-wrap'), incident('inc-formal')] },
+      { name: 'Out-of-order', modules: [...drill('ooo'), ...arch('ooo-rename', 'ooo-window', 'ooo-diagnose'), bossMod('boss-cpu'), ...arch('ooo-boss'), incident('inc-ooo')] },
+      { name: 'Memory hierarchy', modules: [...drill('cache'), ...arch('cache-predict', 'cache-block', 'cache-conflict', 'cache-policy', 'cache-tile', 'cache-write'), ...drill('coherence', 'dram'), bossMod('boss-mem'), ...arch('cache-boss'), incident('inc-memhier')] },
+      { name: 'Interconnect', modules: [...drill('bus'), bossMod('boss-protocols'), ...drill('noc', 'serdes'), bossMod('boss-interconnect'), incident('inc-noc')] },
+      { name: 'Modeling', modules: [...drill('perf'), bossMod('boss-perf'), incident('inc-model')] },
       {
         name: 'Tapeout', modules: [
           { id: 'drills', kind: 'drills', title: 'Interview Gauntlet', concept: 'spaced-repetition interview questions', xp: 150, route: '#/drills' },
@@ -194,7 +181,32 @@ export const ACTS: Act[] = [
     ],
   },
   {
-    id: 'roles', n: 7, name: 'Specializations', tagline: 'The roles beyond RTL and DV: analog, RF, physical design, memory, fab, AI, security, quantum', region: 'SPECIALTY IP',
+    id: 'science', n: 5, kind: 'detour', name: 'Detours: math & physics', tagline: 'The math and physics under every chip, called in when a lab needs them', region: 'STD CELLS',
+    chapters: [
+      { name: 'Circuits', need: 'Transistors', modules: [...drill('ohm', 'rc'), ...clab('clab-divider', 'clab-led'), bossMod('boss-circuits1'), ...clab('clab-boss-ohm'), ...drill('kcl'), ...clab('clab-thevenin', 'clab-bridge'), bossMod('boss-kcl'), ...clab('clab-boss-kcl'), ...drill('ac'), ...clab('clab-lowpass'), bossMod('boss-ac'), ...clab('clab-boss-ac')] },
+      { name: 'Electronics', need: 'Transistors', modules: [...drill('electronics'), ...clab('clab-rectifier', 'clab-bjt'), bossMod('boss-electronics'), ...clab('clab-boss-bjt')] },
+      { name: 'Physics', need: 'Transistors', modules: [...drill('semi', 'mosphys', 'em'), bossMod('boss-em')] },
+      { name: 'Calculus & linear algebra', need: 'Circuit design', modules: [...drill('calc'), bossMod('boss-calc'), ...drill('linalg'), bossMod('boss-linalg')] },
+      { name: 'Differential equations', need: 'Circuit design', modules: [...drill('ode'), ...clab('clab-debounce', 'clab-rlc'), bossMod('boss-ode'), ...clab('clab-boss-ode')] },
+      { name: 'Signals & control', need: 'Board', modules: [...drill('signals', 'dsp'), ...sig('sig-alias', 'sig-fir', 'sig-fft', 'sig-adc'), bossMod('boss-signals'), ...sig('sig-boss'), ...drill('control'), ...sig('sig-pid'), bossMod('boss-control')] },
+      { name: 'Probability & numerics', need: 'Random & coverage', modules: [...drill('prob'), ...code('code-py-mc'), bossMod('boss-prob'), ...drill('numerics'), ...code('code-py-newton', 'code-py-simpson'), bossMod('boss-numerics'), ...code('code-boss-py-root')] },
+    ],
+  },
+  {
+    id: 'software', n: 6, kind: 'detour', name: 'Detours: software', tagline: 'The shell, git, Python, C, C++, algorithms and operating systems, called in when a lab needs them', region: 'FIRMWARE',
+    chapters: [
+      { name: 'The shell', need: 'Microarchitecture', modules: [...drill('shell'), ...shell('sh-nav', 'sh-grep', 'sh-pipes', 'sh-find', 'sh-awk', 'sh-sed', 'sh-perm', 'sh-loop', 'sh-script'), bossMod('boss-shell'), ...shell('sh-boss-triage')] },
+      { name: 'Git', need: 'Microarchitecture', modules: [...drill('git'), ...shell('git-first', 'git-branch', 'git-undo', 'git-conflict', 'git-stash', 'git-bisect'), bossMod('boss-git'), ...shell('git-boss-merge', 'git-boss-bisect')] },
+      { name: 'C', need: 'Hardware/software interface', modules: [...drill('c'), ...code('code-c-swap', 'code-c-strings', 'code-c-array', 'code-c-bits', 'code-c-layout', 'code-c-list', 'code-c-vec', 'code-c-bug-overflow', 'code-c-bug-uaf', 'code-c-bug-leak', 'code-c-bug-dangling', 'code-c-bug-uninit'), bossMod('boss-c'), ...code('code-boss-c-ring', 'code-boss-c-split', 'code-boss-c-crc')] },
+      { name: 'Algorithms', need: 'Pipelines', modules: [...drill('dsa'), ...code('code-py-fibmemo', 'code-py-bsearch', 'code-py-bfs', 'code-py-topo', 'code-py-lru'), bossMod('boss-dsa'), ...code('code-boss-py-graph')] },
+      { name: 'Python', need: 'Static timing', modules: [...drill('python'), ...code('code-py-parse', 'code-py-hist', 'code-py-regfield'), bossMod('boss-python'), ...code('code-boss-py-log')] },
+      { name: 'Flows & scripting', need: 'Static timing', modules: [...drill('flows'), ...code('code-py-triage'), ...shell('sh-make', 'sh-make-hdr', 'sh-python'), bossMod('boss-flows'), ...shell('sh-boss-make')] },
+      { name: 'C++', need: 'Testbenches & debug', modules: [...drill('cpp'), bossMod('boss-cpp')] },
+      { name: 'Operating systems', need: 'Memory hierarchy', modules: [...drill('os'), ...code('code-os-rr', 'code-os-paging', 'code-os-deadlock', 'code-os-alloc'), bossMod('boss-os'), ...code('code-os-boss-sched')] },
+    ],
+  },
+  {
+    id: 'roles', n: 7, kind: 'roles', name: 'Specializations', tagline: 'The roles beyond RTL and DV: analog, RF, physical design, memory, fab, AI, security, quantum', region: 'SPECIALTY IP',
     chapters: [
       { name: 'Circuits & signals', modules: [...drill('analog'), ...clab('clab-inverting', 'clab-gbw', 'clab-csamp', 'clab-mirror'), bossMod('boss-analog'), ...clab('clab-boss-amp'), ...drill('rf'), ...clab('clab-lcfilter'), ...spec('rf-smith', 'rf-match'), bossMod('boss-rf'), incident('inc-radio'), ...drill('pmic'), ...clab('clab-duty', 'clab-buck'), bossMod('boss-pmic'), ...clab('clab-boss-buck'), incident('inc-rail'), lesson('sipi')] },
       { name: 'Silicon & manufacturing', modules: [...drill('pnr'), bossMod('boss-pd'), ...drill('sram'), ...spec('mem-snm', 'mem-assist'), bossMod('boss-memory'), incident('inc-bitflip'), ...drill('fab'), ...spec('proc-yield'), bossMod('boss-process'), incident('inc-wafer'), ...drill('pkg'), ...spec('pkg-thermal'), bossMod('boss-pkg'), incident('inc-package')] },
@@ -229,21 +241,33 @@ export function actProgress(a: Act) {
   return { done, total: ms.length, frac: done / ms.length };
 }
 
-/** Where a player should start, based on onboarding answers. */
+/** Where a player should start, by the job they pick: an index into ACTS. Beginners and students build ADA-1. */
 export function startAct(): number {
   const p = profile();
-  if (!p || p.background === 'new') return 0;
-  if (p.goal === 'special') return 6;
-  if (p.background === 'student') return 2;
-  return { design: 2, verif: 4, pd: 3, board: 3, arch: 5, unsure: 2 }[p.goal];
+  if (!p || p.background !== 'pro') return 0;
+  return { design: 1, verif: 3, pd: 2, board: 2, arch: 3, special: 6, unsure: 0 }[p.goal];
 }
 
-/** The next unfinished module, starting at the player's entry act and wrapping around. */
+const PATH_CHAPTERS: Chapter[] = ACTS.filter((a) => a.kind !== 'detour').flatMap((a) => a.chapters);
+export const DETOURS: Chapter[] = ACTS.filter((a) => a.kind === 'detour').flatMap((a) => a.chapters);
+
+/**
+ * The next unfinished module. It walks the main path (the four chips, then the roles) from the player's entry act,
+ * wrapping around. A detour comes first once the path reaches the chapter that needs it, counting from where the
+ * player started, so a designer who starts at ADA-2 is not sent back for ADA-1's detours.
+ */
 export function recommended(): Module | undefined {
-  const start = ACTS[startAct()].chapters[0].modules[0];
-  const i0 = ALL_MODULES.indexOf(start);
-  const order = [...ALL_MODULES.slice(i0), ...ALL_MODULES.slice(0, i0)];
-  return order.find((m) => !isDone(m));
+  const s = ACTS[startAct()];
+  const from = s.kind === 'detour' ? 0 : PATH_CHAPTERS.indexOf(s.chapters[0]);
+  const order = [...PATH_CHAPTERS.slice(from), ...PATH_CHAPTERS.slice(0, from)];
+  const due = new Set<string>();
+  for (const c of order) {
+    due.add(c.name);
+    for (const d of DETOURS) if (d.need && due.has(d.need)) { const m = d.modules.find((x) => !isDone(x)); if (m) return m; }
+    const m = c.modules.find((x) => !isDone(x));
+    if (m) return m;
+  }
+  return ALL_MODULES.find((m) => !isDone(m));
 }
 
 export function neighbours(id: string): { prev?: Module; next?: Module } {

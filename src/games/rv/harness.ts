@@ -52,7 +52,11 @@ export function checkPorts(d: Design): string | undefined {
   return undefined;
 }
 
-export function runProgram(d: Design, src: string, name: string, hidden: boolean): ProgramResult {
+/**
+ * Runs one program. A generator so a long program can pause: it yields (with no value) whenever its time slice is
+ * used up, and the caller decides when to resume. The synchronous callers never pause.
+ */
+function* runProgramSteps(d: Design, src: string, name: string, hidden: boolean, slice: Slice): Generator<void, ProgramResult, unknown> {
   const ref = reference(src);
   const prog = assemble(src);
   const mem = prog.mem.slice();
@@ -90,6 +94,7 @@ export function runProgram(d: Design, src: string, name: string, hidden: boolean
       d.apply({ clk: 1 });
       d.apply({ clk: 0 });
       res.cycles = c + 1;
+      if (slice.due()) { yield; slice.restart(); }
       if (pcMismatch) break;
     }
   } catch (e) {
@@ -131,9 +136,46 @@ export function runProgram(d: Design, src: string, name: string, hidden: boolean
   return res;
 }
 
+/** Work between two yields to the browser, in milliseconds: long enough to be efficient, short enough to keep frames. */
+export const SLICE_MS = 40;
+
+/** Where a check is, for the progress line: `done` programs have finished and `name` is the one running. */
+export interface EvalProgress { done: number; total: number; name?: string }
+
+/** A time budget measured on `clock`. `due()` says the budget is used up; `restart()` starts a new one. */
+interface Slice { due(): boolean; restart(): void }
+const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
+function makeSlice(clock: () => number, budget: number): Slice {
+  let t0 = clock();
+  return {
+    due: () => budget !== Infinity && clock() - t0 >= budget,
+    restart: () => { t0 = clock(); },
+  };
+}
+/** The synchronous callers: never due, so they never pause. */
+const NEVER = makeSlice(now, Infinity);
+
+/** Run a generator to completion without pausing. */
+function drain<T>(g: Generator<unknown, T, unknown>): T {
+  let r = g.next();
+  while (!r.done) r = g.next();
+  return r.value;
+}
+
+/** Let the browser paint and handle input before the next slice of work. */
+const nextTask = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+export function runProgram(d: Design, src: string, name: string, hidden: boolean): ProgramResult {
+  return drain(runProgramSteps(d, src, name, hidden, NEVER));
+}
+
 export interface ProgramSpec { name: string; src: string; hidden: boolean }
 
-export function evaluateCore(coreSrc: string, programs: ProgramSpec[]): CoreReport {
+/**
+ * The whole check as a generator. It yields a progress report after each program, and inside a program whenever the
+ * slice runs out, so the caller can paint between slices. The result is the same whichever way it is driven.
+ */
+function* evaluateSteps(coreSrc: string, programs: ProgramSpec[], opts: { stopOnFail?: boolean }, slice: Slice): Generator<EvalProgress, CoreReport, unknown> {
   const report: CoreReport = { lints: [], results: [], passed: false };
   let ast;
   try { ast = parseModule(coreSrc); new Design(ast); }
@@ -146,13 +188,47 @@ export function evaluateCore(coreSrc: string, programs: ProgramSpec[]): CoreRepo
   report.lints = probe.lints.map((l) => l.message);
   const portErr = checkPorts(probe);
   if (portErr) { report.error = { message: portErr, phase: 'ports' }; return report; }
-  for (const p of programs) {
-    try { report.results.push(runProgram(new Design(ast), p.src, p.name, p.hidden)); }
+  const total = programs.length;
+  for (let i = 0; i < programs.length; i++) {
+    const p = programs[i];
+    try {
+      const run = runProgramSteps(new Design(ast), p.src, p.name, p.hidden, slice);
+      let r = run.next();
+      while (!r.done) { yield { done: i, total, name: p.name }; slice.restart(); r = run.next(); }
+      report.results.push(r.value);
+    }
     catch (e) {
       if (e instanceof AsmError) { report.error = { message: `internal: test program does not assemble: ${e.message}`, phase: 'program' }; return report; }
       throw e;
     }
+    yield { done: i + 1, total, name: p.name };
+    if (opts.stopOnFail && !report.results[report.results.length - 1].ok) break;
   }
   report.passed = report.results.length > 0 && report.results.every((r) => r.ok);
   return report;
+}
+
+/**
+ * `stopOnFail`: stop after the first program that fails (for "is this bug caught at all?" checks). The page leaves it
+ * off, because it shows every program's result.
+ */
+export function evaluateCore(coreSrc: string, programs: ProgramSpec[], opts: { stopOnFail?: boolean } = {}): CoreReport {
+  return drain(evaluateSteps(coreSrc, programs, opts, NEVER));
+}
+
+/**
+ * The same check, for the page. It pauses to the browser after each program and whenever a slice of about SLICE_MS
+ * runs out inside a program, so no single stretch of work blocks the page for long. `onProgress` reports where the
+ * check is. `clock` and `pause` exist so tests can drive time themselves.
+ */
+export async function evaluateCoreAsync(coreSrc: string, programs: ProgramSpec[], opts: {
+  stopOnFail?: boolean; onProgress?: (p: EvalProgress) => void; clock?: () => number; pause?: () => Promise<void>;
+} = {}): Promise<CoreReport> {
+  const g = evaluateSteps(coreSrc, programs, opts, makeSlice(opts.clock ?? now, SLICE_MS));
+  const pause = opts.pause ?? nextTask;
+  for (let r = g.next(); ; r = g.next()) {
+    if (r.done) return r.value;
+    opts.onProgress?.(r.value);
+    await pause();
+  }
 }

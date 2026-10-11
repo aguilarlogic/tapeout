@@ -38,7 +38,7 @@ describe('weak or wrong answers are rejected', () => {
     expect(ok(run('cache-policy', 1, { ways: '4', policy: 'lru' }))).toBe(false);
   });
   it('write policy: the wrong choice for the workload', () => {
-    const a = ok(run('cache-write', 1, { write: 'wb' })), b = ok(run('cache-write', 1, { write: 'wt' }));
+    const a = ok(run('cache-write', 1, { write: 'wb', block: '8' })), b = ok(run('cache-write', 1, { write: 'wt', block: '8' }));
     expect(a).not.toBe(b);
   });
   it('renaming: switching it on without counting does not pass', () => {

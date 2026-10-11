@@ -5,8 +5,8 @@ import { clearDraft, loadDraft, saveDraft } from '../../state';
 import { rng } from '../../sim/harness';
 import { h } from '../../ui/dom';
 import { editor } from '../../ui/editor';
-import { finishLab, hintBox, labFrame, useSeed, variantButton } from '../../ui/labkit';
-import { evaluateCore, type CoreReport, type ProgramResult } from './harness';
+import { busyWhile, finishLab, hintBox, labFrame, useSeed, variantButton } from '../../ui/labkit';
+import { evaluateCoreAsync, type CoreReport, type ProgramResult } from './harness';
 import { findRvLevel } from './levels';
 
 const hx = (n: number) => '0x' + (n >>> 0).toString(16);
@@ -20,7 +20,7 @@ export function rvPage(id: string): HTMLElement {
   const inst = level.build(rng(seed));
   const draftKey = `rv.${level.id}.${seed}`;
 
-  const ed = editor(loadDraft<string>(draftKey) ?? inst.starter, (v) => saveDraft(draftKey, v), () => check(false), { label: 'Verilog: module rv32_core' });
+  const ed = editor(loadDraft<string>(draftKey) ?? inst.starter, (v) => saveDraft(draftKey, v), () => void check(false), { label: 'Verilog: module rv32_core' });
 
   const { usage, box: hintEl } = hintBox(inst.hints, `${draftKey}.usage`);
 
@@ -52,9 +52,12 @@ export function rvPage(id: string): HTMLElement {
     resultBox.replaceChildren(...rep.results.map(row));
     ed.markLines(rep.error?.line ? [rep.error.line] : [], []);
   };
-  const check = (submit: boolean) => {
+  // The check runs as paused slices (see evaluateCoreAsync), so the busy state and the progress line paint while it runs.
+  const check = (submit: boolean) => busyWhile({ buttons: [checkBtn, submitBtn], status }, async () => {
     const specs = inst.programs.filter((p) => submit || !p.hidden);
-    const rep = evaluateCore(ed.value, specs);
+    const rep = await evaluateCoreAsync(ed.value, specs, {
+      onProgress: (p) => { status.textContent = `Checking program ${Math.min(p.done + 1, p.total)} of ${p.total}${p.name ? `: ${p.name}` : ''}…`; },
+    });
     show(rep);
     if (rep.error) {
       status.className = 'status err';
@@ -73,11 +76,13 @@ export function rvPage(id: string): HTMLElement {
     if (!submit) { status.textContent = `All ${rep.results.length} visible programs pass. Submit runs the hidden ones too.`; return; }
     status.textContent = `PASS: all ${rep.results.length} programs match the reference.`;
     finishLab(level, usage.hints);
-  };
+  });
+  const checkBtn = h('button', { class: 'btn', onclick: () => void check(false), title: 'Ctrl+Enter' }, '▶ Check') as HTMLButtonElement;
+  const submitBtn = h('button', { class: 'btn primary', onclick: () => void check(true) }, '✔ Submit') as HTMLButtonElement;
 
   const toolbar = h('div', { class: 'toolbar' },
-    h('button', { class: 'btn', onclick: () => check(false), title: 'Ctrl+Enter' }, '▶ Check'),
-    h('button', { class: 'btn primary', onclick: () => check(true) }, '✔ Submit'),
+    checkBtn,
+    submitBtn,
     h('button', { class: 'btn ghost', onclick: () => { if (confirm('Reset to the starter?')) { ed.value = inst.starter; clearDraft(draftKey); } } }, 'Reset'),
     boss ? variantButton('Roll a new variant? This clears your current work.', seedKey, () => rvPage(level.id)) : '',
   );

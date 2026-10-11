@@ -2,6 +2,7 @@
 import type { Answer } from '../lessons/answers';
 import { choice, walk } from '../lessons/teach';
 import { mc, pick, type McStep } from '../lessons/types';
+import type { Difficulty } from './types';
 
 export const hex = (n: number, w = 2) => '0x' + n.toString(16).toUpperCase().padStart(w, '0');
 
@@ -67,14 +68,24 @@ export const mcs = (r: () => number, q: string, right: string, wrong: readonly s
 
 /**
  * A concept question with its walkthrough: [question, right, wrong, method, idea, [step question, step right, step
- * wrong], because?]. Keep the options short and parallel; the reasoning goes in `because`, shown after answering.
+ * wrong], because?, level?]. Keep the options short and parallel; the reasoning goes in `because` (use '' for none),
+ * shown after answering (the idea stands in when it is empty). `level` (1-3) is the difficulty the row suits; untagged rows are level 2.
  */
-export type ConceptQ = readonly [string, string, readonly string[], string, string, readonly [string, string, readonly string[]], string?];
+export type ConceptQ = readonly [string, string, readonly string[], string, string, readonly [string, string, readonly string[]], string?, Difficulty?];
 
-/** Pick one concept question and attach its walkthrough: the method, the idea, and one reasoning step to work. */
-export const concept = (r: () => number, qs: readonly ConceptQ[], why: (right: string) => string) => {
-  const [q, right, wrong, method, idea, [sq, sr, sw], because] = pick(r, qs);
-  return walk(mcs(r, q, right, wrong, because ? `${why(right)} ${because}` : why(right)), method, idea, choice(sq, sr, sw));
+/** A concept draw uses rows of the asked level, widened one level at a time until it has at least this many rows. */
+export const CONCEPT_POOL = 6;
+
+/** Pick one concept question at difficulty d and attach its walkthrough: the method, the idea, and one reasoning step. */
+export const concept = (r: () => number, qs: readonly ConceptQ[], why: (right: string) => string, d: Difficulty = 2) => {
+  const level = (row: ConceptQ) => row[7] ?? 2;
+  let rows = qs;
+  for (let w = 0; w <= 2; w++) {
+    const near = qs.filter((row) => Math.abs(level(row) - d) <= w);
+    if (near.length >= Math.min(CONCEPT_POOL, qs.length)) { rows = near; break; }
+  }
+  const [q, right, wrong, method, idea, [sq, sr, sw], because] = pick(r, rows);
+  return walk(mcs(r, q, right, wrong, `${why(right)} ${because || idea}`), method, idea, choice(sq, sr, sw));
 };
 
 /** Exact text answer, ignoring whitespace and quote style: exact("[1, 2]") accepts "[1,2]". */
@@ -83,3 +94,7 @@ export const exact = (canonical: string, ...alts: string[]): Answer => {
   const set = [canonical, ...alts].map(n);
   return { canonical, check: (s) => !!s.trim() && set.includes(n(s)) };
 };
+
+/** Tag every row of a concept bank with one difficulty level (see concept()). */
+export const atLevel = (level: Difficulty, rows: readonly ConceptQ[]): ConceptQ[] =>
+  rows.map((row) => [row[0], row[1], row[2], row[3], row[4], row[5], row[6] ?? '', level]);

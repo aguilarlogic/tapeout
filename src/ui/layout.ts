@@ -4,6 +4,7 @@ import { type Promotion, promotionLine } from '../mastery/promotion';
 import { mentorSay } from '../os/mentor';
 import { playerName } from '../state';
 import { h, stars as starEls } from './dom';
+import { playCue } from './sound';
 
 export function nextHref(levelId: string): string {
   return neighbours(levelId).next?.route ?? '#/map';
@@ -27,14 +28,25 @@ export function levelHeader(title: string, levelId: string, stars: number, xp: n
 }
 
 const PRAISE: Record<number, string[]> = {
-  3: ['Flawless, {name}. That is senior-engineer work.', 'Three stars. I could not have done it better myself. (I could have, but still.)', 'Clean signoff. Ship it.'],
+  3: ['Three stars. I could not have done it better myself. (I could have, but still.)', 'Clean signoff. Ship it.'],
   2: ['Signed off. There is a star left on the table if you want to come back for it.', 'Good work, {name}. Solid pass.'],
   1: ['It passes, and passing is what tapes out. Come back for more stars once it clicks.', 'Done! Replay it later to polish it.'],
 };
+// Three-star praise matched to how hard the level is (its base XP): a first wire is not senior-engineer work.
+const PRAISE_EASY = ['Clean, {name}. First try, no hints.', 'That is exactly how it works. Nicely done.'];
+const PRAISE_HARD = ['Flawless, {name}. That is senior-engineer work.', 'Three stars on that one. Real engineers miss what you just caught.'];
 
-export function celebrate(stars: number, gained: number, notes: string[], nextRoute: string, promoted?: Promotion) {
-  const line = (PRAISE[stars] ?? PRAISE[1])[Math.floor(Math.random() * (PRAISE[stars] ?? PRAISE[1]).length)].replace(/\{name\}/g, playerName());
+export function praise(stars: number, baseXp?: number): string[] {
+  if (stars === 3 && baseXp !== undefined && baseXp < 100) return PRAISE_EASY;
+  if (stars === 3 && baseXp !== undefined && baseXp >= 250) return PRAISE_HARD;
+  return PRAISE[stars] ?? PRAISE[1];
+}
+
+export function celebrate(stars: number, gained: number, notes: string[], nextRoute: string, promoted?: Promotion, baseXp?: number) {
+  const lines = praise(stars, baseXp);
+  const line = lines[Math.floor(Math.random() * lines.length)].replace(/\{name\}/g, playerName());
   setMood(stars === 3 ? 'proud' : 'happy');
+  playCue(promoted ? 'promote' : 'pass');
   mentorSay(promoted ? `${line} ${promotionLine(promoted)}` : line, promoted ? 'excited' : stars === 3 ? 'proud' : 'happy');
   const close = () => overlay.remove();
   const overlay = h('div', { class: 'modal-bg', onclick: (e: Event) => { if (e.target === overlay) close(); } },

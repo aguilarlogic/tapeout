@@ -72,7 +72,7 @@ export const sensorsPractice = practice('practice-sensors', 'Image Sensor Drills
 
 export const sensorsBoss = bossOf(sensorsPractice, 'boss-sensors', 'The Camera Spec Review', 'collected charge, SNR, dynamic range and readout rate', 200,
   'Boss fight, {name}. A phone maker wants a new camera sensor. Charge, noise, dynamic range and the interface they need. Exam rules.', [0, 1, 2, 3],
-  [mc('A fast-moving object looks skewed in video from a phone. What is the cause?', ['Lens distortion only', 'Rolling shutter: rows are exposed and read one after another, so each row sees the scene at a slightly different time; a global shutter exposes all rows at once', 'Too many megapixels', 'A noisy ADC'], 1, 'Rolling shutter is smaller and quieter; global shutter costs pixel area for a storage node.')]);
+  [mc('A fast-moving object looks skewed in video from a phone. What is the cause?', ['Lens distortion at the edges of the frame', 'Rolling shutter: rows are read at different times', 'Motion blur from a long exposure time', 'Barrel distortion from the wide-angle lens at the edges'], 1, 'Rows are exposed and read one after another, so each row sees the scene at a slightly different time; a global shutter exposes all rows at once. Rolling shutter is smaller and quieter; global shutter costs pixel area for a storage node.')]);
 
 // ------------------------------------------------------------------ MEMS
 
@@ -128,7 +128,7 @@ export const memsPractice = practice('practice-mems', 'MEMS Drills', 'resonance,
 
 export const memsBoss = bossOf(memsPractice, 'boss-mems', 'The Sensor Teardown', 'resonance, deflection, capacitive readout and Q', 200,
   'Boss fight, {name}. Teardown of a competitor\'s MEMS accelerometer. What is it, and how does its readout work? Exam rules.', [0, 1, 2, 3],
-  [mc('Why do MEMS gyroscopes sit in a vacuum cavity while accelerometers often do not?', ['A vacuum is cheaper', 'A gyroscope wants a very high Q for sensitivity and low drive power; an accelerometer wants damping near critical so it does not ring after a shock', 'They need different wafer sizes', 'The vacuum reduces temperature'], 1, 'Damping is a design choice: gas in the cavity sets it.')]);
+  [mc('Why do MEMS gyroscopes sit in a vacuum cavity while accelerometers often do not?', ['A vacuum cavity is cheaper to make', 'A gyro wants high Q; an accelerometer wants damping', 'Gyroscopes need a lower die temperature', 'Accelerometers need gas to carry heat away from the proof mass'], 1, 'A gyroscope wants a very high Q for sensitivity and low drive power; an accelerometer wants damping near critical so it does not ring after a shock. Damping is a design choice: gas in the cavity sets it.')]);
 
 // ------------------------------------------------------------------ neuromorphic
 
@@ -167,7 +167,7 @@ export const neuroPractice = practice('practice-neuro', 'Neuromorphic Drills', '
       calc('Period in ms:', `${sig(t)} + ${ref}`, t + ref, 'ms', sig(t + ref), 0.01), calc('Rate = 1000 ÷ period (ms), in Hz:', `1000 / ${sig(t + ref)}`, rate, 'Hz', sig(rate), 0.03));
   },
   (r, d) => {
-    const bits = tier(d, 3, 4, 6), gmax = pick(r, [50, 100]), levels = 2 ** bits;
+    const bits = d === 3 ? pick(r, [5, 6, 7, 8]) : pick(r, [2, 3, 4, 5, 6, 8]), gmax = pick(r, [50, 100, 25, 200, 75, 150]), levels = 2 ** bits;
     if (d < 3) return walk(ask(`A memristor cell stores ${bits} bits. How many distinct conductance levels must it hold, reliably?`, qty(levels, '', 0.001, String(levels)), `2^${bits} = ${levels} levels. A cell with ${levels} reliably distinguishable states stores ${bits} bits.`, 'Two to the number of bits.'),
       'conductance levels', 'A cell that stores n bits must distinguish 2^n separate conductance values. Noise, drift and variability limit how many a real device can hold, which is why analog weights are often 4 bits or fewer per cell.',
       count(`2^${bits}:`, `2^${bits}`, levels));
@@ -180,7 +180,7 @@ export const neuroPractice = practice('practice-neuro', 'Neuromorphic Drills', '
 
 export const neuroBoss = bossOf(neuroPractice, 'boss-neuro', 'The In-Memory Accelerator', 'crossbar currents, energy, LIF neurons and conductance levels', 200,
   'Boss fight, {name}. A startup pitches an analog in-memory inference chip. Check their numbers. Exam rules.', [0, 1, 2, 3],
-  [mc('Which limits the usable precision of an analog crossbar most?', ['The package', 'Device variability, conductance drift, read noise, wire IR drop and ADC resolution: networks are trained with that noise in the loop to tolerate about 4-8 effective bits', 'The clock only', 'The number of columns only'], 1, 'Noise-aware training makes networks robust to analog errors.')]);
+  [mc('Which limits the usable precision of an analog crossbar most?', ['The package\'s thermal resistance', 'Analog device noise, drift and variability', 'The clock frequency of the digital control', 'The bit width of the host CPU\'s floating point'], 1, 'Device variability, conductance drift, read noise, wire IR drop and ADC resolution limit it; networks are trained with that noise in the loop to tolerate about 4-8 effective bits. Noise-aware training makes networks robust to analog errors.')]);
 
 // ------------------------------------------------------------------ emerging devices
 
@@ -211,7 +211,7 @@ export const emergingPractice = practice('practice-emerging', 'Emerging Device D
       calc('ΔV = I × ΔR, in mV (µA × kΩ):', `${iread} × ${sig(rap - rp)}`, iread * (rap - rp), 'mV', sig(iread * (rap - rp)), 0.03));
   },
   (r, d) => {
-    const cpp = pick(r, [45, 48, 54]), th = pick(r, [5, 6]), w = pick(r, [3, 4]);
+    const cpp = pick(r, [45, 48, 54]), th = pick(r, d === 3 ? [5, 6, 7, 8, 9, 10] : [5, 6]), w = pick(r, [3, 4]);
     const area = w * cpp * th * 28;
     if (d === 1) return walk(ask(`A logic cell is ${w} contact pitches wide (CPP = ${cpp} nm) and ${th} metal tracks tall (28 nm pitch). What is its area, in nm²?`, qty(area, 'nm²', 0.01, String(area)), `${w} × ${cpp} × ${th} × 28 = ${area} nm².`, 'Width times height.'),
       'standard-cell area', 'A cell\'s width is its number of contact pitches times the CPP; its height is the number of tracks times the track pitch. Area is the product.',
@@ -222,8 +222,8 @@ export const emergingPractice = practice('practice-emerging', 'Emerging Device D
       'CFET area benefit', 'The cell width stays the same, so the area scales with the height in tracks. The saving is one minus the new height over the old height.',
       calc('Height ratio:', `${th2} / ${th}`, th2 / th, '', sig(th2 / th), 0.01), calc('Saving in %:', `(1 − ${sig(th2 / th)}) × 100`, sav, '%', sig(sav), 0.03));
   },
-  (r) => {
-    const n0 = pick(r, [10, 20, 50]), t = pick(r, [2, 3]), yrs = pick(r, [6, 10, 12]);
+  (r, d) => {
+    const n0 = pick(r, d === 3 ? [10, 20, 50, 100] : [10, 20, 50]), t = pick(r, [2, 3]), yrs = pick(r, d === 3 ? [6, 10, 12, 15, 18] : [6, 10, 12]);
     const f = 2 ** (yrs / t);
     const n = n0 * f;
     return walk(ask(`A process offers ${n0} billion transistors per chip. If density doubles every ${t} years, how many billions after ${yrs} years?`, qty(n, 'B', 0.03, sig(n)), `${n0} × 2^(${yrs}/${t}) = ${sig(n)} billion.`, 'Count the doublings.'),
@@ -234,7 +234,7 @@ export const emergingPractice = practice('practice-emerging', 'Emerging Device D
 
 export const emergingBoss = bossOf(emergingPractice, 'boss-emerging', 'The Roadmap Review', 'subthreshold leakage, MRAM margins, cell area and scaling', 200,
   'Boss fight, {name}. The technology roadmap meeting: leakage, memory margin, area and density claims. Exam rules.', [0, 1, 2, 3],
-  [mc('Why can a 2D semiconductor channel keep good gate control at very short channel lengths?', ['It is a better conductor', 'It is only a few atoms thick, so the gate controls the whole channel and short-channel leakage is suppressed; contacts, defects and wafer-scale growth are the hard problems', 'It needs no gate', 'It is cooler'], 1, 'Electrostatic control scales with channel thickness.')]);
+  [mc('Why can a 2D semiconductor channel keep good gate control at very short channel lengths?', ['It is a better conductor than silicon', 'It is so thin the gate controls the whole channel', 'It runs cooler, so leakage stays low', 'Its higher mobility lets the channel switch off faster'], 1, 'A channel only a few atoms thick suppresses short-channel leakage; contacts, defects and wafer-scale growth are the hard problems. Electrostatic control scales with channel thickness.')]);
 
 // ------------------------------------------------------------------ applications engineering & TPM
 
@@ -277,8 +277,8 @@ export const aetpmPractice = practice('practice-ae-tpm', 'AE & TPM Drills', 'cri
       'break-even volume', 'Each unit sold contributes its price minus its variable cost toward paying back the NRE. Break-even is when the accumulated contribution equals the NRE.',
       calc('Margin per unit = price − cost:', `${price} − ${unit}`, price - unit, '$', String(price - unit), 0.005), calc('Units = NRE ÷ margin, in millions:', `${nre / 1e6}e6 / ${price - unit} / 1e6`, be / 1e6, 'M', sig(be / 1e6), 0.03));
   },
-  (r) => {
-    const slackD = pick(r, [5, 10, 15]), slip = slackD + pick(r, [-3, 4, 10]);
+  (r, d) => {
+    const slackD = pick(r, d === 3 ? [5, 10, 15, 20, 30] : [5, 10, 15]), slip = slackD + pick(r, d === 3 ? [-3, 4, 10, 20, 30] : [-3, 4, 10]);
     const delay = Math.max(0, slip - slackD);
     return walk(ask(`A task off the critical path has ${slackD} days of slack. It slips by ${slip} days. By how many days does the project end date move?`, qty(delay, 'd', 0.001, String(delay)), `${slip} − ${slackD} = ${slip - slackD}; the project only moves by the part of the slip that exceeds the slack: ${delay} days.`, 'Slip beyond the slack.'),
       'slip and slack', 'Slack absorbs slip: a delay on a non-critical task changes nothing until it uses up all its slack, and only the excess delays the project.',
@@ -290,7 +290,7 @@ export const aetpmPractice = practice('practice-ae-tpm', 'AE & TPM Drills', 'cri
 
 export const aetpmBoss = bossOf(aetpmPractice, 'boss-ae-tpm', 'The Launch Review', 'critical path, die cost, NRE and slip', 200,
   'Boss fight, {name}. The launch review with the VP: schedule, cost and risk. Exam rules.', [0, 1, 2, 3],
-  [mc('A customer reports that your chip does not boot on their board. What is the best first step?', ['Replace the chip', 'Ask for their schematic and power-up scope captures (supplies, reset, clock, boot straps) and compare them with the evaluation board that is known to work', 'Escalate immediately', 'Update the firmware'], 1, 'The known-good evaluation board is your control experiment; most boot failures are board-level.')]);
+  [mc('A customer reports that your chip does not boot on their board. What is the best first step?', ['Send a replacement chip right away', 'Get their schematic and power-up scope captures', 'Escalate to the design team immediately', 'Ship them a new firmware image and ask them to retry the boot'], 1, 'Ask for the schematic and power-up scope captures (supplies, reset, clock, boot straps) and compare them with the evaluation board that is known to work. The known-good evaluation board is your control experiment; most boot failures are board-level.')]);
 
 export const FRONTIER_PRACTICE_B = [sensorsPractice, memsPractice, neuroPractice, emergingPractice, aetpmPractice];
 export const FRONTIER_BOSSES_B = [sensorsBoss, memsBoss, neuroBoss, emergingBoss, aetpmBoss];

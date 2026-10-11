@@ -134,6 +134,15 @@ describe('revealSteps', () => {
     await p;
     expect(k).toBe(4);
   });
+
+  it('shows everything at once at instant pace and never shows a NaN count', async () => {
+    const c = manualClock();
+    const seen: number[] = [];
+    await revealSteps(5, INSTANT.line, (n) => seen.push(n), { skip: false }, c);
+    c.advance(100);
+    expect(seen.length).toBeGreaterThan(0);
+    expect(seen.every((n) => n === 5)).toBe(true);
+  });
 });
 
 describe('Output queue', () => {

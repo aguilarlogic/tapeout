@@ -4,6 +4,7 @@ import { award } from '../mastery/promotion';
 import { levelRecord, loadDraft, saveDraft } from '../state';
 import { type Child, h } from './dom';
 import { celebrate, levelHeader, nextHref } from './layout';
+import { playCue } from './sound';
 
 /** Hints cap a lab at 2 stars. */
 export const starsFor = (hintsUsed: number) => (hintsUsed > 0 ? 2 : 3);
@@ -77,6 +78,7 @@ export const goalItems = (goals: LabGoal[]) => goals.map((g) => h('li', { class:
  * attempt passed and should be banked.
  */
 export function report(status: HTMLElement, ev: { error?: { message: string; line?: number }; passed: boolean; goals: LabGoal[] }, submit: boolean): boolean {
+  if (ev.error || !ev.passed) playCue('fail'); // the one hook for the fail blip: every checked lab that reports through here
   if (ev.error) {
     status.className = 'status err';
     status.textContent = ev.error.message + (ev.error.line ? ` (line ${ev.error.line})` : '');
@@ -95,6 +97,43 @@ export function report(status: HTMLElement, ev: { error?: { message: string; lin
   return submit;
 }
 
+/** Let the browser paint and handle input before heavy synchronous work starts. */
+export const yieldToBrowser = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+/** The controls a check disables while it runs, and the status line it reports through. */
+export interface BusyUi { buttons: HTMLButtonElement[]; status: HTMLElement; label?: string }
+
+/** Statuses with a check in flight. A second press (a key shortcut, say) is ignored while one runs. */
+const busy = new WeakSet<HTMLElement>();
+
+/**
+ * Run a heavy check with the busy state shown: the buttons are disabled, the status reads "Checking…" and is marked
+ * aria-busy, and the page yields once so that state paints before `work` starts. The busy state is cleared when `work`
+ * finishes, and also when it throws, in which case the status shows the error. `work` writes the final status itself.
+ */
+export async function busyWhile(ui: BusyUi, work: () => void | Promise<void>): Promise<void> {
+  const { buttons, status } = ui;
+  if (busy.has(status)) return;
+  busy.add(status);
+  const setDisabled = (v: boolean) => buttons.forEach((b) => { b.disabled = v; });
+  setDisabled(true);
+  status.className = 'status idle';
+  status.textContent = ui.label ?? 'Checking…';
+  status.setAttribute('aria-busy', 'true');
+  try {
+    await yieldToBrowser();
+    await work();
+  } catch (e) {
+    status.className = 'status err';
+    status.textContent = `The check stopped: ${e instanceof Error ? e.message : String(e)}`;
+    throw e;
+  } finally {
+    busy.delete(status);
+    setDisabled(false);
+    status.removeAttribute('aria-busy');
+  }
+}
+
 /** Bank a hint-rated lab pass: hints cap it at 2 stars. */
 export const finishLab = (level: { id: string; xp: number }, hintsUsed: number) =>
   finish(level.id, level.xp, starsFor(hintsUsed), [hintsUsed ? HINT_NOTE : '']);
@@ -102,5 +141,5 @@ export const finishLab = (level: { id: string; xp: number }, hintsUsed: number) 
 /** Bank a pass and show the signoff. Empty notes are dropped. */
 export function finish(levelId: string, xp: number, stars: number, notes: string[] = []) {
   const { gained, promotedTo } = award(levelId, xp, stars);
-  celebrate(stars, gained, notes.filter(Boolean), nextHref(levelId), promotedTo);
+  celebrate(stars, gained, notes.filter(Boolean), nextHref(levelId), promotedTo, xp);
 }

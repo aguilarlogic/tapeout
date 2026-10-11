@@ -1,10 +1,12 @@
-import { load, updateCard } from '../../state';
+import { dailyGoal, load, updateCard } from '../../state';
 import { mentorSay } from '../../os/mentor';
 import { pace } from '../../term/terminal';
 import { typeOnPage } from '../../term/typewriter';
 import { h } from '../../ui/dom';
 import { Card, CARDS, DECKS } from './cards';
 import { award, promotionLine } from '../../mastery/promotion';
+import { finishGoal } from '../../daily';
+import { dayKey, MILESTONE_XP, streakLine } from '../../streak';
 
 const SESSION = 10;
 
@@ -26,6 +28,7 @@ export function drillsPage(deckParam?: string): HTMLElement {
         h('nav', { class: 'crumbs' }, h('a', { href: '#/map' }, 'Map'), ' / Interview Prep'),
         h('div', { class: 'title-row' }, h('h2', null, 'Interview Prep'))),
       h('p', { class: 'lede' }, 'Spaced repetition: cards you miss come back in a minute, cards you know come back in 1, 3, 7, then 21 days. A card counts as mastered after three correct answers in a row.'),
+      h('p', { class: 'dim' }, streakLine(dailyGoal(), dayKey())),
       h('div', { class: 'deck-grid' },
         deckCard('Mixed session', `${all.due} due · ${all.mastered}/${all.total} mastered`, all.mastered / all.total, () => start()),
         ...DECKS.map((d) => {
@@ -59,6 +62,8 @@ export function drillsPage(deckParam?: string): HTMLElement {
     const summary = () => {
       const frac = right / session.length;
       const { gained, promotedTo } = award('drills', 150, frac >= 0.9 ? 3 : frac >= 0.7 ? 2 : 1);
+      // A finished session completes today's goal (a streak day); it only pays out at milestones.
+      const goal = finishGoal();
       mentorSay((frac >= 0.9 ? `${right} of ${session.length}. Interviewers would be impressed, {name}.` : `${right} of ${session.length}. The misses come back soon: that is how they stick.`) + (promotedTo ? ` ${promotionLine(promotedTo)}` : ''), promotedTo ? 'excited' : frac >= 0.9 ? 'proud' : 'happy');
       root.replaceChildren(
         h('header', { class: 'level-head' }, h('nav', { class: 'crumbs' }, h('a', { href: '#/map' }, 'Map'), ' / ', h('a', { href: '#/drills', onclick: (e: Event) => { e.preventDefault(); home(); } }, 'Interview Prep')),
@@ -67,6 +72,8 @@ export function drillsPage(deckParam?: string): HTMLElement {
           h('p', { class: 'big' }, `${right} / ${session.length} correct`),
           h('p', { class: 'dim' }, right === session.length ? 'Flawless. Those cards move up a box.' : 'Missed cards will come back soon - that is the point.'),
           gained ? h('p', { class: 'gain' }, `+${gained} XP`) : null,
+          ...goal.reached.map((m) => h('p', { class: 'gain' }, `${m} days played: +${MILESTONE_XP} XP, paid once`)),
+          h('p', { class: 'dim' }, streakLine(dailyGoal(), dayKey())),
           h('div', { class: 'modal-actions' },
             h('button', { class: 'btn ghost', onclick: home }, 'All decks'),
             h('button', { class: 'btn primary', onclick: () => start(deck) }, 'Another round'))),
@@ -76,7 +83,10 @@ export function drillsPage(deckParam?: string): HTMLElement {
   };
 
   const ask = (card: Card, done: (ok: boolean) => void, n: number, total: number, deck?: string) => {
-    const order = card.c.map((_, j) => j).sort(() => Math.random() - 0.5);
+    // A fair Fisher-Yates shuffle. Sorting with a random comparator is biased: it left the stored second option in the
+    // second or third slot three times in four, and most cards store the answer second.
+    const order = card.c.map((_, j) => j);
+    for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
     const deckName = DECKS.find((d) => d.id === card.deck)!.name;
     const explain = h('div', { class: 'explain' });
     const nextBtn = h('button', { class: 'btn primary', style: 'display:none' }, n + 1 < total ? 'Next question →' : 'Finish');

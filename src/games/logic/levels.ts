@@ -57,6 +57,14 @@ function fet(b: Builder, kind: 'NMOS' | 'PMOS', g: string, top: string, bottom: 
 
 export const LOGIC_LEVELS: LogicLevel[] = [
   {
+    id: 'first-wire', title: 'First Wire', concept: 'a wire carries a signal', xp: 40, mode: 'gate',
+    brief: '<p>Start here. A circuit is parts joined by wires. Three words you need:</p><ul><li><b>Switch</b> (labelled <code>in</code>, on the left): click it to turn it on (1) or off (0).</li><li><b>Wire</b>: a line that carries a 0 or a 1 from one pin to another.</li><li><b>Lamp</b> (labelled <code>out</code>, on the right): lights up when it receives a 1.</li></ul><p>Drag one wire from the switch\'s dot on its right to the lamp\'s dot on its left. Then click the switch: the lamp should follow it.</p>',
+    palette: [], inputs: ['in'], outputs: ['out'], par: 0,
+    spec: truth((i) => ({ out: bit(i.in) })),
+    hints: ['No parts to add. A single wire is the whole circuit.', 'Press on the switch\'s right-hand dot, drag, and release on the lamp\'s left-hand dot.'],
+    solve: (b) => { b.wire(IN(b, 'in'), OUT(b, 'out')); },
+  },
+  {
     id: 'logic-not', title: 'NAND Is Universal', concept: 'NOT from NAND', xp: 60, mode: 'gate',
     brief: '<p>Your only part is a 2-input <b>NAND</b>. Build an inverter: <code>y = !a</code>.</p><p>Drag a NAND from the parts bin, then drag from pin to pin to wire it. Click an input switch to toggle it and watch the signals light up.</p>',
     palette: ['NAND'], inputs: ['a'], outputs: ['y'], par: 1,

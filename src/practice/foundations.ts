@@ -3,7 +3,7 @@ import { bin, expr, hexa, num, qty } from '../lessons/answers';
 import { calc, choice, count, show, sim, step, walk, type Part } from '../lessons/teach';
 import { ask, between, mc, pick } from '../lessons/types';
 import { boss, practice, tier } from './types';
-import { eng, hex, pow2, sig, toSigned } from './util';
+import { choose, eng, hex, pow2, sig, toSigned } from './util';
 
 /** Binary digits grouped in fours, e.g. 1010_0011. */
 const nibbles = (n: number, bits?: number) => {
@@ -163,7 +163,7 @@ export const twosPractice = practice('practice-twos', 'Signed Number Drills', "t
     return walk(ask(`8-bit signed addition: ${a} + ${b}. What value does the 8-bit result hold (as signed decimal)?`, num(res), `The true sum ${a + b} ${a + b > 127 || a + b < -128 ? `does not fit in -128..127, so it wraps to ${res}: signed overflow. Two operands of the same sign gave a result of the other sign.` : `fits, so the result is ${res}.`}`, 'Compute the true sum; if it is outside -128..127, add or subtract 256.'),
       'check the range, then wrap', 'An 8-bit signed number holds -128..127. The hardware adds normally, but only 8 bits survive, so a result outside the range wraps around by 256, like an odometer rolling over. That wrap is called overflow.',
       count('First the true sum, as if you had unlimited bits:', `${a} + ${b}`, a + b),
-      choice(`Does ${a + b} fit in -128..127?`, fits ? 'Yes' : 'No', [fits ? 'No' : 'Yes']),
+      choice(`Does ${a + b} fit in -128..127?`, fits ? 'Yes, inside' : 'No, outside', [fits ? 'No, outside' : 'Yes, inside']),
       fits ? step('Then the result is simply the sum:', num(res))
         : count(`It does not fit, so it wraps by 256 (${a + b > 0 ? 'subtract' : 'add'} 256):`, `${a + b} ${a + b > 0 ? '-' : '+'} 256`, res));
   },
@@ -211,17 +211,29 @@ const sopOf = (vars: readonly string[], f: (v: Record<string, boolean>) => boole
 
 export const boolPractice = practice('practice-bool', 'Boolean Drills', 'truth tables, De Morgan, minterms', [
   (r, d) => {
+    // [description, inputs, function, one correct expression, level]
     const cases = [
-      ['output is 1 when exactly one of a and b is 1', ['a', 'b'], (v: Record<string, boolean>) => v.a !== v.b, 'a ^ b'],
-      ['output is 1 when both a and b are 0', ['a', 'b'], (v: Record<string, boolean>) => !v.a && !v.b, '~(a | b)'],
-      ['output is 1 when a and b are equal', ['a', 'b'], (v: Record<string, boolean>) => v.a === v.b, '~(a ^ b)'],
-      ['output is 1 when at least two of a, b, c are 1 (majority)', ['a', 'b', 'c'], (v: Record<string, boolean>) => +v.a + +v.b + +v.c >= 2, 'a&b | a&c | b&c'],
-      ['output is a when s is 0 and b when s is 1 (a mux)', ['a', 'b', 's'], (v: Record<string, boolean>) => (v.s ? v.b : v.a), '~s&a | s&b'],
-      ['output is 1 when an odd number of a, b, c are 1', ['a', 'b', 'c'], (v: Record<string, boolean>) => (+v.a + +v.b + +v.c) % 2 === 1, 'a ^ b ^ c'],
-      ['output is 1 when a is 1 and neither b nor c is 1', ['a', 'b', 'c'], (v: Record<string, boolean>) => v.a && !v.b && !v.c, 'a & ~b & ~c'],
-      ['output is 1 when the 2-bit number {a,b} is greater than the 1-bit number c', ['a', 'b', 'c'], (v: Record<string, boolean>) => 2 * +v.a + +v.b > +v.c, 'a | b&~c'],
+      ['output is 1 when exactly one of a and b is 1', ['a', 'b'], (v: Record<string, boolean>) => v.a !== v.b, 'a ^ b', 1],
+      ['output is 1 when both a and b are 0', ['a', 'b'], (v: Record<string, boolean>) => !v.a && !v.b, '~(a | b)', 1],
+      ['output is 1 when a and b are equal', ['a', 'b'], (v: Record<string, boolean>) => v.a === v.b, '~(a ^ b)', 1],
+      ['output is 1 when a or b is 1', ['a', 'b'], (v: Record<string, boolean>) => v.a || v.b, 'a | b', 1],
+      ['output is 1 when a is 1 and b is 0', ['a', 'b'], (v: Record<string, boolean>) => v.a && !v.b, 'a & ~b', 1],
+      ['output is 1 when a is 0 or b is 1', ['a', 'b'], (v: Record<string, boolean>) => !v.a || v.b, '~a | b', 1],
+      ['output is 0 only when both a and b are 1', ['a', 'b'], (v: Record<string, boolean>) => !(v.a && v.b), '~(a & b)', 1],
+      ['output is 1 when at least two of a, b, c are 1 (majority)', ['a', 'b', 'c'], (v: Record<string, boolean>) => +v.a + +v.b + +v.c >= 2, 'a&b | a&c | b&c', 2],
+      ['output is a when s is 0 and b when s is 1 (a mux)', ['a', 'b', 's'], (v: Record<string, boolean>) => (v.s ? v.b : v.a), '~s&a | s&b', 2],
+      ['output is 1 when a is 1 and neither b nor c is 1', ['a', 'b', 'c'], (v: Record<string, boolean>) => v.a && !v.b && !v.c, 'a & ~b & ~c', 2],
+      ['output is 1 when a, b and c are all equal', ['a', 'b', 'c'], (v: Record<string, boolean>) => v.a === v.b && v.b === v.c, '(a & b & c) | (~a & ~b & ~c)', 2],
+      ['output is 1 when a is 1, or b and c are both 1', ['a', 'b', 'c'], (v: Record<string, boolean>) => v.a || (v.b && v.c), 'a | b & c', 2],
+      ['output is 1 when exactly one of a, b, c is 1', ['a', 'b', 'c'], (v: Record<string, boolean>) => +v.a + +v.b + +v.c === 1, '~a&~b&c | ~a&b&~c | a&~b&~c', 2],
+      ['output is 1 when an odd number of a, b, c are 1', ['a', 'b', 'c'], (v: Record<string, boolean>) => (+v.a + +v.b + +v.c) % 2 === 1, 'a ^ b ^ c', 3],
+      ['output is 1 when the 2-bit number {a,b} is greater than the 1-bit number c', ['a', 'b', 'c'], (v: Record<string, boolean>) => 2 * +v.a + +v.b > +v.c, 'a | b&~c', 3],
+      ['output is 1 when a and b are 1, or c and d are 1 (four inputs)', ['a', 'b', 'c', 'd'], (v: Record<string, boolean>) => (v.a && v.b) || (v.c && v.d), 'a&b | c&d', 3],
+      ['output is 1 when a is 1 and b is 0, or c is 1 and d is 0 (four inputs)', ['a', 'b', 'c', 'd'], (v: Record<string, boolean>) => (v.a && !v.b) || (v.c && !v.d), 'a&~b | c&~d', 3],
+      ['output is 1 when a, b, c and d are all equal (four inputs)', ['a', 'b', 'c', 'd'], (v: Record<string, boolean>) => v.a === v.b && v.b === v.c && v.c === v.d, '(a&b&c&d) | (~a&~b&~c&~d)', 3],
+      ['output is 1 when an odd number of a, b, c and d are 1 (four inputs)', ['a', 'b', 'c', 'd'], (v: Record<string, boolean>) => (+v.a + +v.b + +v.c + +v.d) % 2 === 1, 'a ^ b ^ c ^ d', 3],
     ] as const;
-    const [desc, vars, f, canon] = pick(r, d === 1 ? cases.slice(0, 3) : d === 2 ? cases.slice(3, 6) : cases.slice(5));
+    const [desc, vars, f, canon] = pick(r, cases.filter((c) => c[4] === d));
     const n = vars.length;
     const sop = sopOf(vars, f);
     return walk(ask(`Write a boolean expression (use & | ^ ~ or a b' notation) for: ${desc}.`, expr(canon, [...vars], f), `One answer: ${canon}. Any equivalent expression is accepted, because I check it against the full truth table.`, 'Write the truth table first, then OR together the rows where the output is 1.'),
@@ -250,35 +262,74 @@ export const boolPractice = practice('practice-bool', 'Boolean Drills', 'truth t
       step('Now OR all the terms together:', expr(canon, vars, f)));
   },
   (r, d) => {
-    const forms = [
-      ['~(a & b)', '~a | ~b', ['a', 'b'], (v: Record<string, boolean>) => !v.a || !v.b],
-      ['~(a | b | c)', '~a & ~b & ~c', ['a', 'b', 'c'], (v: Record<string, boolean>) => !v.a && !v.b && !v.c],
-      ['~(a & b | c)', '(~a | ~b) & ~c', ['a', 'b', 'c'], (v: Record<string, boolean>) => !((v.a && v.b) || v.c)],
-      ['~((a | b) & (c | d))', '~a & ~b | ~c & ~d', ['a', 'b', 'c', 'd'], (v: Record<string, boolean>) => !((v.a || v.b) && (v.c || v.d))],
-    ] as const;
-    const fi = Math.min(forms.length - 1, d - 1 + (r() < 0.5 ? 0 : 1));
-    const [e, canon, vars, f] = forms[fi];
-    const inner = expr(canon, [...vars], f);
-    const pushed = { canonical: canon, check: (s: string) => !/[~!]\s*\(|\)\s*'/.test(s) && inner.check(s) };
-    const steps: Part[][] = [
-      [choice('~(a & b): the ~ moves onto each variable and the & flips to:', '~a | ~b', ['~a & ~b', 'a | b'])],
-      [choice('~(a | b | c): the ~ moves onto each variable and every | flips to:', '~a & ~b & ~c', ['~a | ~b | ~c', '~(a & b & c)'])],
-      [choice('The outermost operator inside ~( ) is the |, between (a & b) and c. Apply De Morgan to it: ~(X | c) =', '~X & ~c', ['~X | ~c', 'X & c']),
-        choice('Now X = a & b, so ~X = ~(a & b) =', '~a | ~b', ['~a & ~b', 'a | b'])],
-      [choice('The outermost operator is the & between (a | b) and (c | d). De Morgan on it: ~(X & Y) =', '~X | ~Y', ['~X & ~Y', 'X | Y']),
-        choice('Then ~(a | b) becomes:', '~a & ~b', ['~a | ~b', 'a & b'])],
+    // [expression, one correct form with ~ only on variables, inputs, function, level, the steps of the walkthrough]
+    const forms: [string, string, string[], (v: Record<string, boolean>) => boolean, number, Part[][]][] = [
+      ['~(a & b)', '~a | ~b', ['a', 'b'], (v) => !(v.a && v.b), 1, [[choice('~(a & b): the ~ moves onto each variable and the & flips to:', '~a | ~b', ['~a & ~b', 'a | b'])]]],
+      ['~(a | b | c)', '~a & ~b & ~c', ['a', 'b', 'c'], (v) => !(v.a || v.b || v.c), 1, [[choice('~(a | b | c): the ~ moves onto each variable and every | flips to:', '~a & ~b & ~c', ['~a | ~b | ~c', '~(a & b & c)'])]]],
+      ['~(a | b)', '~a & ~b', ['a', 'b'], (v) => !(v.a || v.b), 1, [[choice('~(a | b): the ~ moves onto each variable and the | flips to:', '~a & ~b', ['~a | ~b', 'a | b'])]]],
+      ['~(a & b & c)', '~a | ~b | ~c', ['a', 'b', 'c'], (v) => !(v.a && v.b && v.c), 1, [[choice('~(a & b & c): the ~ moves onto each variable and every & flips to:', '~a | ~b | ~c', ['~a & ~b & ~c', 'a | b | c'])]]],
+      ['~(a | ~b)', '~a & b', ['a', 'b'], (v) => !(v.a || !v.b), 1, [[choice('~(a | ~b): the ~ moves onto each piece, the | flips to &, and ~~b cancels to:', '~a & b', ['~a | ~b', 'a | b'])]]],
+      ['~(~a | ~b)', 'a & b', ['a', 'b'], (v) => !(!v.a || !v.b), 1, [[choice('~(~a | ~b): the ~ moves onto each piece, the | flips to &, and the double ~ cancels to:', 'a & b', ['~a & ~b', '~a | ~b'])]]],
+      ['~(a & b | c)', '(~a | ~b) & ~c', ['a', 'b', 'c'], (v) => !((v.a && v.b) || v.c), 2, [
+        [choice('The outermost operator inside ~( ) is the |, between (a & b) and c. Apply De Morgan to it: ~(X | c) =', '~X & ~c', ['~X | ~c', 'X & c'])],
+        [choice('Now X = a & b, so ~X = ~(a & b) =', '~a | ~b', ['~a & ~b', 'a | b'])]]],
+      ['~(a & (b | c))', '~a | (~b & ~c)', ['a', 'b', 'c'], (v) => !(v.a && (v.b || v.c)), 2, [
+        [choice('The outermost operator is the & between a and Y = (b | c). De Morgan on it: ~(a & Y) =', '~a | ~Y', ['~a & ~Y', 'a | Y'])],
+        [choice('Now Y = b | c, so ~Y = ~(b | c) =', '~b & ~c', ['~b | ~c', 'b & c'])]]],
+      ['~(a | ~b & c)', '~a & (b | ~c)', ['a', 'b', 'c'], (v) => !(v.a || (!v.b && v.c)), 2, [
+        [choice('The outermost operator is the | between a and Z = (~b & c). De Morgan: ~(a | Z) =', '~a & ~Z', ['~a | ~Z', 'a & Z'])],
+        [choice('Now ~Z = ~(~b & c) =', 'b | ~c', ['~b & ~c', '~b | ~c'])]]],
+      ['~(a & ~b | c)', '(~a | b) & ~c', ['a', 'b', 'c'], (v) => !((v.a && !v.b) || v.c), 2, [
+        [choice('The outermost operator is the | between X = (a & ~b) and c: ~(X | c) =', '~X & ~c', ['~X | ~c', 'X & c'])],
+        [choice('Now ~X = ~(a & ~b) =', '~a | b', ['~a | ~b', 'a & b'])]]],
+      ['~(a | b & c)', '~a & (~b | ~c)', ['a', 'b', 'c'], (v) => !(v.a || (v.b && v.c)), 2, [
+        [choice('The outermost operator is the | between a and Y = (b & c): ~(a | Y) =', '~a & ~Y', ['~a | ~Y', 'a & Y'])],
+        [choice('Now ~Y = ~(b & c) =', '~b | ~c', ['~b & ~c', 'b | c'])]]],
+      ['~(~a & (b | c))', 'a | (~b & ~c)', ['a', 'b', 'c'], (v) => !(!v.a && (v.b || v.c)), 2, [
+        [choice('The outermost operator is the & between X = ~a and Y = (b | c): ~(X & Y) =', '~X | ~Y', ['~X & ~Y', 'X | Y'])],
+        [choice('Now ~Y = ~(b | c) =', '~b & ~c', ['~b | ~c', 'b | c'])]]],
+      ['~((a | b) & (c | d))', '~a & ~b | ~c & ~d', ['a', 'b', 'c', 'd'], (v) => !((v.a || v.b) && (v.c || v.d)), 3, [
+        [choice('The outermost operator is the & between (a | b) and (c | d). De Morgan on it: ~(X & Y) =', '~X | ~Y', ['~X & ~Y', 'X | Y'])],
+        [choice('Then ~(a | b) becomes:', '~a & ~b', ['~a | ~b', 'a & b'])]]],
+      ['~((a & b) | (c & d))', '(~a | ~b) & (~c | ~d)', ['a', 'b', 'c', 'd'], (v) => !((v.a && v.b) || (v.c && v.d)), 3, [
+        [choice('The outermost operator is the | between X = (a & b) and Y = (c & d): ~(X | Y) =', '~X & ~Y', ['~X | ~Y', 'X & Y'])],
+        [choice('Now ~X = ~(a & b) =', '~a | ~b', ['~a & ~b', 'a | b'])]]],
+      ['~((a | b) & c)', '~a & ~b | ~c', ['a', 'b', 'c'], (v) => !((v.a || v.b) && v.c), 3, [
+        [choice('The outermost operator is the & between X = (a | b) and c: ~(X & c) =', '~X | ~c', ['~X & ~c', 'X | c'])],
+        [choice('Now ~X = ~(a | b) =', '~a & ~b', ['~a | ~b', 'a & b'])]]],
+      ['~(a & (b | c | d))', '~a | ~b & ~c & ~d', ['a', 'b', 'c', 'd'], (v) => !(v.a && (v.b || v.c || v.d)), 3, [
+        [choice('The outermost operator is the & between a and Y = (b | c | d): ~(a & Y) =', '~a | ~Y', ['~a & ~Y', 'a | Y'])],
+        [choice('Now ~Y = ~(b | c | d) =', '~b & ~c & ~d', ['~b | ~c | ~d', 'b & c & d'])]]],
+      ['~(a | b | (c & ~d))', '~a & ~b & (~c | d)', ['a', 'b', 'c', 'd'], (v) => !(v.a || v.b || (v.c && !v.d)), 3, [
+        [choice('The outermost operator is the | between a, b and Y = (c & ~d). De Morgan on every piece: ~(a | b | Y) =', '~a & ~b & ~Y', ['~a | ~b | ~Y', 'a & b & Y'])],
+        [choice('Now ~Y = ~(c & ~d) =', '~c | d', ['~c & d', '~c | ~d'])]]],
+      ['~((a & b) | (c | d))', '(~a | ~b) & ~c & ~d', ['a', 'b', 'c', 'd'], (v) => !((v.a && v.b) || v.c || v.d), 3, [
+        [choice('The outermost operator is the | between X = (a & b) and Y = (c | d): ~(X | Y) =', '~X & ~Y', ['~X | ~Y', 'X & Y'])],
+        [choice('Now ~Y = ~(c | d) =', '~c & ~d', ['~c | ~d', 'c & d'])]]],
     ];
+    const [e, canon, vars, f, , steps] = pick(r, forms.filter((x) => x[4] === d));
+    const inner = expr(canon, vars, f);
+    const pushed = { canonical: canon, check: (s: string) => !/[~!]\s*\(|\)\s*'/.test(s) && inner.check(s) };
     return walk(ask(`Push the inversion all the way down to the variables with De Morgan's laws: ${e}. (Your answer may only put ~ directly on variables.)`, pushed, `One answer: ${canon}. De Morgan: ~(x & y) = ~x | ~y and ~(x | y) = ~x & ~y, applied level by level.`, 'Flip & to | (and back) as the ~ moves inward.'),
       "De Morgan's laws, outside in", 'De Morgan says: ~(x & y) = ~x | ~y, and ~(x | y) = ~x & ~y. In words: move the NOT onto each piece and flip AND ↔ OR. With nested brackets, start at the outermost operator and work inward one level at a time.',
-      ...steps[fi],
+      ...steps.flat(),
       step('Write the whole result, with ~ only on single variables:', pushed));
   },
-  (_r, d) => {
-    const n = tier(d, 2, 3, 4);
-    return walk(ask(`How many different boolean functions of ${n} inputs are there?`, qty(2 ** 2 ** n, '', 0.001, String(2 ** 2 ** n)), `A truth table has 2^${n} = ${2 ** n} rows, and each can be 0 or 1: 2^${2 ** n} = ${2 ** 2 ** n} functions.`, 'Count the rows, then the ways to fill the output column.'),
-      'count the truth tables', 'A boolean function is completely described by its truth table. Two functions are different exactly when their output columns differ. So count the rows, then count the ways to fill a column of that many 0s and 1s.',
-      count(`How many rows does a ${n}-input truth table have?`, `2^${n}`, 2 ** n),
-      count(`Each of those ${2 ** n} rows can independently be 0 or 1. Number of ways to fill the column:`, `2^${2 ** n}`, 2 ** 2 ** n));
+  (r, d) => {
+    const n = pick(r, tier(d, [1, 2], [2, 3], [3, 4]));
+    const rows = 2 ** n;
+    if (r() < 0.5) {
+      return walk(ask(`How many different boolean functions of ${n} inputs are there?`, qty(2 ** rows, '', 0.001, String(2 ** rows)), `A truth table has 2^${n} = ${rows} rows, and each can be 0 or 1: 2^${rows} = ${2 ** rows} functions.`, 'Count the rows, then the ways to fill the output column.'),
+        'count the truth tables', 'A boolean function is completely described by its truth table. Two functions are different exactly when their output columns differ. So count the rows, then count the ways to fill a column of that many 0s and 1s.',
+        count(`How many rows does a ${n}-input truth table have?`, `2^${n}`, rows),
+        count(`Each of those ${rows} rows can independently be 0 or 1. Number of ways to fill the column:`, `2^${rows}`, 2 ** rows));
+    }
+    const k = between(r, 1, Math.min(3, rows - 1));
+    const ways = choose(rows, k);
+    return walk(ask(`How many boolean functions of ${n} inputs are 1 on exactly ${k} of their ${rows} rows?`, qty(ways, '', 0.001, String(ways)), `Choose which ${k} of the ${rows} rows are 1 (the rest are 0): C(${rows}, ${k}) = ${ways} functions.`, 'Each choice of the 1-rows is a different function.'),
+      'choose the 1-rows', 'A function is decided by which rows output 1. Counting the functions with exactly k ones means counting the ways to choose those k rows out of all the rows of the truth table.',
+      count(`How many rows does a ${n}-input truth table have?`, `2^${n}`, rows),
+      count(`Ways to choose ${k} of those ${rows} rows to be 1:`, `C(${rows}, ${k})`, ways));
   },
 ]);
 
@@ -362,8 +413,9 @@ export const ohmPractice = practice('practice-ohm', 'Circuit Arithmetic', "Ohm's
 ]);
 
 export const rcPractice = practice('practice-rc', 'RC Drills', 'time constants, charging, cutoff frequency, energy', [
-  (r) => {
-    const R = pick(r, [1e3, 4.7e3, 10e3, 100e3]), C = pick(r, [1e-9, 10e-9, 100e-9, 1e-6]);
+  (r, d) => {
+    const R = pick(r, tier(d, [1e3, 4.7e3, 10e3, 100e3], [1e3, 4.7e3, 10e3, 100e3, 470e3], [2.2e3, 47e3, 1e6, 2.2e6]));
+    const C = pick(r, tier(d, [1e-9, 10e-9, 100e-9, 1e-6], [1e-9, 10e-9, 100e-9, 1e-6, 4.7e-6], [2.2e-9, 47e-9, 470e-9, 4.7e-6]));
     return walk(ask(`R = ${eng(R, 'Ω')}, C = ${eng(C, 'F')}. What is τ, in µs?`, qty(R * C * 1e6, 'us'), `τ = RC = ${eng(R * C, 's')}.`, 'τ = R × C.'),
       'the time constant τ = RC', 'τ (tau) is how fast an RC circuit responds: after one τ a charging capacitor is 63% of the way there, after 5τ it is essentially done. τ = R (in ohms) × C (in farads) gives seconds. Multiply by 10^6 to get microseconds.',
       calc(`Write C in farads (${eng(C, 'F')}):`, eng(C, 'F'), C, '', String(C)),
@@ -436,14 +488,15 @@ export const mosPractice = practice('practice-mos', 'Transistor Drills', 'NMOS/P
       count('Transistors per input:', '1 NMOS + 1 PMOS', 2),
       count(`Total for ${n} inputs:`, `${n} × 2`, 2 * n));
   },
-  (r) => {
-    const g = pick(r, ['NAND', 'NOR']);
+  (r, d) => {
+    const g = pick(r, d === 1 ? ['NAND', 'NOR'] : ['NAND', 'NOR', 'NAND3', 'NOR3']);
+    const nand = g.startsWith('NAND');
     const net = pick(r, ['pull-down (NMOS)', 'pull-up (PMOS)']);
-    const series = (g === 'NAND') === net.startsWith('pull-down');
-    return walk(mc(`In a CMOS ${g} gate, how are the transistors of the ${net} network connected?`, ['In series', 'In parallel'], series ? 0 : 1, `${g}: output low only when ${g === 'NAND' ? 'all inputs are 1 (series NMOS)' : 'any input is 1 (parallel NMOS)'}; the PMOS network is always the dual.`),
+    const series = nand === net.startsWith('pull-down');
+    return walk(mc(`In a CMOS ${g} gate, how are the transistors of the ${net} network connected?`, ['In series: each must be on', 'In parallel: one is enough'], series ? 0 : 1, `${g}: output low only when ${nand ? 'all inputs are 1 (series NMOS)' : 'any input is 1 (parallel NMOS)'}; the PMOS network is always the dual.`),
       'series = AND, parallel = OR', 'Transistors are switches. Switches in series conduct only if ALL are on (AND); in parallel if ANY is on (OR). Ask when the output is pulled low: that condition is the NMOS network. The PMOS network is always the opposite arrangement (the dual).',
-      choice(`When is a ${g}'s output 0?`, g === 'NAND' ? 'Only when all inputs are 1' : 'When any input is 1', [g === 'NAND' ? 'When any input is 1' : 'Only when all inputs are 1']),
-      choice('So the NMOS pull-down network (an NMOS is on when its input is 1) is:', g === 'NAND' ? 'In series' : 'In parallel', [g === 'NAND' ? 'In parallel' : 'In series'], 'Series needs all switches on; parallel needs any one.'),
+      choice(`When is a ${g}'s output 0?`, nand ? 'When every input is 1' : 'When any input is a 1', [nand ? 'When any input is a 1' : 'When every input is 1']),
+      choice('So the NMOS pull-down network (an NMOS is on when its input is 1) is:', nand ? 'In series: each must be on' : 'In parallel: one is enough', [nand ? 'In parallel: one is enough' : 'In series: each must be on'], 'Series needs all switches on; parallel needs any one.'),
       'And the PMOS pull-up network is always the opposite of the NMOS one.');
   },
   (r, d) => {
@@ -463,19 +516,20 @@ export const mosPractice = practice('practice-mos', 'Transistor Drills', 'NMOS/P
       ...parts[g]);
   },
   (r, d) => {
-    const vdd = pick(r, [0.8, 1.0, 1.2, 1.8]);
-    const vt = pick(r, [0.3, 0.4]);
+    const vdd = pick(r, tier(d, [0.8, 1.0, 1.2, 1.8], [0.8, 1.0, 1.2, 1.8], [0.6, 0.9, 1.5, 2.5]));
+    const vt = pick(r, tier(d, [0.3, 0.4], [0.3, 0.4], [0.25, 0.35, 0.45]));
     const typ = pick(r, ['NMOS', 'PMOS']);
-    const vg = +(between(r, 0, 10) / 10 * vdd).toFixed(2);
+    const steps = d === 3 ? 20 : 10;
+    const vg = +(between(r, 0, steps) / steps * vdd).toFixed(2);
     const vs = typ === 'NMOS' ? 0 : vdd;
     const on = typ === 'NMOS' ? vg - vs > vt : vs - vg > vt;
     const ov = typ === 'NMOS' ? vg - vs : vs - vg;
-    return walk(mc(`${typ}, source at ${vs} V, |Vt| = ${vt} V, gate at ${vg} V (Vdd = ${vdd}). Is the channel on?`, ['On', 'Off'], on ? 0 : 1, `${typ === 'NMOS' ? `Vgs = ${+(vg - vs).toFixed(2)} V` : `Vsg = ${+(vs - vg).toFixed(2)} V`} ${on ? '>' : '≤'} ${vt} V, so it is ${on ? 'on' : 'off (only subthreshold leakage flows)'}.${d === 3 ? ' In between, the transistor is partially on: that is where both networks conduct and short-circuit current flows.' : ''}`),
+    return walk(mc(`${typ}, source at ${vs} V, |Vt| = ${vt} V, gate at ${vg} V (Vdd = ${vdd}). Is the channel on?`, ['Yes, it is on', 'No, it is off'], on ? 0 : 1, `${typ === 'NMOS' ? `Vgs = ${+(vg - vs).toFixed(2)} V` : `Vsg = ${+(vs - vg).toFixed(2)} V`} ${on ? '>' : '≤'} ${vt} V, so it is ${on ? 'on' : 'off (only subthreshold leakage flows)'}.${d === 3 ? ' In between, the transistor is partially on: that is where both networks conduct and short-circuit current flows.' : ''}`),
       'compare the gate drive with Vt', typ === 'NMOS'
         ? 'An NMOS turns on when its gate is at least a threshold voltage Vt ABOVE its source: Vgs = Vg - Vs > Vt.'
         : 'A PMOS is the mirror image: it turns on when its gate is at least |Vt| BELOW its source: Vsg = Vs - Vg > |Vt|. Its source usually sits at Vdd.',
       calc(`Compute the gate drive, ${typ === 'NMOS' ? 'Vgs = Vg - Vs' : 'Vsg = Vs - Vg'}:`, typ === 'NMOS' ? `${vg} - ${vs}` : `${vs} - ${vg}`, ov, 'V', String(+ov.toFixed(2)), 0.001),
-      choice(`Is ${+ov.toFixed(2)} V more than |Vt| = ${vt} V?`, on ? 'Yes' : 'No', [on ? 'No' : 'Yes']));
+      choice(`Is ${+ov.toFixed(2)} V more than |Vt| = ${vt} V?`, on ? 'Yes, above it' : 'No, not above', [on ? 'No, not above' : 'Yes, above it']));
   },
 ]);
 
@@ -513,7 +567,7 @@ export const circuitsBoss = boss({
     { t: 'gen', make: (r) => { const r1 = 100e3, r2 = 33e3; const rin = pick(r, [100e3, 50e3]); const r2e = (r2 * rin) / (r2 + rin); const v = (12 * r2e) / (r1 + r2e); return ask(`R1 = 100 kΩ, R2 = 33 kΩ, but the ADC input looks like ${eng(rin, 'Ω')} to ground. At 12 V, what voltage does the ADC actually see?`, qty(v, 'V', 0.02), `R2 ∥ R_in = ${eng(r2e, 'Ω')}, so Vout = 12 × ${eng(r2e, 'Ω')}/(100k + ${eng(r2e, 'Ω')}) = ${v.toFixed(2)} V instead of 2.98 V: a big gain error. Buffer it or use much smaller resistors.`); } },
     { t: 'gen', make: (r) => { const rth = pick(r, [25e3, 33e3]); const fc = pick(r, [10, 100]); const c = 1 / (2 * Math.PI * rth * fc); return ask(`The divider's Thevenin resistance is ${eng(rth, 'Ω')}. You add a capacitor to ground for a ${fc} Hz low-pass. What C, in nF?`, qty(c * 1e9, 'nF', 0.02), `C = 1/(2π × ${eng(rth, 'Ω')} × ${fc}) = ${eng(c, 'F')}. The source resistance of a divider is R1 ∥ R2: exactly the R in the filter.`); } },
     { t: 'gen', make: (r) => { const tau = pick(r, [1, 5, 16]); return ask(`After power-up, the filtered node needs to settle within 0.1% before the first reading. With τ = ${tau} ms, how long must firmware wait, in ms?`, qty(tau * Math.log(1000), 'ms', 0.03), `ln(1000) ≈ 6.9 τ = ${(tau * Math.log(1000)).toFixed(1)} ms.`); } },
-    { t: 'mc', q: 'The ADC samples by briefly connecting a 10 pF capacitor. Why does a big filter capacitor on the input help?', options: ['It raises the input voltage', 'It acts as a charge reservoir, so the sampling cap is charged from it instead of through the 25 kΩ source, avoiding a sampling error', 'It lowers the noise of the ADC reference', 'It does not help'], a: 1, why: 'Charge sharing: a 100 nF reservoir barely moves when a 10 pF sampler connects. Without it, the high source impedance could not recharge the sampler in time.' },
+    { t: 'mc', q: 'The ADC samples by briefly connecting a 10 pF capacitor. Why does a big filter capacitor on the input help?', options: ['It raises the voltage the ADC sees', 'It is a charge reservoir for the sampler', 'It lowers the noise of the ADC reference', 'It speeds up the divider settling'], a: 1, why: 'The sampling cap is charged from the reservoir instead of through the 25 kΩ source, avoiding a sampling error. Charge sharing: a 100 nF reservoir barely moves when a 10 pF sampler connects. Without it, the high source impedance could not recharge the sampler in time.' },
   ],
   recap: ['Divider design + loading + Thevenin resistance + RC settling.'],
 });

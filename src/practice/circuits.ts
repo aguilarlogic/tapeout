@@ -3,7 +3,7 @@ import { num, qty } from '../lessons/answers';
 import { calc, choice, count, show, walk } from '../lessons/teach';
 import { art, ask, between, mc, pick, say } from '../lessons/types';
 import { boss, practice, tier } from './types';
-import { eng, mcs, sci, sig } from './util';
+import { atLevel, concept, eng, mcs, sci, sig } from './util';
 
 const par = (...rs: number[]) => 1 / rs.reduce((a, x) => a + 1 / x, 0);
 const K = (x: number) => eng(x, 'Ω');
@@ -263,13 +263,13 @@ export const electronicsPractice = practice('practice-electronics', 'Amplifier D
   (r, d) => {
     const idea = 'A diode\'s current grows exponentially with its voltage: I ∝ e^(V/V_T), where V_T = kT/q ≈ 25.85 mV at room temperature. So multiplying the current by some ratio needs an extra V_T × ln(ratio) of voltage. A handy rule: about 60 mV per 10× (a decade) of current.';
     if (d === 1) {
-      const k = pick(r, [1, 2, 3]);
+      const k = pick(r, [1, 2, 3, 4, 5, 6]);
       return walk(ask(`A diode's forward voltage rises by ${60 * k} mV. Roughly how many times more current flows? (use 60 mV/decade)`, num(10 ** k), `60 mV per decade: ${k} decade${k > 1 ? 's' : ''} = ${10 ** k}×.`, 'Each 60 mV is 10×.'),
         '60 mV per decade', idea,
         count('How many 60 mV steps (decades) is that?', `${60 * k} / 60`, k),
         count('Each decade is ×10, so the current grows by:', `10^${k}`, 10 ** k));
     }
-    const ratio = pick(r, tier(d, [10], [100, 1000, 2], [8, 50, 4]));
+    const ratio = pick(r, tier(d, [10], [100, 1000, 2, 5, 20, 50], [8, 50, 4, 6, 30, 1000, 3, 7]));
     const dv = VT * Math.log(ratio) * 1000;
     return walk(ask(`At room temperature (V_T = 25.85 mV), how much more forward voltage makes a diode carry ${ratio}× the current, in mV?`, qty(dv, 'mV', 0.02), `ΔV = V_T·ln(${ratio}) = ${sig(dv)} mV. (Bandgap references use exactly this ΔV between two diodes: it is proportional to temperature.)`, 'I ∝ e^(V/V_T) → ΔV = V_T ln(ratio).'),
       'the diode equation', idea,
@@ -352,13 +352,21 @@ export const electronicsPractice = practice('practice-electronics', 'Amplifier D
       calc('The λ correction (1 + λ·V_DS,out)/(1 + λ·V_DS,ref):', `(1 + ${lam}×${v2}) / (1 + ${lam}×${v1})`, k, '', sig(k, 4), 0.002),
       calc('Multiply:', `${sig(Iout)} × ${sig(k, 4)}`, I, 'uA', sig(I, 4), 0.01));
   },
-  (r) => {
+  (r, d) => {
     const stages = [
-      ['common source', 'High voltage gain, inverting', ['Gain ≈ 1, low output resistance (a buffer)', 'Low input resistance, non-inverting gain'], ['the gate', 'the drain'], 'the drain current, set by the gate, flows through the load: big gain, and rising input pulls the drain down (inverting)'],
-      ['common drain (source follower)', 'Gain ≈ 1, low output resistance (a buffer)', ['High voltage gain, inverting', 'Low input resistance, non-inverting gain'], ['the gate', 'the source'], 'the source just follows the gate, one V_GS below it: gain ≈ 1, and a source is a low-resistance node'],
-      ['common gate', 'Low input resistance, non-inverting gain', ['High voltage gain, inverting', 'Gain ≈ 1, low output resistance (a buffer)'], ['the source', 'the drain'], 'looking into a source you see only 1/g_m (low), and pushing the source down pulls the drain down too (non-inverting)'],
+      ['common source', 'High voltage gain, inverting', ['Gain ≈ 1, low R_out (buffer)', 'Low R_in, non-inverting gain'], ['the gate', 'the drain', 'the source'], 'the drain current, set by the gate, flows through the load: big gain, and rising input pulls the drain down (inverting)'],
+      ['common drain (source follower)', 'Gain ≈ 1, low R_out (buffer)', ['High voltage gain, inverting', 'Low R_in, non-inverting gain'], ['the gate', 'the source', 'the drain'], 'the source just follows the gate, one V_GS below it: gain ≈ 1, and a source is a low-resistance node'],
+      ['common gate', 'Low R_in, non-inverting gain', ['High voltage gain, inverting', 'Gain ≈ 1, low R_out (buffer)'], ['the source', 'the drain', 'the gate'], 'looking into a source you see only 1/g_m (low), and pushing the source down pulls the drain down too (non-inverting)'],
+      ['common emitter', 'High voltage gain, inverting', ['Gain ≈ 1, low R_out (buffer)', 'Low R_in, non-inverting gain'], ['the base', 'the collector', 'the emitter'], 'the collector current, set by the base, flows through the load: big gain, and a rising base voltage pulls the collector down (inverting)'],
+      ['emitter follower (common collector)', 'Gain ≈ 1, low R_out (buffer)', ['High voltage gain, inverting', 'Low R_in, non-inverting gain'], ['the base', 'the emitter', 'the collector'], 'the emitter follows the base one V_BE (about 0.7 V) below it: gain ≈ 1 with a low output resistance'],
+      ['common base', 'Low R_in, non-inverting gain', ['High voltage gain, inverting', 'Gain ≈ 1, low R_out (buffer)'], ['the emitter', 'the collector', 'the base'], 'looking into an emitter you see about 1/g_m (low), and the collector follows the emitter up (non-inverting)'],
     ] as const;
-    const [name, right, wrong, [inp, out], why] = pick(r, stages);
+    const [name, right, wrong, [inp, out, common], why] = pick(r, stages);
+    if (d === 1) return walk(mcs(r, `In a ${name} stage, which terminal is common (tied to AC ground)?`, common, [inp, out, 'the substrate'], 'The common terminal is the one that stays at AC ground. The input and output are the other two.'),
+      'the three single-transistor stages', 'Name a stage by the terminal it has in COMMON (tied to AC ground). The other two terminals are the input and the output.',
+      choice(`In a ${name} stage, the input goes to:`, inp, [out, common]),
+      choice('And the output is taken from:', out, [common, inp]),
+      `So ${why}.`);
     return walk(mcs(r, `Which describes a ${name} stage?`, right, wrong, 'CS: the gain stage. CD: the buffer. CG: the current buffer, used in cascodes and for low-impedance inputs like RF.'),
       'the three single-transistor stages', 'Name a stage by the terminal it has in COMMON (tied to AC ground). The other two terminals are the input and the output. Where the signal goes in and comes out decides its personality: CS = gain, CD = buffer, CG = low input resistance.',
       choice(`In a ${name} stage, the input goes to:`, inp, ['the drain', 'the substrate', inp === 'the gate' ? 'the source' : 'the gate'].filter((x) => x !== inp).slice(0, 2)),
@@ -404,7 +412,7 @@ export const semiPractice = practice('practice-semi', 'Silicon Drills', 'carrier
       calc('Net doping, N_D - N_A:', `${sci(N, 0)} - ${sci(NA, 1)}`, n, '', sci(n, 2), 0.02));
   },
   (r, d) => {
-    const T = tier(d, 300, pick(r, [77, 400, 4]), pick(r, [358, 233, 398]));
+    const T = pick(r, tier(d, [280, 290, 300, 310, 320], [77, 400, 4, 150, 250], [358, 233, 398, 100, 450, 320]));
     const vt = 8.617e-5 * T * 1000;
     const shown = d === 3 ? `${T - 273} °C` : `${T} K`;
     return walk(ask(`Thermal voltage kT/q at ${shown}, in mV?`, qty(vt, 'mV', 0.02), `kT/q = 0.08617 mV/K × ${T} K = ${sig(vt)} mV.${T < 10 ? ' At 4 K, thermal energy is tiny: that is why qubits and cryo-CMOS behave so differently.' : ''}`, 'k/q = 86.17 µV per kelvin.'),
@@ -413,7 +421,7 @@ export const semiPractice = practice('practice-semi', 'Silicon Drills', 'carrier
       calc('Multiply by 0.08617 mV/K:', `0.08617 × ${T}`, vt, 'mV', undefined, 0.02));
   },
   (r, d) => {
-    const mats: [string, number][] = tier(d, [['Silicon', 1.12]], [['GaAs', 1.42], ['Germanium', 0.66], ['Silicon', 1.12]], [['GaN', 3.4], ['SiC', 3.26], ['InP', 1.34], ['InGaAs', 0.75]]);
+    const mats: [string, number][] = tier(d, [['Silicon', 1.12]], [['GaAs', 1.42], ['Germanium', 0.66], ['Silicon', 1.12], ['InAs', 0.36], ['GaP', 2.26], ['CdTe', 1.5]], [['GaN', 3.4], ['SiC', 3.26], ['InP', 1.34], ['InGaAs', 0.75], ['AlN', 6.2], ['Diamond', 5.5]]);
     const [m, eg] = pick(r, mats);
     return walk(ask(`${m} has a band gap of ${eg} eV. What is the longest wavelength of light it can absorb, in nm?`, qty(1240 / eg, 'nm', 0.02), `λ = hc/E = 1240/${eg} = ${sig(1240 / eg)} nm. ${eg > 3 ? 'That is ultraviolet: wide-bandgap materials also survive high voltage, which is why GaN and SiC power electronics exist.' : eg < 1 ? 'Infrared: that is why telecom photodetectors use it at 1310/1550 nm, where silicon is transparent.' : 'Photons with longer wavelengths pass straight through.'}`, 'λ(nm) ≈ 1240 / E(eV).'),
       'photon energy and wavelength', 'A photon is absorbed only if its energy is at least the band gap. Photon energy and wavelength are inversely related: E = hc/λ, which in handy units is λ(nm) = 1240 / E(eV). Longer wavelength = less energy, so the band gap sets the LONGEST wavelength absorbed.',
@@ -434,7 +442,7 @@ export const semiPractice = practice('practice-semi', 'Silicon Drills', 'carrier
         calc('Number of squares, L/W:', `${L} / ${W}`, L / W, '', sig(L / W)),
         calc('R = R_sheet × squares, in kΩ:', `${Rs} × ${sig(L / W)} / 1000`, (Rs * L) / W / 1000, 'kΩ', undefined, 0.02));
     }
-    const N = pick(r, [1e15, 1e16, 1e17]), mu = N >= 1e17 ? 800 : N >= 1e16 ? 1200 : 1350;
+    const N = pick(r, [1e15, 1e16, 1e17, 2e16, 5e15, 3e15]), mu = N >= 1e17 ? 800 : N >= 1e16 ? 1200 : 1350;
     const rho = 1 / (1.602e-19 * N * mu);
     return walk(ask(`n-type silicon, N_D = ${sci(N, 0)} cm⁻³, electron mobility ${mu} cm²/V·s. Resistivity, in Ω·cm?`, qty(rho, '', 0.03, sig(rho)), `ρ = 1/(q·n·µ) = 1/(1.602e-19 × ${sci(N, 0)} × ${mu}) = ${sig(rho)} Ω·cm.`, 'ρ = 1/(q n µ).'),
       'resistivity from doping', `${idea} Conductivity σ = q·n·µ: charge per carrier × carriers per cm³ × how fast they move. Resistivity is its inverse.`,
@@ -450,32 +458,35 @@ export const semiPractice = practice('practice-semi', 'Silicon Drills', 'carrier
       calc('N_A × N_D / n_i² (n_i² = 1e20):', `${sci(NA, 0)} × ${sci(ND, 0)} / 1e20`, (NA * ND) / 1e20, '', sci((NA * ND) / 1e20, 0)),
       calc('Natural log of that:', `ln(${sci((NA * ND) / 1e20, 0)})`, Math.log((NA * ND) / 1e20), '', sig(Math.log((NA * ND) / 1e20))),
       calc('Times V_T = 0.02585 V:', `0.02585 × ${sig(Math.log((NA * ND) / 1e20))}`, vbi, 'V', undefined, 0.02));
-    const k = pick(r, [4, 9]);
+    const k = pick(r, [2, 4, 9, 16, 25, 36]);
     return walk(ask(`A one-sided junction's depletion width ∝ √(V_bi + V_R). Reverse bias is raised so that V_bi + V_R becomes ${k}× larger. How does the junction capacitance change? (factor, e.g. 0.5)`, qty(1 / Math.sqrt(k), '', 0.02, sig(1 / Math.sqrt(k))), `W grows by √${k} = ${Math.sqrt(k)}, and C = εA/W shrinks by the same factor: ${sig(1 / Math.sqrt(k))}×. This voltage-dependent capacitance is a varactor, the tuning element in every LC oscillator.`, 'C ∝ 1/W ∝ 1/√(V).'),
       'junction capacitance scaling', 'The depletion region acts like the gap in a parallel-plate capacitor: C = εA/W. More reverse bias widens the gap as √(V_bi + V_R), so the capacitance falls as 1/√(V_bi + V_R).',
       calc('The width grows by √(factor):', `√${k}`, Math.sqrt(k), '', String(Math.sqrt(k)), 0.001),
       calc('C ∝ 1/W, so the capacitance changes by:', `1 / ${Math.sqrt(k)}`, 1 / Math.sqrt(k), '', sig(1 / Math.sqrt(k)), 0.02));
   },
-  (r) => {
+  (r, d) => {
     const qs = [
-      ['Phosphorus is added to silicon. The result is…', 'n-type: electrons are the majority carriers', ['p-type: holes are the majority carriers', 'Intrinsic: nothing changes', 'An insulator'],
+      ['Phosphorus is added to silicon. The result is…', 'n-type, electrons in the majority', ['p-type, holes in the majority', 'Still intrinsic, nothing changes', 'Compensated: no net carriers'],
         'dopants and carriers', 'Silicon has 4 outer electrons. A dopant with 5 (group V: phosphorus, arsenic) has one spare electron to give away: a donor. One with 3 (group III: boron) is one short and creates a hole: an acceptor.',
-        ['How many outer (valence) electrons does phosphorus have?', '5, one more than silicon', ['3, one fewer than silicon', '4, the same as silicon']]],
-      ['Why does a PN junction block reverse current?', 'The depletion region has almost no free carriers, and the built-in field sweeps away the few minority carriers', ['The p side has no atoms', 'The oxide is in the way', 'Holes are too slow'],
+        ['How many outer (valence) electrons does phosphorus have?', '5, one more than silicon', ['3, one fewer than silicon', '4, the same as silicon']], 'Its spare electron is donated: electrons become the majority carriers.'],
+      ['Why does a PN junction block reverse current?', 'Its depletion region has no free carriers', ['The p side has no free electrons at all', 'A thin oxide layer forms at the junction', 'Holes are far too slow to carry any current'],
         'the depletion region', 'At a PN junction, electrons and holes near the boundary recombine, leaving a region with no free carriers (depleted), just fixed charged atoms. Those charges create a built-in field. Reverse bias widens this carrier-free zone.',
-        ['What is in the depletion region?', 'Fixed ionized dopant atoms, but almost no free carriers', ['A thin oxide layer', 'Extra free electrons']]],
-      ['Why is silicon, not germanium, used for almost every chip?', 'Its larger band gap keeps leakage low, and it grows a superb native oxide (SiO₂)', ['It conducts better', 'It is magnetic', 'It has a smaller band gap'],
+        ['What is in the depletion region?', 'Fixed ions, almost no free carriers', ['A thin layer of grown oxide', 'Many free electrons']], 'Almost no free carriers, and the built-in field sweeps away the few minority carriers that arrive.'],
+      ['Why is silicon, not germanium, used for almost every chip?', 'A larger band gap and a superb native oxide', ['It conducts better than germanium', 'Its carriers are more mobile than germanium\'s', 'Its smaller band gap switches faster'],
         'band gap and oxide', 'Leakage comes from carriers thermally excited across the band gap: a larger gap means exponentially fewer of them. Silicon (1.12 eV) beats germanium (0.66 eV). And silicon grows SiO₂, a near-perfect insulator, just by heating it in oxygen.',
-        ['A larger band gap means thermally generated carriers are:', 'Far fewer, so leakage is lower', ['More common, so leakage is higher', 'Unchanged']]],
-      ['What carries current in the valence band?', 'Holes: the missing electrons, which move like positive charges', ['Protons', 'Photons', 'Neutrons'],
+        ['A larger band gap means thermally generated carriers are:', 'Far fewer, so leakage is lower', ['More common, so leakage is higher', 'Unchanged']], 'The larger gap (1.12 eV against 0.66 eV) keeps leakage low, and SiO₂ grows just by heating silicon in oxygen.'],
+      ['What carries current in the valence band?', 'Holes, the missing electrons', ['Fixed ionized dopant atoms', 'Positive ions in the lattice', 'Electrons from the conduction band'],
         'holes', 'In the valence band almost every state is full. When one electron is missing, neighbouring electrons can hop into the gap, so the gap moves the opposite way. It is easier to track the gap, the hole, as a positive charge moving.',
-        ['When a neighbouring electron fills a hole, the hole:', 'Moves the other way, like a positive charge', ['Disappears for good', 'Turns into a proton']]],
-      ['What happens to intrinsic carrier density n_i as temperature rises?', 'It rises exponentially, so leakage rises too', ['It falls', 'It stays constant', 'It becomes negative'],
+        ['When a neighbouring electron fills a hole, the hole:', 'Moves the opposite way', ['Disappears along with it', 'Moves the same way as the electron']], 'A hole moves like a positive charge.'],
+      ['What happens to intrinsic carrier density n_i as temperature rises?', 'It rises exponentially', ['It falls slowly', 'It stays roughly constant', 'It rises linearly with T'],
         'thermal generation', 'Heat gives electrons energy. The chance that one gets enough to jump the band gap grows exponentially with temperature (like e^(-Eg/2kT)), so n_i, and every leakage current that depends on it, climbs fast when the chip warms up.',
-        ['As temperature rises, electrons get:', 'More thermal energy, so more of them jump the gap', ['Less energy', 'Heavier']]],
+        ['As temperature rises, electrons get:', 'More thermal energy', ['Less thermal energy', 'A wider band gap to cross']], 'More of them jump the gap, so every leakage current that depends on n_i rises too.'],
     ] as const;
-    const [q, right, wrong, method, idea, [sq, sr, sw]] = pick(r, qs);
-    return walk(mcs(r, q, right, wrong, `${right}.`), method, idea, choice(sq, sr, sw));
+    const extra = [
+      ...atLevel(1, [['What does a dopant do to a semiconductor?', 'It adds free carriers', ['It adds an insulating layer', 'It removes all carriers', 'It changes the band gap of the whole chip'], 'doping', 'Doping on purpose adds free carriers: donors add electrons and acceptors add holes. That is how the conductivity of silicon is set, from almost nothing up to much higher.', ['Doping is done to:', 'Set how many carriers there are', ['Make an insulator', 'Remove the band gap']]]]),
+      ...atLevel(3, [['Why does a Schottky diode switch off faster than a PN diode?', 'No stored minority charge to remove', ['It has a thicker depletion region', 'It conducts through holes only, not electrons', 'It has a larger band gap than plain silicon has'], 'Schottky diodes', 'A Schottky diode is a metal on n-type silicon. Its current is carried by majority carriers only, so no minority charge is stored that must be swept out when it switches off. The price is higher leakage.', ['A Schottky diode carries current with:', 'Majority carriers only', ['Minority carriers only', 'Neither']]]]),
+    ];
+    return concept(r, [...atLevel(2, qs), ...extra], (right) => `${right}.`, d);
   },
 ]);
 
@@ -483,7 +494,7 @@ export const semiPractice = practice('practice-semi', 'Silicon Drills', 'carrier
 
 export const mosphysPractice = practice('practice-mosphys', 'Transistor Physics Drills', 'Cox, regions, subthreshold leakage, short-channel effects', [
   (r, d) => {
-    const S = tier(d, 60, pick(r, [70, 80, 90]), pick(r, [65, 75, 85]));
+    const S = tier(d, pick(r, [60, 66]), pick(r, [70, 80, 90, 100]), pick(r, [65, 75, 85, 95, 105, 115]));
     const idea = 'Below threshold, drain current changes exponentially with gate voltage. The subthreshold swing S is how many mV of gate voltage change the current by 10× (one decade). The ideal at room temperature is V_T·ln10 ≈ 59.5 mV/decade; real devices are n times worse.';
     if (d < 3) {
       const dv = pick(r, [60, 100, 120, 180]);
@@ -517,16 +528,16 @@ export const mosphysPractice = practice('practice-mosphys', 'Transistor Physics 
       calc('The gate area W × L, in µm²:', `${W} × ${L}`, W * L, '', sig(W * L)),
       calc('C = C_ox × area, in fF:', `${sig(cfu)} × ${sig(W * L)}`, cfu * W * L, 'fF', sig(cfu * W * L), 0.02));
   },
-  (r) => {
-    const vt = pick(r, [0.3, 0.4]), vgs = pick(r, [0.2, 0.6, 0.8, 1.0]), vds = pick(r, [0.05, 0.2, 0.5, 1.0]);
+  (r, d) => {
+    const vt = pick(r, [0.3, 0.4]), vgs = pick(r, d === 1 ? [0.2, 0.6, 1.0] : [0.2, 0.6, 0.8, 1.0, 1.2]), vds = pick(r, d === 3 ? [0.05, 0.2, 0.3, 0.4, 0.5, 1.0, 0.7] : [0.05, 0.2, 0.5, 1.0]);
     const region = vgs <= vt ? 0 : vds >= vgs - vt ? 2 : 1;
-    const names = ['Cut-off (subthreshold)', 'Linear (triode)', 'Saturation'];
+    const names = ['Cut-off', 'Triode (linear)', 'Saturation'];
     const on = vgs > vt;
     return walk(mc(`NMOS with Vt = ${vt} V, V_GS = ${vgs} V, V_DS = ${vds} V. Region?`, names, region, region === 0 ? `V_GS ≤ Vt: no strong channel, only subthreshold current.` : `V_ov = ${sig(vgs - vt)} V; V_DS ${region === 2 ? '≥' : '<'} V_ov, so ${names[region].toLowerCase()}.`),
       'two comparisons decide the region', 'First: is the gate above threshold (V_GS > Vt)? If not, the transistor is cut off. If it is, compute the overdrive V_ov = V_GS - Vt and compare it with V_DS. A small V_DS (below V_ov) leaves the channel intact: linear, like a resistor. V_DS ≥ V_ov pinches the channel off at the drain: saturation, like a current source.',
-      choice(`Is V_GS = ${vgs} V above Vt = ${vt} V?`, on ? 'Yes' : 'No', [on ? 'No' : 'Yes'], on ? '' : 'So there is no channel: cut-off.'),
+      choice(`Is V_GS = ${vgs} V above Vt = ${vt} V?`, on ? 'Yes, above it' : 'No, not above', [on ? 'No, not above' : 'Yes, above it'], on ? '' : 'So there is no channel: cut-off.'),
       on && calc('The overdrive, V_ov = V_GS - Vt:', `${vgs} - ${vt}`, vgs - vt, 'V', sig(vgs - vt), 0.001),
-      on && choice(`Is V_DS = ${vds} V at least V_ov = ${sig(vgs - vt)} V?`, vds >= vgs - vt ? 'Yes: saturation' : 'No: linear', [vds >= vgs - vt ? 'No: linear' : 'Yes: saturation']));
+      on && choice(`Is V_DS = ${vds} V at least V_ov = ${sig(vgs - vt)} V?`, vds >= vgs - vt ? 'Yes: saturation' : 'No: linear mode', [vds >= vgs - vt ? 'No: linear mode' : 'Yes: saturation']));
   },
   (r, d) => {
     const a = tier(d, 2, 2, pick(r, [1.2, 1.3, 1.5]));
@@ -546,21 +557,20 @@ export const mosphysPractice = practice('practice-mosphys', 'Transistor Physics 
   (r, d) => {
     if (d < 3) {
       const qs = [
-        ['What does DIBL do?', 'A high drain voltage lowers the source barrier, reducing Vt and raising leakage', ['It raises Vt', 'It only affects PMOS', 'It changes the oxide thickness'],
+        ['What does DIBL do?', 'Lowers Vt at high V_DS', ['Raises Vt at high drain voltage', 'Affects only PMOS devices', 'Thins the gate oxide over time'],
           'drain-induced barrier lowering', 'In a long transistor only the gate controls the energy barrier between source and channel. In a short one, the drain is close enough that its field reaches the source end too. A high drain voltage pulls that barrier down, as if the gate were pushing harder.',
-          ['A lower source barrier means:', 'More carriers get over it: lower effective Vt, more leakage', ['Fewer carriers flow', 'The gate oxide gets thinner']]],
-        ['Why do short-channel devices have large λ (low output resistance)?', 'The drain has more control over the channel, so I_D keeps rising with V_DS', ['The oxide is thicker', 'Mobility is higher', 'The gate is metal'],
+          ['A lower source barrier means:', 'More carriers get over it', ['Fewer carriers flow', 'The oxide thins']], 'A high drain voltage lowers the source barrier, reducing the effective Vt and raising leakage.'],
+        ['Why do short-channel devices have large λ (low output resistance)?', 'The drain shares control of the channel', ['Short channels have a thicker gate oxide', 'Mobility is higher in short channels', 'The metal gate has lower resistance'],
           'channel-length modulation', 'In saturation the current should be set by the gate alone. But raising V_DS shortens the effective channel (the pinch-off point moves), and in a short device that shortening is a big fraction of the length, so the drain keeps changing the current.',
-          ['In an ideal current source, raising V_DS changes the current:', 'Not at all', ['A lot']]],
-        ['What is velocity saturation?', 'At high fields carriers stop speeding up, so I_D grows roughly linearly with V_ov instead of quadratically', ['Electrons move faster than light', 'Holes stop moving entirely', 'Current stops at high V_DS'],
+          ['In an ideal current source, raising V_DS changes the current:', 'Not at all', ['In proportion to V_DS']], 'So I_D keeps rising with V_DS.'],
+        ['What is velocity saturation?', 'Carrier speed caps out at high fields', ['Mobility keeps rising with field', 'Current falls to zero at high V_DS', 'The channel pinches off at the drain'],
           'velocity saturation', 'Carrier speed is mobility × field, until the field gets very high: then collisions cap the speed at about 1e7 cm/s. Short channels have huge fields, so carriers hit that cap and the square law flattens toward linear.',
-          ['At very high electric fields, carrier speed:', 'Levels off at a maximum', ['Keeps rising forever', 'Drops to zero']]],
-        ['Why did the industry move to FinFETs and nanosheets?', 'Wrapping the gate around the channel restores gate control and cuts leakage at short lengths', ['They are cheaper to make', 'They need no oxide', 'They remove the need for PMOS'],
+          ['At very high electric fields, carrier speed:', 'Levels off at a maximum', ['Keeps rising in proportion', 'Drops to zero']], 'So I_D grows roughly linearly with V_ov instead of quadratically.'],
+        ['Why did the industry move to FinFETs and nanosheets?', 'The wrapped gate restores channel control', ['They are cheaper to make than planar', 'They need no gate oxide, so they switch faster', 'They remove the need for PMOS devices'],
           'gate control', 'Short-channel problems (DIBL, leakage, poor swing) all come from the drain competing with the gate for control of the channel. A gate on one side of a planar channel loses; a gate wrapped around three or four sides wins back control.',
-          ['A gate that surrounds the channel on more sides gives:', 'Stronger control, so less leakage', ['Weaker control', 'No change']]],
+          ['A gate that surrounds the channel on more sides gives:', 'Stronger control', ['Weaker control', 'No change in control']], 'Wrapping the gate around the channel cuts leakage at short lengths.'],
       ] as const;
-      const [q, right, wrong, method, idea, [sq, sr, sw]] = pick(r, qs);
-      return walk(mcs(r, q, right, wrong, `${right}.`), method, idea, choice(sq, sr, sw));
+      return concept(r, qs, (right) => `${right}.`);
     }
     const vt0 = pick(r, [0.35, 0.4]), g = pick(r, [0.3, 0.4, 0.5]), phi = 0.7, vsb = pick(r, [0.3, 0.5, 1.0]);
     const root = Math.sqrt(phi + vsb) - Math.sqrt(phi);
@@ -593,7 +603,7 @@ export const kclBoss = boss({
     { t: 'gen', make: () => ask('What is the Thevenin resistance seen looking into node A (R1 = R2 = 350 Ω, supply shorted), in Ω?', qty(175, 'Ω', 0.01), 'R1 ∥ R2 = 175 Ω.') },
     { t: 'gen', make: (r) => { const Rin = pick(r, [1e3, 2e3, 5e3]); const va = (1.65 * Rin) / (175 + Rin); return ask(`Someone connects node A to a cheap amplifier whose input resistance is ${K(Rin)} to ground. What voltage does node A actually sit at, in V?`, qty(va, 'V', 0.01, sig(va, 4)), `Thevenin: 1.65 V behind 175 Ω, into ${K(Rin)}: 1.65·${Rin}/(175 + ${Rin}) = ${sig(va, 4)} V. That ${sig((1.65 - va) * 1000)} mV error dwarfs the strain signal. Loading, not drift.`); } },
     { t: 'gen', make: (r) => { const dT = pick(r, [10, 20, 40]); const tc = 50e-6; const dR = 350 * tc * dT; const vb = (3.3 * (350 + dR)) / (700 + dR); return ask(`The gauge wires add a temperature coefficient: Rg rises by 50 ppm/°C. After a ${dT} °C warm-up, what false V_out appears (no strain), in mV?`, qty((1.65 - vb) * 1000, 'mV', 0.03, sig((1.65 - vb) * 1000)), `ΔR = 350 × 50e-6 × ${dT} = ${sig(dR)} Ω; V_B = ${sig(vb, 6)} V; V_out = ${sig((1.65 - vb) * 1000)} mV. That is the drift!`); } },
-    mc('Which bridge change cancels the temperature drift best?', ['Put an identical dummy gauge (unstrained, same temperature) in place of R3', 'Raise the supply voltage', 'Use smaller resistors everywhere', 'Add a capacitor across R1'], 0, 'A dummy gauge sees the same temperature, so both halves of the bridge move together and the difference cancels. That is superposition working for you.'),
+    mc('Which bridge change cancels the temperature drift best?', ['Swap R3 for an identical dummy gauge', 'Raise the bridge supply voltage', 'Use lower-value resistors in every arm', 'Add a low-pass capacitor across R1'], 0, 'Put an identical dummy gauge (unstrained, same temperature) in place of R3. A dummy gauge sees the same temperature, so both halves of the bridge move together and the difference cancels. That is superposition working for you.'),
     { t: 'gen', make: (r) => { const Vs = pick(r, [3.3, 5]); return ask(`How much power does the whole bridge (four 350 Ω arms, two parallel legs of 700 Ω) draw from ${Vs} V, in mW?`, qty(((Vs * Vs) / 350) * 1000, 'mW', 0.01), `Two 700 Ω legs in parallel = 350 Ω. P = ${Vs}²/350 = ${sig(((Vs * Vs) / 350) * 1000)} mW. On a battery sensor you would pulse the bridge supply.`); } },
   ],
   recap: ['Bridges turn tiny resistance changes into differential voltages.', 'Thevenin resistance explains loading errors.', 'Matched dummy elements cancel common-mode drift.'],
@@ -612,7 +622,7 @@ export const acBoss = boss({
     { t: 'gen', make: (r) => { const L = pick(r, [1, 2.2]) * 1e-6, C = pick(r, [1, 10]) * 1e-6; const f0 = 1 / (2 * Math.PI * Math.sqrt(L * C)); return ask(`The ringing comes from a ferrite (${eng(L, 'H')}) with a ${eng(C, 'F')} cap on the supply. Resonant frequency, in kHz?`, qty(f0 / 1000, 'kHz', 0.02), `f₀ = 1/(2π√LC) = ${eng(f0, 'Hz')}: right in or near the audio band.`); } },
     { t: 'gen', make: (r) => { const L = 1e-6, C = 10e-6, R = pick(r, [0.01, 0.05]); const Q = Math.sqrt(L / C) / R; return ask(`L = 1 µH, C = 10 µF, total series resistance ${R * 1000} mΩ. Q of the resonance?`, qty(Q, '', 0.02, sig(Q)), `Q = √(L/C)/R = ${sig(Math.sqrt(L / C))}/${R} = ${sig(Q)}: the supply noise at f₀ is amplified about ${sig(Q)}× (${sig(dB(Q))} dB).`); } },
     { t: 'gen', make: () => ask('What series resistance would bring that LC (1 µH, 10 µF) to Q = 1, in mΩ?', qty(Math.sqrt(1e-6 / 10e-6) * 1000, 'mΩ', 0.02), `Q = √(L/C)/R = 1 → R = √(L/C) = 316 mΩ. A tantalum or polymer cap's ESR, or a small series resistor, damps it.`) },
-    mc('Why is the codec\'s supply noise measured in dBV rms rather than peak volts?', ['Noise is random: rms adds meaningfully (in power) across sources and bandwidth, and dB spans the huge dynamic range', 'Peak volts are illegal', 'dBV is always larger', 'Because the ADC is digital'], 0, 'Random noise has no defined peak, and audio chains cover 120 dB of range. rms and dB are the natural units.'),
+    mc('Why is the codec\'s supply noise measured in dBV rms rather than peak volts?', ['Noise is random: rms adds in power', 'dBV always gives a larger number', 'Peak readings need a faster oscilloscope', 'The ADC only reports digital rms codes'], 0, 'Noise is random: rms adds meaningfully (in power) across sources and bandwidth, and dB spans the huge dynamic range. Random noise has no defined peak, and audio chains cover 120 dB of range. rms and dB are the natural units.'),
   ],
   recap: ['RC corner: fc = 1/(2πRC); 20 dB/decade per pole.', 'Resonance f₀ and Q; damp with R = √(L/C).', 'dB and rms are the language of signals.'],
 });
@@ -637,7 +647,7 @@ export const electronicsBoss = boss({
     { t: 'gen', make: (r) => { const I = pick(r, [100, 200]), vov = pick(r, [0.15, 0.2]); const gm = (2 * I) / vov / 1000, ro = 1 / (0.1 * I * 1e-3); const RD = 0.9 / (I * 1e-3); const A = gm * par(RD, ro); return ask(`You want the output to sit at 0.9 V, so R_D drops 0.9 V at ${I} µA. With r_o included, what is |A_v|?`, qty(A, '', 0.03, sig(A)), `R_D = 0.9 V/${I} µA = ${sig(RD)} kΩ; r_o = 1/(λI_D) = ${sig(ro)} kΩ; |A_v| = ${sig(gm)} mS × ${sig(par(RD, ro))} kΩ = ${sig(A)}.`); } },
     { t: 'gen', make: (r) => { const vov = pick(r, [0.15, 0.2]); const vmin = vov; return ask(`How low can the output swing before M1 leaves saturation, in mV? (V_DS ≥ V_ov)`, qty(vmin * 1000, 'mV', 0.01), `V_DS,min = V_ov = ${vov * 1000} mV. Headroom is the other half of analog design: small V_ov gives swing and g_m, but needs big devices.`); } },
     { t: 'gen', make: (r) => { const CL = pick(r, [0.5, 1, 2]) * 1e-12, I = pick(r, [100, 200]); const RD = 0.9 / (I * 1e-6); const f = 1 / (2 * Math.PI * RD * CL); return ask(`The output drives ${eng(CL, 'F')}. Ignoring r_o, where is the output pole (1/(2πR_D C_L)), in MHz?`, qty(f / 1e6, 'MHz', 0.02), `R_D = ${K(RD)}; f_p = 1/(2π·${K(RD)}·${eng(CL, 'F')}) = ${eng(f, 'Hz')}.`); } },
-    mc('The gain came out below target. Which change raises it without touching the current?', ['Lower V_ov (bigger W/L) and/or add a cascode to raise output resistance', 'Raise V_ov', 'Remove R_D', 'Use a source follower instead'], 0, 'Gain = g_m·R_out. For a fixed current, g_m rises as V_ov falls; a cascode multiplies r_o by roughly g_m·r_o.'),
+    mc('The gain came out below target. Which change raises it without touching the current?', ['Lower V_ov (bigger W/L) or add a cascode', 'Raise V_ov with a smaller W/L', 'Lower R_D to raise the headroom', 'Swap the stage for a source follower instead'], 0, 'Lower V_ov (bigger W/L) and/or add a cascode to raise the output resistance. Gain = g_m·R_out. For a fixed current, g_m rises as V_ov falls; a cascode multiplies r_o by roughly g_m·r_o.'),
   ],
   recap: ['Size from the square law.', 'Mirror ratios set bias currents.', 'Gain = g_m(R_D ∥ r_o); swing needs V_DS ≥ V_ov.', 'Output pole = 1/(2πR_out C_L).'],
 });
@@ -655,7 +665,7 @@ export const devicesBoss = boss({
     { t: 'gen', make: (r) => { const S = pick(r, [70, 80]), dvt = pick(r, [30, 50]); return ask(`The target spec is 3× lower I_off. How much must Vt rise, with S = ${S} mV/dec, in mV?`, qty(S * Math.log10(3), 'mV', 0.02), `S·log10(3) = ${sig(S * Math.log10(3))} mV. (A ${dvt} mV shift would give ${sig(10 ** (dvt / S))}×.) Every mV of Vt costs drive current: the eternal trade.`); } },
     { t: 'gen', make: (r) => { const tox = pick(r, [1.2, 1.5]); const cfu = ((3.9 * 8.854e-12) / (tox * 1e-9)) * 1e3; return ask(`C-V measurement gives an accumulation capacitance of ${sig(cfu)} fF/µm². Assuming SiO₂ (εr = 3.9), what is the equivalent oxide thickness, in nm?`, qty(tox, 'nm', 0.02, String(tox)), `t = ε₀εr/C = 3.9 × 8.854e-12 / (${sig(cfu)}e-3 F/m²) = ${tox} nm. Real high-k stacks are thicker physically; EOT is the SiO₂ thickness with the same C.`); } },
     { t: 'gen', make: (r) => { const hot = pick(r, [85, 105, 125]); const f = 2 ** ((hot - 25) / 10); return ask(`Leakage doubles every 10 °C. The 25 °C I_off passes spec with 20× margin. At ${hot} °C, how many times higher is I_off?`, qty(f, 'x', 0.03, sig(f)), `2^(${hot - 25}/10) = ${sig(f)}×. ${f > 20 ? 'The margin is gone at the hot corner: the device fails the spec.' : 'Still within the 20× margin.'}`); } },
-    mc('Short-channel devices show Vt dropping by 80 mV when V_DS goes from 0.05 V to 0.75 V. What is this, and what is the fix?', ['DIBL; improve electrostatic control (thinner body, fins/nanosheets, halo implants)', 'Velocity saturation; use longer wires', 'Body effect; ground the source', 'Hot carriers; lower the temperature'], 0, 'DIBL ≈ 80 mV / 0.7 V ≈ 115 mV/V: high. Better gate control of the channel is the cure.'),
+    mc('Short-channel devices show Vt dropping by 80 mV when V_DS goes from 0.05 V to 0.75 V. What is this, and what is the fix?', ['DIBL; improve gate control (fins, halos)', 'Velocity saturation; lower the drain bias', 'Body effect; tie the body to the source', 'Hot carriers; add a thicker gate oxide'], 0, 'DIBL: improve electrostatic control (thinner body, fins/nanosheets, halo implants). DIBL ≈ 80 mV / 0.7 V ≈ 115 mV/V: high. Better gate control of the channel is the cure.'),
   ],
   recap: ['√I_D extrapolation gives Vt.', 'S from decades per millivolt; I_off from S and Vt.', 'EOT from C-V; leakage at the hot corner.'],
 });

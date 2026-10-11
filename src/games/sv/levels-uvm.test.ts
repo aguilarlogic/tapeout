@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { rng } from '../../sim/harness';
 import { evaluate } from './check';
-import { TB_LEVELS } from './levels';
+import { UVM_LEVELS } from './levels-uvm';
 
+// The uvm (sequences, drivers, monitors, factory, phases) family of testbench missions. Split from levels.test.ts so the families run in parallel.
 describe('testbench missions', () => {
-  for (const level of TB_LEVELS) {
+  for (const level of UVM_LEVELS) {
     describe(level.id, () => {
       const seeds = level.tier === 'boss' ? [1, 2, 3, 4, 5] : [1, 2];
       it('has a brief, hints and a solvable reference solution', { timeout: 60000 }, () => {
