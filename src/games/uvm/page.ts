@@ -2,7 +2,7 @@ import { mentorSay } from '../../os/mentor';
 import { levelRecord } from '../../state';
 import { h, svg, toast } from '../../ui/dom';
 import { levelHeader } from '../../ui/layout';
-import { ArchPuzzle, CodePuzzle, OrderPuzzle, UVM_PUZZLES } from './puzzles';
+import { ArchPuzzle, CodePuzzle, misplacedMessage, OrderPuzzle, UVM_PUZZLES } from './puzzles';
 import { briefPanel, finish } from '../../ui/labkit';
 
 export function uvmPage(id: string): HTMLElement {
@@ -75,7 +75,8 @@ function archView(pz: ArchPuzzle, miss: () => void, finish: () => void): HTMLEle
           if (placed[s.id]) return;
           if (pz.palette.find((c) => c.id === picked)!.id !== s.answer) {
             miss();
-            toast(`${pz.palette.find((c) => c.id === picked)!.label} doesn't belong there.`, 'err');
+            const part = pz.palette.find((c) => c.id === picked)!;
+            toast(misplacedMessage(part.label, part.id), 'err');
             return;
           }
           placed[s.id] = picked;
