@@ -1,8 +1,10 @@
-import { complete, levelRecord, loadDraft, saveDraft } from '../../state';
+import { mentorSay } from '../../os/mentor';
+import { levelRecord, loadDraft, saveDraft } from '../../state';
 import { h, svg, toast } from '../../ui/dom';
-import { celebrate, levelHeader, nextHref } from '../../ui/layout';
+import { levelHeader } from '../../ui/layout';
 import { TIMING_LEVELS } from './levels';
 import { analyzeTiming, edgeKey, emptyTiming, TimingReport, TimingState, TNode } from './sta';
+import { finish } from '../../ui/labkit';
 
 const COL_W = 128, ROW_H = 80, PAD = 24;
 const FF_W = 80, GATE_W = 100;
@@ -211,10 +213,10 @@ export function timingPage(id: string): HTMLElement {
     if (!rep.passed) {
       const why = rep.wns < 0 ? 'setup is still violated' : rep.whs < 0 ? 'hold is still violated' : rep.conflicts.length ? 'the pipeline is inconsistent' : 'you are over the area or leakage budget';
       toast(`Can't sign off: ${why}.`, 'err');
+      mentorSay(`Not yet: ${why}. Click the worst path in the table and read its report from the top.`, 'concerned');
       return;
     }
-    const gained = complete(level.id, level.xp, rep.stars);
-    celebrate(rep.stars, gained, rep.stars < 3 ? [`Area ${rep.area} - hit ${level.par.area} or less for 3 stars.`] : [], nextHref(level.id));
+    finish(level.id, level.xp, rep.stars, [rep.stars < 3 ? `Area ${rep.area} - hit ${level.par.area} or less for 3 stars.` : '']);
   };
 
   const reset = () => {

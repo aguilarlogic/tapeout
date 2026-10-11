@@ -1,0 +1,100 @@
+// Small helpers shared by the practice banks and bosses.
+import type { Answer } from '../lessons/answers';
+import { choice, walk } from '../lessons/teach';
+import { mc, pick, type McStep } from '../lessons/types';
+import type { Difficulty } from './types';
+
+export const hex = (n: number, w = 2) => '0x' + n.toString(16).toUpperCase().padStart(w, '0');
+
+/** Engineering notation with an SI prefix: eng(0.0047, 'F') = "4.7 mF". */
+export const eng = (x: number, unit: string) => {
+  const a = Math.abs(x);
+  const [k, p] = a >= 1e9 ? [1e-9, 'G'] : a >= 1e6 ? [1e-6, 'M'] : a >= 1e3 ? [1e-3, 'k'] : a >= 1 || a === 0 ? [1, ''] : a >= 1e-3 ? [1e3, 'm'] : a >= 1e-6 ? [1e6, 'µ'] : a >= 1e-9 ? [1e9, 'n'] : a >= 1e-12 ? [1e12, 'p'] : [1e15, 'f'];
+  return `${+(x * k).toPrecision(3)} ${p}${unit}`;
+};
+
+/** Scientific notation without the plus sign: sci(1e15) = "1e15". */
+export const sci = (x: number, digits = 0) => x.toExponential(digits).replace('e+', 'e');
+
+/** A number rounded to 3 significant figures, as text. */
+export const sig = (x: number, n = 3) => String(+x.toPrecision(n));
+
+export const pow2 = (n: number) => (n ? n.toString(2).split('').reverse().map((b, i) => (b === '1' ? 2 ** i : 0)).filter(Boolean).reverse().join(' + ') : 'no powers of two at all');
+
+export const toSigned = (v: number, w: number) => (v >= 2 ** (w - 1) ? v - 2 ** w : v);
+
+/** Complementary error function, relative error below 1.2e-7 everywhere (Numerical Recipes erfcc). */
+export function erfc(x: number): number {
+  const z = Math.abs(x), t = 1 / (1 + 0.5 * z);
+  const v = t * Math.exp(-z * z - 1.26551223 + t * (1.00002368 + t * (0.37409196 + t * (0.09678418 + t * (-0.18628806 + t * (0.27886807 + t * (-1.13520398 + t * (1.48851587 + t * (-0.82215223 + t * 0.17087277)))))))));
+  return x >= 0 ? v : 2 - v;
+}
+
+/** Standard normal CDF Φ(z). */
+export const phi = (z: number) => 0.5 * erfc(-z / Math.SQRT2);
+
+/** One-sided upper tail 1 - Φ(z), accurate far out (6σ and beyond). */
+export const tail = (z: number) => 0.5 * erfc(z / Math.SQRT2);
+
+/** n choose k. */
+export const choose = (n: number, k: number) => {
+  let c = 1;
+  for (let i = 0; i < k; i++) c = (c * (n - i)) / (i + 1);
+  return Math.round(c);
+};
+
+/** Shuffle a copy (Fisher-Yates) with the given RNG. */
+export const shuffle = <T>(r: () => number, xs: readonly T[]): T[] => {
+  const a = [...xs];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(r() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+};
+
+/** Multiple choice with the right answer shuffled among distractors. Returns [options, index of the answer]. */
+export const shuffled = (r: () => number, right: string, wrong: readonly string[]): [string[], number] => {
+  const opts = shuffle(r, [right, ...wrong]);
+  return [opts, opts.indexOf(right)];
+};
+
+
+/** Multiple choice whose options are shuffled, so the answer is never "always b". */
+export const mcs = (r: () => number, q: string, right: string, wrong: readonly string[], why: string): McStep => {
+  const [opts, a] = shuffled(r, right, wrong);
+  return mc(q, opts, a, why);
+};
+
+/**
+ * A concept question with its walkthrough: [question, right, wrong, method, idea, [step question, step right, step
+ * wrong], because?, level?]. Keep the options short and parallel; the reasoning goes in `because` (use '' for none),
+ * shown after answering (the idea stands in when it is empty). `level` (1-3) is the difficulty the row suits; untagged rows are level 2.
+ */
+export type ConceptQ = readonly [string, string, readonly string[], string, string, readonly [string, string, readonly string[]], string?, Difficulty?];
+
+/** A concept draw uses rows of the asked level, widened one level at a time until it has at least this many rows. */
+export const CONCEPT_POOL = 6;
+
+/** Pick one concept question at difficulty d and attach its walkthrough: the method, the idea, and one reasoning step. */
+export const concept = (r: () => number, qs: readonly ConceptQ[], why: (right: string) => string, d: Difficulty = 2) => {
+  const level = (row: ConceptQ) => row[7] ?? 2;
+  let rows = qs;
+  for (let w = 0; w <= 2; w++) {
+    const near = qs.filter((row) => Math.abs(level(row) - d) <= w);
+    if (near.length >= Math.min(CONCEPT_POOL, qs.length)) { rows = near; break; }
+  }
+  const [q, right, wrong, method, idea, [sq, sr, sw], because] = pick(r, rows);
+  return walk(mcs(r, q, right, wrong, `${why(right)} ${because || idea}`), method, idea, choice(sq, sr, sw));
+};
+
+/** Exact text answer, ignoring whitespace and quote style: exact("[1, 2]") accepts "[1,2]". */
+export const exact = (canonical: string, ...alts: string[]): Answer => {
+  const n = (s: string) => s.replace(/\s+/g, '').replace(/"/g, "'");
+  const set = [canonical, ...alts].map(n);
+  return { canonical, check: (s) => !!s.trim() && set.includes(n(s)) };
+};
+
+/** Tag every row of a concept bank with one difficulty level (see concept()). */
+export const atLevel = (level: Difficulty, rows: readonly ConceptQ[]): ConceptQ[] =>
+  rows.map((row) => [row[0], row[1], row[2], row[3], row[4], row[5], row[6] ?? '', level]);

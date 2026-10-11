@@ -1,6 +1,7 @@
 // Runs a player's design and a golden reference side by side on the same stimulus
 // and reports every output mismatch, like a self-checking testbench with a scoreboard.
 
+import { mulberry32 } from '../lib/rng';
 import { Design, Lint } from './simulator';
 import { VerilogError } from './lexer';
 
@@ -125,16 +126,7 @@ export function run(userSrc: string, goldenSrc: string, stim: Stimulus): RunResu
 }
 
 /** Small deterministic PRNG so every run of a level uses the same "random" stimulus. */
-export function rng(seed: number): () => number {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
+export const rng = mulberry32;
 
 export function randInt(r: () => number, maxExclusive: number): number {
   return Math.floor(r() * maxExclusive);

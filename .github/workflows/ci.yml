@@ -2,7 +2,15 @@ name: CI
 
 on:
   push:
+    # Pushes to the default branch. The default branch is claude/serene-gates-uei2k6, so it is listed beside main.
+    branches: [main, claude/serene-gates-uei2k6]
+  # Pull requests (any base branch) run once per push to the PR branch, via the concurrency group below.
   pull_request:
+
+# A new push to the same ref cancels the run that is still going.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
@@ -16,3 +24,8 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+      # The whole game is one HTML file; download it from the run's summary page and double-click it.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tapeout-game
+          path: dist/index.html

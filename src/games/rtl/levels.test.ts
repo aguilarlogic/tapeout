@@ -80,6 +80,16 @@ describe('alternative correct solutions are accepted', () => {
   }
 });
 
+describe('the tiny CPU runs its program', () => {
+  it('OUT shows 1 to 10, then stays at 10', () => {
+    const level = byId('cpu-tiny');
+    const r = run(level.golden, level.golden, level.stimulus());
+    expect(r.error).toBeUndefined();
+    const shown = r.samples.map((s) => Number(s.out)).filter((v, i, all) => i === 0 || v !== all[i - 1]);
+    expect(shown).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+  });
+});
+
 describe('the checker catches classic mistakes', () => {
   it('registered edge detector is one cycle late', () => {
     const level = byId('edge');
@@ -104,6 +114,39 @@ describe('the checker catches classic mistakes', () => {
           default: s <= din ? 1 : 0; // forgets that "10" overlaps
         endcase
       assign found = s == 4;
+    endmodule`, level.golden, level.stimulus());
+    expect(r.ok).toBe(false);
+  });
+
+  it('regfile that ignores the write enable fails', () => {
+    const level = byId('regfile4');
+    const r = run(`module regfile4(input clk, input we, input [1:0] waddr, input [7:0] wdata, input [1:0] raddr1, input [1:0] raddr2, output [7:0] rdata1, output [7:0] rdata2);
+      reg [7:0] regs [0:3];
+      assign rdata1 = regs[raddr1];
+      assign rdata2 = regs[raddr2];
+      always @(posedge clk) regs[waddr] <= wdata;
+    endmodule`, level.golden, level.stimulus());
+    expect(r.ok).toBe(false);
+  });
+
+  it('ALU that reports subtract carry as "no borrow" fails', () => {
+    const level = byId('alu8');
+    const r = run(`module alu8(input [7:0] a, input [7:0] b, input [2:0] op, output reg [7:0] y, output zero, output reg carry);
+      wire [8:0] sum = {1'b0, a} + {1'b0, b};
+      wire [8:0] dif = {1'b0, a} - {1'b0, b};
+      assign zero = (y == 8'd0);
+      always @(*) begin
+        y = 8'd0;
+        carry = 1'b0;
+        case (op)
+          3'd0: begin y = sum[7:0]; carry = sum[8]; end
+          3'd1: begin y = dif[7:0]; carry = ~dif[8]; end
+          3'd2: y = a & b;
+          3'd3: y = a | b;
+          3'd4: y = a ^ b;
+          default: y = 8'd0;
+        endcase
+      end
     endmodule`, level.golden, level.stimulus());
     expect(r.ok).toBe(false);
   });

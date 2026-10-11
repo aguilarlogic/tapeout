@@ -54,6 +54,8 @@ const SHIFT = new Set(['<<', '>>', '<<<', '>>>']);
 
 export const mask = (w: number): bigint => (1n << BigInt(w)) - 1n;
 
+export interface DesignState { values: Map<string, bigint>; mems: Map<string, bigint[]>; seen: (bigint[] | undefined)[] }
+
 export class Design {
   readonly name: string;
   readonly signals = new Map<string, Signal>();
@@ -840,6 +842,21 @@ export class Design {
       this.settle();
     }
     throw new VerilogError('clock edges kept triggering each other (a generated clock loop?)', 0);
+  }
+
+  /** Copy of all state, so a search (bounded model checking) can backtrack. */
+  saveState(): DesignState {
+    return {
+      values: new Map(this.values),
+      mems: new Map([...this.mems].map(([k, v]) => [k, v.slice()])),
+      seen: [...this.combProcs, ...this.seqProcs].map((p) => p.lastSeen),
+    };
+  }
+
+  loadState(st: DesignState): void {
+    this.values = new Map(st.values);
+    this.mems = new Map([...st.mems].map(([k, v]) => [k, v.slice()]));
+    [...this.combProcs, ...this.seqProcs].forEach((p, i) => { p.lastSeen = st.seen[i]; });
   }
 
   get(name: string): bigint {

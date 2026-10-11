@@ -1,10 +1,12 @@
-import { complete, levelRecord, loadDraft, saveDraft } from '../../state';
+import { mentorSay } from '../../os/mentor';
+import { levelRecord, loadDraft, saveDraft } from '../../state';
 import { h, toast } from '../../ui/dom';
-import { celebrate, levelHeader, nextHref } from '../../ui/layout';
+import { levelHeader } from '../../ui/layout';
 import {
   analyze, Analysis, BoardState, compsOf, emptyBoard, erase, key, Layer, moveComp, netAt, padsOf, placeVia, route, unkey,
 } from './board';
 import { PCB_LEVELS } from './levels';
+import { finish } from '../../ui/labkit';
 
 type Tool = 'route' | 'via' | 'erase' | 'move';
 const CELL = 34;
@@ -78,16 +80,17 @@ export function pcbPage(id: string): HTMLElement {
     renderSide();
     if (!analysis.passed) {
       toast('DRC failed - fix the errors listed on the right.', 'err');
+      const first = analysis.issues.find((i) => i.severity === 'error') ?? analysis.issues[0];
+      mentorSay(first ? `DRC says: ${first.message}` : 'Some nets are still open. Follow the white ratsnest lines.', 'concerned');
       return;
     }
-    const gained = complete(level.id, level.xp, analysis.stars);
     const notes: string[] = [];
     if (analysis.stars < 3) {
       if (analysis.issues.length) notes.push('Clear the warnings too.');
       if (analysis.totalLength > level.par.length) notes.push(`Total length ${analysis.totalLength} - par is ${level.par.length}.`);
       if (analysis.totalVias > level.par.vias) notes.push(`${analysis.totalVias} vias - par is ${level.par.vias}.`);
     }
-    celebrate(analysis.stars, gained, notes, nextHref(level.id));
+    finish(level.id, level.xp, analysis.stars, notes);
   };
 
   // ---------------------------------------------------------------- side panel
@@ -347,7 +350,9 @@ export function pcbPage(id: string): HTMLElement {
 
   const onKey = (ev: KeyboardEvent) => {
     if (!document.body.contains(canvas)) { window.removeEventListener('keydown', onKey); return; }
-    if ((ev.target as HTMLElement)?.tagName === 'INPUT') return;
+    if (['INPUT', 'TEXTAREA', 'SELECT'].includes((ev.target as HTMLElement)?.tagName)) return;
+    const win = canvas.closest('.win');
+    if (win && !win.classList.contains('focused')) return; // another window has the keyboard
     if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'z') { ev.preventDefault(); doUndo(); return; }
     const k = ev.key.toLowerCase();
     if (k === 'r') setTool('route');

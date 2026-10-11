@@ -1,0 +1,13 @@
+/* The chip floorplan on Map.app. Colors come from the tokens in styles.css, so both themes follow. */
+.chip-figure { margin: 0; }
+.chip-name { margin: 0 0 6px; font-weight: 600; color: var(--text); }
+.chip-fp { display: block; width: 100%; height: auto; }
+.chip-box { fill: var(--panel); stroke: var(--border); stroke-width: 1.5; }
+.chip-blk.done .chip-box { stroke: var(--accent); stroke-width: 2.5; }
+.chip-blk.dim .chip-box { stroke-dasharray: 5 4; }
+.chip-blk.dim { opacity: 0.6; }
+.chip-blk-name { font-weight: 600; fill: var(--text); }
+.chip-slot { fill: var(--code-bg); stroke: var(--border); stroke-width: 1; }
+.chip-slot.half { fill: var(--accent); fill-opacity: 0.35; stroke: var(--accent); stroke-dasharray: 3 2; }
+.chip-slot.built { fill: var(--accent); stroke: var(--accent); }
+.chip-cap { margin: 8px 0 0; font-size: 0.9rem; color: var(--text-dim); }
