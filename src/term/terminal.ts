@@ -373,6 +373,15 @@ export class Terminal {
   }
 
   /** Abort whatever the terminal is waiting for (used when the player navigates elsewhere). */
+  /**
+   * An interrupt that arrived while nothing was waiting is kept for the next question. A route that arrives during the
+   * boot greeting leaves one behind, and it would knock out the lesson's first question. The shell calls this when it
+   * starts a queued command, so a stale interrupt never reaches the new work.
+   */
+  dropPendingInterrupt() {
+    this.interruptPending = false;
+  }
+
   interrupt() {
     this.q.skipAll();
     const rej = this.rejecter;

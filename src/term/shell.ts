@@ -48,7 +48,9 @@ export class Shell {
     }
     for (;;) {
       try {
-        const cmd = this.queue.shift() ?? (await this.term.ask({ prompt: `${playerName().toLowerCase().replace(/\s+/g, '')}@tapeout:~$`, chips: this.idleChips() }));
+        let cmd: string;
+        if (this.queue.length) { this.term.dropPendingInterrupt(); cmd = this.queue.shift()!; }
+        else cmd = await this.term.ask({ prompt: `${playerName().toLowerCase().replace(/\s+/g, '')}@tapeout:~$`, chips: this.idleChips() });
         await this.exec(cmd);
       } catch (e) {
         if (!(e instanceof Interrupted)) {
