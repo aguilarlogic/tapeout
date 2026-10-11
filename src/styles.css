@@ -380,8 +380,8 @@ select.blank.wrong { border-color: var(--err); color: var(--err); }
 .goals { list-style: none; margin: 8px 0; padding: 0; display: grid; gap: 4px; }
 .goals li { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
 .goals li .mark { width: 1.2em; text-align: center; color: var(--text-dim); }
-.goals li.ok .mark { color: #4ade80; }
-.goals li.bad .mark { color: #fb7185; }
+.goals li.ok .mark { color: var(--ok); }
+.goals li.bad .mark { color: var(--err); }
 .optable { border-collapse: collapse; font-family: var(--mono, monospace); font-size: 12px; margin: 6px 0 12px; }
 .optable td { padding: 2px 14px 2px 0; }
 .plot-host { display: grid; gap: 14px; margin-top: 8px; }
@@ -393,7 +393,7 @@ select.blank.wrong { border-color: var(--err); color: var(--err); }
 .cplot-svg .grid { stroke: rgba(138,148,166,.18); }
 .cplot-svg .frame { fill: none; stroke: rgba(138,148,166,.45); }
 .cplot-svg .zero { stroke: rgba(138,148,166,.45); stroke-dasharray: 3 3; }
-.cplot-svg .tick, .cplot-svg .axis { fill: #8a94a6; font-size: 10px; font-family: var(--mono, monospace); }
+.cplot-svg .tick, .cplot-svg .axis { fill: var(--text-dim); font-size: 10px; font-family: var(--mono, monospace); }
 .cplot-svg .trace { fill: none; stroke-width: 1.6; vector-effect: non-scaling-stroke; }
 .cplot-svg .cursor { stroke: rgba(138,148,166,.7); }
 .cplot-read { font-family: var(--mono, monospace); font-size: 11px; min-height: 1.4em; overflow-x: auto; white-space: nowrap; }
@@ -403,11 +403,11 @@ select.blank.wrong { border-color: var(--err); color: var(--err); }
 .tk-str { color: #86efac; }
 .case-table { overflow-x: auto; }
 .cases { border-collapse: collapse; width: 100%; font-size: 12px; margin: 8px 0; }
-.cases th { text-align: left; color: #8a94a6; font-weight: 500; padding: 2px 10px 2px 0; }
+.cases th { text-align: left; color: var(--text-dim); font-weight: 500; padding: 2px 10px 2px 0; }
 .cases td { padding: 3px 10px 3px 0; vertical-align: top; border-top: 1px solid rgba(138,148,166,.18); word-break: break-word; }
-.cases tr.ok .mark { color: #4ade80; }
-.cases tr.bad .mark { color: #fb7185; }
-.cases .err { color: #fb7185; }
+.cases tr.ok .mark { color: var(--ok); }
+.cases tr.bad .mark { color: var(--err); }
+.cases .err { color: var(--err); }
 .console { background: rgba(138,148,166,.15); border-radius: 6px; padding: 8px 10px; font-size: 12px; white-space: pre-wrap; margin: 8px 0 0; }
 .console:empty { display: none; }
 
@@ -436,7 +436,7 @@ table.cex th, table.cex td { padding: 2px 7px; border: 1px solid rgba(138,148,16
 table.cex th:first-child { text-align: left; position: sticky; left: 0; background: var(--panel, #fff); }
 table.cex .hot { background: rgba(255,120,100,.22); }
 .mut { padding: 2px 0; font-size: 13px; }
-.mut.ok { color: #1f9d6b; } .mut.bad { color: #d9534f; }
+.mut.ok { color: var(--ok); } .mut.bad { color: var(--err); }
 .formal-ctl { display: inline-flex; align-items: center; gap: 6px; margin: 0 6px; }
 .depth-in { width: 4.2em; }
 .formal-out { margin-top: 8px; }
@@ -445,11 +445,11 @@ table.cex .hot { background: rgba(255,120,100,.22); }
 .sim-log { margin: 8px 0 0; max-height: 240px; overflow: auto; padding: 8px 10px; border-radius: 6px; background: rgba(138,148,166,.12); font-size: 12px; white-space: pre-wrap; word-break: break-word; }
 .cov-box h4, .cov-group h4 { margin: 10px 0 4px; font-size: 13px; }
 table.cases.cov td, table.cases.cov th { text-align: left; padding: 2px 8px; }
-table.cases.cov tr.bad td:last-child { color: #fb7185; }
+table.cases.cov tr.bad td:last-child { color: var(--err); }
 
 /* CDC Lab */
 table.cases.cdc td, table.cases.cdc th { text-align: left; padding: 3px 8px; vertical-align: top; }
-table.cases.cdc tr.bad td:last-child { color: #fb7185; }
+table.cases.cdc tr.bad td:last-child { color: var(--err); }
 .cdc-sim .mut { margin: 3px 0; }
 
 /* ISA Lab */
@@ -479,7 +479,7 @@ table.pipe th, table.pipe td, table.arch-table th, table.arch-table td { border:
 table.pipe td.pipe-ins { text-align: left; min-width: 150px; }
 table.pipe td.st-IF { background: #2d3b52; } table.pipe td.st-ID { background: #3a3358; } table.pipe td.st-EX { background: #2f5440; }
 table.pipe td.st-MEM { background: #5a4a2a; } table.pipe td.st-WB { background: #4a3a3a; } table.pipe td.st-s { background: #6a2d2d; color: #fff; }
-table.arch-table tr.hit td:last-child { color: #6c6; } table.arch-table tr.miss td:last-child { color: #e88; }
+table.arch-table tr.hit td:last-child { color: var(--ok); } table.arch-table tr.miss td:last-child { color: var(--err); }
 .arch-bar { display: grid; grid-template-columns: 130px 1fr 60px; gap: 8px; align-items: center; margin: 3px 0; font-size: 12px; }
 .arch-bar .track { height: 10px; background: var(--panel-2); border-radius: 5px; overflow: hidden; }
 .arch-bar .fill { display: block; height: 100%; background: #4d8bd6; }
@@ -489,7 +489,7 @@ pre.arch-listing { margin: 6px 0 0; padding: 8px 10px; background: var(--panel-2
 .rv-results { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
 .rv-row { border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; }
 .rv-row summary { cursor: pointer; font-size: 13px; }
-.rv-row.ok .mark { color: #6c6; } .rv-row.bad .mark { color: #e88; }
+.rv-row.ok .mark { color: var(--ok); } .rv-row.bad .mark { color: var(--err); }
 table.rv-fmt { border-collapse: collapse; font: 11px/1.3 ui-monospace, Menlo, monospace; margin: 6px 0; }
 table.rv-fmt th, table.rv-fmt td { border: 1px solid var(--border); padding: 2px 6px; text-align: center; }
 pre.rv-prog { max-height: 260px; overflow: auto; }
@@ -506,8 +506,8 @@ table.arch-grid td.lm1, table.arch-grid td.lc, table.arch-grid td.lp, table.arch
 
 /* Signals Lab plots */
 .arch-plot { width: 100%; max-width: 620px; background: var(--panel-2); border-radius: 6px; display: block; }
-.arch-plot .grid { stroke: #2a3340; stroke-width: 1; }
+.arch-plot .grid { stroke: var(--border); stroke-width: 1; }
 .arch-plot .mark { stroke: #ff7a90; stroke-width: 1; stroke-dasharray: 4 3; }
-.arch-plot .tick { fill: #8b97a6; font-size: 10px; }
+.arch-plot .tick { fill: var(--text-dim); font-size: 10px; }
 .arch-legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; margin-top: 4px; }
 .arch-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; }

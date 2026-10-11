@@ -87,3 +87,15 @@ describe('lab palette (styles.css) meets WCAG AA in both themes', () => {
     });
   }
 });
+
+// U16 (4/4): status and muted colours in the labs come from the theme tokens. A fixed green or grey written for the
+// dark page reads at about 2:1 on the light page. (Terminal-only colours on the always-dark terminal are fine.)
+describe('lab status colours follow the theme', () => {
+  const FIXED = ['#4ade80', '#fb7185', '#f87171', '#8a94a6', '#8b97a6', '#2a3340', '#1f9d6b', '#d9534f', '#6c6', '#e88'];
+  it('no fixed status or muted colour in styles.css', () => {
+    // The palette declarations (--ok: #4ade80) are where the values belong; only rules may not use them.
+    const rules = stylesCss.split('\n').filter((l) => !/^\s*--/.test(l)).join('\n').toLowerCase();
+    const found = FIXED.filter((c) => rules.includes(c));
+    expect(found).toEqual([]);
+  });
+});
