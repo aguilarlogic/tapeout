@@ -1,6 +1,7 @@
 // TAPEOUT's brain: onboarding, the command shell, and the lesson runner.
 import { award, promotionLine, withPromotion, type Award } from '../mastery/promotion';
-import { ACTS, actProgress, ALL_MODULES, findModule, goalRole, KIND_APP, KIND_LABEL, Module, nextInPath, planSentence, readiness, recommended, setGoalRole, startAct } from '../curriculum';
+import { ACTS, actProgress, ALL_MODULES, detourFor, findModule, goalRole, KIND_APP, KIND_LABEL, learningOrder, Module, nextInPath, planSentence, readiness, recommended, setGoalRole, startAct } from '../curriculum';
+import { unfinishedPrereqs } from '../prereqs';
 import { CARDS, DECKS } from '../games/drills/cards';
 import { lookup } from '../glossary';
 import { findIncident, INCIDENTS } from '../incidents';
@@ -119,7 +120,7 @@ export class Shell {
     // The goal shapes the path (U7): one sentence on how, then the start. The whole curriculum is one line (U18).
     await t.say(planSentence(prof), 'happy');
     // A new player's path opens with five quick wins before the normal order (U19).
-    if (prof.background === 'new') await t.say("We'll start with five quick wins: from a single bit to your first Verilog module.", 'excited');
+    if (prof.background === 'new') await t.say("We'll start with five quick wins: from a single bit to your first Verilog module, and I'll bring in the maths just before you need it.", 'excited');
     const act = ACTS[startAct()];
     const first = recommended()!;
     await t.say(`Start at **Act ${act.n}: ${act.name}**. First up: **${first.title}**.`);
@@ -144,6 +145,10 @@ export class Shell {
       case 'next': case 'n': case 'continue': case 'c': case 'start': case 'go': {
         const m = recommended();
         if (!m) return t.say('Nothing left to do. Replay anything from `map`, or try `play`.', 'proud');
+        // a maths module pulled forward for a new player: say what it is for (U19)
+        const order = learningOrder();
+        const detour = detourFor(order, order.findIndex((x) => x.id === m.id));
+        if (detour) await t.say(`A short detour first: **${detour.detour.title}**, which **${detour.builtOnBy.title}** builds on.`, 'thinking');
         return this.openModule(m);
       }
       case 'map':
@@ -155,6 +160,10 @@ export class Shell {
       case 'learn': case 'open': case 'cd': case 'run': case 'lesson': {
         const m = this.findModuleByText(arg);
         if (!m) return t.print(`No module called "${arg}".${didYouMean(closestMatches(arg, ALL_MODULES))} Try \`ls\`.`, 'err');
+        // advisory only: nothing is blocked (U19)
+        const [need] = unfinishedPrereqs(m.id, (id) => !!levelRecord(id));
+        const pre = need && findModule(need);
+        if (pre) t.print(`${m.title} builds on ${pre.module.title}. Type \`learn ${pre.module.id}\` first if it is new to you.`, 'dim');
         return this.openModule(m);
       }
       case 'resume':

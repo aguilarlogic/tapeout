@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { ACTS, ALL_MODULES, FIRST_SESSION, goalRole, learningOrder, neighbours, pathNeighbours, planSentence, recommendedFor, setGoalRole, startAct, type Module } from './curriculum';
+import { ACTS, ALL_MODULES, detourFor, FIRST_SESSION, goalRole, learningOrder, neighbours, pathNeighbours, planSentence, recommendedFor, setGoalRole, startAct, type Module } from './curriculum';
 import { career } from './mastery/career';
 import { SKILLS, type RoleId } from './mastery/skills';
 import type { Profile } from './state';
+import { JIT_CHAPTERS, PREREQS, unfinishedPrereqs } from './prereqs';
 
 const BACKGROUNDS = ['new', 'student', 'pro'] as const;
 const GOALS = ['design', 'verif', 'pd', 'board', 'arch', 'special', 'unsure'] as const;
@@ -10,9 +11,12 @@ const ROLE_GOALS = ['design', 'verif', 'pd', 'board', 'arch'] as const;
 const prof = (background: Profile['background'], goal: Profile['goal'], role?: string): Profile =>
   ({ name: 'Ada', background, goal, since: 0, ...(role ? { role } : {}) });
 const actIds = (n: number) => ACTS[n].chapters.flatMap((c) => c.modules).map((m) => m.id);
-/** A new player's order begins with the first session (U19); students and pros have none. */
-const withFirstSession = (b: Profile['background'], list: string[]) =>
-  b === 'new' ? [...FIRST_SESSION, ...list.filter((id) => !FIRST_SESSION.includes(id))] : list;
+/**
+ * A new player's order moves the first session and the just-in-time maths (U19). Comparisons of the act order drop both,
+ * which leaves the curriculum order of everything else.
+ */
+const JIT_IDS = new Set(ACTS[0].chapters.filter((c) => (JIT_CHAPTERS as readonly string[]).includes(c.name)).flatMap((c) => c.modules.map((m) => m.id)));
+const plain = (list: string[]) => list.filter((id) => !JIT_IDS.has(id) && !FIRST_SESSION.includes(id));
 const ids = (ms: Module[]) => ms.map((m) => m.id);
 /** The modules a role's skills use: skills that name the role, and skills every role needs. */
 const usedBy = (role: RoleId) => new Set(SKILLS.filter((s) => s.roles === 'all' || s.roles.includes(role))
@@ -45,15 +49,16 @@ describe('the path', () => {
   it('opens with the entry act, in its own order', () => {
     for (const b of BACKGROUNDS) for (const g of GOALS) {
       const p = prof(b, g);
-      expect(ids(learningOrder(p)).slice(0, actIds(startAct(p)).length), `${b}/${g}`).toEqual(withFirstSession(b, actIds(startAct(p))).slice(0, actIds(startAct(p)).length));
+      const entry = actIds(startAct(p));
+      expect(plain(ids(learningOrder(p))).slice(0, plain(entry).length), `${b}/${g}`).toEqual(plain(entry));
     }
   });
   it('a new player gets the same entry act for every goal, then a goal-shaped order', () => {
-    const base = ids(learningOrder(prof('new', 'unsure')));
-    const n = actIds(0).length;
+    const base = plain(ids(learningOrder(prof('new', 'unsure'))));
+    const n = plain(actIds(0)).length;
     for (const g of ROLE_GOALS) {
       const order = ids(learningOrder(prof('new', g)));
-      expect(order.slice(0, n), g).toEqual(base.slice(0, n));
+      expect(plain(order).slice(0, n), g).toEqual(base.slice(0, n));
       expect(order, g).not.toEqual(base);
     }
   });
@@ -67,8 +72,9 @@ describe('the path', () => {
     for (const b of BACKGROUNDS) {
       const start = startAct(prof(b, 'unsure'));
       const natural = [...ACTS.slice(start), ...ACTS.slice(0, start)].flatMap((a) => a.chapters.flatMap((c) => c.modules.map((m) => m.id)));
-      // a new player's first five wins come first (U19); the rest is the curriculum order
-      expect(ids(learningOrder(prof(b, 'unsure'))), b).toEqual(withFirstSession(b, natural));
+      // students and pros keep the curriculum order exactly; a new player keeps it apart from the moved maths (U19)
+      if (b === 'new') expect(plain(ids(learningOrder(prof(b, 'unsure')))), b).toEqual(plain(natural));
+      else expect(ids(learningOrder(prof(b, 'unsure'))), b).toEqual(natural);
     }
   });
   it('after the entry act, a role\'s chapters come before the chapters it does not use, in every act', () => {
@@ -195,5 +201,62 @@ describe('the first session for a new player (U19)', () => {
       expect(walk(prof(b, g), 5), `${b}/${g}`).not.toEqual(FIRST_SESSION);
       expect(learningOrder(prof(b, g)).slice(0, 5).map((m) => m.id), `${b}/${g}`).not.toEqual(FIRST_SESSION);
     }
+  });
+});
+
+describe('just-in-time maths for a new player (U19, 3/3)', () => {
+  const newOrder = () => learningOrder(prof('new', 'unsure'));
+  it('the new-player order is a permutation of every module, each once', () => {
+    const order = ids(newOrder());
+    expect(order.length).toBe(ALL_MODULES.length);
+    expect(new Set(order)).toEqual(new Set(ALL_MODULES.map((m) => m.id)));
+  });
+  it('every prerequisite comes before the first module that needs it', () => {
+    const pos = new Map(newOrder().map((m, i) => [m.id, i]));
+    for (const [id, needs] of Object.entries(PREREQS)) for (const q of needs) {
+      expect(pos.get(q)!, `${q} before ${id}`).toBeLessThan(pos.get(id)!);
+    }
+  });
+  it('the first session still comes first', () => {
+    expect(newOrder().slice(0, FIRST_SESSION.length).map((m) => m.id)).toEqual(FIRST_SESSION);
+  });
+  it('a maths module comes just before the first lab that needs it, not at the start of Act 1', () => {
+    const order = ids(newOrder());
+    expect(order.indexOf('ode')).toBeLessThan(order.indexOf('vlsi'));
+    expect(order.indexOf('ode')).toBeLessThan(order.indexOf('clab-boss-pdn'));
+    // the RLC pair are needed by nothing on the path, so they sit together after Act 6
+    expect(order.indexOf('clab-rlc')).toBeLessThan(order.indexOf('clab-boss-ode'));
+    expect(order.indexOf('ode')).toBeGreaterThan(FIRST_SESSION.length + 40);
+  });
+  it('a deferred module nothing needs goes after Act 6 and before Act 7', () => {
+    const order = ids(newOrder());
+    const act6Last = Math.max(...ACTS[5].chapters.flatMap((c) => c.modules.map((m) => order.indexOf(m.id))));
+    const act7First = Math.min(...ACTS[6].chapters.flatMap((c) => c.modules.map((m) => order.indexOf(m.id))));
+    for (const id of ['boss-calc', 'practice-calc', 'boss-em', 'practice-semi']) {
+      const i = order.indexOf(id);
+      expect(i > act6Last && i < act7First, id).toBe(true);
+    }
+  });
+  it('students and pros are unchanged: no maths is pulled forward', () => {
+    for (const b of ['student', 'pro'] as const) {
+      const order = ids(learningOrder(prof(b, 'unsure')));
+      expect(order.slice(0, FIRST_SESSION.length), b).not.toEqual(FIRST_SESSION);
+      expect(order.indexOf('ode') > order.indexOf('vlsi') || order.indexOf('ode') < 20, b).toBe(true);
+    }
+  });
+  it('detourFor names the maths module and the module that builds on it, for a new player only', () => {
+    const p = prof('new', 'unsure');
+    const order = learningOrder(p);
+    const d = detourFor(order, order.findIndex((m) => m.id === 'ode'), p);
+    expect(d?.detour.id).toBe('ode');
+    expect(PREREQS[d!.builtOnBy.id]).toContain('ode');
+    expect(detourFor(order, order.findIndex((m) => m.id === 'bits'), p)).toBeUndefined();
+    const s = prof('student', 'unsure');
+    const so = learningOrder(s);
+    expect(detourFor(so, so.findIndex((m) => m.id === 'ode'), s)).toBeUndefined();
+  });
+  it('the learn hint names the unfinished prerequisites of a module', () => {
+    expect(unfinishedPrereqs('clab-rlc', () => false)).toEqual(['ode']);
+    expect(unfinishedPrereqs('clab-rlc', (id) => id === 'ode')).toEqual([]);
   });
 });

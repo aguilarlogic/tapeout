@@ -85,3 +85,8 @@ export const PREREQS: Record<string, string[]> = {
   // A power-analysis attack is a correlation over noisy traces.
   'sec-dpa': ['prob'],
 };
+
+/** The direct prerequisites of a module that the player has not finished yet (advisory: nothing is blocked). */
+export function unfinishedPrereqs(id: string, done: (id: string) => boolean): string[] {
+  return (PREREQS[id] ?? []).filter((q) => !done(q));
+}

@@ -19,6 +19,7 @@ import { FINAL_ID, FINAL_XP, findLesson } from './lessons';
 import { findIncident } from './incidents';
 import { findBoss, findPractice } from './practice';
 import { ROLES, SKILLS, type RoleId } from './mastery/skills';
+import { JIT_CHAPTERS, PREREQS } from './prereqs';
 import { levelRecord, profile, type Profile } from './state';
 
 export type ModKind = 'lesson' | 'practice' | 'boss' | 'incident' | 'logic' | 'cmos' | 'rtl' | 'debug' | 'cov' | 'uvm' | 'sta' | 'pcb' | 'clab' | 'code' | 'shell' | 'sva' | 'tb' | 'cdc' | 'isa' | 'arch' | 'rv' | 'dft' | 'pd' | 'sta2' | 'layout' | 'sig' | 'spec' | 'drills' | 'final';
@@ -295,18 +296,69 @@ function pathActs(p: Profile | undefined): Act[] {
   return [entry, ...ACTS.slice(start + 1).map(reorder), ...ACTS.slice(0, start)];
 }
 
-/** Every module, in the order TAPEOUT leads the player through them (see pathActs). */
 /**
- * A new player's first five wins, in order: from one bit to the first Verilog module (U19). Only the order changes,
- * so the heavy maths comes after them, in the normal order. There is no prerequisite data, so nothing else is pulled in.
+ * A new player's first five wins, in order: from one bit to the first Verilog module (U19). Only the order changes.
  */
 export const FIRST_SESSION = ['bits', 'ohm', 'cmos-inv', 'logic-not', 'gates'];
 
+/** The Act 1 modules in the five maths and physics chapters: a new player meets them just before they are needed (U19). */
+const JUST_IN_TIME = new Set(ACTS[0].chapters.filter((c) => (JIT_CHAPTERS as readonly string[]).includes(c.name)).flatMap((c) => c.modules.map((m) => m.id)));
+
+/**
+ * The rest of the path with the just-in-time modules placed. Each one goes just before the first module that needs it,
+ * directly or through another, with its own prerequisites first. A module that nothing on the path needs goes after the
+ * last module of Act 6 and before Act 7. Each module appears once.
+ */
+function justInTime(rest: Module[]): Module[] {
+  const byId = new Map(ALL_MODULES.map((m) => [m.id, m]));
+  const need = new Set<string>();
+  const mark = (id: string) => {
+    for (const q of PREREQS[id] ?? []) if (JUST_IN_TIME.has(q) && !need.has(q)) { need.add(q); mark(q); }
+  };
+  for (const m of rest) mark(m.id);
+  const out: Module[] = [];
+  const placed = new Set<string>();
+  const place = (id: string) => {
+    if (placed.has(id)) return;
+    placed.add(id);
+    for (const q of PREREQS[id] ?? []) if (JUST_IN_TIME.has(q)) place(q);
+    out.push(byId.get(id)!);
+  };
+  const act7 = new Set(ACTS[6].chapters.flatMap((c) => c.modules.map((m) => m.id)));
+  let tailPlaced = false;
+  const placeTail = () => {
+    if (tailPlaced) return;
+    tailPlaced = true;
+    for (const m of ALL_MODULES) if (JUST_IN_TIME.has(m.id) && !need.has(m.id)) place(m.id);
+  };
+  for (const m of rest) {
+    if (act7.has(m.id)) placeTail();
+    for (const q of PREREQS[m.id] ?? []) if (JUST_IN_TIME.has(q)) place(q);
+    out.push(m);
+  }
+  placeTail();
+  return out;
+}
+
+/** Every module, in the order TAPEOUT leads the player through them (see pathActs). */
 export function learningOrder(p: Profile | undefined = profile()): Module[] {
   const order = pathActs(p).flatMap((a) => a.chapters.flatMap((c) => c.modules));
   if (p?.background !== 'new') return order;
   const first = FIRST_SESSION.map((id) => ALL_MODULES.find((m) => m.id === id)!);
-  return [...first, ...order.filter((m) => !FIRST_SESSION.includes(m.id))];
+  const rest = order.filter((m) => !FIRST_SESSION.includes(m.id) && !JUST_IN_TIME.has(m.id));
+  return [...first, ...justInTime(rest)];
+}
+
+/**
+ * When the path lands on a maths module that was pulled forward (a new player only), the module that builds on it: the
+ * first one after it that lists it as a prerequisite. Undefined for everything else.
+ */
+export function detourFor(order: Module[], index: number, p: Profile | undefined = profile()): { detour: Module; builtOnBy: Module } | undefined {
+  if (p?.background !== 'new') return undefined;
+  const detour = order[index];
+  if (!detour || !JUST_IN_TIME.has(detour.id)) return undefined;
+  const builtOnBy = order.slice(index + 1).find((m) => (PREREQS[m.id] ?? []).includes(detour.id));
+  return builtOnBy ? { detour, builtOnBy } : undefined;
 }
 
 /** The next unfinished module on the player's path. */
