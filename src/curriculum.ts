@@ -305,39 +305,33 @@ export const FIRST_SESSION = ['bits', 'ohm', 'cmos-inv', 'logic-not', 'gates'];
 const JUST_IN_TIME = new Set(ACTS[0].chapters.filter((c) => (JIT_CHAPTERS as readonly string[]).includes(c.name)).flatMap((c) => c.modules.map((m) => m.id)));
 
 /**
- * The rest of the path with the just-in-time modules placed. Each one goes just before the first module that needs it,
- * directly or through another, with its own prerequisites first. A module that nothing on the path needs goes after the
- * last module of Act 6 and before Act 7. Each module appears once.
+ * The rest of the path with the just-in-time modules placed. A maths module that the path needs (directly, or through
+ * another maths module) goes just before the first module that needs it. A maths module that nothing on the path needs
+ * goes after the last module of Act 6 and before Act 7, or, when one of its prerequisites is placed later, right after
+ * that prerequisite (its prerequisites always come first). Ties keep the curriculum order. Each module appears once.
  */
 function justInTime(rest: Module[]): Module[] {
-  const byId = new Map(ALL_MODULES.map((m) => [m.id, m]));
-  const need = new Set<string>();
-  const mark = (id: string) => {
-    for (const q of PREREQS[id] ?? []) if (JUST_IN_TIME.has(q) && !need.has(q)) { need.add(q); mark(q); }
+  // the first rest module that needs each maths module, directly or through another
+  const anchor = new Map<string, number>();
+  const reach = (id: string, at: number) => {
+    for (const q of PREREQS[id] ?? []) if (JUST_IN_TIME.has(q) && !anchor.has(q)) { anchor.set(q, at); reach(q, at); }
   };
-  for (const m of rest) mark(m.id);
-  const out: Module[] = [];
-  const placed = new Set<string>();
-  const place = (id: string) => {
-    if (placed.has(id)) return;
-    placed.add(id);
-    for (const q of PREREQS[id] ?? []) if (JUST_IN_TIME.has(q)) place(q);
-    out.push(byId.get(id)!);
-  };
+  rest.forEach((m, i) => reach(m.id, i));
   const act7 = new Set(ACTS[6].chapters.flatMap((c) => c.modules.map((m) => m.id)));
-  let tailPlaced = false;
-  const placeTail = () => {
-    if (tailPlaced) return;
-    tailPlaced = true;
-    for (const m of ALL_MODULES) if (JUST_IN_TIME.has(m.id) && !need.has(m.id)) place(m.id);
+  const boundary = rest.findIndex((m) => act7.has(m.id));
+  const base = (boundary < 0 ? rest.length : boundary) - 0.5;
+  const key = new Map<string, number>();
+  const keyOf = (id: string): number => {
+    if (key.has(id)) return key.get(id)!;
+    let k = anchor.has(id) ? anchor.get(id)! - 0.5 : base;
+    if (!anchor.has(id)) for (const q of PREREQS[id] ?? []) if (JUST_IN_TIME.has(q)) k = Math.max(k, keyOf(q));
+    key.set(id, k);
+    return k;
   };
-  for (const m of rest) {
-    if (act7.has(m.id)) placeTail();
-    for (const q of PREREQS[m.id] ?? []) if (JUST_IN_TIME.has(q)) place(q);
-    out.push(m);
-  }
-  placeTail();
-  return out;
+  const items: { k: number; rank: number; sec: number; m: Module }[] = rest.map((m, i) => ({ k: i, rank: 1, sec: 0, m }));
+  ALL_MODULES.forEach((m, sec) => { if (JUST_IN_TIME.has(m.id)) items.push({ k: keyOf(m.id), rank: 0, sec, m }); });
+  items.sort((a, b) => a.k - b.k || a.rank - b.rank || a.sec - b.sec);
+  return items.map((x) => x.m);
 }
 
 /** Every module, in the order TAPEOUT leads the player through them (see pathActs). */
@@ -350,14 +344,15 @@ export function learningOrder(p: Profile | undefined = profile()): Module[] {
 }
 
 /**
- * When the path lands on a maths module that was pulled forward (a new player only), the module that builds on it: the
- * first one after it that lists it as a prerequisite. Undefined for everything else.
+ * When the path lands on a maths module that was pulled forward (a new player only), the first lesson or lab after it that
+ * builds on it. Undefined for everything else.
  */
 export function detourFor(order: Module[], index: number, p: Profile | undefined = profile()): { detour: Module; builtOnBy: Module } | undefined {
   if (p?.background !== 'new') return undefined;
   const detour = order[index];
   if (!detour || !JUST_IN_TIME.has(detour.id)) return undefined;
-  const builtOnBy = order.slice(index + 1).find((m) => (PREREQS[m.id] ?? []).includes(detour.id));
+  // the lesson or lab it is for: a maths module that only another maths module needs is not a detour worth naming
+  const builtOnBy = order.slice(index + 1).find((m) => !JUST_IN_TIME.has(m.id) && (PREREQS[m.id] ?? []).includes(detour.id));
   return builtOnBy ? { detour, builtOnBy } : undefined;
 }
 

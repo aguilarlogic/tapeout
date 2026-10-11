@@ -228,6 +228,12 @@ describe('just-in-time maths for a new player (U19, 3/3)', () => {
     expect(order.indexOf('clab-rlc')).toBeLessThan(order.indexOf('clab-boss-ode'));
     expect(order.indexOf('ode')).toBeGreaterThan(FIRST_SESSION.length + 40);
   });
+  it('a maths module that only a later maths module uses still follows the prerequisite the path needs', () => {
+    // practice-linalg is needed by nothing, but linalg is needed by the Act 7 NPU lab, so the practice set follows linalg
+    const order = ids(newOrder());
+    expect(order.indexOf('linalg')).toBeLessThan(order.indexOf('npu'));
+    expect(order.indexOf('practice-linalg')).toBeGreaterThan(order.indexOf('linalg'));
+  });
   it('a deferred module nothing needs goes after Act 6 and before Act 7', () => {
     const order = ids(newOrder());
     const act6Last = Math.max(...ACTS[5].chapters.flatMap((c) => c.modules.map((m) => order.indexOf(m.id))));
