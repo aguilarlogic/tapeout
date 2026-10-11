@@ -3,7 +3,7 @@
 import { clearDraft, loadDraft, saveDraft } from '../../state';
 import { h } from '../../ui/dom';
 import { editor } from '../../ui/editor';
-import { finishLab, goalItems, hintBox, labFrame, report, useSeed, variantButton } from '../../ui/labkit';
+import { busyWhile, finishLab, goalItems, hintBox, labFrame, report, useSeed, variantButton } from '../../ui/labkit';
 import { rng } from '../../sim/harness';
 import { AsmError, assemble, MNEMONICS, REG_NAMES, type Program } from './asm';
 import { evaluate, setupMachine, SENTINEL, type Evaluation } from './check';
@@ -38,7 +38,7 @@ export function isaPage(id: string): HTMLElement {
   const inst = level.build(rng(seed));
   const draftKey = `isa.${level.id}.${seed}`;
 
-  const ed = editor(loadDraft<string>(draftKey) ?? inst.starter, (v) => saveDraft(draftKey, v), () => check(false), { highlight: highlightAsm, label: 'RISC-V assembly' });
+  const ed = editor(loadDraft<string>(draftKey) ?? inst.starter, (v) => saveDraft(draftKey, v), () => void check(false), { highlight: highlightAsm, label: 'RISC-V assembly' });
 
   const { usage, box: hintEl } = hintBox(inst.hints, `${draftKey}.usage`);
 
@@ -58,12 +58,12 @@ export function isaPage(id: string): HTMLElement {
     goalList.replaceChildren(...goalItems(ev.goals));
     ed.markLines(ev.error?.line ? [ev.error.line] : [], []);
   };
-  const check = (submit: boolean) => {
+  const check = (submit: boolean) => busyWhile({ buttons: [checkBtn, submitBtn], status }, () => {
     const ev = evaluate(inst, ed.value);
     show(ev);
     resetDebug();
     if (report(status, ev, submit)) finishLab(level, usage.hints);
-  };
+  });
 
   // ---- debugger
   const caseSel = h('select', { class: 'isa-case', 'aria-label': 'Case to debug' }, ...inst.cases.map((c, i) => h('option', { value: String(i) }, c.hidden ? `case ${i + 1}: ${c.label}` : c.label))) as HTMLSelectElement;
@@ -135,9 +135,11 @@ export function isaPage(id: string): HTMLElement {
     h('div', { class: 'dim small' }, `Memory is 64 KiB: code at 0, data at 0x2000, stack top ${hx(STACK_TOP)}.`),
   );
 
+  const checkBtn = h('button', { class: 'btn', onclick: () => void check(false), title: 'Ctrl+Enter' }, '▶ Check') as HTMLButtonElement;
+  const submitBtn = h('button', { class: 'btn primary', onclick: () => void check(true) }, '✔ Submit') as HTMLButtonElement;
   const toolbar = h('div', { class: 'toolbar' },
-    h('button', { class: 'btn', onclick: () => check(false), title: 'Ctrl+Enter' }, '▶ Check'),
-    h('button', { class: 'btn primary', onclick: () => check(true) }, '✔ Submit'),
+    checkBtn,
+    submitBtn,
     h('button', { class: 'btn ghost', onclick: () => { if (confirm('Reset to the starter?')) { ed.value = inst.starter; clearDraft(draftKey); } } }, 'Reset'),
     boss ? variantButton('Roll a new variant? This clears your current work.', seedKey, () => isaPage(level.id)) : '',
   );

@@ -3,7 +3,7 @@
 import { clearDraft, loadDraft, saveDraft } from '../../state';
 import { h } from '../../ui/dom';
 import { editor, highlight } from '../../ui/editor';
-import { finishLab, goalItems, hintBox, labFrame, report, useSeed, variantButton } from '../../ui/labkit';
+import { busyWhile, finishLab, goalItems, hintBox, labFrame, report, useSeed, variantButton } from '../../ui/labkit';
 import { rng } from '../../sim/harness';
 import { evaluate, type Evaluation } from './check';
 import { bmc, type BmcResult, type Cex } from './formal';
@@ -28,7 +28,7 @@ export function svaPage(id: string): HTMLElement {
   const draftKey = `sva.${level.id}.${seed}`;
   const fix = inst.mode === 'fix';
 
-  const ed = editor(loadDraft<string>(draftKey) ?? inst.starter, (v) => saveDraft(draftKey, v), () => run(false), {
+  const ed = editor(loadDraft<string>(draftKey) ?? inst.starter, (v) => saveDraft(draftKey, v), () => void run(false), {
     highlight: highlight, label: fix ? 'Verilog source' : 'SystemVerilog assertions',
   });
 
@@ -70,11 +70,12 @@ export function svaPage(id: string): HTMLElement {
     else ed.markLines([], []);
   };
 
-  const run = (submit: boolean) => {
+  // The judging is synchronous, so busyWhile yields once first to let the busy state paint.
+  const run = (submit: boolean) => busyWhile({ buttons: [checkBtn, submitBtn], status }, () => {
     const ev = evaluate(inst, ed.value);
     show(ev);
     if (report(status, ev, submit)) finishLab(level, usage.hints);
-  };
+  });
 
   // --- formal button (assume and fix missions)
   const depthIn = h('input', { type: 'number', class: 'depth-in', min: '1', max: String(inst.depth + 2), value: String(Math.min(5, inst.depth)) }) as HTMLInputElement;
@@ -96,9 +97,11 @@ export function svaPage(id: string): HTMLElement {
     } else formalOut.replaceChildren(h('div', { class: 'status err' }, `Inconclusive: ${r.note ?? 'budget reached'}.`));
   };
 
+  const checkBtn = h('button', { class: 'btn', onclick: () => void run(false), title: 'Ctrl+Enter' }, '▶ Check') as HTMLButtonElement;
+  const submitBtn = h('button', { class: 'btn primary', onclick: () => void run(true) }, '✔ Submit') as HTMLButtonElement;
   const toolbar = h('div', { class: 'toolbar' },
-    h('button', { class: 'btn', onclick: () => run(false), title: 'Ctrl+Enter' }, '▶ Check'),
-    h('button', { class: 'btn primary', onclick: () => run(true) }, '✔ Submit'),
+    checkBtn,
+    submitBtn,
     inst.mode !== 'write' ? h('span', { class: 'formal-ctl' }, h('button', { class: 'btn', onclick: formal }, 'Run formal'), h('label', { class: 'dim small' }, ' depth ', depthIn)) : '',
     h('button', { class: 'btn ghost', onclick: () => { if (confirm('Reset to the starter?')) { ed.value = inst.starter; clearDraft(draftKey); } } }, 'Reset'),
     boss ? variantButton('Roll a new variant? This clears your current work.', seedKey, () => svaPage(level.id)) : '',
