@@ -423,8 +423,8 @@ export const datapathIncident: Incident = {
   pager: 'PAGER · SEV-2 · The RV32 core fails the first run of its test suite. The tests cover the ALU, the branch compare and the load/store unit. The core is the datapath you built this chapter. You have 100 minutes on the bench.',
   causes: [
     {
-      id: 'alu', name: 'The ALU decoder ignores funct7 bit 30, so SUB runs as ADD',
-      fix: 'Decode funct7 bit 30 in the ALU control for register ops',
+      id: 'alu', name: 'The ALU decoder ignores instruction bit 30, so SUB runs as ADD',
+      fix: 'Decode instruction bit 30 in the ALU control for register ops',
       story: 'For register-register ops, bit 30 of the instruction picks SUB over ADD and SRA over SRL. The decoder dropped that bit, so sub returned a sum. The decoder output showed ADD for a sub.',
     },
     {
