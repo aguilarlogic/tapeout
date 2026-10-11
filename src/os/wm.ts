@@ -117,11 +117,11 @@ export function openWindow(o: WinOpts): Win {
     if (o.maximized) el.classList.add('max');
   }
 
-  const taskBtn = h('button', { class: 'task', title: o.title }, h('span', { class: 'task-icon' }, o.icon ?? '▣'), h('span', { class: 'task-label' }, o.title));
+  const taskBtn = h('button', { class: 'task', title: o.title, 'aria-label': o.title }, h('span', { class: 'task-icon' }, o.icon ?? '▣'), h('span', { class: 'task-label' }, o.title));
 
   const win: Win = {
     id: o.id, el, body, onClose: o.onClose,
-    setTitle(t) { titleEl.textContent = t; taskBtn.title = t; taskBtn.querySelector('.task-label')!.textContent = t; el.setAttribute('aria-label', t); },
+    setTitle(t) { titleEl.textContent = t; taskBtn.title = t; taskBtn.setAttribute('aria-label', t); taskBtn.querySelector('.task-label')!.textContent = t; el.setAttribute('aria-label', t); },
     setContent(c) { body.replaceChildren(c); body.scrollTop = 0; },
     focus() {
       el.classList.remove('min');

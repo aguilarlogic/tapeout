@@ -1,7 +1,7 @@
 {
   "name": "tapeout",
   "private": true,
-  "version": "0.12.0",
+  "version": "0.12.1",
   "description": "A game that trains you to be a competitive semiconductor engineer: RTL, verification, timing closure, PCB layout.",
   "type": "module",
   "scripts": {
