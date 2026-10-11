@@ -290,6 +290,11 @@ body { display: block; }
 .logic-svg .v0 { stroke: #4b6a86; }
 .logic-svg .vx { stroke: var(--err); }
 .logic-svg .vz { stroke: var(--text-dim); stroke-dasharray: 3 3; }
+/* Keyboard cursor and wiring affordances (U51): a ring that reads on both themes, and a visible focus on the schematic. */
+.logic-svg:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.logic-svg .kcursor { fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-dasharray: 4 3; pointer-events: none; }
+.kbd-live { min-height: 1.4em; margin: 6px 0 0; }
+.kbd-menu { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel-2); }
 .logic-svg .pin.v1 { fill: var(--ok); }
 .logic-svg .wire .hit { stroke: transparent; stroke-width: 12; fill: none; cursor: pointer; }
 .logic-svg .wire .line { fill: none; stroke-width: 2.4; stroke: inherit; stroke-linejoin: round; }

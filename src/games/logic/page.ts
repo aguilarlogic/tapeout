@@ -8,6 +8,7 @@ import { CANVAS, findLogicLevel, starter } from './levels';
 import { briefPanel, finish, hintNote, useHints } from '../../ui/labkit';
 import { askConfirm } from '../../ui/modal';
 import { touchGate } from '../../ui/touch';
+import { displayNames, nearestTarget, wireStep, type Dir, type Target, type WireState } from './wiring';
 
 const GRID = 10;
 const snap = (v: number) => Math.round(v / GRID) * GRID;
@@ -85,8 +86,14 @@ function buildLogic(id: string): HTMLElement {
   let sim = new Sim(circ);
   let cycles = 0;
   let selected: { part?: string; wire?: number } = {};
-  let pending: string | null = null; // pin ref waiting for a second click
+  let wire: WireState = {}; // one pin chosen, waiting for a second (see wiring.ts)
   let rubber: { from: string; x: number; y: number } | null = null;
+  /** The keyboard cursor, in canvas units: it sits on a pin or on a part's centre (U51). */
+  let cursor: Target | undefined;
+  /** Where to announce each action for screen readers (and show it under the schematic). */
+  const live = h('p', { class: 'kbd-live dim small', role: 'status', 'aria-live': 'polite' });
+  const say = (m: string) => { live.textContent = m; };
+  const paletteHost = h('div', { class: 'kbd-menu-host' });
 
   const W = CANVAS.w, H = CANVAS.h;
   const canvas = svg('svg', { viewBox: `0 0 ${W} ${H}`, class: 'logic-svg', tabindex: 0, role: 'application', 'aria-label': 'Schematic editor' });
@@ -101,8 +108,8 @@ function buildLogic(id: string): HTMLElement {
   const undo = () => {
     const prev = history.pop();
     if (prev === undefined) { toast('Nothing to undo.', 'info'); return; }
-    circ = JSON.parse(prev) as Circuit; saved = prev; selected = {}; pending = null;
-    saveDraft(key, circ); resim(true); draw();
+    circ = JSON.parse(prev) as Circuit; saved = prev; selected = {}; wire = {}; cursor = undefined;
+    saveDraft(key, circ); resim(true); draw(); say('Undone.');
   };
   const partOf = (idp: string) => circ.parts.find((p) => p.id === idp)!;
 
@@ -137,13 +144,14 @@ function buildLogic(id: string): HTMLElement {
       g.append(symbol(p, (pin) => sim.pin(`${p.id}.${pin}`), p.kind === 'IN' ? inputs[p.label!] : undefined));
       for (const pin of PINS[p.kind]) {
         const ref = `${p.id}.${pin.name}`;
-        const c = svg('circle', { cx: pin.dx, cy: pin.dy, r: 5, class: `pin ${vcls(sim.pin(ref))}${pending === ref ? ' pending' : ''}`, 'data-pin': ref });
+        const c = svg('circle', { cx: pin.dx, cy: pin.dy, r: 5, class: `pin ${vcls(sim.pin(ref))}${wire.from === ref ? ' pending' : ''}`, 'data-pin': ref });
         c.append(svg('title', {}, `${p.label ?? p.kind} ${pin.name}`));
         g.append(c);
       }
       g.addEventListener('pointerdown', (e) => partDown(e as PointerEvent, p));
       canvas.append(g);
     }
+    if (cursor) canvas.append(svg('circle', { cx: cursor.x, cy: cursor.y, r: cursor.ref ? 10 : 14, class: 'kcursor', 'aria-hidden': 'true' }));
     if (rubber) {
       const [pid, pn] = rubber.from.split('.');
       const [x1, y1] = pinPos(partOf(pid), pn);
@@ -182,21 +190,92 @@ function buildLogic(id: string): HTMLElement {
     draw();
   };
   const deleteSelected = () => {
-    if (selected.wire !== undefined) removeWire(selected.wire);
-    else if (selected.part) removePart(selected.part);
+    if (selected.wire !== undefined) { removeWire(selected.wire); say('Wire removed.'); }
+    else if (selected.part) { const name = displayNames(circ.parts).get(selected.part); removePart(selected.part); say(`${name} removed.`); }
   };
 
-  const addPart = (kind: Kind) => {
+  /** Adds a part: at a free spot, or with its corner at `at` (the keyboard cursor, U51). Returns its id. */
+  const addPart = (kind: Kind, at?: [number, number]): string => {
     const [w, hh] = SIZE[kind];
     const overlaps = (x: number, y: number) => circ.parts.some((p) => { const [pw, ph] = SIZE[p.kind]; return x < p.x + pw + 20 && x + w + 20 > p.x && y < p.y + ph + 20 && y + hh + 20 > p.y; });
     let spot: [number, number] = [snap(W / 2 - w / 2), snap(H / 2 - hh / 2)];
     outer: for (let y = 60; y < H - hh - 40; y += 40) for (let x = 110; x < W - w - 110; x += 40) if (!overlaps(x, y)) { spot = [x, y]; break outer; }
+    if (at) spot = [Math.max(0, Math.min(W - w, snap(at[0]))), Math.max(0, Math.min(H - hh, snap(at[1])))];
     const pid = `${kind.toLowerCase()}_${Date.now().toString(36)}${Math.floor(Math.random() * 99)}`;
     circ.parts.push({ id: pid, kind, x: spot[0], y: spot[1] });
     selected = { part: pid };
     persist();
     resim(true);
     draw();
+    return pid;
+  };
+
+  // ---- wiring by pin (mouse, touch and keyboard share this, U51)
+  /** A pin in words for announcements: "NAND1.y", or just "OUT" for an input, output or rail. */
+  const labelOf = (ref: string) => {
+    const [pid, pin] = ref.split('.');
+    const name = displayNames(circ.parts).get(pid) ?? pid;
+    const kind = partOf(pid)?.kind;
+    return kind && ['IN', 'OUT', 'VDD', 'GND'].includes(kind) ? name : `${name}.${pin}`;
+  };
+  const pinAction = (ref: string) => {
+    const r = wireStep(wire, { t: 'pin', ref }, labelOf);
+    wire = r.state;
+    if (r.connect) connect(r.connect[0], r.connect[1]);
+    if (r.message) say(r.message);
+    draw();
+  };
+
+  // ---- keyboard cursor (U51): arrows hop between pins and parts; Enter picks; A adds a part at the cursor
+  const targets = (): Target[] => circ.parts.flatMap((p) => {
+    const [w, hh] = SIZE[p.kind];
+    return [
+      { x: p.x + w / 2, y: p.y + hh / 2, part: p.id } as Target,
+      ...PINS[p.kind].map((pin) => ({ x: p.x + pin.dx, y: p.y + pin.dy, ref: `${p.id}.${pin.name}` } as Target)),
+    ];
+  });
+  const describeTarget = (t: Target) => (t.ref ? labelOf(t.ref) : `the ${displayNames(circ.parts).get(t.part!) ?? 'part'} body`);
+  const moveCursor = (dir: Dir) => {
+    const ts = targets();
+    if (!ts.length) return;
+    if (!cursor) { cursor = ts[0]; say(`Cursor on ${describeTarget(cursor)}. Arrows move it, Enter picks.`); draw(); return; }
+    const next = nearestTarget(ts, cursor, dir);
+    if (!next) { say(`Nothing ${dir} of ${describeTarget(cursor)}.`); return; }
+    cursor = next;
+    say(`Cursor on ${describeTarget(cursor)}.`);
+    draw();
+  };
+  const pressCursor = () => {
+    if (!cursor) { say('Move the cursor first with the arrow keys.'); return; }
+    if (cursor.ref) { pinAction(cursor.ref); return; }
+    const p = partOf(cursor.part!);
+    if (p.kind === 'IN') { inputs[p.label!] ^= 1; resim(false); say(`${p.label} is now ${inputs[p.label!]}.`); draw(); return; }
+    selected = { part: p.id };
+    say(`Selected ${displayNames(circ.parts).get(p.id)}. Delete removes it.`);
+    draw();
+  };
+  /** The parts bin as a small menu next to the canvas: focus goes in, Enter places the part at the cursor, Escape backs out. */
+  const closePalette = (back: boolean) => {
+    paletteHost.replaceChildren();
+    if (back) canvas.focus({ preventScroll: true });
+  };
+  const openPalette = () => {
+    const place = (k: Kind) => {
+      const at: [number, number] = cursor ? [cursor.x, cursor.y] : [W / 2, H / 2];
+      const pid = addPart(k, at);
+      // the cursor follows the new part, so the next arrow key starts from it
+      const p = partOf(pid), [pw, ph] = SIZE[p.kind];
+      cursor = { x: p.x + pw / 2, y: p.y + ph / 2, part: pid };
+      closePalette(true);
+      draw();
+      say(`Added ${displayNames(circ.parts).get(pid)} at the cursor.`);
+    };
+    const items = level.palette.map((k) => h('button', {
+      class: 'chip', role: 'menuitem', onclick: () => place(k),
+      onkeydown: (ev: KeyboardEvent) => { if (ev.key === 'Escape') { ev.preventDefault(); closePalette(true); } },
+    }, `+ ${k}`));
+    paletteHost.replaceChildren(h('div', { class: 'kbd-menu', role: 'menu', 'aria-label': 'Add a part at the cursor' }, ...items));
+    items[0]?.focus();
   };
 
   const partDown = (e: PointerEvent, p: Part) => {
@@ -204,7 +283,8 @@ function buildLogic(id: string): HTMLElement {
     const pinEl = (e.target as Element).closest('[data-pin]');
     if (pinEl) {
       const ref = pinEl.getAttribute('data-pin')!;
-      if (pending && pending !== ref) { connect(pending, ref); pending = null; draw(); return; }
+      // A pin that is already chosen, or a second pin after one was chosen, follows the wiring rules (U51, U52).
+      if (wire.from) { pinAction(ref); return; }
       const [x, y] = toLocal(e);
       rubber = { from: ref, x, y };
       const sx = e.clientX, sy = e.clientY;
@@ -215,8 +295,9 @@ function buildLogic(id: string): HTMLElement {
         canvas.removeEventListener('pointerup', up);
         rubber = null;
         const target = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('[data-pin]')?.getAttribute('data-pin');
-        if (target && target !== ref) { connect(ref, target); pending = null; }
-        else if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < 5) pending = pending === ref ? null : ref;
+        if (target && target !== ref) { wire = {}; connect(ref, target); say(`Wired ${labelOf(ref)} to ${labelOf(target)}`); draw(); return; }
+        // a tap, not a drag: it picks the pin (or cancels, if it was the chosen one)
+        if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < 5) { pinAction(ref); return; }
         draw();
       };
       canvas.addEventListener('pointermove', move);
@@ -241,11 +322,24 @@ function buildLogic(id: string): HTMLElement {
     canvas.addEventListener('pointerup', up);
     draw();
   };
-  canvas.addEventListener('pointerdown', () => { selected = {}; pending = null; draw(); });
+  canvas.addEventListener('pointerdown', () => { selected = {}; wire = {}; draw(); });
+  const ARROWS: Record<string, Dir> = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' };
   canvas.addEventListener('keydown', (e) => {
-    if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); deleteSelected(); }
-    if (e.key === 'Escape') { pending = null; selected = {}; draw(); }
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); }
+    const dir = ARROWS[e.key];
+    if (dir) { e.preventDefault(); moveCursor(dir); return; }
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pressCursor(); return; }
+    if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); deleteSelected(); return; }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      const r = wireStep(wire, { t: 'cancel' }, labelOf);
+      wire = r.state;
+      selected = {};
+      if (r.message) say(r.message);
+      draw();
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); return; }
+    if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === 'a') { e.preventDefault(); openPalette(); }
   });
 
   // ---- side panel: live truth table / sequence
@@ -305,13 +399,14 @@ function buildLogic(id: string): HTMLElement {
 
   const palette = h('div', { class: 'palette' }, ...level.palette.map((k) => h('button', { class: 'chip', onclick: () => addPart(k), title: `Add a ${k}` }, `+ ${k}`)));
   const brief = briefPanel({ tag: level.concept, html: level.brief, hintBox }, h('h3', { class: 'sub-head' }, 'Parts bin'), palette,
-    h('p', { class: 'dim small' }, 'Drag parts to move them. Drag from pin to pin (or click one pin, then another) to wire. Click an input switch to toggle it. ', h('span', { class: 'kbd-hint' }, 'Select + Delete removes; '), 'double-click a wire to cut it.'));
+    h('p', { class: 'dim small' }, 'Drag parts to move them. Drag from pin to pin (or click one pin, then another) to wire. Click an input switch to toggle it. ', h('span', { class: 'kbd-hint' }, 'Select + Delete removes; '), 'double-click a wire to cut it.'),
+    h('p', { class: 'kbd-hint dim small' }, 'Keys: click the schematic, then arrows move the cursor · Enter picks a pin, then a second pin wires them · Escape cancels · A adds a part at the cursor · Delete removes · Ctrl+Z undoes.'));
 
   resim(true);
   draw();
   return h('div', { class: 'level' },
     levelHeader(level.title, level.id, levelRecord(level.id)?.stars ?? 0, level.xp),
     h('div', { class: 'level-grid logic-grid' }, brief,
-      h('section', { class: 'work panel' }, toolbar, h('div', { class: 'logic-wrap' }, canvas)),
+      h('section', { class: 'work panel' }, toolbar, h('div', { class: 'logic-wrap' }, canvas), live, paletteHost),
       h('aside', { class: 'panel' }, side)));
 }
