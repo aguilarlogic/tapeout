@@ -132,7 +132,7 @@ export const ACTS: Act[] = [
         name: 'Your first chip', modules: [...logic(['first-wire']), lesson('bits'), lesson('bool'), ...logic(['logic-not', 'logic-and', 'logic-half']),
           incident('inc-demo-board'), ...mods(RTL_LEVELS, 'rtl', 'rtl', (x) => FIRST_RTL.includes(x.id))],
       },
-      { name: 'Numbers', modules: [prac('practice-bits'), ...drill('twos'), bossMod('boss-numbers')] },
+      { name: 'Numbers', modules: [prac('practice-bits'), ...drill('twos'), bossMod('boss-numbers'), incident('inc-numbers')] },
       { name: 'Logic', modules: [prac('practice-bool'), ...logic(['logic-or', 'logic-xor']), incident('inc-logic')] },
       { name: 'Building blocks', modules: [...drill('comb'), ...logic(['logic-mux', 'logic-full']), incident('inc-adder')] },
       { name: 'Memory & state', modules: [...drill('seq'), ...logic(['logic-latch', 'logic-counter']), ...drill('fsm'), bossMod('boss-logic'), incident('inc-controller')] },
@@ -142,7 +142,7 @@ export const ACTS: Act[] = [
   {
     id: 'ada2', n: 2, kind: 'chip', name: 'ADA-2: a RISC-V core', tagline: 'A 32-bit RISC-V core: assembly, a single-cycle datapath, clocks, then a pipeline', region: 'CPU CORE',
     chapters: [
-      { name: 'Hardware/software interface', modules: [...drill('asm'), ...isa('isa-first', 'isa-branch', 'isa-loop', 'isa-array', 'isa-strlen', 'isa-popcount', 'isa-mul', 'isa-gcd', 'isa-copy', 'isa-reverse', 'isa-abi', 'isa-fix-signed', 'isa-fix-max', 'isa-fib', 'isa-sort'), bossMod('boss-asm'), ...isa('isa-boss-str', 'isa-boss-perf', 'isa-boss-rec')] },
+      { name: 'Hardware/software interface', modules: [...drill('asm'), ...isa('isa-first', 'isa-branch', 'isa-loop', 'isa-array', 'isa-strlen', 'isa-popcount', 'isa-mul', 'isa-gcd', 'isa-copy', 'isa-reverse', 'isa-abi', 'isa-fix-signed', 'isa-fix-max', 'isa-fib', 'isa-sort'), bossMod('boss-asm'), ...isa('isa-boss-str', 'isa-boss-perf', 'isa-boss-rec'), incident('inc-isa')] },
       { name: 'Microarchitecture', modules: [...drill('alu'), ...rv('rv-alu', 'rv-branch', 'rv-mem', 'rv-mext'), bossMod('boss-uarch'), ...rv('rv-boss'), incident('inc-datapath')] },
       { name: 'Clocks & resets', modules: [...drill('clk'), ...cdc('cdc-sync', 'cdc-pulse', 'cdc-gray', 'cdc-handshake'), bossMod('boss-cdc'), ...cdc('cdc-fifo'), incident('inc-crossing')] },
       { name: 'Pipelines', modules: [...drill('pipe'), ...arch('pipe-fwd', 'pipe-branch', 'pipe-sched', 'pipe-unroll'), ...arch('pipe-boss'), incident('inc-pipeline')] },
@@ -151,7 +151,7 @@ export const ACTS: Act[] = [
   {
     id: 'ada3', n: 3, kind: 'chip', name: 'ADA-3: to silicon', tagline: 'Your core becomes silicon: transistors, timing, layout, placement, power, test and the board', region: 'CLOCKS · PHY',
     chapters: [
-      { name: 'Transistors', modules: [...drill('mos'), ...logic(['cmos-inv', 'cmos-nand', 'cmos-nor', 'cmos-and', 'cmos-aoi']), bossMod('boss-devices')] },
+      { name: 'Transistors', modules: [...drill('mos'), ...logic(['cmos-inv', 'cmos-nand', 'cmos-nor', 'cmos-and', 'cmos-aoi']), bossMod('boss-devices'), incident('inc-cell')] },
       { name: 'Circuit design', modules: [...drill('vlsi'), bossMod('boss-circuit'), incident('inc-bypass')] },
       { name: 'Static timing', modules: [...drill('sta'), ...mods(TIMING_LEVELS, 'sta', 'sta'), ...sta2('sta-report', 'sta-ocv', 'sta-mcp'), bossMod('boss-sta'), ...sta2('sta-eco'), incident('inc-sta')] },
       { name: 'Layout', modules: [...layout('layout-drc', 'layout-inv', 'layout-lvs', 'layout-nand'), ...layout('layout-boss'), incident('inc-drc')] },

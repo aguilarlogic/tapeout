@@ -33,6 +33,12 @@ describe('the chip ladder', () => {
     for (const d of DETOURS) expect(path, d.name).toContain(d.need);
   });
 
+  it('gives every chip chapter a boss incident, except the final tapeout', () => {
+    const missing = ACTS.filter((a) => a.kind === 'chip').flatMap((a) => a.chapters)
+      .filter((c) => c.name !== 'Tapeout' && !c.modules.some((m) => m.kind === 'incident')).map((c) => c.name);
+    expect(missing).toEqual([]);
+  });
+
   it('starts a fresh save on the First Wire', () => {
     expect(recommended()?.id).toBe('first-wire');
   });
