@@ -146,7 +146,8 @@ body { display: block; }
 .term-side-name { font-family: var(--mono); font-weight: 800; color: var(--term-ai); letter-spacing: 0.12em; margin-top: 8px; text-shadow: 0 0 8px color-mix(in srgb, var(--term-ai) 60%, transparent); }
 .term-side-sub { font-family: var(--mono); font-size: 0.7rem; color: var(--term-dim); }
 /* In the mentor column the identity becomes a header strip: avatar on the left, name and role beside it. */
-.mentor-region .term-window { flex-direction: column; }
+.mentor-region .term-window { flex-direction: column; min-height: 0; }
+.mentor-region .term { min-height: 0; }
 .mentor-region .term-side { width: auto; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: 12px; padding: 10px 14px; border-right: 0; border-bottom: 1px solid #13232b; }
 .mentor-region .term-side .avatar { grid-row: 1 / 3; }
 .mentor-region .term-side-name { margin-top: 0; }
