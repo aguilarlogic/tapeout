@@ -7,7 +7,7 @@ import { h, toast } from '../../ui/dom';
 import { editor } from '../../ui/editor';
 import { highlightAsm } from '../isa/page';
 import { findArchLevel } from './levels';
-import { defaults, type ArchResult, type Control, type Values, type View } from './types';
+import { defaults, goalSummary, type ArchResult, type Control, type Values, type View } from './types';
 import { UndoHistory } from '../../ui/undo';
 
 import { briefPanel, finish, goalItems, labPage, loadSeed, newVariantButton, starsFor, useHints } from '../../ui/labkit';
@@ -143,7 +143,7 @@ export function archPage(id: string): HTMLElement {
     ed?.markLines(res.error?.line ? [res.error.line] : [], []);
     if (res.error) { status.className = 'status err'; status.textContent = res.error.message + (res.error.line ? ` (line ${res.error.line})` : ''); }
     else if (res.goals.every((g) => g.ok)) { status.className = 'status ok'; status.textContent = `All ${res.goals.length} goals met. Submit to bank the result.`; }
-    else { const bad = res.goals.filter((g) => !g.ok); status.className = 'status err'; status.textContent = `${bad.length} of ${res.goals.length} goals not met.`; }
+    else { status.className = 'status err'; status.textContent = goalSummary(res.goals); }
     return res;
   };
   const changed = () => { saveValues(); run(); };

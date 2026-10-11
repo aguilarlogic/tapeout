@@ -11,6 +11,13 @@ export type Control =
 
 export interface Goal { label: string; ok: boolean; note?: string }
 
+/** The status line for a run with goals missed: the count, then the first goal not met, with its reading. */
+export function goalSummary(goals: Goal[]): string {
+  const bad = goals.filter((g) => !g.ok);
+  const first = bad[0];
+  return `${bad.length} of ${goals.length} goals not met: ${first.label}${first.note ? ` (${first.note})` : ''}`;
+}
+
 export type View =
   | { kind: 'diagram'; rows: PipeRow[]; caption?: string }
   | { kind: 'table'; head: string[]; rows: (string | number)[][]; caption?: string; /** a CSS class per row */ classes?: string[] }
