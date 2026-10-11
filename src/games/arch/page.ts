@@ -3,14 +3,20 @@
 import { mentorSay } from '../../os/mentor';
 import { clearDraft, loadDraft, saveDraft } from '../../state';
 import { rng } from '../../sim/harness';
-import { h } from '../../ui/dom';
+import { h, toast } from '../../ui/dom';
 import { editor } from '../../ui/editor';
 import { highlightAsm } from '../isa/page';
 import { findArchLevel } from './levels';
 import { defaults, type ArchResult, type Control, type Values, type View } from './types';
+import { UndoHistory } from '../../ui/undo';
 
 import { briefPanel, finish, goalItems, labPage, loadSeed, newVariantButton, starsFor, useHints } from '../../ui/labkit';
 import { askConfirm } from '../../ui/modal';
+
+/** One undo step: the control values, and the code when a Reset replaced it (typed edits are not recorded). */
+type Snap = { values: Values; code?: string };
+/** Undo history per lab and seed. It lives here, not on the page, so Reset and "New variant" (which rebuild the page) keep it. */
+const histories = new Map<string, UndoHistory<Snap>>();
 
 const PLOT_COLORS = ['#6cc8ff', '#ffb454', '#8be28b', '#ff7a90'];
 
@@ -84,6 +90,12 @@ export function archPage(id: string): HTMLElement {
 
   const { hintBox, usage } = useHints(inst.hints, `${draftKey}.usage`);
 
+  // Undo (U53): each change records the state it replaces. A burst of changes to one control is one step (see ui/undo).
+  if (!histories.has(draftKey)) histories.set(draftKey, new UndoHistory<Snap>());
+  const hist = histories.get(draftKey)!;
+  const snap = (withCode = false): Snap => ({ values: JSON.parse(JSON.stringify(values)) as Values, ...(withCode && ed ? { code: ed.value } : {}) });
+  const remember = (key: string) => hist.record(snap(), key);
+
   const brief = briefPanel({ tag: `${level.lab} Lab · ${level.concept}`, ticket: level.ticket, model: level.model, html: inst.brief, note: boss ? 'Boss mission: no hints. A new variant changes the workload and the targets.' : undefined, hintBox }, inst.listing ? h('details', { class: 'src-view', open: '' }, h('summary', null, inst.listing.label), h('pre', { class: 'arch-listing' }, inst.listing.text)) : '');
 
   // ---- controls
@@ -91,17 +103,17 @@ export function archPage(id: string): HTMLElement {
   const field = (c: Control): HTMLElement => {
     let input: HTMLElement;
     if (c.kind === 'select') {
-      input = h('select', { id: `c-${c.id}`, onchange: (e: Event) => { values[c.id] = (e.target as HTMLSelectElement).value; changed(); } }, ...c.options.map((o) => h('option', { value: o.value }, o.label)));
+      input = h('select', { id: `c-${c.id}`, onchange: (e: Event) => { remember(c.id); values[c.id] = (e.target as HTMLSelectElement).value; changed(); } }, ...c.options.map((o) => h('option', { value: o.value }, o.label)));
       (input as HTMLSelectElement).value = String(values[c.id]);
     } else if (c.kind === 'text') {
       let timer: ReturnType<typeof setTimeout> | undefined;
-      input = h('textarea', { id: `c-${c.id}`, rows: String(c.rows ?? 4), spellcheck: 'false', class: 'arch-text', placeholder: c.placeholder ?? '', oninput: (e: Event) => { values[c.id] = (e.target as HTMLTextAreaElement).value; clearTimeout(timer); timer = setTimeout(changed, 250); } });
+      input = h('textarea', { id: `c-${c.id}`, rows: String(c.rows ?? 4), spellcheck: 'false', class: 'arch-text', placeholder: c.placeholder ?? '', oninput: (e: Event) => { remember(c.id); values[c.id] = (e.target as HTMLTextAreaElement).value; clearTimeout(timer); timer = setTimeout(changed, 250); } });
       (input as HTMLTextAreaElement).value = String(values[c.id]);
     } else if (c.kind === 'toggle') {
-      input = h('input', { type: 'checkbox', id: `c-${c.id}`, onchange: (e: Event) => { values[c.id] = (e.target as HTMLInputElement).checked; changed(); } });
+      input = h('input', { type: 'checkbox', id: `c-${c.id}`, onchange: (e: Event) => { remember(c.id); values[c.id] = (e.target as HTMLInputElement).checked; changed(); } });
       (input as HTMLInputElement).checked = !!values[c.id];
     } else {
-      input = h('input', { type: 'number', id: `c-${c.id}`, min: String(c.min), max: String(c.max), step: String(c.step ?? 1), onchange: (e: Event) => { values[c.id] = Number((e.target as HTMLInputElement).value); changed(); } });
+      input = h('input', { type: 'number', id: `c-${c.id}`, min: String(c.min), max: String(c.max), step: String(c.step ?? 1), onchange: (e: Event) => { remember(c.id); values[c.id] = Number((e.target as HTMLInputElement).value); changed(); } });
       (input as HTMLInputElement).value = String(values[c.id]);
     }
     return h('label', { class: `arch-field ${c.kind}` }, h('span', { class: 'lbl' }, c.label), input, c.hint ? h('span', { class: 'dim small' }, c.hint) : '');
@@ -148,14 +160,44 @@ export function archPage(id: string): HTMLElement {
     finish(level.id, level.xp, stars, [usage.hints ? 'Solve it without hints for another star.' : '', wrongSubmits >= 2 ? 'Two wrong submits cap a boss at 2 stars.' : ''].filter(Boolean));
   };
 
+  // Rebuilding the page is how the lab picks up restored values and code; focus goes to Undo so keyboard users keep their place.
+  const rebuild = () => {
+    const host = document.getElementById('lab-slot');
+    if (!host) return;
+    host.replaceWith(archPage(level.id));
+    document.querySelector<HTMLElement>('[data-act="undo"]')?.focus();
+  };
+  const undo = () => {
+    const s = hist.undo();
+    if (!s) { toast('Nothing to undo.', 'info'); return; }
+    for (const k of Object.keys(values)) delete values[k];
+    Object.assign(values, s.values);
+    saveValues();
+    if (s.code !== undefined && ed) saveDraft(draftKey, s.code);
+    rebuild();
+  };
+
   const toolbar = h('div', { class: 'toolbar' },
     h('button', { class: 'btn', onclick: () => check(false), title: 'Ctrl+Enter' }, '▶ Run'),
     h('button', { class: 'btn primary', onclick: () => check(true) }, '✔ Submit'),
-    h('button', { class: 'btn ghost', onclick: () => void askConfirm({ title: 'Reset?', body: 'Reset the controls and code to their starting values? Your current work here is cleared.', confirm: 'Reset', danger: true }).then((ok) => { if (!ok) return; Object.assign(values, defaults(inst.controls)); saveValues(); if (ed && inst.code) ed.value = inst.code.starter; clearDraft(draftKey); const host = document.getElementById('lab-slot'); if (host) host.replaceWith(archPage(level.id)); }) }, 'Reset'),
+    h('button', { class: 'btn ghost', 'data-act': 'undo', title: 'Ctrl+Z', 'aria-keyshortcuts': 'Control+Z', onclick: () => undo() }, 'Undo'),
+    h('button', { class: 'btn ghost', onclick: () => void askConfirm({ title: 'Reset?', body: 'Reset the controls and code to their starting values. You can undo it with Ctrl+Z.', confirm: 'Reset', danger: true }).then((ok) => { if (!ok) return; hist.record(snap(true), 'reset'); Object.assign(values, defaults(inst.controls)); saveValues(); if (ed && inst.code) ed.value = inst.code.starter; clearDraft(draftKey); rebuild(); }) }, 'Reset'),
     boss ? newVariantButton(seedKey, () => archPage(level.id)) : '',
   );
 
   const page = labPage(level, brief, [toolbar, form, ed ? ed.el : ''], [status, goalList, metricBox, viewBox]);
+  // Ctrl+Z undoes the lab, but not while typing in a field or the code editor (their own undo applies there), and not
+  // when the focus is in another window. A listener left behind by a rebuilt page removes itself.
+  const onKey = (e: KeyboardEvent) => {
+    if (!page.isConnected) { document.removeEventListener('keydown', onKey); return; }
+    if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey || e.key.toLowerCase() !== 'z') return;
+    const t = e.target as HTMLElement;
+    if (t.closest?.('textarea, input, select, [contenteditable="true"]')) return;
+    if (!page.contains(t) && t !== document.body) return;
+    e.preventDefault();
+    undo();
+  };
+  document.addEventListener('keydown', onKey);
   run();
   return page;
 }
