@@ -1,0 +1,231 @@
+// Act II - the tools every chip engineer uses every day: the Linux shell, regular expressions, git, Python,
+// Make and TCL. Interviewers assume them; nobody teaches them.
+import { has, num, rx, words } from './answers';
+import { art, ask, gen, Lesson, mc, pick, say } from './types';
+
+export const shell: Lesson = {
+  id: 'shell',
+  title: 'The Command Line',
+  concept: 'files, pipes, grep, find, redirection, regular expressions',
+  xp: 90,
+  steps: [
+    say('Here is a secret of the chip industry: almost all the work happens in a **Linux terminal**, a lot like this one. Simulators, synthesis and place-and-route tools run on big Linux compute farms, and engineers drive them by typing commands and chaining small tools together. Get fast at the shell and you get fast at everything.'),
+    art(`
+   pwd                      where am I?
+   ls -l                    list files, with details
+   cd sim/run42             change directory   (.. = up one, ~ = home)
+   cat / less file.log      print / page through a file
+   head -20 / tail -f       first 20 lines / follow a growing log
+   cp, mv, rm, mkdir        copy, move, delete, make a directory`),
+    mc('A regression is still running and writing to `run.log`. Which command shows new lines as they arrive?', ['cat run.log, which prints the whole file once and then exits', 'tail -f run.log', 'head run.log, which prints the first ten lines and then stops', 'ls run.log, which lists the file but shows none of the lines'], 1, '`tail -f` (follow) keeps printing as the file grows. Ctrl+C stops it.'),
+    say('The real power is the **pipe**, `|`. It sends the output of one command into the next, so small tools combine into big ones. `grep` finds lines matching a pattern, `wc -l` counts lines, `sort` sorts, `uniq -c` counts repeats.'),
+    art(`
+   grep UVM_ERROR run.log | wc -l                  how many errors?
+   grep UVM_ERROR *.log | sort | uniq -c | sort -rn  which errors are most common?
+   find . -name "*.sv" | xargs grep -l "always_latch"  which files use latches?`),
+    ask('Write one command that counts how many lines in `run.log` contain `UVM_ERROR`.', has('grep -c UVM_ERROR run.log', ['grep'], ['uvm_error'], ['run.log'], ['-c', 'wc -l', 'wc']), 'Either `grep -c UVM_ERROR run.log` or `grep UVM_ERROR run.log | wc -l`. The first is shorter; the second shows the pipe idea.', 'grep finds the lines; -c counts them (or pipe into wc -l).'),
+    mc('What does `>` do in `grep FAIL results.txt > fails.txt`, and how is `>>` different?', ['They are the same, and both of them append to the file', '`>` writes into a file, replacing it; `>>` appends to it', '`>` compares numbers, while `>>` compares the text of files', '`>>` runs the command in the background, while `>` waits for it'], 1, 'Redirection. `2>` redirects errors, `&>` both (bash only; the portable form is `> file 2>&1`), and `< file` feeds a file in as input.'),
+    say('grep patterns are **regular expressions**: a tiny language for describing text. Learn these and you can find anything in a million-line log.'),
+    art(`
+   .        any character          ^ / $    start / end of line
+   [0-9]    one digit              [a-fA-F] one of these letters
+   *        0 or more of previous  +        1 or more        ?  0 or 1
+   (a|b)    a or b                 {2,4}    2 to 4 times       (grep -E, or \\( \\| \\{ in plain grep)
+
+   Three dialects, so know which tool you are talking to:
+   portable (POSIX)         [0-9]   [[:digit:]]   [[:alnum:]_]   [[:space:]]
+   GNU grep/sed extras      \\w  \\s  \\b  \\<  \\>
+   Perl-style only          \\d   lookahead (?=...) (?!...)
+                            (Python re, JavaScript, grep -P; plain grep sees \\d as a literal d)`),
+    ask('Write a regular expression that matches hex numbers written like `0x1F`, `0xdeadBEEF` or `0x0` (the 0x prefix plus at least one hex digit).', rx('0x[0-9a-fA-F]+', ['0x1F', '0xdeadBEEF', '0x0', 'addr=0x40'], ['0x', '1F', '0xZZ']), 'One answer: `0x[0-9a-fA-F]+`. The + requires at least one digit; the character class lists every legal hex digit. I test your pattern against real examples, so any correct regex passes.', 'Literal 0x, then a character class of hex digits, then +.'),
+    ask('Write a regex that matches lines that **start** with `UVM_ERROR` or `UVM_FATAL`.', rx('^UVM_(ERROR|FATAL)', ['UVM_ERROR @ 100ns: mismatch', 'UVM_FATAL @ 5ns: timeout'], ['UVM_INFO @ 1ns', 'note: UVM_ERROR was expected', 'UVM_WARNING x']), 'One answer: `^UVM_(ERROR|FATAL)`. The ^ anchors it to the start of the line, and (a|b) is alternation.', 'Anchor with ^, then UVM_ and a group with |.'),
+    say('**Quoting** decides what the shell does to your text. Unquoted, a variable is split into words at every space, and `*` is expanded into file names. Double quotes keep one word but still expand `$x`; single quotes keep everything literally. The classic bug: a file called `run 1.log`.'),
+    art(`
+   f="run 1.log"
+   ls $f              ->  ls run 1.log      two arguments: run and 1.log
+   ls "$f"            ->  ls "run 1.log"    one argument
+   for f in $(ls)     splits names at spaces: do not
+   for f in *.log     the shell expands the glob, names stay whole
+
+   find . -name "*.log" -print0 | xargs -0 grep -l ERROR
+                      NUL-separated names survive any character, even a newline`),
+    mc('A script loops with `for f in $(ls *.log)` and a file is called `run 1.log`. What does the loop see?', ['One name, run 1.log, because ls prints it as a single line', 'Two names, run and 1.log, because the result is split at spaces', 'Nothing at all, since ls refuses names that contain a space', 'The name run 1.log twice, once per word that the name holds'], 1, 'The command substitution result is split into words on white space (the IFS characters). Use `for f in *.log` and quote every `"$f"`.'),
+    say('Scripts that run unattended should fail loudly. Start them with `set -euo pipefail`: **-e** stops at the first failing command, **-u** makes an unset variable an error (so a typo does not become `rm -rf "$DIR/"` with an empty `DIR`), and **pipefail** makes a pipeline fail if any stage fails, not just the last one.'),
+    mc('Under `set -e` alone, what is the exit status of `grep ERROR run.log | sort` when run.log does not exist?', ['Success, because only the status of the last stage (sort) counts', 'Failure, because the first stage failed and the pipeline reports it', 'Undefined, since a pipeline has no status of its own to report', 'Success only when sort prints nothing on its standard output'], 0, 'Without `pipefail` a pipeline returns the status of its last command, so the missing file is hidden. With `set -o pipefail` the pipeline fails and `-e` stops the script.'),
+    say('Chip-design machines add two habits of their own. **Environment modules** (`module load vcs/2024`, `module list`, `module purge`) set `PATH` and licence variables for a tool version, so two projects can use different versions on the same server. And many sites still have **csh/tcsh** users: there you write `setenv NAME value` where bash writes `export NAME=value`, and a copied bash line fails with a confusing error.'),
+    mc('You run a job on the compute farm and log out. How do you keep long jobs alive and find their output later?', ['You cannot: a job always stops as soon as you log out of the farm', 'Submit them through the farm scheduler (LSF `bsub`, Slurm `sbatch`', 'Keep the laptop open forever, so that the job has a live session', 'Email the results to yourself, from a script that runs at the end'], 1, 'LSF `bsub` and Slurm `sbatch` do it on the farm; `nohup`/`tmux` on a single machine. Big companies run thousands of simulations at once through job schedulers. `bjobs`/`squeue` show what is running.'),
+    mc('What does `chmod +x run.sh` do?', ['Deletes the file, once the script has been run for the first time', 'Makes the file executable, so it runs as `./run.sh`', 'Makes the file read-only, so that nobody can edit the script again', 'Changes its owner to the user who ran the command, on the machine'], 1, 'Unix permissions: read, write and execute, for the owner, the group and others. `ls -l` shows them as rwxr-xr-x.'),
+  ],
+  recap: ['Everything runs on Linux: navigate with pwd, ls, cd; read with cat, less, head, tail -f.', 'Pipes chain tools: grep | sort | uniq -c | sort -rn.', 'Redirect with > (overwrite), >> (append), 2> (errors).', 'Regex: . [ ] * + ? ^ $ ( | ) {n,m}.', 'Long jobs go through the farm scheduler.', 'Quote "$var"; use globs, not $(ls); find -print0 | xargs -0.', 'set -euo pipefail for unattended scripts; module load picks tool versions; csh uses setenv.'],
+};
+
+export const git: Lesson = {
+  id: 'git',
+  title: 'Version Control with git',
+  concept: 'commits, branches, merges, conflicts, bisect, code review',
+  xp: 90,
+  steps: [
+    say('Chip designs are code, and hundreds of engineers edit the same repository every day. **git** keeps the full history, lets everyone work in parallel on **branches**, and merges their work together. Every design and verification team uses it (or something very like it).'),
+    art(`
+   git status              what changed?
+   git diff                show the changes
+   git add file.sv         stage a change for the next commit
+   git commit -m "msg"     record a snapshot
+   git log --oneline       history
+   git switch -c fix-fifo  create and switch to a new branch
+   git pull / git push     sync with the shared remote`),
+    mc('What is the **staging area** (the index) for?', ['It backs up your files', 'It lets you pick which changes go into the next commit', 'It compiles the code', 'It stores deleted files, so that they can be brought back later'], 1, 'So one commit holds one logical change. `git add` stages; `git commit` records what is staged. Small, focused commits make history readable and bugs easy to find.'),
+    ask('What command creates a commit from the staged changes with the message "fix fifo overflow"?', words('git commit -m "fix fifo overflow"', "git commit -m 'fix fifo overflow'", 'git commit -m fix fifo overflow', 'git commit --message "fix fifo overflow"', 'git commit --message="fix fifo overflow"'), '`git commit -m "fix fifo overflow"`. Good messages say what and why, in the imperative mood ("fix", not "fixed").', 'git commit with the -m flag.'),
+    say('Most work is shared through a **remote**, normally called `origin`. `git fetch` downloads new commits and moves your remote-tracking branch (`origin/main`) but changes none of your files or branches, so you can look first with `git log main..origin/main`. `git pull` is a fetch followed by a merge (or a rebase, with `--rebase`) into your current branch. If you have no local commits the merge is a **fast-forward**: the branch pointer just moves, with no merge commit.'),
+    mc('You run `git fetch` and your working files do not change. Why?', ['The fetch failed silently, so you must run it again to get the new work', 'Fetch only updates origin/main; your branch and files stay as they were', 'Fetch merges into a hidden branch, which has to be checked out first', 'Fetch needs the force option before it may touch the working files'], 1, 'Fetch is the safe half of pull: it updates the remote-tracking refs only. Merge or rebase afterwards, or use `git pull`.'),
+    say('Two more things you will meet in big repositories. A **submodule** pins another repository at an exact commit inside yours (`git submodule update --init` fetches it; clone with `--recursive` to do it in one go). **Git LFS** keeps big binaries such as waveforms or GDS files out of normal history: the repository stores small pointer files and the content lives on a separate server, fetched on checkout.'),
+    say('A **branch** is a movable pointer to a line of commits. You make a branch for your change, commit on it, and when it is reviewed, **merge** it back into `main`. If two people changed the same lines, git cannot decide, and you get a **merge conflict** to resolve by hand.'),
+    art(`
+   <<<<<<< HEAD
+   assign full = (count == DEPTH);
+   =======
+   assign full = (count >= DEPTH);
+   >>>>>>> fix-fifo
+
+   Keep the right version (or combine them), delete the markers, git add, git commit.`),
+    mc('What is the difference between **merge** and **rebase**?', ['None: both give exactly the same history, in the same shape', 'Merge joins histories; rebase replays commits in a line', 'Rebase deletes branches', 'Merge only works locally'], 1, 'Never rebase commits that others already have. Both integrate work. Rebase rewrites history, so it is for your own unpublished branch; merge is always safe on shared branches.'),
+    say('Before you ask for review, tidy your own unpublished commits with **interactive rebase**: `git rebase -i HEAD~3` lists the last three commits as `pick` lines. Change a word to `squash` (meld into the commit above, keeping both messages), `fixup` (meld, drop its message), `reword` (new message) or `drop` (delete the commit), save, and git replays them. This rewrites history, so never do it to commits others already have.'),
+    say('A superpower for verification engineers: **git bisect**. A test passed last week and fails today, with 300 commits in between. Bisect binary-searches the history: you mark one commit good and one bad, and git checks out the middle for you to test.'),
+    ask('A regression broke somewhere in the last 300 commits. At most how many test runs does `git bisect` need to find the guilty commit?', num(9), 'Each test halves the range: 2^9 = 512 ≥ 300, so at most 9 runs. With `git bisect run ./test.sh` it happens automatically.', 'log2 of the number of commits, rounded up.'),
+    mc('Before merging to main, most teams require a **pull request** (or merge request). Why?', ['To slow people down, so that fewer changes reach the main branch', 'Another engineer reviews the change, and CI runs lint, tests and regressions on it', 'git requires it, and refuses any merge that was not reviewed', 'To count commits, which the managers use to measure progress'], 1, 'Bugs are caught before they reach everyone. Code review and continuous integration. On chip teams, CI often runs smoke regressions, lint and synthesis checks on every request.'),
+    mc('Your simulation writes 2 GB of waveform files into the repository folder. What stops you from committing them by accident?', ['Nothing: git will store whatever is in the folder, so be careful', 'A `.gitignore` entry such as `*.fsdb` or `sim_out/`', 'git refuses large files automatically, and stops the commit', 'Deleting them by hand each time, before running git add again'], 1, 'Generated outputs (waveforms, logs, build products) never belong in git. `.gitignore` lists patterns to leave out.'),
+  ],
+  recap: ['status, diff, add, commit, log, switch -c, pull, push.', 'Stage to make focused commits.', 'Branches + merges; resolve conflicts by editing the markers.', 'Rebase only your own unpublished work.', 'git bisect finds the breaking commit in log2(n) tests.', 'fetch updates origin/main only; pull = fetch + merge (or rebase); submodules pin repos, LFS holds big files.', 'git rebase -i: pick, reword, squash, fixup, drop; tidy your own unpublished commits.', 'Pull requests: review + CI. .gitignore keeps outputs out.'],
+};
+
+export const python: Lesson = {
+  id: 'python',
+  title: 'Python for Engineers',
+  concept: 'lists, dicts, loops, functions, comprehensions, parsing logs',
+  xp: 100,
+  steps: [
+    say('**Python** is the glue of the chip industry: regression scripts, log parsers, reference models, test generators, data analysis, and whole testbenches (cocotb). You will write it every week in almost any role. Let us learn it by predicting what code prints. Type exactly what the program would print.'),
+    art(`
+   errors = 3
+   name = "fifo"
+   print(name.upper(), errors * 2)       →  FIFO 6`),
+    gen((r) => {
+      const a = pick(r, [2, 3, 4]), b = pick(r, [5, 7, 10]);
+      return ask(`What does this print?\n\n\`x = ${a}\`\n\`y = ${b}\`\n\`print(x * y + 1)\``, num(a * b + 1), `${a} × ${b} + 1 = ${a * b + 1}.`, 'Multiplication before addition, like maths.');
+    }),
+    say('**Lists** hold sequences; indexing starts at 0, and negative indexes count from the end. **Slices** `a[i:j]` take items i up to (not including) j.'),
+    gen((r) => {
+      const xs = [pick(r, [3, 5, 7]), pick(r, [1, 2, 4]), pick(r, [8, 9, 6]), pick(r, [0, 10, 11])];
+      const q = pick(r, [['xs[1]', xs[1]], ['xs[-1]', xs[3]], ['len(xs)', 4], ['sum(xs[1:3])', xs[1] + xs[2]], ['max(xs)', Math.max(...xs)]] as const);
+      return ask(`\`xs = [${xs.join(', ')}]\`. What is \`${q[0]}\`?`, num(q[1] as number), `${q[0]} = ${q[1]}. Index 0 is the first item, -1 the last, and xs[1:3] is items 1 and 2.`, 'Count from 0.');
+    }),
+    say('**Loops** repeat, and `range(n)` counts 0 .. n-1. **Comprehensions** build a list from a loop in one line: `[x * x for x in range(4)]` is `[0, 1, 4, 9]`.'),
+    gen((r) => {
+      const n = pick(r, [3, 4, 5, 6]);
+      const kind = pick(r, ['sq', 'even', 'count']);
+      if (kind === 'sq') { let s = 0; for (let i = 0; i < n; i++) s += i * i; return ask(`What does \`print(sum(x * x for x in range(${n})))\` print?`, num(s), `range(${n}) is 0..${n - 1}; the squares sum to ${s}.`, 'Square 0 through n-1, then add.'); }
+      if (kind === 'even') { const v = Array.from({ length: n * 2 }, (_, i) => i).filter((i) => i % 2 === 0).length; return ask(`What does \`print(len([i for i in range(${n * 2}) if i % 2 == 0]))\` print?`, num(v), `The even numbers in 0..${n * 2 - 1}: there are ${v}.`, 'Count the evens below the limit, including 0.'); }
+      let t = 0; for (let i = 1; i <= n; i++) t += i; return ask(`What does this print?\n\n\`total = 0\`\n\`for i in range(1, ${n + 1}):\`\n\`    total += i\`\n\`print(total)\``, num(t), `1 + 2 + ... + ${n} = ${t}. range(1, ${n + 1}) stops before ${n + 1}.`, 'range(a, b) includes a but not b.');
+    }),
+    say('**Dictionaries** map keys to values, which is perfect for counting things, like how many times each error appears in a log.'),
+    art(`
+   counts = {}
+   for line in open("run.log"):
+       if "UVM_ERROR" in line:
+           key = line.split(":")[1].strip()
+           counts[key] = counts.get(key, 0) + 1
+   for k, v in sorted(counts.items(), key=lambda kv: -kv[1]):
+       print(v, k)`),
+    mc('In that script, what does `counts.get(key, 0)` do?', ['Crashes with a KeyError if the key has not been seen yet', 'Returns the current count, or 0 if the key is new', 'Deletes the key from the dictionary, and returns its old value', 'Returns the key itself'], 1, '`dict.get(key, default)` avoids a KeyError. (`collections.Counter` does the whole counting job in one line.)'),
+    gen((r) => {
+      const s = pick(r, ['UVM_ERROR @ 120ns: scoreboard mismatch', 'UVM_ERROR @ 5ns: bad parity']);
+      const parts = s.split(':');
+      return ask(`\`line = "${s}"\`. What does \`print(line.split(":")[1].strip())\` print?`, words(parts[1].trim()), `split(":") cuts at the colon: ["${parts[0]}", "${parts[1]}"]. [1] is the second piece, and strip() trims the spaces: "${parts[1].trim()}".`, 'split at ":" and take the piece after it.');
+    }),
+    say('**Functions** package logic for reuse. In verification, a Python function is often the **reference model**: the golden answer your testbench compares the hardware against.'),
+    gen((r) => {
+      const x = pick(r, [0b1011, 0b1110, 0b0111, 0b10000001]);
+      const ones = x.toString(2).split('').filter((c) => c === '1').length;
+      return ask(`A reference model for a parity checker:\n\n\`def parity(x):\`\n\`    return bin(x).count("1") % 2\`\n\nWhat does \`parity(0b${x.toString(2)})\` return?`, num(ones % 2), `0b${x.toString(2)} has ${ones} ones; ${ones} % 2 = ${ones % 2}.`, 'Count the 1 bits, then take the remainder mod 2.');
+    }),
+    mc('Why do verification teams like writing reference models in Python rather than in SystemVerilog?', ['Python runs faster than hardware does, so the models are quicker', 'It is quick to write and read, has huge libraries, and tools like cocotb', 'SystemVerilog cannot do maths, so a model needs another language', 'It is required by UVM, which cannot call any other language at all'], 1, 'DPI and sockets connect it as well. Fast to write and easy to check against the spec. Performance-critical models move to C/C++ through DPI.'),
+  ],
+  recap: ['Predict before you run: that is how you learn a language.', 'Lists index from 0; -1 is the last; slices exclude the end.', 'range(a, b) stops before b; comprehensions build lists in one line.', 'Dicts count things; .get(k, 0) avoids KeyErrors.', 'split/strip parse log lines.', 'Functions make reference models.'],
+};
+
+export const flows: Lesson = {
+  id: 'flows',
+  title: 'Make, TCL and Tool Flows',
+  concept: 'Makefiles, dependencies, TCL scripting, EDA flow scripts',
+  xp: 90,
+  steps: [
+    say('Chip tools are not clicked, they are **scripted**. A synthesis run, a place-and-route flow or a regression is a pipeline of steps, each with inputs and outputs. **Make** decides which steps need to rerun, and **TCL** is the language almost every EDA tool (Synopsys, Cadence, Siemens, AMD Vivado) speaks.'),
+    art(`
+   # Makefile: target: dependencies, then the command (indented with a TAB)
+   netlist.v: rtl/*.sv constraints.sdc
+   	dc_shell -f synth.tcl
+
+   timing.rpt: netlist.v
+   	pt_shell -f sta.tcl`),
+    mc('You edit `constraints.sdc` and run `make timing.rpt`. What reruns?', ['Nothing, since the report file already exists in the folder', 'Only STA, since the constraints are read by the timing tool alone', 'Synthesis (netlist.v depends on the SDC), then STA', 'Everything in the project, since make cannot tell what changed'], 2, 'timing.rpt depends on netlist.v, which depends on the SDC. Make compares file timestamps along the dependency chain and rebuilds only what is out of date. The same idea powers incremental compiles and regressions.'),
+    mc('Make reports "missing separator". What is the most famous cause?', ['A missing semicolon at the end of the line before the recipe', 'A recipe line indented with spaces, not a TAB', 'The target has no dependencies, which make does not allow', 'The makefile is too long for make to parse in a single pass'], 1, 'Make recipes must start with a literal TAB character. Everyone hits this once.'),
+    say('**TCL** has a simple rule: everything is a command followed by words. `set x 5` stores a variable, `$x` reads it, and **square brackets run a command and substitute its result**: `[expr {$x * 2}]`.'),
+    art(`
+   set period 2.0
+   set half [expr {$period / 2}]
+   puts "half period = $half"          →  half period = 1.0
+
+   foreach cell [get_cells *reg*] {    # EDA commands return lists of objects
+     puts [get_attribute $cell ref_name]
+   }`),
+    gen((r) => {
+      const a = pick(r, [3, 4, 6]), b = pick(r, [2, 5, 10]);
+      return ask(`What does this TCL print?\n\n\`set a ${a}\`\n\`set b [expr {$a * ${b}}]\`\n\`puts $b\``, num(a * b), `[expr {$a * ${b}}] evaluates to ${a * b}, stored in b; puts prints ${a * b}.`, 'Brackets are replaced by the result of the command inside.');
+    }),
+    gen((r) => {
+      const n = pick(r, [3, 4, 5]);
+      const items = ['u_alu', 'u_fifo', 'u_ctrl', 'u_dma', 'u_uart'].slice(0, n);
+      return ask(`What does this TCL print?\n\n\`set blocks {${items.join(' ')}}\`\n\`puts [llength $blocks]\``, num(n), `llength counts list elements: ${n}. TCL lists are space-separated words in braces.`, 'Count the words in the list.');
+    }),
+    say('**Braces versus quotes** is the rule that trips everyone. `"..."` still substitutes `$x` and `[cmd]`. `{...}` substitutes **nothing**: it hands the text over untouched, which is how a script is passed to `if`, `foreach`, `proc` and `catch` to run later.'),
+    say('One more trap: in the Tcl version most EDA tools embed, a number with a **leading zero is octal**. `expr {010 + 1}` gives 9, and a value such as `08` from a timestamp or a cell name is an error in arithmetic. Read such fields with `scan $x %d n`, which always takes decimal.'),
+    art(`
+   set n 3
+   puts "n is $n"        →  n is 3
+   puts {n is $n}        →  n is $n
+
+   proc area {w h} { return [expr {$w * $h}] }
+   puts [area 4 5]                      →  20
+
+   set l {a b c}
+   lappend l d                          # l is now {a b c d}
+   puts "[llength $l] [lindex $l 1]"    →  4 b
+
+   dict set d clk 2.0                   # a dict maps keys to values
+   puts [dict get $d clk]               →  2.0
+
+   regexp {u_(\\w+)/(\\d+)} "u_alu/7" all name idx
+   puts "$name $idx"                    →  alu 7
+
+   set rc [catch {error "bad"} msg]     # catch returns 1 and keeps the message
+   puts "$rc $msg"                      →  1 bad`),
+    mc('A script runs `set n 3` and then `puts {n is $n}`. What appears?', ['n is 3', 'n is $n', 'The command fails with an error', 'Nothing is printed'], 1, 'Curly braces stop all substitution, so the text goes to puts exactly as typed. Double quotes would have printed n is 3.'),
+    mc('Why wrap a risky command in `catch`?', ['It makes the command run faster, as it skips the usual checks', 'An error becomes return code 1 plus a message, and the script goes on', 'It hides the output of the command from the log file', 'It sends the command to run on the compute farm instead'], 1, 'Without catch, one error stops the whole flow. With catch you can test the code, log the message and decide what to do next.'),
+    say('The EDA commands return **collections** of design objects, and a loop over them uses `foreach_in_collection`. A filter picks objects by attribute, for example every flop whose library cell starts with DFF.'),
+    art(`
+   set flops [get_cells -hier -filter "ref_name =~ DFF*"]
+   foreach_in_collection c $flops {
+     puts [get_attribute $c full_name]
+   }
+   puts [sizeof_collection [get_pins -hier */D]]`),
+    gen((r) => {
+      const a = pick(r, [4, 6, 8]), b = pick(r, [2, 3, 5]);
+      return ask(`What does this TCL print?\n\n\`set x ${a}\`\n\`set y {$x}\`\n\`puts [expr $y + ${b}]\``, num(a + b), `The braces keep y as the text $x, but expr substitutes variables again when it evaluates its arguments: ${a} + ${b} = ${a + b}.`, 'expr evaluates the text of its arguments, including any $ in it.');
+    }),
+    mc('In a synthesis script, what do `create_clock -period 1.0 [get_ports clk]` and `set_input_delay` define?', ['The RTL of the design, which the tool will go on to read next', 'Timing constraints (SDC): the clock and when inputs arrive relative to it', 'The layout of the chip, which the tool will then try to place', 'Simulation stimulus, which the testbench applies to the design'], 1, 'Synthesis and STA optimize against them. SDC is itself TCL. Constraints tell the tools what "fast enough" means; wrong constraints are a top cause of silicon timing failures.'),
+    mc('A regression flow runs 5,000 tests every night. What turns this into something one engineer can manage?', ['Running them by hand, one after the other, as the team does now', 'A scripted flow: test list, scheduler, pass/fail parser, summary', 'Buying a faster laptop, so that the runs complete a little sooner', 'Running only the tests that passed yesterday, and skipping the rest'], 1, 'The scheduler farms runs out in parallel, and the report shows failure signatures. Regression infrastructure is itself engineering. The triage lab later in the game makes you do it.'),
+  ],
+  recap: ['Make: targets, dependencies, recipes (TAB!); rebuild only what is stale.', 'TCL: `set x 5`, `$x`, `[cmd]` substitution, `expr {}`, lists, foreach.', 'Quotes substitute, braces do not; proc, dict, regexp and catch (return code 1 plus message).', 'EDA idiom: get_cells / get_pins with -filter, then foreach_in_collection.', 'EDA tools and SDC constraints are TCL.', 'Flows = scripted pipelines; regressions = test lists + scheduler + parsing + reports.'],
+};
+
+export const TOOLING_LESSONS = [shell, git, python, flows];

@@ -1,7 +1,10 @@
-import { complete, levelRecord, loadDraft, saveDraft } from '../../state';
+import { mentorSay } from '../../os/mentor';
+import { levelRecord, loadDraft, saveDraft } from '../../state';
 import { h, toast } from '../../ui/dom';
-import { celebrate, levelHeader, nextHref } from '../../ui/layout';
+import { levelHeader } from '../../ui/layout';
 import { defaultPhase, Phase, RunOutcome, SCENARIOS, score } from './scenarios';
+import { briefPanel, finish } from '../../ui/labkit';
+import { copyOf, snapOf, builderHistory } from './history';
 
 export function coveragePage(id: string): HTMLElement {
   const sc = SCENARIOS.find((s) => s.id === id);
@@ -20,6 +23,20 @@ export function coveragePage(id: string): HTMLElement {
   const persist = () => saveDraft(draftKey, { phases, seed });
   const total = () => phases.reduce((a, p) => a + p.count, 0);
 
+  // Undo (U54): each phase or seed change records the builder state it replaces. A run of slider or count changes to
+  // one control is one step (ui/undo), so a drag is undone in one go.
+  const hist = builderHistory();
+  const remember = (key: string) => hist.record(snapOf(phases, seed), key);
+  const undo = () => {
+    const s = hist.undo();
+    if (!s) { toast('Nothing to undo.', 'info'); return; }
+    const back = copyOf(s);
+    phases.splice(0, phases.length, ...back.phases);
+    seed = back.seed;
+    seedInput.value = String(seed);
+    persist(); renderBuilder();
+  };
+
   const renderBudget = () => {
     const t = total();
     budgetEl.className = `budget${t > sc.budget ? ' over' : ''}`;
@@ -29,7 +46,7 @@ export function coveragePage(id: string): HTMLElement {
   const renderBuilder = () => {
     builder.replaceChildren(...phases.map((ph, pi) => {
       const count = h('input', { type: 'number', min: 1, max: sc.budget, value: ph.count, class: 'num', 'aria-label': `Phase ${pi + 1} transaction count` }) as HTMLInputElement;
-      count.addEventListener('input', () => { ph.count = Math.max(1, Math.min(sc.budget, parseInt(count.value) || 1)); persist(); renderBudget(); });
+      count.addEventListener('input', () => { remember(`count-${pi}`); ph.count =Math.max(1, Math.min(sc.budget, parseInt(count.value) || 1)); persist(); renderBudget(); });
       const knobs = sc.knobs.map((k) => {
         const w = ph.weights[k.id];
         const sum = () => Object.values(w).reduce((a, b) => a + b, 0) || 1;
@@ -40,7 +57,7 @@ export function coveragePage(id: string): HTMLElement {
           const val = h('b', null, String(w[o.id]));
           const pct = h('span', { class: 'dim' });
           pctEls.set(o.id, pct);
-          slider.addEventListener('input', () => { w[o.id] = parseInt(slider.value); val.textContent = slider.value; refreshPct(); persist(); });
+          slider.addEventListener('input', () => { remember(`w-${pi}-${k.id}-${o.id}`); w[o.id] = parseInt(slider.value); val.textContent = slider.value; refreshPct(); persist(); });
           return h('div', { class: 'wrow' }, h('code', null, o.label), slider, val, pct);
         });
         const el = h('div', { class: 'knob' }, h('div', { class: 'knob-title' }, `${k.label} dist { ... }`), ...rows);
@@ -51,11 +68,15 @@ export function coveragePage(id: string): HTMLElement {
         h('div', { class: 'phase-head' },
           h('b', null, `Phase ${pi + 1}`),
           h('label', null, 'transactions ', count),
-          phases.length > 1 ? h('button', { class: 'btn ghost small', onclick: () => { phases.splice(pi, 1); persist(); renderBuilder(); } }, 'Remove') : null),
+          phases.length > 1 ? h('button', { class: 'btn ghost small', onclick: () => {
+            remember(`remove-${pi}`); phases.splice(pi, 1); persist(); renderBuilder();
+            // The Remove button is gone now; keep keyboard users on the way back, at Undo.
+            document.querySelector<HTMLElement>('[data-act="undo"]')?.focus();
+          } }, 'Remove') : null),
         ...knobs);
     }));
     if (phases.length < sc.maxPhases) {
-      builder.append(h('button', { class: 'btn ghost', onclick: () => { phases.push(defaultPhase(sc, 50)); persist(); renderBuilder(); } }, '+ Add phase'));
+      builder.append(h('button', { class: 'btn ghost', onclick: () => { remember('add'); phases.push(defaultPhase(sc, 50)); persist(); renderBuilder(); } }, '+ Add phase'));
     }
     renderBudget();
   };
@@ -86,33 +107,47 @@ export function coveragePage(id: string): HTMLElement {
   };
 
   const seedInput = h('input', { type: 'number', value: seed, class: 'num', 'aria-label': 'Random seed' }) as HTMLInputElement;
-  seedInput.addEventListener('input', () => { seed = parseInt(seedInput.value) || 1; persist(); });
+  seedInput.addEventListener('input', () => { remember('seed'); seed = parseInt(seedInput.value) || 1; persist(); });
 
   const runIt = () => {
     if (total() > sc.budget) { toast('Over the simulation budget - shorten your phases.', 'err'); return; }
     outcome = sc.run(phases, seed);
     renderReport();
     const s = score(sc, outcome);
+    if (!s.done) mentorSay(outcome.log.some((l) => l.error) ? 'You found the bug, but coverage still has holes. Shape the distributions toward the red bins.' : 'Coverage holes and no bug yet. Random alone will not get there: aim a phase at the corners.', 'thinking');
     if (s.done) {
-      const gained = complete(sc.id, sc.xp, s.stars);
-      celebrate(s.stars, gained, s.stars < 3 ? [`${outcome.total} transactions - do it in ${sc.par} or fewer for 3 stars.`] : [], nextHref(sc.id));
+      finish(sc.id, sc.xp, s.stars, s.stars < 3 ? [`${outcome.total} transactions - do it in ${sc.par} or fewer for 3 stars.`] : []);
     }
   };
 
   renderBuilder();
   renderReport();
 
-  return h('div', { class: 'level' },
+  const root = h('div', { class: 'level' },
     levelHeader(sc.title, sc.id, levelRecord(sc.id)?.stars ?? 0, sc.xp),
     h('div', { class: 'level-grid cov-grid' },
-      h('aside', { class: 'brief panel' }, h('div', { class: 'tag' }, sc.concept), h('div', { class: 'brief-body', html: sc.brief })),
+      briefPanel({ tag: sc.concept, html: sc.brief }),
       h('section', { class: 'work panel' },
         h('div', { class: 'toolbar' },
           h('label', null, '+ntb_random_seed=', seedInput),
           h('span', { class: 'spacer' }),
+          h('button', { class: 'btn ghost', 'data-act': 'undo', title: 'Ctrl+Z', 'aria-keyshortcuts': 'Control+Z', onclick: () => undo() }, 'Undo'),
           h('button', { class: 'btn primary', onclick: runIt }, '▶ Run regression')),
         budgetEl, builder),
       h('aside', { class: 'panel' }, h('h4', null, 'Coverage report'), report, h('h4', null, 'Transcript'), logEl),
     ),
   );
+  // Ctrl+Z undoes the builder, except while typing in a number, text or select field (their own undo applies there).
+  // Sliders and checkboxes are not typing fields, so Ctrl+Z works after a drag. A listener left by a closed page removes itself.
+  const onKey = (e: KeyboardEvent) => {
+    if (!root.isConnected) { document.removeEventListener('keydown', onKey); return; }
+    if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey || e.key.toLowerCase() !== 'z') return;
+    const t = e.target as HTMLElement;
+    if (t.closest?.('textarea, select, input:not([type=range]):not([type=checkbox]), [contenteditable="true"]')) return;
+    if (!root.contains(t) && t !== document.body) return;
+    e.preventDefault();
+    undo();
+  };
+  document.addEventListener('keydown', onKey);
+  return root;
 }

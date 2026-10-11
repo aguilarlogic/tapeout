@@ -1,8 +1,11 @@
-import { complete, levelRecord, loadDraft, saveDraft } from '../../state';
+import { mentorSay } from '../../os/mentor';
+import { levelRecord, loadDraft, saveDraft } from '../../state';
 import { h, svg, toast } from '../../ui/dom';
-import { celebrate, levelHeader, nextHref } from '../../ui/layout';
+import { levelHeader } from '../../ui/layout';
 import { TIMING_LEVELS } from './levels';
 import { analyzeTiming, edgeKey, emptyTiming, TimingReport, TimingState, TNode } from './sta';
+import { briefPanel, finish } from '../../ui/labkit';
+import { askConfirm } from '../../ui/modal';
 
 const COL_W = 128, ROW_H = 80, PAD = 24;
 const FF_W = 80, GATE_W = 100;
@@ -17,6 +20,8 @@ export function timingPage(id: string): HTMLElement {
   let rep: TimingReport = analyzeTiming(level, st);
   let sel: Sel = null;
   let reportPath = 0;
+  /** The gate or wire to focus after the next redraw, so keyboard focus survives the rebuild (U40). */
+  let focusKey: string | null = null;
 
   const schematicHost = h('div', { class: 'sta-schematic' });
   const inspector = h('div', { class: 'inspector' });
@@ -25,10 +30,19 @@ export function timingPage(id: string): HTMLElement {
   const report = h('pre', { class: 'sta-report' });
 
   const update = () => {
+    // A size or Vt button keeps keyboard focus: the inspector is rebuilt, so refocus the same button by position (U40).
+    const buttons = [...inspector.querySelectorAll('button')];
+    const at = buttons.indexOf(document.activeElement as HTMLButtonElement);
     rep = analyzeTiming(level, st);
     saveDraft(draftKey, st);
     render();
+    if (at >= 0) (inspector.querySelectorAll('button')[at] as HTMLButtonElement | undefined)?.focus();
   };
+  /** Gates and wires are focusable: Enter or Space selects one, as a click does. */
+  const onPick = (key: string, pick: () => void) => ({
+    onclick: () => { focusKey = key; pick(); render(); },
+    onkeydown: (ev: KeyboardEvent) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); focusKey = key; pick(); render(); } },
+  });
 
   const nodeById = new Map(level.nodes.map((n) => [n.id, n]));
   const pos = (n: TNode) => ({ x: PAD + n.x * COL_W, y: PAD + n.y * ROW_H });
@@ -37,7 +51,7 @@ export function timingPage(id: string): HTMLElement {
   const renderSchematic = () => {
     const maxX = Math.max(...level.nodes.map((n) => n.x)), maxY = Math.max(...level.nodes.map((n) => n.y));
     const W = PAD * 2 + maxX * COL_W + GATE_W, H = PAD * 2 + maxY * ROW_H + 46;
-    const root = svg('svg', { viewBox: `0 0 ${W} ${H}`, class: 'sta-svg', role: 'img', 'aria-label': 'Logic schematic' });
+    const root = svg('svg', { viewBox: `0 0 ${W} ${H}`, class: 'sta-svg', role: 'group', 'aria-label': 'Logic schematic' }); // a group, not an image: it holds the focusable nodes
 
     for (const e of level.edges) {
       const a = nodeById.get(e.from)!, b = nodeById.get(e.to)!;
@@ -48,7 +62,7 @@ export function timingPage(id: string): HTMLElement {
       const k = edgeKey(e);
       const crit = rep.critical.has(k) && rep.wns < 0;
       const selected = sel?.kind === 'edge' && sel.key === k;
-      const g = svg('g', { class: `sta-edge${crit ? ' crit' : ''}${selected ? ' sel' : ''}`, onclick: () => { sel = { kind: 'edge', key: k }; render(); } });
+      const g = svg('g', { class: `sta-edge${crit ? ' crit' : ''}${selected ? ' sel' : ''}`, tabindex: '0', role: 'button', 'aria-label': `Wire from ${e.from} to ${e.to}`, 'data-key': `e:${k}`, ...onPick(`e:${k}`, () => { sel = { kind: 'edge', key: k }; }) });
       g.append(svg('path', { d, class: 'hit' }), svg('path', { d, class: 'wire' }));
       const buf = st.buffers[k] ?? 0;
       const midY = (y1 + y2) / 2;
@@ -64,7 +78,7 @@ export function timingPage(id: string): HTMLElement {
       const p = pos(n);
       const selected = sel?.kind === 'node' && sel.id === n.id;
       const crit = rep.critical.has(n.id) && rep.wns < 0;
-      const g = svg('g', { class: `sta-node ${n.kind}${crit ? ' crit' : ''}${selected ? ' sel' : ''}${n.kind === 'ff' && endpointBad(n.id) ? ' bad' : ''}`, onclick: () => { sel = { kind: 'node', id: n.id }; render(); } });
+      const g = svg('g', { class: `sta-node ${n.kind}${crit ? ' crit' : ''}${selected ? ' sel' : ''}${n.kind === 'ff' && endpointBad(n.id) ? ' bad' : ''}`, tabindex: '0', role: 'button', 'aria-label': `${n.kind === 'ff' ? 'Flip-flop' : 'Gate'} ${n.label}`, 'data-key': `n:${n.id}`, ...onPick(`n:${n.id}`, () => { sel = { kind: 'node', id: n.id }; }) });
       if (n.kind === 'ff') {
         g.append(svg('rect', { x: p.x, y: p.y, width: FF_W, height: 44, rx: 4 }));
         g.append(svg('path', { d: `M${p.x},${p.y + 30} l8,6 l-8,6`, class: 'clkmark' }));
@@ -77,9 +91,15 @@ export function timingPage(id: string): HTMLElement {
         g.append(svg('text', { x: p.x + GATE_W / 2, y: p.y + 18, 'text-anchor': 'middle' }, `${n.label}${size > 1 ? ` X${size}` : ''}${lvt ? ' L' : ''}`));
         g.append(svg('text', { x: p.x + GATE_W / 2, y: p.y + 36, 'text-anchor': 'middle', class: 'sub' }, `${rep.gateDelay[n.id].toFixed(2)} ns`));
       }
+      // The name is what the node is and its figures. The figures are drawn beside the node, not inside it, so the
+      // node's own content is only its shape (axe compares a control's visible text with its name).
+      const texts = [...g.querySelectorAll('text')];
+      g.setAttribute('aria-label', `${n.kind === 'ff' ? 'Flip-flop' : 'Gate'} ${texts.map((t) => t.textContent ?? '').join(', ')}`);
       root.append(g);
+      for (const t of texts) { t.setAttribute('aria-hidden', 'true'); t.setAttribute('pointer-events', 'none'); root.append(t); }
     }
     schematicHost.replaceChildren(root);
+    if (focusKey) { (root.querySelector(`[data-key="${focusKey}"]`) as SVGElement | null)?.focus({ preventScroll: true }); focusKey = null; }
   };
 
   const renderInspector = () => {
@@ -211,23 +231,23 @@ export function timingPage(id: string): HTMLElement {
     if (!rep.passed) {
       const why = rep.wns < 0 ? 'setup is still violated' : rep.whs < 0 ? 'hold is still violated' : rep.conflicts.length ? 'the pipeline is inconsistent' : 'you are over the area or leakage budget';
       toast(`Can't sign off: ${why}.`, 'err');
+      mentorSay(`Not yet: ${why}. Click the worst path in the table and read its report from the top.`, 'concerned');
       return;
     }
-    const gained = complete(level.id, level.xp, rep.stars);
-    celebrate(rep.stars, gained, rep.stars < 3 ? [`Area ${rep.area} - hit ${level.par.area} or less for 3 stars.`] : [], nextHref(level.id));
+    finish(level.id, level.xp, rep.stars, rep.stars < 3 ? [`Area ${rep.area} - hit ${level.par.area} or less for 3 stars.`] : []);
   };
 
-  const reset = () => {
-    if (!confirm('Undo all changes on this block?')) return;
+  const reset = () => void askConfirm({ title: 'Undo all changes?', body: 'This block goes back to how it was when you opened it.', confirm: 'Undo all', danger: true }).then((ok) => {
+    if (!ok) return;
     Object.assign(st, emptyTiming());
     update();
-  };
+  });
 
   render();
   return h('div', { class: 'level' },
     levelHeader(level.title, level.id, levelRecord(level.id)?.stars ?? 0, level.xp),
     h('div', { class: 'level-grid sta-grid' },
-      h('aside', { class: 'brief panel' }, h('div', { class: 'tag' }, level.concept), h('div', { class: 'brief-body', html: level.brief })),
+      briefPanel({ tag: level.concept, html: level.brief }),
       h('section', { class: 'work panel' },
         h('div', { class: 'toolbar' }, h('button', { class: 'btn ghost', onclick: reset }, 'Reset'), h('span', { class: 'spacer' }), h('button', { class: 'btn primary', onclick: signoff }, 'Sign off timing')),
         schematicHost, inspector),

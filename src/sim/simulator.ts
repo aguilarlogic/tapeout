@@ -1,7 +1,7 @@
 // Elaborates a parsed module and simulates it cycle by cycle.
 //
-// Semantics are a faithful subset of IEEE 1364 for synthesizable RTL, with two
-// simplifications that are called out in the game's help text:
+// Semantics are a faithful subset of IEEE 1800 (SystemVerilog, which absorbed 1364) for synthesizable RTL, with two
+// simplifications that the labs' model note states to the player (plan S0.3):
 //   * 2-state values (no X/Z); registers start at 0.
 //   * All arithmetic is unsigned.
 // Expression widths follow Verilog's context-determined sizing rules, so classic
@@ -54,11 +54,15 @@ const SHIFT = new Set(['<<', '>>', '<<<', '>>>']);
 
 export const mask = (w: number): bigint => (1n << BigInt(w)) - 1n;
 
+export interface DesignState { values: Map<string, bigint>; mems: Map<string, bigint[]>; seen: (bigint[] | undefined)[] }
+
 export class Design {
   readonly name: string;
   readonly signals = new Map<string, Signal>();
   readonly params = new Map<string, { value: bigint; width: number; signed: boolean }>();
   readonly lints: Lint[] = [];
+  /** Compile warnings that do not cost a star: the 2-state model has no x/z, so such literals read as 0. */
+  readonly warnings: Lint[] = [];
   readonly ports: Signal[] = [];
 
   private values = new Map<string, bigint>();
@@ -73,6 +77,7 @@ export class Design {
   constructor(src: string | ModuleAst) {
     const ast = typeof src === 'string' ? parseModule(src) : src;
     this.name = ast.name;
+    for (const line of new Set(ast.xlits ?? [])) this.warnings.push({ line, message: 'x/z bits are treated as 0 in this 2-state simulator' });
     this.elaborate(ast);
     this.settle();
   }
@@ -132,7 +137,7 @@ export class Design {
         if (a.init) continue;
         if (sig.dir === 'input') throw new VerilogError(`cannot assign to input '${name}'`, a.line);
         if (sig.kind === 'reg' || sig.kind === 'integer') {
-          throw new VerilogError(`'${name}' is declared as a reg, so it can't be driven by 'assign'. Declare it as a wire, or drive it from an always block.`, a.line);
+          throw new VerilogError(`'${name}' is declared as a reg, so it can't be driven by 'assign'. Declare it as logic (or a wire), or drive it from an always block.`, a.line);
         }
         if (this.lvIsWhole(a.lhs, name)) claim(name, `assign on line ${a.line}`, a.line);
         else if (drivers.get(name)?.startsWith('always')) claim(name, `assign on line ${a.line}`, a.line);
@@ -153,7 +158,7 @@ export class Design {
         const sig = this.signals.get(name)!;
         if (sig.dir === 'input') throw new VerilogError(`cannot assign to input '${name}'`, blk.line);
         if (sig.kind === 'wire') {
-          throw new VerilogError(`'${name}' is a wire, so it can't be assigned inside an always block. Declare it as 'reg' (or 'output reg').`, blk.line);
+          throw new VerilogError(`'${name}' is a wire, so it can't be assigned inside an always block. Declare it as 'logic' (or 'output logic'); older code writes 'reg'.`, blk.line);
         }
         claim(name, `always block on line ${blk.line}`, blk.line);
       }
@@ -840,6 +845,21 @@ export class Design {
       this.settle();
     }
     throw new VerilogError('clock edges kept triggering each other (a generated clock loop?)', 0);
+  }
+
+  /** Copy of all state, so a search (bounded model checking) can backtrack. */
+  saveState(): DesignState {
+    return {
+      values: new Map(this.values),
+      mems: new Map([...this.mems].map(([k, v]) => [k, v.slice()])),
+      seen: [...this.combProcs, ...this.seqProcs].map((p) => p.lastSeen),
+    };
+  }
+
+  loadState(st: DesignState): void {
+    this.values = new Map(st.values);
+    this.mems = new Map([...st.mems].map(([k, v]) => [k, v.slice()]));
+    [...this.combProcs, ...this.seqProcs].forEach((p, i) => { p.lastSeen = st.seen[i]; });
   }
 
   get(name: string): bigint {

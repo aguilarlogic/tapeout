@@ -52,6 +52,23 @@ export interface CodePuzzle {
 
 export type UvmPuzzle = ArchPuzzle | OrderPuzzle | CodePuzzle;
 
+/** One line per part type: what the part is for, which tells the player where it goes. Never the slot itself (U55). */
+export const PART_HINTS: Record<string, string> = {
+  test: 'The test is the top of the tree: it builds the environment and starts the sequences, so nothing sits above it.',
+  env: 'The env is a container. Agents, the scoreboard and coverage all live inside it, and it lives inside the test.',
+  agent: 'An agent bundles one interface: its sequencer, driver and monitor. It belongs inside the env, beside the scoreboard.',
+  sqr: 'The sequencer arbitrates between sequences and hands items to the driver, so it sits in the agent with the driver.',
+  drv: 'The driver pulls items from the sequencer and drives the DUT pins, so it lives in the agent with the sequencer.',
+  mon: 'A monitor only watches the pins; it belongs on the passive side, next to the interface.',
+  scb: 'The scoreboard checks behaviour against a model and is fed by the monitors, so it lives in the env, not in one agent.',
+  cov: 'Coverage samples the transactions the monitors broadcast, so it belongs in the env, beside the scoreboard.',
+  seq: 'A sequence is an object, not a component. It is started from the test, on a sequencer, so it lives in the test.',
+  dut: 'The DUT is the RTL itself, outside the UVM tree. It sits at the far end of the interface, below the test.',
+};
+
+/** The toast for a part dropped in the wrong slot: the part's name, then where its role points. */
+export const misplacedMessage = (label: string, id: string): string => `${label} doesn't belong here. ${PART_HINTS[id]}`;
+
 export const UVM_PUZZLES: UvmPuzzle[] = [
   {
     kind: 'arch',

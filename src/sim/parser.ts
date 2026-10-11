@@ -1,7 +1,7 @@
 import { tokenize, Token, VerilogError } from './lexer';
 import type { AlwaysBlock, CaseItem, Decl, Expr, ModuleAst, NetKind, Sensitivity, Stmt } from './ast';
 
-// Binary operator precedence (higher binds tighter), per IEEE 1364 table 5-4.
+// Binary operator precedence (higher binds tighter), per IEEE 1800 (SystemVerilog, which absorbed 1364) table 11-2.
 const BIN_PREC: Record<string, number> = {
   '||': 1,
   '&&': 2,
@@ -23,6 +23,8 @@ export function parseModule(src: string): ModuleAst {
 
 class Parser {
   private p = 0;
+  private typedefs = new Map<string, { msb?: Expr; lsb?: Expr }>(); // typedef enum names -> their base range
+  private xlits = new Map<Expr, number>(); // literals with x/z/? bits; casez/casex labels are removed again
   constructor(private toks: Token[]) {}
 
   private get t(): Token { return this.toks[this.p]; }
@@ -51,6 +53,7 @@ class Parser {
       if (this.is('module')) throw new VerilogError('only one module per file is supported for now', this.t.line);
       throw new VerilogError(`unexpected '${this.t.text}' after endmodule`, this.t.line);
     }
+    if (this.xlits.size) mod.xlits = [...this.xlits.values()];
     return mod;
   }
 
@@ -178,11 +181,26 @@ class Parser {
           }
           if (this.accept('=')) {
             const rhs = this.expr();
-            const init = kind === 'reg' || kind === 'integer';
+            // a variable (reg, logic, integer) with = gets a power-on value; only a wire's = is a continuous assign
+            const init = kind !== 'wire';
             mod.assigns.push({ lhs: { k: 'id', name: id.text, line: id.line }, rhs, line: id.line, init });
           }
         } while (this.accept(','));
         this.expect(';');
+        return;
+      }
+      case 'typedef': {
+        this.next();
+        const base = this.parseEnum(mod);
+        const name = this.ident('type name');
+        this.typedefs.set(name.text, base);
+        this.expect(';');
+        return;
+      }
+      case 'enum': {
+        // enum logic [1:0] {A, B} state, next;  (constants become localparams, the variables plain logic)
+        const base = this.parseEnum(mod);
+        this.declareVars(mod, base, 'logic');
         return;
       }
       case 'parameter':
@@ -222,10 +240,52 @@ class Parser {
       case 'genvar':
         throw new VerilogError('generate blocks are not supported yet', t.line);
     }
+    if (t.kind === 'id' && this.peek().kind === 'id' && this.typedefs.has(t.text)) {
+      this.next();
+      this.declareVars(mod, this.typedefs.get(t.text)!, 'logic');
+      return;
+    }
     if (t.kind === 'id' && this.peek().kind === 'id') {
       throw new VerilogError(`module instantiation ('${t.text} ${this.peek().text} (...)') is not supported yet - keep your design in one module`, t.line);
     }
     throw new VerilogError(`unexpected '${t.text}' in module body`, t.line);
+  }
+
+  /** `enum [logic [N:0]] { A, B = 3, C }`: the names become localparams (auto-increment from 0), returns the base range. */
+  private parseEnum(mod: ModuleAst): { msb?: Expr; lsb?: Expr } {
+    this.expect('enum');
+    if (this.is('logic') || this.is('reg') || this.is('int') || this.is('integer')) this.next();
+    const range = this.is('[') ? this.parseRange() : undefined;
+    const w = range && range.msb.k === 'num' && range.lsb.k === 'num' ? Number(range.msb.lit.value - range.lsb.lit.value) + 1 : 0;
+    const lit = (v: bigint, line: number): Expr => ({ k: 'num', line, lit: w ? { value: v, width: w, sized: true, dcMask: 0n } : { value: v, width: 32, sized: false, dcMask: 0n, signed: true } });
+    this.expect('{', 'to open the enum list');
+    let nextVal: bigint | undefined = 0n;
+    let prev: string | undefined;
+    do {
+      const id = this.ident('enum constant');
+      let value: Expr;
+      if (this.accept('=')) value = this.expr();
+      else if (nextVal !== undefined) value = lit(nextVal, id.line);
+      else value = { k: 'binary', op: '+', l: { k: 'id', name: prev!, line: id.line }, r: lit(1n, id.line), line: id.line };
+      nextVal = value.k === 'num' ? value.lit.value + 1n : undefined;
+      mod.params.push({ name: id.text, value, local: true, line: id.line });
+      prev = id.text;
+    } while (this.accept(',') && !this.is('}'));
+    this.expect('}', 'to close the enum list');
+    if (!range) { // no base type given: an enum is an int, 32 bits
+      const n = (v: bigint): Expr => ({ k: 'num', line: 0, lit: { value: v, width: 32, sized: false, dcMask: 0n, signed: true } });
+      return { msb: n(31n), lsb: n(0n) };
+    }
+    return { msb: range.msb, lsb: range.lsb };
+  }
+
+  private declareVars(mod: ModuleAst, base: { msb?: Expr; lsb?: Expr }, kind: NetKind) {
+    do {
+      const id = this.ident('signal name');
+      if (mod.decls.some((d) => d.name === id.text)) throw new VerilogError(`'${id.text}' is declared twice`, id.line);
+      mod.decls.push({ name: id.text, kind, msb: base.msb, lsb: base.lsb, line: id.line });
+    } while (this.accept(','));
+    this.expect(';');
   }
 
   private parseAlways(): AlwaysBlock {
@@ -303,6 +363,7 @@ class Parser {
         }
         const labels: Expr[] = [];
         do labels.push(this.expr()); while (this.accept(','));
+        if (kind !== 'case') for (const l of labels) this.xlits.delete(l); // z, x and ? are don't-cares here
         this.expect(':', 'after case item');
         items.push({ labels, body: this.stmt() });
       }
@@ -409,7 +470,12 @@ class Parser {
 
   private primary(): Expr {
     const t = this.t;
-    if (t.kind === 'num') { this.next(); return { k: 'num', lit: t.num!, line: t.line }; }
+    if (t.kind === 'num') {
+      this.next();
+      const n: Expr = { k: 'num', lit: t.num!, line: t.line };
+      if (t.num!.dcMask) this.xlits.set(n, t.line);
+      return n;
+    }
     if (this.accept('(')) {
       const e = this.expr();
       this.expect(')');

@@ -1,0 +1,17 @@
+import type { Rule } from './types';
+
+// Part C, slice c-b: content that was wrong regardless of date (C6-C10, C12, C14-C16).
+export const RULES_C_B: Rule[] = [
+  { id: 'C7', why: 'C7: the stored ESD energy mostly burns in the 1.5 kΩ body resistance, not the clamp', ban: /all goes into the (protection|clamp)/ },
+  { id: 'C9', why: 'C9: a vertical smear is a CCD artifact; CMOS blooming is a halo', files: /incidents/, ban: /vertical (streak|smear)[^.]*bloom|bloom[^.]*vertical (streak|smear)/i },
+  { id: 'C10', why: 'C10: the radio allows about ±50 ppm; ±20 ppm is the design budget for the crystal alone', ban: /±20 ppm the protocol allows|protocol allows ±20 ppm/ },
+  { id: 'C8', why: 'C8: load capacitance pulls a crystal by ppm, never by 8.75 percent', ban: /26\.1 MHz/ },
+  { id: 'C12', why: 'C12: the Born rule is |b|², the squared magnitude, not b²', files: /practice\/domains|lessons\/quantum/, ban: /probability (is|=) [ab]²|the SQUARE of its amplitude/ },
+  { id: 'C14', why: 'C14: a PUF key is re-derived from stored non-secret helper data, so the claim "nothing stored" is wrong', ban: /PUF[^.]*nothing (is )?stored/i },
+  { id: 'C14b', why: 'C14: only the first stage of a root of trust is immutable', ban: /small, immutable block|An immutable hardware anchor|nothing can alter it/ },
+  { id: 'C15', why: 'C15: power-down is stop clocks, isolate, save, switch off', ban: /Stop clocks, save retention, enable isolation/ },
+  { id: 'C16', why: 'C16: an ASIL belongs to a hazardous event, not to a function such as braking', ban: /ASIL D, for example braking and steering/ },
+  { id: 'C16b', why: 'C16: the 10 FIT PMHF budget is for the whole item; one chip gets a share', ban: /over the 10 FIT limit/ },
+  { id: 'C6', why: 'C6: KV-cache size uses the KV width, not the model width', ban: /KV cache: \$\{layers\} layers, model width/ },
+  { id: 'C8b', why: 'C8: a crystal is pulled by ppm, so no percent-level frequency error from load capacitors', ban: /load capacitance pulled it off frequency/ },
+];

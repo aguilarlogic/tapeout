@@ -1,15 +1,24 @@
-import { complete, levelRecord, loadDraft, saveDraft } from '../../state';
+import { mentorSay } from '../../os/mentor';
+import { levelRecord, loadDraft, saveDraft } from '../../state';
 import { h, toast } from '../../ui/dom';
-import { celebrate, levelHeader, nextHref } from '../../ui/layout';
+import { levelHeader } from '../../ui/layout';
 import {
   analyze, Analysis, BoardState, compsOf, emptyBoard, erase, key, Layer, moveComp, netAt, padsOf, placeVia, route, unkey,
 } from './board';
 import { PCB_LEVELS } from './levels';
+import { briefPanel, finish } from '../../ui/labkit';
+import { askConfirm } from '../../ui/modal';
+import { touchGate } from '../../ui/touch';
 
 type Tool = 'route' | 'via' | 'erase' | 'move';
 const CELL = 34;
 
+/** Routing traces needs a mouse: on a phone the board opens behind an honest card (see ui/touch.ts). */
 export function pcbPage(id: string): HTMLElement {
+  return touchGate('pcb', () => buildPcb(id));
+}
+
+function buildPcb(id: string): HTMLElement {
   const level = PCB_LEVELS.find((l) => l.id === id);
   if (!level) return h('p', null, 'Unknown board.');
   const draftKey = `pcb.${level.id}`;
@@ -64,7 +73,7 @@ export function pcbPage(id: string): HTMLElement {
     h('div', { class: 'segmented' }, mkTool('route', 'Route', 'R'), mkTool('via', 'Via', 'V'), mkTool('erase', 'Erase', 'E'), level.movable?.length ? mkTool('move', 'Move', 'M') : null),
     h('div', { class: 'segmented' }, ...layerBtns),
     h('button', { class: 'btn ghost', onclick: () => doUndo(), title: 'Ctrl+Z' }, 'Undo'),
-    h('button', { class: 'btn ghost', onclick: () => { if (confirm('Clear the whole board?')) { snapshot(); st = emptyBoard(); commit(); } } }, 'Clear'),
+    h('button', { class: 'btn ghost', onclick: () => void askConfirm({ title: 'Clear the board?', body: 'Every trace and via goes. You can undo it with Ctrl+Z.', confirm: 'Clear', danger: true }).then((ok) => { if (ok) { snapshot(); st = emptyBoard(); commit(); } }) }, 'Clear'),
     h('span', { class: 'spacer' }),
     h('button', { class: 'btn primary', onclick: () => signoff() }, 'Sign off layout'),
   );
@@ -78,16 +87,17 @@ export function pcbPage(id: string): HTMLElement {
     renderSide();
     if (!analysis.passed) {
       toast('DRC failed - fix the errors listed on the right.', 'err');
+      const first = analysis.issues.find((i) => i.severity === 'error') ?? analysis.issues[0];
+      mentorSay(first ? `DRC says: ${first.message}` : 'Some nets are still open. Follow the white ratsnest lines.', 'concerned');
       return;
     }
-    const gained = complete(level.id, level.xp, analysis.stars);
     const notes: string[] = [];
     if (analysis.stars < 3) {
       if (analysis.issues.length) notes.push('Clear the warnings too.');
       if (analysis.totalLength > level.par.length) notes.push(`Total length ${analysis.totalLength} - par is ${level.par.length}.`);
       if (analysis.totalVias > level.par.vias) notes.push(`${analysis.totalVias} vias - par is ${level.par.vias}.`);
     }
-    celebrate(analysis.stars, gained, notes, nextHref(level.id));
+    finish(level.id, level.xp, analysis.stars, notes);
   };
 
   // ---------------------------------------------------------------- side panel
@@ -347,7 +357,9 @@ export function pcbPage(id: string): HTMLElement {
 
   const onKey = (ev: KeyboardEvent) => {
     if (!document.body.contains(canvas)) { window.removeEventListener('keydown', onKey); return; }
-    if ((ev.target as HTMLElement)?.tagName === 'INPUT') return;
+    if (['INPUT', 'TEXTAREA', 'SELECT'].includes((ev.target as HTMLElement)?.tagName)) return;
+    const win = canvas.closest('.win');
+    if (win && !win.classList.contains('focused')) return; // another window has the keyboard
     if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'z') { ev.preventDefault(); doUndo(); return; }
     const k = ev.key.toLowerCase();
     if (k === 'r') setTool('route');
@@ -374,8 +386,8 @@ export function pcbPage(id: string): HTMLElement {
   return h('div', { class: 'level' },
     levelHeader(level.title, level.id, levelRecord(level.id)?.stars ?? 0, level.xp),
     h('div', { class: 'level-grid pcb-grid' },
-      h('aside', { class: 'brief panel' }, h('div', { class: 'tag' }, level.concept), h('div', { class: 'brief-body', html: level.brief }),
-        h('p', { class: 'dim small' }, 'Keys: R route · V via · E erase · L switch layer · Ctrl+Z undo. Click a DRC message to highlight it.')),
+      briefPanel({ tag: level.concept, html: level.brief },
+        h('p', { class: 'dim small' }, h('span', { class: 'kbd-hint' }, 'Keys: R route · V via · E erase · L switch layer · Ctrl+Z undo. '), 'Click a DRC message to highlight it.')),
       h('section', { class: 'work panel' }, toolbar, h('div', { class: 'pcb-wrap' }, canvas), legend),
       h('aside', { class: 'panel drc' }, h('h4', null, 'Nets'), statsEl, h('h4', null, 'Design rule check'), issuesEl),
     ),

@@ -1,0 +1,122 @@
+# Mastery plan: taking every audit row to level 3
+
+The goal: take a complete beginner, with hand-holding at first, all the way to job-ready mastery in every topic of
+[CURRICULUM-AUDIT.md](CURRICULUM-AUDIT.md). The game may take months or years to finish. That is fine.
+
+Two rules apply to everything below:
+
+1. **Genuinely fun and unique.** Every tier is a different kind of play: conversation, puzzles, sandboxes, investigations,
+   code, projects. Nothing is a wall of text with a quiz stapled on.
+2. **Understandable at first.** Every skill starts with a TAPEOUT lesson that assumes nothing. Difficulty ramps
+   automatically. The hard modes unlock only after the player has shown they are ready, though anyone can try a boss
+   early if they want to.
+
+## The ladder is the audit
+
+The audit's depth scale becomes the game's progression system. Every audit row is a **skill**, and each skill has three
+tiers:
+
+| Level | Audit meaning | In the game | Mechanic |
+| --- | --- | --- | --- |
+| 1 · Aware | Explained, recall questions | **Learn** | A TAPEOUT lesson in the terminal: story, ASCII diagrams, questions with hints. Hand-holding. |
+| 2 · Practised | Calculations or a hands-on lab | **Practice** | Endless generated problem sets that ramp from easy to hard as you get them right, plus guided labs. |
+| 3 · Job-ready | Built, verified or debugged something realistic, unguided | **Boss** | No hints. A realistic scenario: an engineering problem chain, an incident to investigate with instruments, a design to build and verify in a lab, or a multi-week project. |
+
+**Skills.app** shows the whole audit table live, with the player's level in every row, plus a readiness bar for every
+role (DV engineer, physical design engineer, quantum control engineer…), computed from the skills that role needs. The
+audit document effectively becomes a playable screen.
+
+## Mechanics, and the skills each one unlocks
+
+| Mechanic | What it is | Takes these skills to 3 |
+| --- | --- | --- |
+| **Practice runner** | Generated problems with a difficulty ramp; an endless mode; a daily mix across the skills you have learned | Level 2 for every knowledge skill |
+| **Boss exams** | Multi-step engineering scenarios in the terminal: no hints, one attempt per step, 80% to pass | The math, physics, architecture and theory skills |
+| **Incidents** | Investigations in the terminal. A pager goes off; you get instruments (`measure`, `probe`, `shmoo`, `log`, `scope`, `tdr`, …) and a lab-time budget, find the root cause among many candidates, and pick the fix. Root causes are randomized, so replays differ. | Post-silicon, test, yield, SI/PI, power, packaging, memory, FuSa, security, RF, photonics, quantum operations, SoC integration, and more |
+| **Circuit Lab** | A SPICE-like simulator with DC, AC (Bode) and transient analysis, and a schematic editor | Circuits I/II, RC/RLC, ODEs, electronics, analog, power converters, PDN |
+| **Signals Lab** | Sampling, aliasing, convolution, FFT, FIR/IIR design against a spec mask, z-plane | Signals and systems, DSP, SerDes equalization |
+| **Code Lab** | A Python-subset interpreter with tests, plus a C-subset interpreter with a byte-addressed memory | Python, DSA, numerical methods, Monte Carlo, C and pointers, reference models |
+| **Shell Lab** | A simulated Linux machine: files, pipes, grep/regex, find, sort, Make, and git with branches and merge conflicts; a regression-triage game | Tooling, regressions, triage |
+| **SV Lab** | Extends the Verilog simulator with hierarchy, tasks/functions, classes, randomization and constraints, covergroups, interfaces, SVA, and a mini-UVM library | Every DV row, SystemVerilog design constructs, formal (bounded model checking on small designs), CDC |
+| **ISA Lab** | A RISC-V assembler and simulator | Assembly, the hardware/software interface, the CPU project |
+| **Architecture labs** | Pipeline hazards, an OoO rename/ROB scheduler, a trace-driven cache/memory simulator, an OS scheduler and paging | Architecture, performance modeling, OS |
+| **Implementation labs** | Floorplan and placement, clock trees, SDC writing, scan insertion with ATPG fault simulation, a layout editor with DRC/LVS | PD, STA, DFT, custom layout |
+| **Specialty labs** | A qubit simulator (Bloch sphere, pulses), an ADC/PLL explorer, a Smith-chart matcher, a DPA side-channel game, an NPU tiling puzzle, FMEDA, SRAM margins | The Act 7 roles |
+| **Projects** | Multi-part capstones: an RV32I core, verifying an AXI-to-APB bridge, a test plan from a spec, signing off a block | Each project is the final boss of a role |
+
+## Phases
+
+Each phase ships playable content and is committed on its own.
+
+- [x] **Phase 1: mastery framework.** Skills registry (every audit row, every role), practice runner with a difficulty
+  ramp, boss exams, Skills.app, and the `skills`, `practice` and `roles` terminal commands.
+- [x] **Phase 2: practice banks and bosses for every existing topic**, plus new foundation lessons: probability and
+  statistics, numerical methods, circuits I/II, signals and systems, DSP, control, electromagnetics, electronics/BJTs,
+  and tooling (Linux, git, regex, Python, TCL/Make).
+- [x] **Phase 3: the incident engine** and incidents for the role skills. Twelve incidents (`src/incidents/`): the
+  3 A.M. hang, the final-test yield drop, the wafer map, the field returns, the flaky PCIe link, the ringing rail, the
+  deaf radio, the dark optical channel, the flipping DRAM bits, the leaking key, the limp-mode storm and the qubit that
+  will not behave. Each has 5-6 candidate causes, 7-9 instruments with a lab-time cost, symptom-only fixes as traps,
+  and a random root cause per run. Tests prove every pair of causes can be told apart, that no single reading gives the
+  answer away, and that a careful engineer solves every case within 70% of the budget. The first incident comes with
+  a coach that crosses causes off after each reading; after that the notebook is the player's.
+- [x] **Teach-me walkthroughs on every practice question.** Stuck on a practice question? Say "teach me how" (or pick
+  the lifebuoy option on a multiple-choice question) and the mentor names the method, says when and why it applies,
+  then walks the problem one small step at a time with the numbers already in place. After a walkthrough you get the
+  same kind of problem with new numbers. Every practice generator in every set has one, and
+  `src/practice/teach.test.ts` checks seeds 1-25 at all three difficulties: each walkthrough's steps must accept their
+  own canonical answer, and a worked calculation must end on the question's answer.
+- [x] **Teach-me depth pass.** An audit of all 385 generators (46,200 sampled walkthroughs) found five gaps, all closed:
+  1. **Simulation generators no longer show a solved table.** The 17 generators that did (bool/0, prob/1, shell/1, os/2,
+     fsm/1, dv/1, uvm/0, pipe/0, pipe/1, cache/0, coherence/0, coherence/1, dram/0, bus/0, bus/1, pnr/2, fusa/1) now
+     walk the first three events with the player deciding each one (hit or miss? which state now? does a transfer
+     happen?) through the `sim` helper in `src/lessons/teach.ts`, and only then show the whole table. The test rejects
+     any walkthrough that shows a table but gives the player fewer than two steps.
+  2. **Thin multi-stage walkthroughs split into stages** (bit idioms, priority encoders, JTAG routes, DRAM refresh,
+     shared_ptr counts). The remaining single-step ones are one-formula questions such as `1240 / 1.12`, where the
+     explanation before the step does the teaching.
+  3. **Multiple-choice walkthroughs** keep their single reasoning step: they are concept questions, which deserve a
+     lighter touch than the numeric ones.
+  4. **Wrong-answer message** says "Read the step again" for non-numeric steps; "Check the arithmetic" is for numbers.
+  5. **Answer check tightened:** the test now requires a typed question's walkthrough to end on a step the player
+     answers, and the two generators that ended on an explanation (python `%`, C++ `use_count`) were reordered.
+- [x] **Phase 4: Circuit Lab.** A netlist-based SPICE engine (R, C, L, V, I, diodes, level-1 MOSFETs, Ebers-Moll BJTs, controlled sources, op-amps with GBW and rails, switches; DC, AC and transient with breakpoint alignment), a netlist editor with plots and a hover read-out, and 25 missions (17 guided, 8 randomized no-hint bosses with standard-value parts) wired into Circuits, ODEs, Electronics, Analog, PMIC, RF and Board. Every mission has a reference solution that the tests prove passes all goals while the starter fails. A schematic editor and a phase-margin mission are left for the balancing pass.
+- [x] **Phase 5: Code Lab and Shell Lab**, with regression triage. Code Lab is done: a Python-subset interpreter (classes, comprehensions, f-strings, closures, exceptions, `collections`/`heapq`/`math`/`random`) and a C-subset interpreter with a byte-addressed little-endian memory and AddressSanitizer-style reports (null dereference, heap/stack/global overflow, use-after-free, use-after-return, double free, writes to string literals, leaks). 32 missions: 14 Python, 7 guided C, 5 C bug hunts read from sanitizer output, and 6 randomized no-hint bosses, each with hidden cases and a reference solution the tests prove correct. Shell Lab is a virtual machine in the browser: an in-memory Unix filesystem with modes and a logical clock, a real shell language (pipes, redirects, here-documents, `$(...)`, arithmetic, loops, functions, globs, brace expansion, scripts with shebangs), about 60 commands including `grep`, `sed`, `awk` (a full mini-awk), `find`, `sort`, `xargs`, `diff` and `python3` (reusing the Code Lab interpreter), `make` with pattern rules and a pretend `cc` that embeds headers so stale builds are visible, and a git simulator (commit, branch, checkout, three-way merge with real conflict markers, reset, restore, revert, cherry-pick, stash, tags, bisect with `run`). 22 missions: 9 shell, 3 make/python, 6 git, and 4 randomized no-hint bosses (regression triage, build-system repair, merge of diverged branches, bisect-then-revert, among them), each proven solvable by the tests. The terminal supports history, tab completion and multi-line input.
+- [x] **Phase 6: SV Lab**: SystemVerilog, UVM, SVA, formal, CDC. Three engines, 41 missions, every one with a reference solution the tests prove correct and weak or wrong solutions the tests prove are rejected.
+  - **SVA and formal** (13 missions, 2 bosses): a sequence/property parser and checker with implication, delays and ranges, repetition, `$past`, `$rose`/`$fell`, cover and assume, a bounded model checker with counterexample waveforms, and hidden buggy-design mutants that the learner's assertions must catch. Assume and fix missions use exhaustive search.
+  - **Testbench interpreter** (23 missions, 3 bosses): a generator-based SystemVerilog interpreter with an event scheduler (active, NBA and time-wheel regions), classes with virtual dispatch, parameterised classes, interfaces and virtual interfaces, mailboxes, semaphores, events, fork/join variants, queues, associative and dynamic arrays, structs and enums. A constraint solver handles `rand`/`randc`, `dist`, `soft`, `solve before`, implication, `foreach` and array-size constraints, nested objects, `std::randomize`, `rand_mode` and `constraint_mode`. Covergroups support explicit, array, transition, ignore and illegal bins, crosses with `binsof`, auto bins and holes reporting. A mini-UVM library written in SystemVerilog (phases and objections, factory with type and instance overrides, `config_db` with glob paths, sequences and sequencers, analysis ports, subscribers, scoreboards) runs the learner's agent, environment and tests. Missions: classes, copying, virtual methods, interfaces, randomization, weights, array constraints, coverage and holes, fork; layered benches, a self-checking FIFO bench, a register model; UVM sequences, driver, monitor and scoreboard, `config_db` debugging, factory overrides, a coverage subscriber, objections; bosses that ask for a whole UVM agent, a full class-based ALU environment, and the repair of a bench with five classic bugs. Learner benches run against the correct design and hidden mutants, with a coverage goal where it applies. Not modelled: 4-state values, clocking blocks, generate loops, UVM field automation and a real `uvm_reg` library (a register-model mission covers the idea).
+  - **CDC Lab** (5 missions, 1 boss): a static crossing analysis (domain of every flop and net, crossings classified as synchronizer, bus, qualified bus, unsynchronized or combinational-glitch, with first-flop fan-out and enable rules) combined with a two-clock stress simulation where flops that sample a changing signal capture a random old/new mix per bit and per register. Missions: two-flop synchronizer, toggle pulse synchronizer, Gray-code counter, four-phase data handshake and the asynchronous FIFO boss (clock ratios and traffic randomized per variant).
+- [x] **Phase 7: ISA and architecture labs**, OS labs, and the RISC-V project. Four engines and 44 missions, every one with a reference solution that the tests prove correct and weak or wrong answers that the tests prove are rejected.
+  - **ISA Lab** (18 missions, 3 bosses): an RV32IM assembler and disassembler (pseudo-instructions, directives, `%hi`/`%lo`), a simulator with a debugger (registers, listing, execution trace, memory view), hidden test cases with ABI checks (callee-saved registers, stack discipline), and bosses on strings, performance (instruction-count budgets) and recursion.
+  - **Architecture Lab** (16 missions, 3 bosses): trace-driven models fed by real programs running on the ISA simulator. *Pipeline*: forwarding paths, load-use stalls, predictors (static, 1-bit, 2-bit, BTB, return stack), hardware cost budgets, and software scheduling and unrolling in assembly that must keep its results. *Cache*: a simulator with three-C miss classification, LRU/FIFO/random, write-back vs write-through, AMAT and cost models, and missions on block size, conflict misses vs padding, the cyclic-access pathology, matrix-multiply tiling and a design boss. *Out-of-order*: ROB, renaming, issue width and units, with stall accounting, window-size vs memory latency, bottleneck diagnosis and a design boss. Targets come from an exhaustive search at build time, so every mission is solvable and discriminating.
+  - **OS missions** (5 Code Lab missions, 1 boss): round-robin, page replacement (FIFO vs LRU, Belady), deadlock detection, a first/best-fit allocator, and a boss comparing FCFS, SJF and round-robin waiting times with arrivals.
+  - **RISC-V core project** (5 missions, 1 boss): the learner writes a single-cycle RV32IM core in Verilog, in four steps (ALU and word memory, branches and jumps, byte and halfword accesses, multiply and divide). A testbench plays the memory and compares the core's whole store stream, and the pc after every instruction, with the ISA simulator on random programs; failures point at the first differing store, the instruction that produced it and the cycle window. The boss is a bring-up: a core with three bugs, chosen by seed from thirteen, to be found from failing programs. Tests prove that every one of the thirteen bugs is caught.
+- [x] **Phase 8: implementation labs**: DFT, PD, STA and layout. Four labs, 21 missions on the generic lab page (typed controls, text areas, tables, bars, grid maps). Every mission has a reference solution that the tests prove correct and weak or wrong answers that the tests prove are rejected; targets for search-style missions are computed by exhaustive search or annealing at build time, so they are always reachable.
+  - **DFT Lab** (6 missions, 1 boss): a gate-level netlist engine with full-scan flops, stuck-at fault simulation and exhaustive ATPG. Detecting a given fault (activation and propagation), covering all faults with a vector budget, finding redundant (untestable) faults, scan test time with one and several chains, LFSR BIST (periods, primitive polynomials) and a boss on a random unseen block.
+  - **PD Lab** (6 missions, 1 boss): HPWL placement with annealed references, L-route global-routing demand and overflow, a recursive clock tree (skew vs latency vs power), a resistive power mesh (IR drop vs stripe width vs bumps), 2x2 macro floorplanning, and a closure boss with a hard macro, a critical net and routing capacity.
+  - **STA Lab** (4 missions, 1 boss): reading a path report (setup, hold, Fmax), OCV derates and CRPR, multicycle exceptions with the hold adjustment and the unsafe-exception trap, and an ECO-budget boss.
+  - **Layout Lab** (5 missions, 1 boss): a rectangle layout language with a design-rule checker, connectivity and device extraction, and LVS (opens, shorts, wrong devices). Fix DRC errors, draw an inverter, debug an LVS failure, draw a NAND2, and a boss that draws a NAND2 or NOR2 from its schematic within an area budget.
+- [x] **Phase 9: Signals Lab and specialty labs.** 6 Signals missions and 20 specialty missions on the generic lab page, each with a reference solution proved by tests over many seeds and wrong answers proved rejected.
+  - [x] **Signals Lab** (5 missions, 1 boss, on the generic lab page with a new SVG plot view): aliasing and choosing a sample rate around an interferer, windowed-sinc FIR design (taps, window, cutoff), FFT resolution and leakage (record length and window), converter noise (bits, oversampling, delta-sigma order against power), PID tuning on an under-damped plant, and a boss that sizes an anti-alias filter, sample rate and ADC together at minimum cost. Targets come from exhaustive search over the models the learner runs, checked over 40 seeds per mission.
+  - [x] **Specialty labs** (new Specialty Lab kind; 19 guided missions and 1 boss, each wired into the skill's practice or boss tier, replacing the earlier "plan" placeholders):
+    - **RF**: reflection coefficient, VSWR and return loss from an impedance; an L-match with a lossy inductor (topology, L and C solved numerically, bandwidth checked).
+    - **Photonics**: optical link budget with WDM split, couplers, modulator type and energy per bit; ring-filter WDM channel plan (Q, linewidth, crosstalk, FSR).
+    - **Memory, process, package**: 6T SRAM sizing with Pelgrom mismatch; read/write assists and Vmin against energy; spare-row redundancy and good dies per wafer; junction temperature, TIM, heat sink, fan and throttling against cost.
+    - **FPGA**: resource counting (DSP, LUT, FF, block-RAM aspect ratios); pipelining for Fmax against flip-flops and latency.
+    - **AI**: output-stationary matmul tiling (buffer fit, DRAM traffic, tile overhead); a boss sizing an accelerator on a roofline (array, precision, batch).
+    - **Security**: CPA key recovery from simulated power traces; a defence mission (masking, shuffling, noise) judged by a real second-order attack.
+    - **Safety**: FMEDA metrics (SPFM, LFM, ASIL); the cheapest mechanism set for an ASIL target; fault-injection confidence bounds.
+    - **Quantum**: one-qubit state preparation by BFS-checked shortest sequence; T1/T2 gate budgets; pulse calibration with leakage, DRAG and decoherence.
+- [x] **Phase 10: the roles still missing**: EDA/CAD, library characterization, I/O and ESD, SoC integration, clocking/PLL, image sensors, MEMS, neuromorphic, emerging devices, application engineering/TPM. Three new chapters in Act 7 ("Design tools & clocking", "Chip integration", "Sensors & frontier"); every skill now has all three tiers built and the old "plan" placeholders are gone.
+  - **Lessons, practice and bosses**: a guided lesson, a practice bank (at least three generators) and a boss for each of the ten roles.
+  - **Incidents** (4): the dead USB ports (ESD, latch-up, CDM, back-powering, floating shield), the silent peripheral (address overlap, clock gate, reset, interrupt, byte lanes, power domain), the banded image (flicker, reference ripple, hot pixels, column FPN, blooming, black-level drift) and the board that will not boot (straps, sequencing, crystal, decoupling, reset RC, flash level).
+  - **Labs** (4 on the generic lab page): reading an NLDM delay table (interpolation and extrapolation), setup and hold from the clock-to-Q pushout curves, PLL loop-filter design (bandwidth, phase margin, capacitor area on a live Bode plot) and PLL jitter (reference against VCO noise, reference frequency and optimum bandwidth).
+  - **Code Lab** (3 missions and a boss, Python): Lee maze routing, a mini static timing analyzer, a DPLL SAT solver, and a boss that reports worst slack and the critical path on random netlists.
+- [x] **Phase 11: capstones, the career story, and balancing.**
+  - **Capstones**: the multi-part projects of the plan are the SV Lab bosses (a full UVM agent, a class-based ALU environment, a bench repair, an asynchronous FIFO), the RISC-V core project and the lab bosses. On top of those, every one of the 32 roles ends in a **hiring panel** (`cap-<role>`, a new chapter "Hiring panels" in Act 7): 12 hard questions with no hints, drawn fresh on every attempt from the practice sets of the skills the role needs (75% to pass). Passing makes the player "hired" for the role.
+  - **Career story**: each rank has a story beat (`src/mastery/career.ts`) that TAPEOUT tells at promotion. The `career` command shows the rank, XP to the next rank, the roles the player is hired for, and the three roles closest to a hiring panel. Skills.app marks hired roles and offers the panel once a role passes 60% readiness.
+  - **Balancing**: the campaign is now about 81,000 XP, so the rank thresholds (previously topped out at 13,500) were stretched to 0 / 1.5k / 5k / 14k / 28k / 44k / 62k. Each gap is at least as long as the one before, the first promotion comes inside Act 1, and Fellow needs about three quarters of the campaign. Tests keep the thresholds in step with the curriculum as content is added.
+  - **Audit fixes** (October 2026): see [AUDIT-FIX-PLAN.md](AUDIT-FIX-PLAN.md) for the work order and its status table. Practice grading, the incident evidence rule, answer-length balance, hiring panels, promotion beats, Daily Mix, reset, skill mapping, CI and the hosted lazy-loading build are done; generator variety, guided-lab target tightening and a Web Worker for the RV/SV/SVA checks are done too; the lab-kit refactor and the faster test suite (about 31 s, from 64 s) are done, so every item in the plan is complete (see the status table).
+
+The source of truth for what is built is `src/mastery/skills.ts`. It lists, for each skill, the modules at each tier. A
+tier with no modules yet shows as "in development" in Skills.app, so the game always reports its own gaps honestly.

@@ -1,25 +1,26 @@
-import { complete, levelRecord } from '../../state';
+import { mentorSay } from '../../os/mentor';
+import { levelRecord } from '../../state';
 import { h, svg, toast } from '../../ui/dom';
-import { celebrate, levelHeader, nextHref } from '../../ui/layout';
-import { ArchPuzzle, CodePuzzle, OrderPuzzle, UVM_PUZZLES } from './puzzles';
+import { levelHeader } from '../../ui/layout';
+import { ArchPuzzle, CodePuzzle, misplacedMessage, OrderPuzzle, UVM_PUZZLES } from './puzzles';
+import { briefPanel, finish } from '../../ui/labkit';
 
 export function uvmPage(id: string): HTMLElement {
   const pz = UVM_PUZZLES.find((p) => p.id === id);
   if (!pz) return h('p', null, 'Unknown puzzle.');
   let mistakes = 0;
-  const finish = () => {
+  const done = () => {
     const stars = mistakes === 0 ? 3 : mistakes <= 2 ? 2 : 1;
-    const gained = complete(pz.id, pz.xp, stars);
-    celebrate(stars, gained, mistakes ? [`${mistakes} wrong attempt${mistakes > 1 ? 's' : ''} - a perfect run earns 3 stars.`] : [], nextHref(pz.id));
+    finish(pz.id, pz.xp, stars, mistakes ? [`${mistakes} wrong attempt${mistakes > 1 ? 's' : ''} - a perfect run earns 3 stars.`] : []);
   };
-  const miss = () => { mistakes++; };
+  const miss = () => { mistakes++; if (mistakes === 3) mentorSay('Three misses. Think about who talks to whom: sequences make items, drivers drive pins, monitors only watch.', 'thinking'); };
 
-  const body = pz.kind === 'arch' ? archView(pz, miss, finish) : pz.kind === 'order' ? orderView(pz, miss, finish) : codeView(pz, miss, finish);
+  const body = pz.kind === 'arch' ? archView(pz, miss, done) : pz.kind === 'order' ? orderView(pz, miss, done) : codeView(pz, miss, done);
 
   return h('div', { class: 'level' },
     levelHeader(pz.title, pz.id, levelRecord(pz.id)?.stars ?? 0, pz.xp),
     h('div', { class: 'level-grid' },
-      h('aside', { class: 'brief panel' }, h('div', { class: 'tag' }, pz.concept), h('div', { class: 'brief-body', html: pz.brief })),
+      briefPanel({ tag: pz.concept, html: pz.brief }),
       h('section', { class: 'work panel' }, body),
     ),
   );
@@ -65,13 +66,17 @@ function archView(pz: ArchPuzzle, miss: () => void, finish: () => void): HTMLEle
       const el = h('div', {
         class: `slot${comp ? ' filled' : ''}${isParent ? ' container' : ''}`,
         style: `left:${s.x}%;top:${s.y}%;width:${s.w}%;height:${s.h}%`,
+        // Slots are reachable and operable by keyboard too (U39): Tab to a slot, Enter or Space places the picked part.
+        tabindex: '0', role: 'button', 'aria-label': comp ? `Slot: ${comp.label}` : 'Empty slot',
+        onkeydown: (ev: KeyboardEvent) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); (ev.currentTarget as HTMLElement).click(); } },
         onclick: (ev: Event) => {
           ev.stopPropagation();
           if (!picked) { toast('Pick a component from the palette first.', 'info'); return; }
           if (placed[s.id]) return;
           if (pz.palette.find((c) => c.id === picked)!.id !== s.answer) {
             miss();
-            toast(`${pz.palette.find((c) => c.id === picked)!.label} doesn't belong there.`, 'err');
+            const part = pz.palette.find((c) => c.id === picked)!;
+            toast(misplacedMessage(part.label, part.id), 'err');
             return;
           }
           placed[s.id] = picked;
@@ -95,7 +100,7 @@ function archView(pz: ArchPuzzle, miss: () => void, finish: () => void): HTMLEle
   };
   renderPalette();
   renderDiagram();
-  return h('div', null, h('h4', null, 'Components'), palette, info, diagram);
+  return h('div', null, h('h3', { class: 'sub-head' }, 'Components'), palette, info, diagram);
 }
 
 function orderView(pz: OrderPuzzle, miss: () => void, finish: () => void): HTMLElement {
@@ -121,7 +126,7 @@ function orderView(pz: OrderPuzzle, miss: () => void, finish: () => void): HTMLE
     }));
   };
   render();
-  return h('div', null, h('h4', null, 'Phases (click in execution order)'), pool, list);
+  return h('div', null, h('h3', { class: 'sub-head' }, 'Phases (click in execution order)'), pool, list);
 }
 
 function codeView(pz: CodePuzzle, miss: () => void, finish: () => void): HTMLElement {
