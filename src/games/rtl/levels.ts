@@ -94,6 +94,32 @@ endmodule`,
     hints: ['NAND is just NOT applied to AND: ~(a & b).', 'Each output needs its own assign statement.'],
   },
   {
+    id: 'half-adder-v',
+    track: 'rtl',
+    title: 'Half Adder in Verilog',
+    concept: 'sum and carry with assign',
+    xp: 100,
+    brief: `
+      <p>You built a half adder from gates. Now describe the same circuit in Verilog. Adding two bits gives a <b>sum</b> bit and a <b>carry</b> bit.</p>
+      <p><code>assign y = ...;</code> means "y is always equal to this expression": it is a wire, not a one-time instruction.
+      <code>^</code> is XOR (1 when the bits differ) and <code>&amp;</code> is AND (1 only when both are 1).</p>
+      <h4>Spec</h4>
+      <ul><li><code>sum = a ^ b</code></li><li><code>carry = a &amp; b</code></li></ul>
+      <p class="note">Replace the two <code>TODO</code> comments with one <code>assign</code> line each.</p>`,
+    starter: `module half_adder(input a, input b, output sum, output carry);
+  // TODO sum: 1 when exactly one of a and b is 1
+  // TODO carry: 1 only when both a and b are 1
+
+endmodule
+`,
+    golden: `module half_adder(input a, input b, output sum, output carry);
+  assign sum = a ^ b;
+  assign carry = a & b;
+endmodule`,
+    stimulus: () => ({ vectors: exhaustive([['a', 1], ['b', 1]]) }),
+    hints: ['Each output gets its own assign line. Use ^ for sum and & for carry.', 'Try a = 1, b = 1: sum should be 0 and carry 1, because 1 + 1 = 10 in binary.'],
+  },
+  {
     id: 'mux2',
     track: 'rtl',
     title: 'Choose Wisely',
