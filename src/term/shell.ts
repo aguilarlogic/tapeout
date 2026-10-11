@@ -12,7 +12,7 @@ import { BOSSES, findBoss, findPractice, PRACTICE, problem } from '../practice';
 import { gradePractice, PRACTICE_COUNT, PRACTICE_HARD, PRACTICE_PASS, PRACTICE_START, rampStep, type Boss, type Difficulty, type PracticeSet } from '../practice/types';
 import { setMood } from '../os/avatar';
 import { launchGame, randomGame } from '../os/launch';
-import { best, dailyGoal, levelRecord, load, playerName, prefs, Prefs, Profile, profile, rank, RANKS, recordBest, resetAll, setPrefs, setProfile, totalXp, updateCard } from '../state';
+import { best, dailyGoal, levelRecord, load, onChange, playerName, prefs, Prefs, Profile, profile, rank, RANKS, recordBest, resetAll, setPrefs, setProfile, totalXp, updateCard } from '../state';
 import { h, stars as starEls } from '../ui/dom';
 import { runIncident } from './incident';
 import { Interrupted, Redirect, rich, Terminal } from './terminal';
@@ -20,6 +20,7 @@ import { award, promotionLine, type Promotion } from '../mastery/promotion';
 import { finishGoal, type GoalResult } from '../daily';
 import { dayKey, MILESTONE_XP, MIX_RECORD, streakLine } from '../streak';
 import { signsOff } from './stakes';
+import { GOAL_CHOICES, progressReport, runWrap, wrapDue } from './wrap';
 
 const pickOne = <T>(xs: T[]) => xs[Math.floor(Math.random() * xs.length)];
 const PRAISE = ['Correct.', 'Yes.', 'Exactly.', 'Nice.', 'Right on.', 'That\'s it.'];
@@ -35,8 +36,16 @@ export class Shell {
   private taught = false;
   /** Set by `question()` when the player skipped the problem and did not walk through it. */
   private skipped = false;
+  /** The shell is idle, waiting at its prompt. */
+  private atPrompt = false;
 
-  constructor(public term: Terminal, private go: (route: string) => void) {}
+  constructor(public term: Terminal, private go: (route: string) => void) {
+    // The chapter can end in another window (the Verilog lab) while the shell waits at its prompt: wake it, so the wrap
+    // shows up right away. Only at the prompt: never cut a lesson or practice run short.
+    // Clear the flag at once: one save often follows another (the level, then the rank), and a second interrupt would
+    // cut the wrap's first question short.
+    onChange(() => { if (this.atPrompt && wrapDue()) { this.atPrompt = false; this.term.interrupt(); } });
+  }
 
   /** Ask the shell to run a command as soon as it can, interrupting whatever it is waiting for. */
   run(cmd: string) {
@@ -51,7 +60,9 @@ export class Shell {
     }
     for (;;) {
       try {
-        const cmd = this.queue.shift() ?? (await this.term.ask({ prompt: `${playerName().toLowerCase().replace(/\s+/g, '')}@tapeout:~$`, chips: this.idleChips() }));
+        // The wrap goes before anything queued: the chapter's end card, then whatever the player picked next.
+        if (wrapDue()) await runWrap(this.term, (v) => this.queue.push(v));
+        const cmd = this.queue.shift() ?? (await this.prompt());
         await this.exec(cmd);
       } catch (e) {
         if (!(e instanceof Interrupted)) {
@@ -59,6 +70,15 @@ export class Shell {
           this.term.print(`kernel panic: ${(e as Error).message}. TAPEOUT recovered.`, 'err');
         }
       }
+    }
+  }
+
+  private async prompt(): Promise<string> {
+    this.atPrompt = true;
+    try {
+      return await this.term.ask({ prompt: `${playerName().toLowerCase().replace(/\s+/g, '')}@tapeout:~$`, chips: this.idleChips() });
+    } finally {
+      this.atPrompt = false;
     }
   }
 
@@ -117,8 +137,8 @@ export class Shell {
     prof.background = (['new', 'student', 'pro'] as const)[bg];
     await t.say(['Great, then you know the basics. We can move fast and fill the gaps.', 'Excellent. Then I will skip the pleasantries and aim for the hard stuff.'][bg - 1], 'happy');
     await t.say('And what do you want to become?');
-    const goal = await t.choose(['Digital design engineer (RTL)', 'Verification engineer (DV)', 'Physical design / timing engineer', 'Hardware / board engineer', 'Computer architect', 'A specialist: analog, RF, memory, AI chips, security, quantum...', 'Not sure yet, show me everything']);
-    prof.goal = (['design', 'verif', 'pd', 'board', 'arch', 'special', 'unsure'] as const)[goal];
+    const goal = await t.choose(GOAL_CHOICES.map(([label]) => label));
+    prof.goal = GOAL_CHOICES[goal][1];
     setProfile(prof);
     await t.say('Here is the plan. Six core acts take you from electrons all the way up to out-of-order cores, and a seventh covers the specialist roles, from analog and RF to quantum computers:');
     this.printActs();
@@ -136,6 +156,8 @@ export class Shell {
     const t = this.term;
     const line = raw.trim();
     if (!line) return;
+    // Hidden on purpose (not in help): the playtest report.
+    if (line.toLowerCase().split(/\s+/).join(' ') === 'log export') return this.logExport();
     const [cmd, ...rest] = line.split(/\s+/);
     const arg = rest.join(' ');
     switch (cmd.toLowerCase()) {
@@ -239,6 +261,17 @@ export class Shell {
         return t.say(pickOne([`I do not know \`${cmd}\` yet. Type \`help\` to see what I can do.`, `Command not found: \`${cmd}\`. Try \`help\`, or ask me \`what is <something>\`.`]), 'thinking');
       }
     }
+  }
+
+  /** `log export`: the progress report as JSON, copied to the clipboard when the browser allows it, else shown. */
+  private async logExport() {
+    const t = this.term;
+    const text = JSON.stringify(progressReport(), null, 2);
+    let copied = false;
+    try { await navigator.clipboard.writeText(text); copied = true; } catch { /* no clipboard here: show it below */ }
+    if (copied) return t.print(`Copied your progress log to the clipboard (${text.length} characters).`, 'dim');
+    void t.block(h('figure', { class: 'term-art' }, h('pre', null, text)), 'instant');
+    t.print('The clipboard is not available here. Copy the log above.', 'dim');
   }
 
   private help() {
