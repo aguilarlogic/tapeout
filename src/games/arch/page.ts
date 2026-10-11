@@ -5,12 +5,15 @@ import { clearDraft, loadDraft, saveDraft } from '../../state';
 import { rng } from '../../sim/harness';
 import { h } from '../../ui/dom';
 import { editor } from '../../ui/editor';
-import { finishLab, goalItems, hintBox, labFrame, useSeed, variantButton } from '../../ui/labkit';
+import { finish, finishLab, goalItems, hintBox, labFrame, type LabGoal, starsFor, useSeed, variantButton } from '../../ui/labkit';
 import { highlightAsm } from '../isa/page';
 import { findArchLevel } from './levels';
 import { defaults, type ArchResult, type Control, type Values, type View } from './types';
 
 const PLOT_COLORS = ['#6cc8ff', '#ffb454', '#8be28b', '#ff7a90'];
+
+/** Boss labs: a pass after two or more wrong submits is capped at 2 stars (the boss twin of the hint cap in starsFor). */
+const attemptStars = (wrongSubmits: number) => (wrongSubmits >= 2 ? 2 : 3);
 
 /** A small SVG line/stem plot; the axes autoscale to the data. */
 function plotEl(v: Extract<View, { kind: 'plot' }>): HTMLElement {
@@ -116,16 +119,25 @@ export function archPage(id: string): HTMLElement {
   const goalList = h('ul', { class: 'goals' });
   const metricBox = h('div', { class: 'arch-metrics' });
   const viewBox = h('div', { class: 'arch-viewbox' });
-  let last: ArchResult | undefined;
+  // Boss labs: live runs show metrics and the view only. Goals are revealed by Submit alone, and each wrong submit is
+  // counted (the count persists per variant, so a reload or Reset does not win back the attempts).
+  const wrongKey = `${draftKey}.wrong`;
+  let wrong = boss ? (loadDraft<number>(wrongKey) ?? 0) : 0;
+  let revealed: LabGoal[] | undefined;
+  const goalsShown = (live: LabGoal[]): HTMLElement[] => {
+    if (!boss) return goalItems(live);
+    if (!revealed) return [h('li', { class: 'dim small' }, 'Goals are hidden until you submit.')];
+    return [h('li', { class: 'dim small' }, 'As of your last submit:'), ...goalItems(revealed)];
+  };
   const run = (): ArchResult => {
     let res: ArchResult;
     try { res = inst.run(values, ed?.value); } catch (e) { res = { goals: [], metrics: [], error: { message: (e as Error).message } }; }
-    last = res;
-    goalList.replaceChildren(...goalItems(res.goals));
+    goalList.replaceChildren(...goalsShown(res.goals));
     metricBox.replaceChildren(...res.metrics.map(([k, v]) => h('div', { class: 'arch-metric' }, h('span', { class: 'dim small' }, k), h('b', null, v))));
     viewBox.replaceChildren(...[res.view, res.extra].map((x) => (x ? viewEl(x) : '')));
     ed?.markLines(res.error?.line ? [res.error.line] : [], []);
     if (res.error) { status.className = 'status err'; status.textContent = res.error.message + (res.error.line ? ` (line ${res.error.line})` : ''); }
+    else if (boss) { status.className = 'status idle'; status.textContent = 'Changes run automatically. Submit checks the goals.'; }
     else if (res.goals.every((g) => g.ok)) { status.className = 'status ok'; status.textContent = `All ${res.goals.length} goals met. Submit to bank the result.`; }
     else { const bad = res.goals.filter((g) => !g.ok); status.className = 'status err'; status.textContent = `${bad.length} of ${res.goals.length} goals not met.`; }
     return res;
@@ -135,12 +147,28 @@ export function archPage(id: string): HTMLElement {
     const res = run();
     if (res.error) { mentorSay(status.textContent ?? '', 'concerned'); return; }
     const bad = res.goals.filter((g) => !g.ok);
-    if (bad.length) { if (submit) mentorSay(`Not yet: ${bad[0].label}${bad[0].note ? ` (${bad[0].note})` : ''}.`, 'concerned'); return; }
     if (!submit) return;
+    if (!boss) {
+      if (bad.length) { mentorSay(`Not yet: ${bad[0].label}${bad[0].note ? ` (${bad[0].note})` : ''}.`, 'concerned'); return; }
+      status.textContent = `PASS: all ${res.goals.length} goals met.`;
+      finishLab(level, usage.hints);
+      return;
+    }
+    revealed = res.goals;
+    goalList.replaceChildren(...goalsShown(res.goals));
+    if (bad.length) {
+      wrong += 1;
+      saveDraft(wrongKey, wrong);
+      status.className = 'status err';
+      status.textContent = `${bad.length} of ${res.goals.length} goals not met. Wrong submits: ${wrong}.`;
+      mentorSay(`Not yet: ${bad[0].label}${bad[0].note ? ` (${bad[0].note})` : ''}.${wrong === 2 ? ' A second wrong submit caps this lab at 2 stars.' : ''}`, 'concerned');
+      return;
+    }
+    const stars = Math.min(starsFor(usage.hints), attemptStars(wrong));
+    status.className = 'status ok';
     status.textContent = `PASS: all ${res.goals.length} goals met.`;
-    finishLab(level, usage.hints);
+    finish(level.id, level.xp, stars, wrong >= 2 ? [`${wrong} wrong submits: capped at 2 stars.`] : []);
   };
-  void last;
 
   const toolbar = h('div', { class: 'toolbar' },
     h('button', { class: 'btn', onclick: () => check(false), title: 'Ctrl+Enter' }, '▶ Run'),
