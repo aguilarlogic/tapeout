@@ -4,7 +4,7 @@ import { qty } from '../lessons/answers';
 import { calc, choice, walk } from '../lessons/teach';
 import { ask, mc, pick, say } from '../lessons/types';
 import { boss, practice } from './types';
-import { concept, sci, sig } from './util';
+import { atLevel, concept, sci, sig } from './util';
 
 const kT = 1.38e-23 * 300;
 const db10 = (x: number) => 10 * Math.log10(x);
@@ -58,7 +58,7 @@ export const analogPractice = practice('practice-analog', 'Analog Drills', 'op-a
   },
   (r, d) => {
     if (d === 1) {
-      const c = pick(r, [0.1, 0.5, 1, 2]), v = Math.sqrt(kT / (c * 1e-12)) * 1e6;
+      const c = pick(r, [0.1, 0.2, 0.5, 1, 2, 5]), v = Math.sqrt(kT / (c * 1e-12)) * 1e6;
       return walk(ask(`kT/C noise at 300 K on a ${c} pF sampling capacitor, in µV rms? (kT = 4.14×10⁻²¹ J)`, qty(v, 'uV', 0.03, sig(v)), `√(kT/C) = √(4.14e-21 / ${c}e-12) = ${sig(v)} µV. It depends only on C: the resistor sets how fast the noise arrives, not how much.`, 'v = √(kT/C).'),
         'kT/C noise', 'Every switch has a resistor with thermal noise, and it is frozen onto the capacitor when the switch opens. The rms noise voltage left on the capacitor is √(kT ÷ C), and surprisingly it does not depend on the resistor. Bigger capacitor, less noise.',
         calc('kT ÷ C in V² (C in farads, so 1 pF = 1e-12):', `4.14e-21 / ${c}e-12`, kT / (c * 1e-12), '', sci(kT / (c * 1e-12), 2), 0.03),
@@ -72,7 +72,7 @@ export const analogPractice = practice('practice-analog', 'Analog Drills', 'op-a
         calc('4kTRB in V² (R in ohms, B in hertz):', `4 × 4.14e-21 × ${rk}e3 × ${b}e6`, v2, '', sci(v2, 2), 0.03),
         calc('Square root, in µV (× 1e6):', `sqrt(${sci(v2, 2)}) × 1e6`, v, 'uV', sig(v), 0.03));
     }
-    const vt = pick(r, [50, 100, 200]), c = (kT / (vt * 1e-6) ** 2) * 1e12;
+    const vt = pick(r, [30, 50, 100, 150, 200, 300]), c = (kT / (vt * 1e-6) ** 2) * 1e12;
     const v2 = (vt * 1e-6) ** 2;
     return walk(ask(`Your sampler may add at most ${vt} µV rms of kT/C noise. What is the smallest sampling capacitor, in pF?`, qty(c, 'pF', 0.03, sig(c)), `C = kT / v² = 4.14e-21 / (${vt}e-6)² = ${sig(c)} pF. Halving the noise needs 4× the capacitance, and 4× the power to drive it: the core trade-off of every ADC front end.`, 'Solve v = √(kT/C) for C.'),
       'sizing a capacitor for kT/C noise', 'The noise voltage is v = √(kT ÷ C). To find the capacitor for a noise budget, turn it around: square both sides to get v² = kT ÷ C, so C = kT ÷ v². Convert µV to volts first (× 1e-6).',
@@ -121,14 +121,17 @@ export const analogPractice = practice('practice-analog', 'Analog Drills', 'op-a
       calc('The frequency range, in MHz (GHz difference × 1000):', `(${hi} - ${lo}) × 1000`, (hi - lo) * 1000, 'MHz', sig((hi - lo) * 1000, 4), 0.005),
       calc('Voltage range = range ÷ Kvco:', `${sig((hi - lo) * 1000, 4)} / ${kv}`, v, 'V', sig(v), 0.02));
   },
-  (r) => concept(r, [
+  (r, d) => concept(r, [...atLevel(2, [
     ['Your feedback amplifier has only 15° of phase margin. What do you see on a step?', 'Heavy ringing and slow settling', ['A slow, overdamped rise with no overshoot', 'Lower DC gain at the output', 'A clean, slightly faster rise'], 'phase margin', 'In a feedback loop, the signal fed back should arrive so as to correct the error. Phase margin measures how far the loop is from arriving exactly in phase with (reinforcing) the error, which is an oscillator. Small margin means a ringing, slow-to-settle response; about 60° is a comfortable target.', ['Less phase margin means the loop is:', 'Closer to oscillating', ['Further from oscillating', 'More heavily damped']], 'With 15° of margin the loop is close to oscillation.'],
     ['Pelgrom: σ(ΔVt) = A/√(W·L). How do you halve the mismatch of a transistor pair?', 'Make each device 4× the area', ['Make each device 2× the area', 'Halve L and double W', 'Raise the gate overdrive of the pair'], 'device matching', 'Two "identical" transistors never match exactly. The random difference in their threshold voltage shrinks with the square root of the gate area. To cut it in half, the area must grow by 2 × 2 = 4 times.', ['To halve something that falls as 1/√area, the area must be:', '4 times larger', ['2 times larger', 'Half']]],
     ['Why is almost every precision analog circuit differential?', 'Common noise cancels and the swing doubles', ['It halves the power of each stage', 'Single-ended circuits cannot amplify small signals', 'It needs fewer transistors per stage'], 'differential circuits', 'A differential circuit uses the DIFFERENCE between two signals. Anything that disturbs both halves equally (supply ripple, substrate noise, coupled interference) drops out in the subtraction, while the wanted signal, moving in opposite directions on each half, doubles.', ['A disturbance that hits both halves equally is:', 'Cancelled in the difference', ['Doubled in the difference', 'Amplified with it']], 'Noise and supply ripple common to both halves drop out in the difference, while the wanted signal doubles.'],
     ['What does a bandgap reference add together to get a voltage that barely moves with temperature?', 'A PTAT voltage and a CTAT diode voltage', ['Two diode voltages that both fall with heat', 'A Zener voltage and a resistor drop', 'The supply voltage divided by two resistors'], 'the bandgap reference', 'A diode\'s voltage falls as it gets hotter (CTAT). The voltage difference between two diodes at different currents rises with temperature (PTAT). Add the right amount of each and the changes cancel, leaving about 1.2 V whatever the temperature.', ['To make a temperature-independent voltage, you add:', 'A rising and a falling term', ['Two rising terms in any ratio', 'Two falling terms']], 'The PTAT term rises with temperature and the diode (CTAT) voltage falls with it.'],
     ['What does chopping do in a precision amplifier?', 'Moves the signal away from offset and 1/f noise', ['Cuts the supply between samples to save power', 'Clips large signals to protect the input', 'Adds hysteresis so the output never chatters on noise'], 'chopping', 'An amplifier\'s offset and 1/f noise sit at very low frequency, right where slow signals are. Chopping swaps the signal polarity at a high rate so the wanted signal is moved to a high frequency while the offset stays at DC; a filter can then separate them.', ['Offset stays at DC while the signal is moved to:', 'A high frequency', ['A lower frequency', 'DC, with the offset']], 'It modulates the input up in frequency, so offset and 1/f noise can be filtered away.'],
     ['Why add a cascode transistor to a gain stage?', 'It raises the output resistance, and so the gain', ['It raises the gm of the input device', 'It removes the need for a bias current', 'It cuts the noise of the stage to zero'], 'cascodes', 'The gain of a stage is gm × (output resistance). A second transistor stacked on top of the first shields the first one from the output voltage, which multiplies the output resistance by about gm·ro. That is how gain comes back in short-channel devices.', ['Gain = gm × Rout, so a higher Rout means:', 'More gain', ['Less gain', 'The same gain']], 'Gain is gm·Rout.'],
-  ], (why) => `${why}.`),
+  ]),
+    ...atLevel(1, [['What does a voltage follower (unity-gain buffer) do?', 'Copies its input with low output impedance', ['Amplifies the input by a factor of ten or more', 'Filters out high frequencies', 'Converts voltage into current'], 'voltage follower', 'A unity-gain buffer has its output tied to its inverting input, so the output equals the input. It draws almost no current from the source and drives a load with a low output impedance.', ['A voltage follower has a gain of:', 'One', ['Ten', 'Zero']]]]),
+    ...atLevel(3, [['Why does a current mirror need matched devices?', 'Mismatch sets the error in the copied current', ['Matching makes the mirror faster than a single device', 'It lets the mirror run without any supply', 'Matched devices never need a bias voltage at all'], 'current mirror matching', 'A current mirror copies a reference current into another branch. Threshold and geometry mismatch between the two transistors show up directly as a current error, so layout matching (common centroid) matters.', ['A current mirror copies a current by:', 'Matching two transistors', ['Amplifying the reference', 'Sharing a bias node only']]]]),
+  ], (why) => `${why}.`, d),
 ]);
 
 export const analogBoss = boss({
@@ -189,7 +192,7 @@ export const rfPractice = practice('practice-rf', 'RF Drills', 'dBm, wavelength,
       calc('λ in mm = 300 ÷ (f × √εr):', `300 / (${ff} × ${sig(Math.sqrt(er), 4)})`, l, 'mm', sig(l), 0.02));
   },
   (r, d) => {
-    const zl = pick(r, [10, 25, 75, 100, 150]), g = (zl - 50) / (zl + 50);
+    const zl = pick(r, [10, 25, 75, 100, 150, 200, 300, 20]), g = (zl - 50) / (zl + 50);
     const idea = 'When a load ZL is not equal to the line impedance Z0 (50 Ω), part of the wave reflects. The reflection coefficient Γ = (ZL - Z0) ÷ (ZL + Z0) says how much: 0 means a perfect match, ±1 means everything reflects. It is negative when ZL is below Z0.';
     if (d === 1) return walk(ask(`A ${zl} Ω load on a 50 Ω line. Reflection coefficient Γ?`, qty(g, '', 0.02, sig(g)), `Γ = (${zl} - 50)/(${zl} + 50) = ${sig(g)}.${g < 0 ? ' Negative: the reflected wave is inverted.' : ''}`, 'Γ = (ZL - Z0)/(ZL + Z0).'),
       'the reflection coefficient', idea,
@@ -394,12 +397,16 @@ export const pmicPractice = practice('practice-pmic', 'Power Drills', 'LDOs, buc
       'ESR voltage step', 'A real capacitor has a small series resistance, its ESR. The moment a current step starts flowing through it, Ohm\'s law gives an instant voltage step of I × ESR, before the charge has even begun to drain. An ampere times a milliohm is a millivolt.',
       calc('ΔV = I × ESR, in mV (A × mΩ = mV):', `${i} × ${esr}`, v, 'mV', String(v), 0.02));
   },
-  (r) => concept(r, [
+  (r, d) => concept(r, [...atLevel(2, [
     ['Why are GaN and SiC switches taking over chargers and EV inverters?', 'Wide band gap: higher breakdown, faster switching', ['They are cheaper than silicon and need no special gate driver', 'They conduct freely in both directions', 'Their narrow band gap lowers on-resistance'], 'wide-band-gap switches', 'A semiconductor with a wider band gap can withstand a higher electric field before breaking down, so the switch can be smaller for the same voltage. Smaller means less capacitance and faster edges, so less switching loss.', ['A smaller switch for the same voltage has:', 'Less capacitance, faster edges', ['More capacitance, slower edges', 'The same capacitance']], 'Their wide band gap gives higher breakdown and faster switching with lower loss.'],
     ['Why use a multiphase buck for a 200 A CPU rail?', 'Phases share the current and their ripples cancel', ['One phase cannot make voltages below 1 V', 'It lowers the output voltage for the CPU', 'It removes the need for output capacitors on the rail'], 'multiphase converters', 'Several buck converters share the load, each staggered in time. Each carries a fraction of the current, so each inductor and switch is smaller, and their ripple currents partly cancel at the shared output, which also shrinks the capacitors needed.', ['With N phases sharing the load, each carries:', 'About 1/N of the current', ['The full current, in turns', 'N times the current']], 'So each inductor is smaller and the response is faster.'],
     ['Why put an LDO after a switching regulator for a PLL supply?', 'It rejects the switcher\'s ripple', ['It raises the overall efficiency', 'It raises the voltage for the PLL', 'LDOs are faster to design than switchers'], 'LDO after a switcher', 'A switching regulator is efficient but its output has ripple and spikes at the switching frequency. An LDO has good power-supply rejection, so it removes most of that, at a small cost in efficiency. Noise-sensitive circuits like PLLs get a clean rail.', ['The LDO in this chain cleans up:', 'The switcher\'s ripple', ['The PLL\'s own jitter', 'Ground bounce on the board']], 'The LDO gives the sensitive circuit a quiet rail.'],
     ['What does a PMIC\'s power sequencer do?', 'Orders the rails and watches them for faults', ['Measures battery age and state of charge', 'Sets the CPU frequency with DVFS', 'Balances the converter phases'], 'power sequencing', 'A chip can be damaged or latch up if one supply comes up before another it depends on (for example, I/O power before the core). The sequencer turns each rail on in the required order with the required delays and watches for faults.', ['If the I/O rail comes up before the core rail, the chip may:', 'Latch up or be damaged', ['Boot faster than normal', 'Save leakage power']], 'It turns rails on and off in the order and timing the SoC requires, and monitors them for faults.'],
-  ], (why) => `${why}.`),
+  ]),
+    ...atLevel(1, [['What does a buck converter do?', 'Steps the voltage down with a switch', ['Doubles the voltage with a charge pump', 'Filters noise out of a clean supply', 'Limits current to a fixed value'], 'buck converter', 'A buck converter chops the input with a switch and smooths it with an inductor and capacitor. Its output is set by the duty cycle, and the losses stay low because the switch is either fully on or fully off.', ['A buck converter output is set mainly by:', 'Its duty cycle', ['Its load only', 'The clock only']]]]),
+    ...atLevel(2, [['What does an LDO need to work?', 'An input above the output plus dropout', ['A switching inductor, a diode, and a clock source', 'A clock at the switching frequency', 'A negative supply rail'], 'LDO dropout', 'A low-dropout regulator is a linear pass device. It needs the input to stay above the output by its dropout voltage, and its efficiency is roughly output over input.', ['An LDO efficiency is about:', 'Output voltage over input voltage', ['Input over output', 'One at any voltage']]]]),
+    ...atLevel(3, [['What does a PMIC integrate that a discrete design does not?', 'Several regulators and sequencing logic', ['Only the battery charger', 'Nothing, because a PMIC is just a voltage reference', 'A higher clock speed for the core'], 'PMIC', 'A power management IC puts several regulators, power switches, and the sequencing and monitoring logic on one die. That saves board area and makes the power-up order repeatable.', ['A PMIC sequences the rails to:', 'Power up in the required order', ['Run all at once, always']]]]),
+  ], (why) => `${why}.`, d),
 ]);
 
 export const pmicBoss = boss({

@@ -3,7 +3,7 @@ import { bin, expr, hexa, num, qty } from '../lessons/answers';
 import { calc, choice, count, show, sim, step, walk } from '../lessons/teach';
 import { art, ask, between, mc, pick, say, type Rng } from '../lessons/types';
 import { boss, practice, tier } from './types';
-import { concept, type ConceptQ, exact, hex, mcs, shuffle, sig } from './util';
+import { atLevel, concept, type ConceptQ, exact, hex, mcs, shuffle, sig } from './util';
 
 const code = (s: string) => '\n```\n' + s + '\n```\n';
 const bits = (r: Rng, n: number) => Array.from({ length: n }, () => (r() < 0.5 ? 1 : 0)).join('');
@@ -102,14 +102,23 @@ export const combPractice = practice('practice-comb', 'Building Block Drills', '
       step('Write the eight bits of b, from b[7] down to b[0]:', bin(b, 8)));
   },
   (r, d) => {
+    // [description, inputs, function, one correct expression, [step question, right, wrong], level]
     const cases = [
-      ['y = 1 when a 2-bit number {a1,a0} equals the 2-bit number {b1,b0}', ['a1', 'a0', 'b1', 'b0'], (v: Record<string, boolean>) => v.a1 === v.b1 && v.a0 === v.b0, '~(a1 ^ b1) & ~(a0 ^ b0)', ['Two bits are equal exactly when their XOR is:', '0, so ~(x ^ y) is 1', ['1', 'always 0']]],
-      ['y = 1 when {a1,a0} > {b1,b0} (unsigned)', ['a1', 'a0', 'b1', 'b0'], (v: Record<string, boolean>) => 2 * +v.a1 + +v.a0 > 2 * +v.b1 + +v.b0, 'a1&~b1 | ~(a1^b1)&a0&~b0', ['To compare two numbers, which bits decide first?', 'The top bits; the low bits matter only if the top bits are equal', ['The low bits first', 'Only the bits of b']]],
-      ['the carry-out of a full adder with inputs a, b, cin', ['a', 'b', 'cin'], (v: Record<string, boolean>) => +v.a + +v.b + +v.cin >= 2, 'a&b | cin&(a^b)', ['A full adder carries out when:', 'At least two of the three inputs are 1', ['Exactly one input is 1', 'All inputs are 0']]],
-      ['the sum of a full adder with inputs a, b, cin', ['a', 'b', 'cin'], (v: Record<string, boolean>) => (+v.a + +v.b + +v.cin) % 2 === 1, 'a ^ b ^ cin', ['The sum bit of a full adder is 1 when:', 'An odd number of the inputs are 1', ['At least two inputs are 1', 'All inputs are equal']]],
-      ['a 2:1 mux: y = d1 when s, else d0', ['s', 'd0', 'd1'], (v: Record<string, boolean>) => (v.s ? v.d1 : v.d0), 's&d1 | ~s&d0', ['A 2:1 mux passes:', 'd1 when s = 1, and d0 when s = 0', ['d0 when s = 1', 'Both at once']]],
+      ['y = NOT a', ['a'], (v: Record<string, boolean>) => !v.a, '~a', ['An inverter outputs 1 when its input is:', '0', ['1', 'Either value']], 1],
+      ['y = a AND b', ['a', 'b'], (v: Record<string, boolean>) => v.a && v.b, 'a & b', ['A 2-input AND is 1 when:', 'Both inputs are 1', ['Either input is 1', 'Both inputs are 0']], 1],
+      ['y = a OR b', ['a', 'b'], (v: Record<string, boolean>) => v.a || v.b, 'a | b', ['A 2-input OR is 1 when:', 'Either input is 1', ['Exactly one input is 1', 'Both inputs are 0']], 1],
+      ['y = a XOR b', ['a', 'b'], (v: Record<string, boolean>) => v.a !== v.b, 'a ^ b', ['A 2-input XOR is 1 when:', 'The inputs differ', ['Both inputs are 1', 'Both inputs are 0']], 1],
+      ['y = a AND b, OR c', ['a', 'b', 'c'], (v: Record<string, boolean>) => (v.a && v.b) || v.c, 'a&b | c', ['Which gate is applied last, to the AND output and c?', 'An OR gate', ['An AND gate', 'An XOR gate']], 2],
+      ['y = 1 when exactly two of a, b, c are 1', ['a', 'b', 'c'], (v: Record<string, boolean>) => +v.a + +v.b + +v.c === 2, 'a&b&~c | a&~b&c | ~a&b&c', ['Is "exactly two of three" the same as "at least two of three"?', 'No: it is 0 when all three are 1', ['Yes, always', 'No: it is 0 when all three are 0']], 2],
+      ['the mux: y = d1 when s, else d0', ['s', 'd0', 'd1'], (v: Record<string, boolean>) => (v.s ? v.d1 : v.d0), 's&d1 | ~s&d0', ['A 2:1 mux passes:', 'd1 when s = 1, and d0 when s = 0', ['d0 when s = 1', 'Both at once']], 2],
+      ['the carry-out of a full adder with inputs a, b, cin', ['a', 'b', 'cin'], (v: Record<string, boolean>) => +v.a + +v.b + +v.cin >= 2, 'a&b | cin&(a^b)', ['A full adder carries out when:', 'At least two of the three inputs are 1', ['Exactly one input is 1', 'All inputs are 0']], 2],
+      ['the sum of a full adder with inputs a, b, cin', ['a', 'b', 'cin'], (v: Record<string, boolean>) => (+v.a + +v.b + +v.cin) % 2 === 1, 'a ^ b ^ cin', ['The sum bit of a full adder is 1 when:', 'An odd number of the inputs are 1', ['At least two inputs are 1', 'All inputs are equal']], 2],
+      ['y = 1 when a 2-bit number {a1,a0} equals the 2-bit number {b1,b0}', ['a1', 'a0', 'b1', 'b0'], (v: Record<string, boolean>) => v.a1 === v.b1 && v.a0 === v.b0, '~(a1 ^ b1) & ~(a0 ^ b0)', ['Two bits are equal exactly when their XOR is:', '0, so ~(x ^ y) is 1', ['1', 'always 0']], 3],
+      ['y = 1 when {a1,a0} > {b1,b0} (unsigned)', ['a1', 'a0', 'b1', 'b0'], (v: Record<string, boolean>) => 2 * +v.a1 + +v.a0 > 2 * +v.b1 + +v.b0, 'a1&~b1 | ~(a1^b1)&a0&~b0', ['To compare two numbers, which bits decide first?', 'The top bits; the low bits matter only if the top bits are equal', ['The low bits first', 'Only the bottom bit']], 3],
+      ['y = 1 when {a1,a0} < {b1,b0} (unsigned)', ['a1', 'a0', 'b1', 'b0'], (v: Record<string, boolean>) => 2 * +v.a1 + +v.a0 < 2 * +v.b1 + +v.b0, '~a1&b1 | ~(a1^b1)&~a0&b0', ['To compare two numbers, which bits decide first?', 'The top bits; the low bits matter only if the top bits are equal', ['The low bits first', 'Only the bottom bit']], 3],
     ] as const;
-    const [desc, vars, f, canon, [pq, pr, pw]] = pick(r, d === 1 ? cases.slice(2) : d === 2 ? cases.slice(0, 4) : cases.slice(0, 2));
+    const near = [0, 1, 2].map((w) => cases.filter((c) => Math.abs(c[5] - d) <= w)).find((p) => p.length >= 6) ?? cases;
+    const [desc, vars, f, canon, [pq, pr, pw]] = pick(r, near);
     const a = expr(canon, [...vars], f);
     return walk(ask(`Write a boolean expression for ${desc}. (& | ^ ~, any equivalent form)`, a, `One answer: ${canon}. Checked against the full truth table.`, 'Write the truth table rows where y = 1.'),
       'from a truth table to an expression', 'Any logic function can be written from its truth table: list every input combination and mark where y is 1. Each 1-row becomes an AND of the inputs (an input that is 0 in that row is written with ~), and you OR the rows together (sum of products). Then simplify by spotting patterns like XOR. Operators here: & AND, | OR, ^ XOR, ~ NOT.',
@@ -133,6 +142,13 @@ const Q_SEQ3: ConceptQ[] = [
   ['A flop\'s D input changes right at the clock edge. What can happen?', 'Metastability: the output may hover between 0 and 1', ['Nothing: the flop simply keeps its old value', 'The flop always captures 0 on a tie', 'A hold violation that stops the flop from ever changing again'], 'metastability', 'If the input changes inside the setup/hold window, the flop cannot decide between 0 and 1: its output can hover in between for an unpredictable time before falling one way. The longer you wait, the less likely it is still undecided, but the wait has no fixed upper bound.', ['A metastable flop\'s output is:', 'In between, for an unpredictable time', ['The old value, until the next edge', 'The new value, after a fixed delay']], 'It can hover for an unbounded time before resolving.'],
   ['Why are asynchronous-reset flops released through a synchronizer?', 'Flops may leave reset on different cycles', ['To save power while the chip is in reset', 'Because the reset net acts as a clock', 'To filter reset-pin glitches'], 'reset synchronization', 'Asserting an async reset is safe at any time, but RELEASING it near a clock edge is just like an async input changing at the edge: some flops may see it and some not, or go metastable. A synchronizer makes the release line up cleanly with the clock.', ['Releasing reset near a clock edge is risky because:', 'Flops may see it on different cycles', ['It shortens the clock pulse', 'It resets the clock generator']], 'If reset deasserts near a clock edge, some flops leave reset a cycle later than others, or go metastable.'],
 ];
+
+// Standard-level rows for the sequential bank: holds and clock enables.
+const Q_SEQ_MID: ConceptQ[] = [
+  ['Hold time is violated when data changes…', 'Too soon after the clock edge', ['Too long before the clock edge', 'Just before the setup window opens', 'Only when the clock is stopped'], 'hold time', 'Hold is the short time AFTER the clock edge during which the input must stay steady. If the data changes inside that window, the flop may capture the new value by mistake. Hold problems are fixed by adding delay on the data path, because the clock cannot be moved later.', ['Hold is measured relative to the clock edge, looking:', 'After it', ['Before it', 'At a random time']]],
+  ['With its clock enable at 0, a flop on the clock edge…', 'Keeps its old value', ['Loads its D input anyway', 'Resets to 0', 'Toggles its output'], 'clock enable', 'A clock enable is a mux in front of the flop. When the enable is 0 the mux feeds the flop its own output, so the clock edge changes nothing. This is the usual way to hold a register without gating the clock.', ['When the enable is 0, the mux feeds the flop:', 'Its own output', ['The D input', 'Ground']]],
+];
+const Q_SEQ = [...atLevel(1, Q_SEQ1), ...atLevel(2, Q_SEQ2), ...atLevel(3, Q_SEQ3), ...Q_SEQ_MID];
 
 export const seqPractice = practice('practice-seq', 'Flop & Counter Drills', 'counters, shift registers, LFSRs, setup/hold, Fmax', [
   (r, d) => {
@@ -180,9 +196,9 @@ export const seqPractice = practice('practice-seq', 'Flop & Counter Drills', 'co
       calc('What it must beat, hold time + clock skew:', `${th} + ${skew}`, th + skew, 'ps', String(th + skew), 0.001),
       calc('Hold slack = earliest arrival minus that:', `${tcq + tmin} - ${th + skew}`, slack, 'ps', String(slack), 0.01));
   },
-  (r, d) => concept(r, tier(d, Q_SEQ1, Q_SEQ2, Q_SEQ3), (why) => `${why}.`),
+  (r, d) => concept(r, Q_SEQ, (why) => `${why}.`, d),
   (r, d) => {
-    const n = pick(r, tier(d, [10, 60, 100], [1000, 1e6], [48e6, 1e9]));
+    const n = pick(r, tier(d, [10, 60, 100, 12, 25, 50, 200], [1000, 1e6, 4096, 3000, 50000, 65536], [48e6, 1e9, 12e6, 250e6, 3e9, 96e6]));
     const k = Math.ceil(Math.log2(n));
     return walk(ask(`${d === 3 ? `A timer counts ${n.toLocaleString('en-US')} cycles of a clock and then fires.` : `A counter must count from 0 to ${n - 1}.`} How many flip-flops does it need at minimum?`, num(k), `ceil(log2 ${n}) = ${k}${d === 3 ? ` (2^${k} = ${(2 ** k).toLocaleString('en-US')} ≥ ${n.toLocaleString('en-US')})` : ''}.`, 'Smallest k with 2^k ≥ n.'),
       'how many flops to count', `Each flip-flop stores one bit, and k bits can tell 2^k different values apart. A counter that must reach ${n} different values therefore needs the smallest k with 2^k at least ${n}: that is log2 of ${n}, rounded UP.`,
@@ -193,12 +209,22 @@ export const seqPractice = practice('practice-seq', 'Flop & Counter Drills', 'co
 
 // ------------------------------------------------------------------ FSMs
 
-const Q_FSM: ConceptQ[] = [
+const Q_FSM_BASE: ConceptQ[] = [
   ['Moore vs Mealy: which reacts to an input in the same cycle?', 'Mealy, since outputs see inputs directly', ['Moore, since its outputs follow the state', 'Both react in the same cycle', 'Neither: outputs wait for a clock edge'], 'Moore versus Mealy', 'In a Moore machine the output depends only on the current STATE, so an input change shows up only after the next clock edge. In a Mealy machine the output also depends directly on the input, so it can react immediately, in the same cycle, but it can glitch and the input now has a long path to the output.', ['In a Moore machine the output depends on:', 'The current state only', ['The state and the input', 'The input only, not the state']], 'That speed comes at the risk of glitches and long combinational paths.'],
   ['Why register FSM outputs in a high-speed design?', 'They are glitch-free and cut the path to the next block', ['It saves flops in the next-state logic', 'It lets the outputs react to inputs in the same clock cycle', 'It lets the FSM drop its reset'], 'registered outputs', 'Outputs coming straight from next-state logic can glitch and they arrive late in the cycle, eating the time budget of the block that uses them. Passing them through a flop makes them clean and gives the next block a full cycle to work with.', ['A flop on an output gives it:', 'A clean value early in the cycle', ['A glitch at every clock edge', 'A value one cycle earlier']]],
   ['What should an FSM do if it ever lands in an unused state (e.g. after a radiation upset)?', 'Recover to a safe state through a default branch', ['Stay there until the next reset', 'Jump to the nearest valid state', 'Stop the clock to freeze the error'], 'illegal states', 'An FSM with 5 states in 3 bits has 3 unused encodings. A stray particle or glitch can flip a bit and put the machine in one. If nothing is defined there it could hang forever, so designs add a default branch that sends every unused state back to a safe one.', ['With 5 states in 3 flops, how many encodings are unused?', '3', ['0', '5']], 'Typically the default branch goes to IDLE; safety standards demand it.'],
   ['Why do FPGAs favour one-hot encoding?', 'Flops are plentiful and the next-state logic is fast', ['It uses the fewest flops of any encoding', 'It is the only encoding FPGA tools accept', 'It lets the FSM run without a clock, as plain combinational logic'], 'one-hot encoding', 'One-hot uses one flop per state with exactly one of them set. It uses MORE flops than binary, but next-state and output logic shrink to a gate or two per state, which is fast. FPGAs have lots of flops already built in, so the trade is good.', ['One-hot encoding uses how many flops for n states?', 'n, one per state', ['log2(n), rounded up', '2n, two per state']], 'Next-state logic becomes a few gates per state.'],
 ];
+const Q_FSM_MORE: ConceptQ[] = [
+  ['What does an FSM do when no transition matches the current input?', 'Stays in its current state', ['Jumps back to the reset state and clears everything', 'Clears all its outputs', 'Stops the clock'], 'missing transitions', 'Every state needs an answer for every input. When a transition is not written, the hardware rule is to stay put: the next state equals the current state. Writing that default out explicitly keeps the design predictable.', ['The default next state, when no transition matches, is:', 'The current state', ['The reset state', 'The first state in the list']], '', 1],
+  ['Why is a Mealy output hard to time in a large SoC?', 'Its output depends on the input, too', ['It runs on the falling edge, which the tools reject', 'It is always one full cycle slower than a Moore output', 'Mealy outputs cannot drive blocks'], 'Mealy timing', 'A Mealy output is a function of the current input as well as the state, so the input-to-output path is combinational, and its delay lands on the next block. A Moore output depends only on the state, so it comes straight from a flop.', ['A Mealy output depends on:', 'The state and the input', ['The state only', 'The clock only']], '', 3],
+  ['Two states of an FSM are equivalent when:', 'Same outputs and equivalent next states', ['They have the same name', 'They have the same encoding', 'They sit next to each other in the state list'], 'state equivalence', 'No input sequence can tell two equivalent states apart. Equivalent states can be merged into one, which saves flops and logic. Minimizing a state machine means finding and merging them.', ['Equivalent states can be:', 'Merged into one', ['Left as they are, always', 'Deleted, along with their outputs']], '', 3],
+  ['In a one-hot FSM, an illegal state (no bit set, or two bits set) is reached only by:', 'A fault such as a bit flip', ['Normal operation with a valid input', 'The reset sequence', 'A long idle period'], 'one-hot faults', 'In a one-hot design every legal state has exactly one bit set, so normal operation never produces any other pattern. Only a fault can, which is why safety designs check for it and recover.', ['In a one-hot design, a legal state has:', 'Exactly one bit set', ['No bits set', 'All bits set']], '', 3],
+  ['A detector for an overlapping pattern needs states that record:', 'How much of the pattern is matched', ['Every input seen since the last reset, in full', 'Only the last output', 'The clock cycle count'], 'overlapping detectors', 'The machine must remember how much of the target pattern is matched right now, so each state is a partial match. For overlaps it moves to the state matching the tail of what it has seen, not back to zero.', ['A detector state records:', 'A partial match of the pattern', ['A full history of inputs', 'The output only']], '', 2],
+  ['Why draw the state diagram before writing RTL?', 'To check every state and transition', ['Because the simulator needs a picture', 'Synthesis tools cannot read code without one', 'To count the flops in advance'], 'design before code', 'A diagram makes missing transitions, unreachable states and dead ends easy to see. Finding them on paper is much cheaper than finding them in a waveform.', ['A diagram makes it easy to see:', 'Missing transitions and dead ends', ['Only the clock speed', 'The synthesis script']], '', 2],
+];
+const Q_FSM: ConceptQ[] = [...atLevel(2, Q_FSM_BASE), ...Q_FSM_MORE];
+
 
 export const fsmPractice = practice('practice-fsm', 'State Machine Drills', 'encodings, sequence detectors, transition tables', [
   (r, d) => {
@@ -243,7 +269,7 @@ export const fsmPractice = practice('practice-fsm', 'State Machine Drills', 'enc
       'following a transition table', 'A transition table lists, for every state, the next state for each input value. To run the machine: start in the given state, and for each input bit look up the row of the CURRENT state and pick the column for that bit (the left entry for 0, the right for 1). The result is the new current state. Repeat for every input.',
       ...ins.split('').map((b, i) => step(`${i === 0 ? 'IDLE' : trace[i - 1]}, input ${b}: next state?`, exact(trace[i], trace[i].toLowerCase()))));
   },
-  (r) => concept(r, Q_FSM, (why) => `${why}.`),
+  (r, d) => concept(r, Q_FSM, (why) => `${why}.`, d),
 ]);
 
 // ------------------------------------------------------------------ Verilog
@@ -256,6 +282,8 @@ const V_BUGS = [
   ['wire [7:0] sum;\nassign sum = a + b;  // a, b are [7:0]', 'The carry-out is lost: an 8-bit sum of two 8-bit values needs 9 bits', 'width of a sum', 'Adding two N-bit numbers can produce an (N+1)-bit result. If the destination is only N bits, the top bit, the carry-out, is silently dropped. Make the destination one bit wider, for example a 9-bit sum.', ['The largest 8-bit value is 255. 255 + 255 is:', '510, which needs 9 bits', ['255, the largest 8-bit value', '256, which still fits in 8 bits']]],
   ['assign y = a;\nassign y = b;', 'Multiple drivers on y: contention, x in simulation', 'multiple drivers', 'A wire can only be driven by one source at a time. Two continuous assignments to y fight each other: if they disagree, the simulator shows x (unknown), and real hardware would short two outputs together.', ['When a = 1 and b = 0 both drive y, the result is:', 'x: the drivers conflict', ['1: a 1 always wins the fight', '0: the 0 overrides the 1']]],
   ['case (op)\n  2\'b00: y = a;\n  2\'b01: y = b;\nendcase  // inside always @(*)', 'Missing default: op = 2 or 3 leaves y unassigned, inferring a latch', 'complete case statements', 'A 2-bit op has four possible values. This case covers only two of them. For op = 2 or 3 the output is not assigned, so a latch is inferred. A default branch assigns it in every remaining case.', ['How many values can a 2-bit op take, and how many does the case cover?', '4 values, 2 covered', ['2 values, 2 covered', '4 values, 4 covered']]],
+  ['always @(posedge clk) begin\n  q <= d;\n  q <= ~d;\nend', 'Two non-blocking assignments to q: the second wins, so the first does nothing', 'overwritten assignments', 'Non-blocking assignments all take effect together at the end of the time step, in order, and the last one to a variable wins. q gets ~d and the d copy is dead code. A register written twice in one block is almost always a mistake.', ['After this edge, q is:', '~d: the second assignment wins', ['d: the first assignment wins', 'Both, toggling every edge']]],
+  ['always @(*) begin\n  if (a = b) y = 1;\n  else y = 0;\nend', 'if (a = b) assigns b to a, then tests the new value; it does not compare a with b', 'assignment in a condition', 'In Verilog = assigns and == compares. Inside an if, a = b first copies b into a, then tests the result, so the condition is really b. Lint tools flag any assignment in a condition. The comparison you wanted is if (a == b).', ['In if (a = b), what is tested?', 'The value of b, after it is copied into a', ['Whether a equals b', 'Whether a is zero']]],
 ] as const;
 
 export const verilogPractice = practice('practice-verilog', 'Verilog Drills', 'widths, literals, blocking vs non-blocking, 4-state logic, bug spotting', [
@@ -335,14 +363,22 @@ export const verilogPractice = practice('practice-verilog', 'Verilog Drills', 'w
       [2, `^8'h${H}`, ones % 2, `XOR-reduce is the parity: ${ones} ones → ${ones % 2}.`, 'reduction XOR (parity)', 'A reduction operator folds all the bits of a vector into one bit with the same gate. ^x is the XOR of every bit, which is 1 exactly when the number of 1 bits is odd: the parity.', [step('Write the value in binary:', bin(v, 8)), count('How many of the bits are 1?', `ones in ${bv}`, ones), count('Odd count gives 1, even gives 0. The result:', `${ones} mod 2`, ones % 2)]],
       [3, `(1'bx & 1'b0) | (1'bx & 1'b1 & 1'b0)`, 0, 'x & 0 = 0 in 4-state logic, so both terms are 0.', 'x in 4-state logic', 'Verilog has four values: 0, 1, x (unknown) and z. An unknown input makes the output unknown UNLESS the other inputs already settle it: AND with a 0 is always 0 and OR with a 1 is always 1, whatever x is.', [choice('x AND 0 is:', '0: a 0 forces an AND to 0', ['x', '1']), choice('x AND 1 AND 0 is:', '0: the 0 settles it', ['x', '1']), count('OR of the two terms (0 | 0):', '0 | 0', 0)]],
       [3, `1'bx | 1'b1`, 1, 'x | 1 = 1: whatever x is, the OR is 1.', 'x in 4-state logic', 'Verilog has four values: 0, 1, x (unknown) and z. An unknown input makes the output unknown UNLESS the other inputs already settle it: AND with a 0 is always 0 and OR with a 1 is always 1, whatever x is.', [choice('x OR 1 is:', '1: a 1 forces an OR to 1', ['x', '0']), count('The result:', "1'bx | 1'b1", 1)]],
+      [3, `~(1'bx & 1'b0)`, 1, 'x & 0 = 0 whatever x is, and the ~ turns that 0 into 1.', 'x in 4-state logic', 'Verilog has four values: 0, 1, x (unknown) and z. A 0 on either side of an AND forces the result to 0 even when the other side is unknown, so the NOT of that 0 is 1.', [choice('x AND 0 is:', '0: a 0 forces an AND to 0', ['x', '1']), count('The NOT of 0 is:', '~0', 1)]],
+      [3, `1'b1 ? 1'b0 : 1'bx`, 0, 'The select is a known 1, so the ternary takes the first branch: 0. The x branch is never used.', 'the ternary with a known select', 'The condition of ?: picks one branch. When the condition is a known 1 or 0, only that branch matters, and the other branch can hold x without affecting the answer.', [choice('With a select of 1, the ?: takes:', 'The first branch', ['The second branch, x', 'Both branches, merged']), count('So the result is:', "1'b0", 0)]],
+      [3, `1'bx === 1'bx`, 1, 'The === operator compares x bits literally, so x matches x and the result is 1. (== would give x.)', 'case equality with x', 'The == operator returns x when either side has an unknown bit. The === operator compares all four states exactly, so x === x is true. Testbenches use === to check for unknowns on purpose.', [choice('x == x gives:', 'x: unknown', ['1', '0']), choice('x === x gives:', '1: the same state on both sides', ['x: unknown', '0'])]],
+      [3, `!(1'bx & 1'b0)`, 1, 'x & 0 is 0, and ! of 0 is 1.', 'logical NOT of a settled 0', 'The logical ! turns a 0 into a 1 and a 1 into a 0. Here the AND is already settled to 0 by its known 0 input, so ! gives 1 regardless of the x.', [choice('The logical NOT of 0 is:', '1', ['0', 'x']), count('So the result is:', "!(0)", 1)]],
     ] as const;
     const [, e, val, why, method, idea, beats] = pick(r, variants.filter((q) => q[0] === d));
-    return walk(ask(`What does ${e} evaluate to? (0 or 1)`, num(val), why, 'Reduction operators fold every bit with the same gate.'), method, idea, ...beats);
+    // A typed question must end on a step the player types in, so a closing pick gets a typed count.
+    const last = beats[beats.length - 1];
+    const steps = last.t === 'pick' ? [...beats, count('So the result is:', String(val), val)] : beats;
+    return walk(ask(`What does ${e} evaluate to? (0 or 1)`, num(val), why, 'Reduction operators fold every bit with the same gate.'), method, idea, ...steps);
   },
-  (r) => {
-    const i = between(r, 0, V_BUGS.length - 1);
-    const others = shuffle(r, V_BUGS.filter((_, j) => j !== i).map((b) => b[1])).slice(0, 3);
-    const [src, bug, method, idea, [sq, sr, sw]] = V_BUGS[i];
+  (r, d) => {
+    const pool = V_BUGS.slice(0, tier(d, 4, 6, 8));
+    const bugOf = pool[between(r, 0, pool.length - 1)];
+    const others = shuffle(r, V_BUGS.filter((b) => b !== bugOf).map((b) => b[1])).slice(0, 3);
+    const [src, bug, method, idea, [sq, sr, sw]] = bugOf;
     return walk(mcs(r, `What is wrong with this Verilog?${code(src)}`, bug, others, `${bug}. Lint tools flag all of these; learn to see them yourself in reviews.`), method, idea, choice(sq, sr, sw));
   },
   (r, d) => {
@@ -399,7 +435,7 @@ export const aluPractice = practice('practice-alu', 'Datapath Drills', 'ALU flag
       step('In hex:', hexa(v, 2)));
   },
   (r, d) => {
-    const n = pick(r, [8, 16, 32, 64]);
+    const n = pick(r, tier(d, [8, 16, 32, 64], [8, 16, 32, 64], [8, 16, 24, 32, 48, 64, 128]));
     const mult = 'Multiplying is adding shifted copies: for each bit of the multiplier that is 1, you add a copy of the multiplicand shifted into that bit\'s position. Each copy is a partial product, and all of them must be added. Fewer partial products means a smaller, faster adder tree. Booth recoding reads the multiplier two bits at a time to halve the count.';
     if (d === 1) return walk(ask(`A plain n×n array multiplier makes one partial product per multiplier bit. For ${n}×${n}, how many partial products?`, num(n), `${n}: one per bit of the multiplier, each an AND of the multiplicand with that bit.`, 'One per multiplier bit.'),
       'partial products', mult,
@@ -444,13 +480,24 @@ export const aluPractice = practice('practice-alu', 'Datapath Drills', 'ALU flag
 
 // ------------------------------------------------------------------ clocks, resets, CDC
 
-const Q_CLK: ConceptQ[] = [
+const Q_CLK_BASE: ConceptQ[] = [
   ['A single control bit crosses from clock A to unrelated clock B. What is the standard fix?', 'A two-flop synchronizer in domain B', ['Nothing: a single bit is always safe', 'A Gray-code encoder before the crossing', 'An AND gate with the destination clock'], 'the two-flop synchronizer', 'When a signal from another clock domain changes near a capture edge, the first flop can go metastable. A second flop in the receiving domain gives it a full extra clock period to settle before anything uses it, which makes the chance of a bad value astronomically small.', ['The second flop of a synchronizer gives the first flop:', 'A whole extra cycle to settle', ['A cleaner, faster clock edge', 'A reset if metastable']]],
   ['An 8-bit counter value crosses domains through 8 separate two-flop synchronizers. Problem?', 'B can capture a mix of old and new bits', ['None: each bit is synchronized safely', 'It uses too many flops for 8 bits', 'Each bit needs a third flop at this width'], 'multi-bit crossings', 'Each synchronizer settles independently, so when several bits change at once, domain B may capture some of the new bits and some of the old ones: a value that never existed (like 0111 → 1000 seen as 1111). Fix it by making only one bit change at a time (Gray code), or use a handshake or an async FIFO.', ['A binary counter goes 0111 → 1000. How many bits change at once?', 'All four', ['Just one', 'Only two']], 'Bits can resolve on different cycles, so B can see a value that never existed; use Gray code, a handshake, or an async FIFO.'],
   ['A one-cycle pulse in a 500 MHz domain goes to a 100 MHz domain via a two-flop synchronizer. Problem?', 'The slow clock can miss the pulse entirely', ['It arrives twice in the slow domain', 'Nothing: two flops catch any pulse', 'It shows up stretched in time'], 'pulses across slow clocks', 'A 500 MHz pulse lasts 2 ns, but the slow 100 MHz clock only looks every 10 ns. The pulse can fall completely between two looks and never be seen. The fix: turn the pulse into a level change (a toggle) that stays put until the slow side has seen it.', ['A 2 ns pulse meets a clock that samples every 10 ns. Can it be missed?', 'Yes, it may fall between two samples', ['No, a synchronizer catches it', 'Only if the pulse is metastable']], 'Stretch it, or convert it to a toggle and detect the edge.'],
   ['Two signals from the same domain are synchronized separately and then combined in domain B. Risk?', 'Reconvergence: they may arrive on different cycles', ['None, since both come from the same clock', 'Extra power from the duplicated flops', 'Glitches from the gate that combines them, after the synchronizers'], 'reconvergence', 'Two signals that change together in domain A go through two separate synchronizers, and each may take a different number of cycles to settle. Combining them in B can give a pairing of old and new values that was never true in A. Synchronize ONE signal (or a Gray/handshake bundle) and derive the rest from it.', ['Each separate synchronizer settles:', 'Independently of the others', ['In lockstep with all the others', 'Exactly one cycle after the source']], 'That can give a combination that never existed in domain A.'],
   ['Why must no logic sit between a source flop and the first synchronizer flop?', 'A glitch could be captured as a false pulse', ['It slows the destination clock', 'Synthesis tools refuse to build it', 'It adds hold violations that the synchronizer cannot absorb'], 'launching from a flop', 'Combinational logic can glitch: briefly show wrong values before settling. If a glitch appears at the synchronizer\'s input at the wrong moment, it can be captured as a real pulse. A flop output changes once, cleanly, per cycle, so the crossing must start at a flop.', ['Logic between flops can briefly show:', 'Glitches before settling', ['Only its final, settled value', 'Metastable values that never settle']], 'Combinational glitches can be captured as false pulses, so the crossing must launch from a flop.'],
 ];
+const Q_CLK_EASY: ConceptQ[] = [
+  ['What defines a clock domain?', 'The flops timed by one clock, or clocks derived from it', ['The flops that share one power supply', 'The flops between two reset lines', 'The wires between two flops'], 'clock domains', 'A clock domain is the group of flops that are all timed by the same clock, or by clocks that are known to be related to it. Signals that cross between unrelated domains need special care; signals inside one domain do not.', ['A clock domain is set by:', 'The clock that times its flops', ['Its power supply', 'Its reset line']]],
+];
+const Q_CLK_HARD: ConceptQ[] = [
+  ['Why is a Gray-coded pointer safer to cross domains than a binary one?', 'Only one bit changes per count, so a sample is never far off', ['It uses fewer flops than a binary pointer does', 'It works with no clock at all, in any domain', 'Gray pointers never need to be synchronized in any design'], 'Gray pointers', 'When a binary count goes 0111 to 1000, all four bits change at once, and a sample can catch a value that never existed. A Gray count changes exactly one bit per step, so a sample is either the old value or the new one, off by at most one step.', ['A Gray count changes how many bits per step?', 'One', ['All of them', 'Two']]],
+];
+const Q_CLK_MID: ConceptQ[] = [
+  ['Which flop of a two-flop synchronizer may go metastable?', 'The first flop, which samples the other domain', ['The second flop, which drives the logic', 'Both, at the same time, always', 'Neither: the synchronizer prevents it'], 'synchronizer stages', 'The first flop samples a signal that changes at an unrelated time, so it can catch a near-edge transition and go metastable. The second flop gives the first one a full cycle to settle before anything uses the value.', ['The second flop gives the first one:', 'A full cycle to settle', ['A faster clock edge', 'A reset line']]],
+];
+const Q_CLK: ConceptQ[] = [...atLevel(2, Q_CLK_BASE), ...atLevel(2, Q_CLK_MID), ...atLevel(1, Q_CLK_EASY), ...atLevel(3, Q_CLK_HARD)];
+
 
 export const clkPractice = practice('practice-clk', 'Clock Domain Drills', 'MTBF, synchronizers, Gray pointers, async FIFO depth, dividers', [
   (r, d) => {
@@ -502,7 +549,7 @@ export const clkPractice = practice('practice-clk', 'Clock Domain Drills', 'MTBF
       count('Depth = burst words minus words read, rounded up (never below 0):', `max(0, ceil(${B} - ${sig((B / fwEff) * fr, 4)}))`, Math.max(0, depth)));
   },
   (r, d) => {
-    const f = pick(r, [100, 200, 400]), n = pick(r, tier(d, [2, 4], [3, 5, 8], [3, 5, 7]));
+    const f = pick(r, [100, 200, 400]), n = pick(r, tier(d, [2, 4], [3, 5, 8], [3, 5, 7, 9, 11, 13, 15]));
     if (d < 3) return walk(ask(`A counter-based divider divides a ${f} MHz clock by ${n}. Output frequency, in MHz?`, qty(f / n, 'MHz', 0.01), `${f}/${n} = ${sig(f / n)} MHz.`, 'Divide.'),
       'clock dividers', 'A divide-by-n circuit produces one output cycle for every n input cycles, so the output frequency is the input frequency divided by n.',
       calc('Output frequency = input ÷ n:', `${f} / ${n}`, f / n, 'MHz', sig(f / n, 4), 0.01));
@@ -512,7 +559,7 @@ export const clkPractice = practice('practice-clk', 'Clock Domain Drills', 'MTBF
       count('Cycles the output is high (given in the question):', `${hi}`, hi),
       calc('Duty cycle = high cycles ÷ total cycles, as a %:', `${hi} / ${n} × 100`, (hi / n) * 100, '%', sig((hi / n) * 100), 0.01));
   },
-  (r) => concept(r, Q_CLK, (why) => `${why}. CDC tools check exactly these rules.`),
+  (r, d) => concept(r, Q_CLK, (why) => `${why}. CDC tools check exactly these rules.`, d),
 ]);
 
 export const DIGITAL_PRACTICE = [combPractice, seqPractice, fsmPractice, verilogPractice, aluPractice, clkPractice];

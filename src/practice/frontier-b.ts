@@ -167,7 +167,7 @@ export const neuroPractice = practice('practice-neuro', 'Neuromorphic Drills', '
       calc('Period in ms:', `${sig(t)} + ${ref}`, t + ref, 'ms', sig(t + ref), 0.01), calc('Rate = 1000 ÷ period (ms), in Hz:', `1000 / ${sig(t + ref)}`, rate, 'Hz', sig(rate), 0.03));
   },
   (r, d) => {
-    const bits = tier(d, 3, 4, 6), gmax = pick(r, [50, 100]), levels = 2 ** bits;
+    const bits = d === 3 ? pick(r, [5, 6, 7, 8]) : pick(r, [2, 3, 4, 5, 6, 8]), gmax = pick(r, [50, 100, 25, 200, 75, 150]), levels = 2 ** bits;
     if (d < 3) return walk(ask(`A memristor cell stores ${bits} bits. How many distinct conductance levels must it hold, reliably?`, qty(levels, '', 0.001, String(levels)), `2^${bits} = ${levels} levels. A cell with ${levels} reliably distinguishable states stores ${bits} bits.`, 'Two to the number of bits.'),
       'conductance levels', 'A cell that stores n bits must distinguish 2^n separate conductance values. Noise, drift and variability limit how many a real device can hold, which is why analog weights are often 4 bits or fewer per cell.',
       count(`2^${bits}:`, `2^${bits}`, levels));
@@ -211,7 +211,7 @@ export const emergingPractice = practice('practice-emerging', 'Emerging Device D
       calc('ΔV = I × ΔR, in mV (µA × kΩ):', `${iread} × ${sig(rap - rp)}`, iread * (rap - rp), 'mV', sig(iread * (rap - rp)), 0.03));
   },
   (r, d) => {
-    const cpp = pick(r, [45, 48, 54]), th = pick(r, [5, 6]), w = pick(r, [3, 4]);
+    const cpp = pick(r, [45, 48, 54]), th = pick(r, d === 3 ? [5, 6, 7, 8, 9, 10] : [5, 6]), w = pick(r, [3, 4]);
     const area = w * cpp * th * 28;
     if (d === 1) return walk(ask(`A logic cell is ${w} contact pitches wide (CPP = ${cpp} nm) and ${th} metal tracks tall (28 nm pitch). What is its area, in nm²?`, qty(area, 'nm²', 0.01, String(area)), `${w} × ${cpp} × ${th} × 28 = ${area} nm².`, 'Width times height.'),
       'standard-cell area', 'A cell\'s width is its number of contact pitches times the CPP; its height is the number of tracks times the track pitch. Area is the product.',
@@ -222,8 +222,8 @@ export const emergingPractice = practice('practice-emerging', 'Emerging Device D
       'CFET area benefit', 'The cell width stays the same, so the area scales with the height in tracks. The saving is one minus the new height over the old height.',
       calc('Height ratio:', `${th2} / ${th}`, th2 / th, '', sig(th2 / th), 0.01), calc('Saving in %:', `(1 − ${sig(th2 / th)}) × 100`, sav, '%', sig(sav), 0.03));
   },
-  (r) => {
-    const n0 = pick(r, [10, 20, 50]), t = pick(r, [2, 3]), yrs = pick(r, [6, 10, 12]);
+  (r, d) => {
+    const n0 = pick(r, d === 3 ? [10, 20, 50, 100] : [10, 20, 50]), t = pick(r, [2, 3]), yrs = pick(r, d === 3 ? [6, 10, 12, 15, 18] : [6, 10, 12]);
     const f = 2 ** (yrs / t);
     const n = n0 * f;
     return walk(ask(`A process offers ${n0} billion transistors per chip. If density doubles every ${t} years, how many billions after ${yrs} years?`, qty(n, 'B', 0.03, sig(n)), `${n0} × 2^(${yrs}/${t}) = ${sig(n)} billion.`, 'Count the doublings.'),
@@ -277,8 +277,8 @@ export const aetpmPractice = practice('practice-ae-tpm', 'AE & TPM Drills', 'cri
       'break-even volume', 'Each unit sold contributes its price minus its variable cost toward paying back the NRE. Break-even is when the accumulated contribution equals the NRE.',
       calc('Margin per unit = price − cost:', `${price} − ${unit}`, price - unit, '$', String(price - unit), 0.005), calc('Units = NRE ÷ margin, in millions:', `${nre / 1e6}e6 / ${price - unit} / 1e6`, be / 1e6, 'M', sig(be / 1e6), 0.03));
   },
-  (r) => {
-    const slackD = pick(r, [5, 10, 15]), slip = slackD + pick(r, [-3, 4, 10]);
+  (r, d) => {
+    const slackD = pick(r, d === 3 ? [5, 10, 15, 20, 30] : [5, 10, 15]), slip = slackD + pick(r, d === 3 ? [-3, 4, 10, 20, 30] : [-3, 4, 10]);
     const delay = Math.max(0, slip - slackD);
     return walk(ask(`A task off the critical path has ${slackD} days of slack. It slips by ${slip} days. By how many days does the project end date move?`, qty(delay, 'd', 0.001, String(delay)), `${slip} − ${slackD} = ${slip - slackD}; the project only moves by the part of the slip that exceeds the slack: ${delay} days.`, 'Slip beyond the slack.'),
       'slip and slack', 'Slack absorbs slip: a delay on a non-critical task changes nothing until it uses up all its slack, and only the excess delays the project.',

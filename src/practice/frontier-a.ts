@@ -89,7 +89,7 @@ export const libcharPractice = practice('practice-libchar', 'Characterization Dr
       calc('Halfway between those two:', `(${sig(dl0)} + ${sig(dl1)}) / 2`, dd, 'ps', sig(dd), 0.02));
   },
   (r, d) => {
-    const nom = pick(r, [60, 80, 100]);
+    const nom = pick(r, [60, 80, 100, 120, 40, 50]);
     const th = nom * 1.1;
     const pts: [number, number][] = [[200, nom], [100, nom + 2], [60, nom + 5], [40, nom + 10], [30, nom + 18], [20, nom + 45]];
     // find the pair of rows that straddle the threshold and interpolate the offset
@@ -135,7 +135,7 @@ export const libcharBoss = bossOf(libcharPractice, 'boss-libchar', 'Signing Off 
 
 export const ioesdPractice = practice('practice-io-esd', 'I/O & ESD Drills', 'HBM currents, clamp sizing, supply bounce, termination', [
   (r, d) => {
-    const v = pick(r, [500, 1000, 2000, 4000, 8000]);
+    const v = pick(r, [250, 500, 1000, 2000, 4000, 8000]);
     if (d === 1) {
       const i = v / 1500;
       return walk(ask(`An HBM zap of ${v} V discharges through the standard 1.5 kΩ. What is the peak current, in A?`, qty(i, 'A', 0.03, sig(i)), `I = ${v} / 1500 = ${sig(i)} A.`, 'Ohm\'s law.'),
@@ -143,10 +143,10 @@ export const ioesdPractice = practice('practice-io-esd', 'I/O & ESD Drills', 'HB
         calc('I = V ÷ R:', `${v} / 1500`, i, 'A', sig(i), 0.03));
     }
     if (d === 2) {
-      const tau = 1500 * 100e-12 * 1e9;
-      return walk(ask(`The HBM model is 100 pF through 1.5 kΩ. What is its time constant RC, in ns?`, qty(tau, 'ns', 0.02, sig(tau)), `RC = 1500 × 100e-12 = ${sig(tau)} ns. The pulse lasts a few of these: the clamp must conduct for hundreds of nanoseconds.`, 'Resistance times capacitance.'),
+      const R = pick(r, [330, 500, 1000, 1500, 2000, 3000]), tau = R * 100e-12 * 1e9;
+      return walk(ask(`The HBM model is 100 pF through ${R} Ω. What is its time constant RC, in ns?`, qty(tau, 'ns', 0.02, sig(tau)), `RC = ${R} × 100e-12 = ${sig(tau)} ns. The pulse lasts a few of these: the clamp must conduct for hundreds of nanoseconds.`, 'Resistance times capacitance.'),
         'the HBM time constant', 'A capacitor discharging through a resistor decays with time constant τ = R·C. For the human-body model this is 1.5 kΩ × 100 pF, which sets the pulse length that protection devices must survive.',
-        calc('τ = R × C, with 1500 Ω × 100 pF in ns:', '1500 × 100e-12 × 1e9', tau, 'ns', sig(tau), 0.02));
+        calc(`τ = R × C, with ${R} Ω × 100 pF in ns:`, `${R} × 100e-12 × 1e9`, tau, 'ns', sig(tau), 0.02));
     }
     const e = 0.5 * 100e-12 * v * v * 1e6;
     return walk(ask(`A ${v} V HBM zap starts with a 100 pF capacitor charged to ${v} V. How much energy does it hold, in µJ? (½CV²)`, qty(e, 'µJ', 0.03, sig(e)), `½ × 100e-12 × ${v}² = ${sig(e)} µJ. Small energy, but delivered in a hundred nanoseconds into a few microns of silicon.`, '½ C V².'),
@@ -174,8 +174,8 @@ export const ioesdPractice = practice('practice-io-esd', 'I/O & ESD Drills', 'HB
       calc('Total current change, in mA:', `${n} × ${di}`, n * di, 'mA', String(n * di), 0.005),
       calc('V = L × ΔI ÷ Δt (nH × mA ÷ ns = mV):', `${l} × ${n * di} / ${tr}`, v, 'mV', sig(v), 0.03));
   },
-  (r) => {
-    const z0 = pick(r, [50, 60, 75]), ro = pick(r, [10, 15, 20, 25]);
+  (r, d) => {
+    const z0 = pick(r, d === 3 ? [50, 60, 75, 100] : [50, 60, 75]), ro = pick(r, d === 3 ? [5, 10, 15, 20, 25, 30] : [10, 15, 20, 25]);
     const rs = z0 - ro;
     return walk(ask(`A driver has ${ro} Ω output impedance and drives a ${z0} Ω trace. What series termination resistor, in Ω, matches the source to the line?`, qty(rs, 'Ω', 0.02, String(rs)), `Rs = Z0 − Rout = ${z0} − ${ro} = ${rs} Ω. The wave launched into the line sees ${z0} Ω and the reflection from the open end is absorbed on its return.`, 'Total source impedance should equal Z0.'),
       'source termination', 'A reflection from the far end is absorbed if the source impedance matches the line. The driver already has some output resistance, so the series resistor only makes up the difference to the line impedance.',
@@ -231,7 +231,7 @@ export const socintPractice = practice('practice-soc-int', 'SoC Integration Dril
       calc('Time = cycles ÷ frequency (MHz), in ns:', `${cyc} / ${f} × 1000`, t, 'ns', sig(t), 0.02));
   },
   (r, d) => {
-    const n = tier(d, pick(r, [64, 128]), pick(r, [200, 500]), pick(r, [1000, 3000]));
+    const n = tier(d, pick(r, [64, 128]), pick(r, [200, 500]), pick(r, [1000, 3000, 2000, 5000, 8000, 10000]));
     const bytes = n * 4;
     const bits = Math.ceil(Math.log2(bytes));
     return walk(ask(`A peripheral has ${n} 32-bit registers, each 4 bytes apart. How many address bits does its window need (round up to a power of two)?`, qty(bits, '', 0.001, String(bits)), `${n} × 4 = ${bytes} bytes; the next power of two is 2^${bits}.`, 'Bytes, then log2, rounded up.'),

@@ -4,7 +4,7 @@ import { num, qty } from '../lessons/answers';
 import { calc, choice, count, sim, step, walk } from '../lessons/teach';
 import { art, ask, mc, pick, say } from '../lessons/types';
 import { boss, practice, tier } from './types';
-import { concept, exact, hex, sci, sig } from './util';
+import { atLevel, concept, exact, hex, sci, sig } from './util';
 
 const popcount = (x: number) => { let n = 0; for (; x; x >>= 1) n += x & 1; return n; };
 const H = 6.626e-34, KB = 1.38e-23;
@@ -96,12 +96,16 @@ export const npuPractice = practice('practice-npu', 'AI Hardware Drills', 'MAC c
       calc('What memory can feed = bandwidth × intensity, in TFLOP/s:', `${bw} × ${i}`, bw * i, 'TFLOP/s', sig(bw * i, 4), 0.005),
       calc(`The attainable rate is the smaller of that and the peak ${peak}:`, `min(${sig(bw * i, 4)}, ${peak})`, att, 'TFLOP/s', sig(att), 0.02));
   },
-  (r) => concept(r, [
+  (r, d) => concept(r, [...atLevel(2, [
     ['Why do systolic arrays beat CPUs on matrix math?', 'Each fetched operand feeds many MACs', ['They run at a higher clock', 'They have bigger caches', 'They predict branches better'], 'data reuse in a systolic array', 'Moving a number from memory costs far more energy than multiplying it. In a systolic array each value passes from one MAC to the next, so a single fetch is used in many multiplications.', ['Reuse makes the chip efficient because fetching data costs:', 'More energy than the arithmetic', ['Less energy than the arithmetic', 'Nothing']], 'Data reuse: each operand fetched from memory feeds many MACs as it flows through the array.'],
     ['What does "weight stationary" mean in a dataflow?', 'Weights stay in the PEs; activations stream past', ['Weights never change at all during training', 'Weights are stored in flash next to the array', 'Activations stay fixed while weights stream past'], 'dataflows', 'A dataflow decides which operand stays put in each processing element (PE). Weight stationary loads the weights once and keeps them there, streaming the activations through, so the weights need no further memory traffic. Which operand to keep depends on the shape of the layer.', ['Weight stationary keeps which operand in place?', 'The weights', ['The activations', 'The outputs']], 'The weights are loaded once, so they need no further memory traffic.'],
     ['Why train in BF16 rather than FP16?', 'It keeps FP32\'s exponent range', ['BF16 has more mantissa bits, so it is more precise', 'FP16 values cannot be multiplied in a tensor core', 'BF16 is the IEEE standard'], 'BF16 versus FP16', 'A floating-point number has an exponent (its range) and a mantissa (its precision). FP16 has only 5 exponent bits, so very large or small gradients overflow or vanish. BF16 has 8 exponent bits like FP32, so the range matches, and only precision is lost.', ['More exponent bits give a number format more:', 'Range', ['Precision', 'Zeros']], 'So gradients rarely overflow or underflow, at half the bits of FP32.'],
     ['What does 2:4 structured sparsity give hardware?', 'A fixed zero pattern it can skip cheaply', ['Random zeros anywhere in the weight matrix', 'Smaller activations stored in half the memory', 'Fewer layers, so the network finishes sooner'], 'structured sparsity', 'Skipping multiplications by zero saves work, but finding random zeros is expensive. A fixed pattern (2 of every 4 are zero) is easy for hardware to index, so it can skip half the multiplications cheaply.', ['A fixed sparsity pattern is easier for hardware than random zeros because it is:', 'Easy to index', ['More random', 'Bigger in memory']], 'Two of every four weights are zero, so the hardware can skip half the multiplications and double effective throughput.'],
-  ], (why) => `${why}.`),
+  ]),
+    ...atLevel(1, [['What does a MAC unit compute?', 'A multiply, then an add into a sum', ['A comparison of two wide bit vectors bit by bit', 'A division and a remainder', 'A shift of a value by one bit'], 'MAC units', 'A multiply-accumulate unit multiplies two numbers and adds the product to a running sum. Neural network layers are mostly long chains of these operations.', ['A MAC unit adds its product to:', 'A running sum', ['A new register each time']]]]),
+    ...atLevel(2, [['What does quantizing a network to INT8 trade?', 'Some accuracy for smaller, faster arithmetic', ['Speed for more memory', 'Power for more accuracy', 'Accuracy for a lot more memory and clock cycles'], 'INT8 quantization', 'Eight-bit integers need less memory and cheaper arithmetic than floating point. The rounding costs a little accuracy, which is usually small after calibration or retraining.', ['INT8 arithmetic is cheaper than FP32 mainly because:', 'The operands are smaller', ['The clock is faster', 'It skips the adder']]]]),
+    ...atLevel(3, [['Why is on-chip data reuse important for an NPU?', 'Off-chip bandwidth is the usual bottleneck', ['On-chip memory is always slower than off-chip DRAM access', 'It removes the need for any clock', 'It makes every MAC run in one cycle'], 'data reuse', 'A MAC array can compute faster than off-chip memory can feed it. Keeping weights or activations in on-chip SRAM and reusing them many times is what keeps the array busy.', ['Reusing data on chip mainly saves:', 'Off-chip bandwidth', ['Clock cycles only']]]]),
+  ], (why) => `${why}.`, d),
 ]);
 
 export const aiBoss = boss({
@@ -136,7 +140,7 @@ export const hwsecPractice = practice('practice-hwsec', 'Security Drills', 'brut
       'a timing side channel', 'If the check stops at the first wrong byte, it takes longer when more of the start is right. An attacker can try all 256 values for the first byte and pick the one that takes longest; that byte is now known, so repeat for the next. Each byte is solved separately, so the work ADDS up instead of multiplying.',
       count('Worst case for ONE byte, trying every value:', '2^8', 256),
       count(`Do that for each of the ${n} bytes in turn:`, `${n} × 256`, n * 256));
-    const [bits, rate] = pick(r, [[40, 1e9], [56, 1e12], [64, 1e12]] as const), s = 2 ** bits / rate, hrs = s / 3600;
+    const [bits, rate] = pick(r, [[40, 1e9], [56, 1e12], [64, 1e12], [32, 1e9], [48, 1e12], [80, 1e12]] as const), s = 2 ** bits / rate, hrs = s / 3600;
     return walk(ask(`A ${bits}-bit key, and an attacker can try ${rate === 1e9 ? 'a billion' : 'a trillion'} keys per second. Worst-case time, in hours?`, qty(hrs, 'h', 0.03, sig(hrs)), `2^${bits} / ${rate} = ${sig(s)} s = ${sig(hrs)} h. Every extra bit doubles it; at 128 bits the answer is longer than the age of the universe.`, 'Keys / rate.'),
       'time to brute force a key', 'A key of N bits has 2^N possible values. The attacker tries them at some rate per second, so the worst-case time is (number of keys) ÷ (keys per second). Divide by 3600 to turn seconds into hours.',
       calc(`Number of keys = 2^${bits}:`, `2^${bits}`, 2 ** bits, '', sci(2 ** bits, 3), 0.01),
@@ -189,13 +193,16 @@ export const hwsecPractice = practice('practice-hwsec', 'Security Drills', 'brut
       calc(`All ${n} must fail: (1 - p)^${n}:`, `${sig(1 - p, 5)}^${n}`, (1 - p) ** n, '', sig((1 - p) ** n, 4), 0.01),
       calc('At least one success = 1 minus that, as a %:', `(1 - ${sig((1 - p) ** n, 4)}) × 100`, pr, '%', sig(pr), 0.02));
   },
-  (r) => concept(r, [
+  (r, d) => concept(r, [...atLevel(2, [
     ['What is a hardware root of trust?', 'An immutable block that verifies the first code', ['The first transistor powered up on the die', 'The OS kernel and its signed drivers', 'A password manager stored in on-chip flash'], 'the root of trust', 'Security starts from something that cannot be changed: a small block with code in ROM and keys in fuses. It checks the first piece of software before it runs, which then checks the next, forming a chain. The root is trusted because nothing can alter it.', ['The root of trust can be trusted because it:', 'Cannot be modified', ['Is the largest block', 'Runs the fastest']], 'It is small and isolated (boot ROM, fused keys, crypto), and the code it verifies then verifies the next stage.'],
     ['How did Spectre leak secrets?', 'Cancelled speculative work left timeable cache traces', ['It printed protected memory through a debug port', 'It broke AES by solving its key schedule directly from output', 'It glitched the supply voltage to skip a check'], 'speculative execution attacks', 'A CPU guesses ahead and runs instructions speculatively; if the guess was wrong, it undoes their architectural effects. But the cache still holds data those instructions touched, and an attacker can time memory accesses to learn what was touched.', ['A cancelled speculative instruction can still leave a trace in:', 'The cache', ['The registers', 'The program counter']]],
     ['What is a PUF?', 'A circuit deriving a unique, never-stored key', ['A cheap cipher for low-power devices', 'A fuse bank programmed with a key', 'A random number generated in software at every boot'], 'physically unclonable functions', 'No two chips are exactly alike at the atomic scale. A PUF measures those tiny random differences (for example which of two identical circuits is faster) and turns them into a key that is unique to the chip. The key is re-derived each time, so there is nothing stored to steal.', ['A PUF key comes from:', 'Random manufacturing variation', ['A key programmed into fuses at test', 'Software']], 'It turns random manufacturing variation into a device-unique key, re-derived each time.'],
     ['Why do secure chips run crypto in constant time?', 'So timing never depends on secret data', ['To save power during long crypto runs', 'To make the clock tree simpler to build', 'Because constant-time code is always faster'], 'constant-time code', 'If the time taken (or which memory gets touched) depends on a secret, anyone who measures it learns something about the secret. Constant-time code does the same work in the same time whatever the secret is.', ['If timing never depends on the secret, timing reveals:', 'Nothing about the secret', ['The whole secret', 'The secret, bit by bit']], 'This closes timing side channels.'],
     ['What does a secure boot chain check at each stage?', 'The next image\'s signature', ['The image\'s file size', 'The CPU die temperature', 'That the image is compressed'], 'secure boot', 'Before running the next piece of code, each stage verifies its digital signature, using a public key that traces back to the root of trust. A valid signature proves the code came from the key holder and has not been altered.', ['A digital signature proves the image:', 'Is authentic and unmodified', ['Is encrypted so nobody can read it', 'Is compressed']], 'A valid signature proves the image came from the key holder and was not modified, using a key anchored in the root of trust.'],
-  ], (why) => `${why}.`),
+  ]),
+    ...atLevel(1, [['What does a TPM or secure element do?', 'Stores keys and runs crypto in isolation', ['Speeds up the processor by caching code in a fast tier', 'Holds the operating system kernel', 'Stores the user\'s video files'], 'secure elements', 'A TPM or secure element holds keys and performs cryptographic operations inside its own boundary. Software outside can ask for a signature, but cannot read the key.', ['Keys in a secure element can be read by:', 'Nothing outside it', ['Any application', 'The user']]]]),
+    ...atLevel(3, [['What does a side-channel attack use?', 'Timing, power, or radiated emissions', ['A flaw in the encryption math alone', 'Stolen passwords from a phishing email', 'A bug in the operating system only'], 'side channels', 'A side-channel attack measures something the device leaks while it computes: how long an operation takes, how much power it draws, or what it radiates. The secret is recovered from the physical behaviour, not from a broken formula.', ['A timing attack measures:', 'How long an operation takes', ['The cipher name', 'The key size']]]]),
+  ], (why) => `${why}.`, d),
 ]);
 
 export const hwsecBoss = boss({
@@ -250,7 +257,7 @@ export const fusaPractice = practice('practice-fusa', 'Functional Safety Drills'
       calc('FIT = failures ÷ device-hours × 10⁹:', `${fails} / ${n * h} × 1e9`, f, '', sig(f), 0.02));
   },
   (r, d) => {
-    const k = pick(r, [8, 16, 32, 64, 128]);
+    const k = pick(r, tier(d, [8, 16, 32, 64, 128], [8, 16, 32, 64, 128], [4, 8, 11, 16, 26, 32, 64, 128]));
     let rr = 1;
     while (2 ** rr < k + rr + 1) rr++;
     const idea = 'A Hamming code adds r check bits to k data bits so that one flipped bit can be located and fixed. The r check bits must be able to say which of the k + r bit positions is wrong, or that none is: 2^r ≥ k + r + 1. SECDED adds one more overall parity bit, so a double-bit error is detected too (but not corrected).';
@@ -268,7 +275,7 @@ export const fusaPractice = practice('practice-fusa', 'Functional Safety Drills'
       calc('Overhead = check bits ÷ data bits, as a %:', `${rr + 1} / ${k} × 100`, ((rr + 1) / k) * 100, '%', sig(((rr + 1) / k) * 100), 0.02));
   },
   (r, d) => {
-    const safe = pick(r, [0.3, 0.4, 0.5]);
+    const safe = pick(r, [0.3, 0.4, 0.5, 0.2, 0.6, 0.25]);
     const idea = 'Faults can be SAFE (they cannot cause a dangerous failure) or dangerous. A safety mechanism detects a fraction DC (diagnostic coverage) of the dangerous faults. The rest are RESIDUAL faults: dangerous and undetected. The single-point fault metric SPFM = 1 - (residual faults ÷ all faults). So residual = (1 - safe) × (1 - DC), as a fraction of ALL faults. ASIL D needs SPFM ≥ 99%.';
     if (d < 3) {
       const dc = pick(r, [0.9, 0.97, 0.99]), spfm = (1 - (1 - safe) * (1 - dc)) * 100;
@@ -288,20 +295,23 @@ export const fusaPractice = practice('practice-fusa', 'Functional Safety Drills'
   },
   (r, d) => {
     const parts = tier(d, [['CPU', 20], ['RAM', 30]], [['CPU', 40], ['RAM', 60], ['bus', 10]], [['CPU', 80], ['RAM', 120], ['bus', 20], ['clock', 5]]) as [string, number][];
-    const dc = pick(r, [0.9, 0.95, 0.99]), total = parts.reduce((a, [, f]) => a + f, 0), res = total * (1 - dc);
+    const dc = pick(r, [0.9, 0.95, 0.99, 0.6, 0.8, 0.5]), total = parts.reduce((a, [, f]) => a + f, 0), res = total * (1 - dc);
     return walk(ask(`Raw dangerous FIT: ${parts.map(([n, f]) => `${n} ${f}`).join(', ')}. Every part has ${dc * 100}% diagnostic coverage. Residual FIT (PMHF contribution)?`, qty(res, '', 0.02, sig(res)), `(${parts.map(([, f]) => f).join(' + ')}) × ${sig(1 - dc)} = ${sig(res)} FIT. ASIL D requires under 10 FIT for the whole item${res >= 10 ? ', so this fails' : ''}.`, 'Sum × (1 - coverage).'),
       'residual FIT (PMHF)', 'The probabilistic metric for random hardware failures (PMHF) adds up the failure rate (in FIT) of all the dangerous faults that are NOT caught by a safety mechanism. For each block the undetected part is FIT × (1 - coverage). When all blocks have the same coverage, add the raw FITs first and multiply once.',
       calc('Total raw dangerous FIT = the sum:', parts.map(([, f]) => f).join(' + '), total, '', String(total), 0.001),
       calc('The undetected fraction, 1 - coverage:', `1 - ${dc}`, 1 - dc, '', sig(1 - dc, 4), 0.002),
       calc('Residual FIT = total × undetected fraction:', `${total} × ${sig(1 - dc, 4)}`, res, '', sig(res), 0.02));
   },
-  (r) => concept(r, [
+  (r, d) => concept(r, [...atLevel(2, [
     ['ISO 26262 grades risk ASIL A to D. Which needs the most rigor?', 'ASIL D', ['ASIL A', 'QM', 'All equal'], 'ASIL levels', 'The automotive safety integrity level is set by three things: how severe the harm would be, how often the situation occurs, and how controllable it is for the driver. Losing the brakes is worst on all three, so it is ASIL D, with the strictest requirements.', ['Losing braking is graded:', 'ASIL D, the highest', ['ASIL A, the highest', 'QM, no ASIL needed']], 'For example braking and steering.'],
     ['Which is a random hardware fault rather than a systematic one?', 'An alpha particle flips an SRAM bit', ['A bug in the RTL of the controller', 'A wrong requirement in the spec', 'A missing timing constraint on a path'], 'random versus systematic faults', 'Random faults come from physics and happen by chance in working hardware (a particle, wear); safety mechanisms handle them. Systematic faults come from mistakes in the design or the requirements, which are built into every unit and are prevented by a good process.', ['A bug in the RTL is:', 'A systematic fault', ['A random hardware fault', 'A transient soft error']]],
     ['Two identical cores run a couple of cycles apart and compare outputs every cycle. What is it?', 'Dual-core lockstep', ['Hyperthreading', 'Speculation', 'Cache coherence protocol'], 'lockstep cores', 'Two cores run the same program and a checker compares their outputs. If a random fault upsets only one, the outputs differ and the fault is caught. A small delay between them makes it unlikely that one event corrupts both the same way.', ['A mismatch between the two cores means:', 'A fault happened in one of them', ['Both cores failed in the same way', 'The program has a software bug']], 'It detects random faults in either core.'],
     ['How do you show a safety mechanism reaches its claimed coverage?', 'Inject faults and count detections', ['Ask the designer to sign a statement', 'Run the normal regression one more time', 'Measure the power with the mechanism on'], 'measuring coverage', 'Coverage is a measured number, not a promise. You deliberately inject many faults (flip bits, stick signals) in simulation or emulation and count how many the safety mechanism catches.', ['Diagnostic coverage is measured by:', 'Injecting faults and counting detections', ['Counting the lines of safety code reviewed', 'Reading the safety spec']], 'Fault-injection campaigns force faults in simulation or emulation and count how many are detected.'],
     ['Why does a watchdog timer exist in a safety system?', 'To catch lock-ups and force a safe state', ['To count cars passing the sensor', 'To speed up the boot after a reset', 'To encrypt data on the CAN bus'], 'watchdog timers', 'A watchdog is an independent timer that counts down. Healthy software "kicks" it regularly to restart the count. If the software hangs, it stops kicking, the timer runs out, and the watchdog forces a reset into a safe state.', ['A hung program stops kicking the watchdog, so it:', 'Expires and forces a safe reset', ['Keeps counting with no action', 'Waits for the code to recover']], 'If it is not serviced in time, it forces a safe state.'],
-  ], (why) => `${why}.`),
+  ]),
+    ...atLevel(1, [['What does ECC memory do?', 'Detects and corrects bit errors in stored data', ['Makes the memory run faster', 'Stores a backup copy of the whole OS', 'Encrypts the stored data so it cannot be read'], 'ECC codes', 'Error-correcting code adds check bits to each word. A single flipped bit can be located and fixed, and a double flip is detected, which protects against soft errors from radiation.', ['ECC can correct how many flipped bits per word?', 'One', ['Zero', 'Any number']]]]),
+    ...atLevel(3, [['What does a safe state mean for a safety system?', 'A state where a fault cannot lead to harm', ['A state where the chip is fully fast', 'A state with all clocks running', 'A state where the chip reboots itself every second'], 'safe state', 'A safe state is a defined state the system can enter on a fault, where the fault can no longer cause a hazard. Examples are shutting off an actuator or holding it in a known position.', ['A safe state is one where:', 'A fault cannot cause harm', ['The system runs at full speed']]]]),
+  ], (why) => `${why}.`, d),
 ]);
 
 export const fusaBoss = boss({
@@ -325,14 +335,14 @@ export const fusaBoss = boss({
 
 export const photonicsPractice = practice('practice-photonics', 'Photonics Drills', 'band gaps, WDM, energy per bit, link budgets, photodetectors', [
   (r, d) => {
-    const m = pick(r, [['Silicon', 1.12], ['Germanium', 0.66], ['InP', 1.34], ['GaAs', 1.42]] as const);
+    const m = pick(r, [['Silicon', 1.12], ['Germanium', 0.66], ['InP', 1.34], ['GaAs', 1.42], ['GaN', 3.4], ['InGaAs', 0.75]] as const);
     const idea = 'Light comes in particles called photons, and each photon of wavelength λ carries energy E = h·c ÷ λ. In convenient units: E (in eV) = 1.24 ÷ λ (in µm). A semiconductor can absorb a photon only if its energy is at least the material\'s band gap Eg. So the LONGEST wavelength a material absorbs is where the photon energy equals the band gap: λ = 1.24 ÷ Eg.';
     if (d < 3) return walk(ask(`${m[0]} has a band gap of ${m[1]} eV. Longest wavelength it absorbs, in µm? (λ = 1.24/Eg)`, qty(1.24 / m[1], 'um', 0.02, sig(1.24 / m[1])), `1.24 / ${m[1]} = ${sig(1.24 / m[1])} µm. Silicon is transparent at 1.31 and 1.55 µm, which is why it makes good waveguides and needs germanium to detect light.`, 'Photon energy must exceed the band gap.'),
       'the absorption edge', idea,
       choice('A photon can be absorbed only if its energy is:', 'At least the band gap', ['Below the band gap', 'Exactly zero']),
       calc('λ = 1.24 ÷ Eg, in µm:', `1.24 / ${m[1]}`, 1.24 / m[1], 'um', sig(1.24 / m[1]), 0.02));
-    const lam = pick(r, [1.31, 1.55]), e = 1.24 / lam;
-    return walk(ask(`What is the energy of a ${lam} µm photon, in eV?`, qty(e, 'eV', 0.02, sig(e)), `1.24 / ${lam} = ${sig(e)} eV: below silicon's 1.12 eV band gap, so silicon cannot absorb it.`, 'E = 1.24/λ with λ in µm.'),
+    const lam = pick(r, [1.31, 1.55, 1.06, 0.98, 0.85, 1.7]), e = 1.24 / lam;
+    return walk(ask(`What is the energy of a ${lam} µm photon, in eV?`, qty(e, 'eV', 0.02, sig(e)), `1.24 / ${lam} = ${sig(e)} eV: ${e < 1.12 ? "below silicon's 1.12 eV band gap, so silicon cannot absorb it" : "above silicon's 1.12 eV band gap, so silicon absorbs it"}.`, 'E = 1.24/λ with λ in µm.'),
       'photon energy', idea,
       calc('E = 1.24 ÷ λ, in eV:', `1.24 / ${lam}`, e, 'eV', sig(e), 0.02));
   },
@@ -385,12 +395,16 @@ export const photonicsPractice = practice('practice-photonics', 'Photonics Drill
       calc('λ × η (micrometres × efficiency):', `${lam} × ${eta}`, lam * eta, '', sig(lam * eta, 4), 0.005),
       calc('R = that ÷ 1.24, in A/W:', `${sig(lam * eta, 4)} / 1.24`, rr, 'A/W', sig(rr), 0.02));
   },
-  (r) => concept(r, [
+  (r, d) => concept(r, [...atLevel(2, [
     ['Why can\'t you easily make a laser out of silicon?', 'Its band gap is indirect', ['Silicon is too expensive', 'Silicon absorbs all light', 'Silicon melts when pumped'], 'direct versus indirect band gaps', 'In a direct band-gap material, an electron and a hole recombine by emitting a photon easily. Silicon has an indirect band gap: recombination also needs a lattice vibration (a phonon), which makes light emission rare and inefficient. So lasers are made of III-V materials such as InP and attached to the silicon.', ['Silicon emits light poorly because its band gap is:', 'Indirect', ['Direct', 'Too wide']], 'Electrons and holes rarely recombine by emitting light, so lasers use III-V materials bonded or attached.'],
     ['What is the classic problem with ring modulators?', 'Resonance drifts with temperature', ['They only work in red light', 'They are too big for a chip', 'They need no power, so cannot be tuned'], 'ring resonators', 'A ring modulator works only for wavelengths that fit the ring exactly (its resonance). Silicon\'s refractive index changes with temperature, which shifts the resonant wavelength (about 0.1 nm per kelvin), so a heater and feedback loop must hold it in place.', ['If the ring heats up, its resonant wavelength:', 'Shifts', ['Stays the same', 'Disappears']], 'Each needs a heater and control loop.'],
     ['Why move optics into the package (co-packaged optics)?', 'Short electrical paths cut pJ/bit', ['Fibres are cheaper than copper', 'It removes the need for lasers', 'It makes the switch die smaller and cheaper'], 'co-packaged optics', 'Driving 200 Gb/s over long copper traces on a board needs power-hungry equalizing circuits. If the optical engine sits right next to the switch chip, the electrical path is only a few millimetres, which needs much less power per bit.', ['A shorter electrical path needs:', 'Less power per bit', ['More power per bit', 'No power']], 'Electrical traces to the front panel burn too much power at high rates.'],
     ['What does a Mach-Zehnder modulator do?', 'Interference turns a phase shift into intensity', ['It generates light by stimulated emission', 'It detects light as a photocurrent', 'It amplifies light by pumping a doped fibre'], 'Mach-Zehnder modulators', 'The light is split into two paths. A voltage changes the phase of light in one arm. When the paths recombine, waves in phase add up (bright) and waves 180° apart cancel (dark), so the voltage controls the output intensity.', ['Two waves 180° out of phase, when combined:', 'Cancel', ['Add up', 'Double in frequency']], 'It splits light into two arms, shifts the phase of one, and recombines them.'],
-  ], (why) => `${why}.`),
+  ]),
+    ...atLevel(1, [['What does a waveguide do for light?', 'Guides light by total internal reflection', ['Amplifies light with a laser gain medium inside it', 'Stores light for a long time', 'Converts light into electrical current'], 'waveguides', 'A waveguide is a core of high-index material surrounded by lower-index cladding. Light stays confined in the core by total internal reflection, so it can be routed around a chip like a wire.', ['Light stays in a waveguide because of:', 'Total internal reflection', ['Gravity', 'A magnetic field']]]]),
+    ...atLevel(2, [['What does a photodiode do?', 'Turns incoming light into a current', ['Turns a current into light for the fibre link', 'Guides light between two chips', 'Splits one beam into two'], 'photodiodes', 'A photodiode absorbs photons and produces an electrical current proportional to the light power. It is the receiving end of an optical link.', ['A photodiode produces:', 'A current from light', ['Light from a current']]]]),
+    ...atLevel(3, [['Why is a silicon photonic modulator sensitive to temperature?', 'Its refractive index shifts with heat', ['Silicon has no band gap at room heat', 'Heat makes light travel slower in air', 'Temperature changes the laser colour only'], 'thermal drift', 'Silicon\'s refractive index rises slightly with temperature, which shifts a ring resonator\'s wavelength. Designs add heaters or tuning circuits to keep the ring locked to the laser.', ['Heating a silicon ring makes its resonance:', 'Shift to a longer wavelength', ['Disappear', 'Stay exactly fixed']]]]),
+  ], (why) => `${why}.`, d),
 ]);
 
 export const photonicsBoss = boss({
@@ -429,7 +443,7 @@ export const qubitPractice = practice('practice-qubit', 'Qubit Drills', 'state s
         calc('Number of amplitudes, 2^n:', `2^${n}`, 2 ** n, '', sci(2 ** n, 3), 0.01),
         calc('GB = amplitudes × 16 bytes ÷ 1e9:', `${sci(2 ** n, 3)} × 16 / 1e9`, gb, 'GB', sig(gb), 0.02));
     }
-    const tb = pick(r, [1, 100]), n = Math.floor(Math.log2((tb * 1e12) / 16));
+    const tb = pick(r, [1, 100, 10, 1000, 4, 16]), n = Math.floor(Math.log2((tb * 1e12) / 16));
     return walk(ask(`How many qubits can a full state-vector simulation hold in ${tb} TB (16 bytes per amplitude)?`, num(n), `2^n × 16 ≤ ${tb}e12 → n = ${n}. A hundred times the memory buys only ${Math.round(Math.log2(100))} more qubits.`, 'log2(memory / 16), rounded down.'),
       'how many qubits fit in memory', `${idea} To find how many qubits fit, ask how many amplitudes the memory can hold, then how many times 2 doubles to that (log base 2), rounded down.`,
       calc('Amplitudes that fit = memory in bytes ÷ 16:', `${tb}e12 / 16`, (tb * 1e12) / 16, '', sci((tb * 1e12) / 16, 3), 0.01),
@@ -448,7 +462,7 @@ export const qubitPractice = practice('practice-qubit', 'Qubit Drills', 'state s
         choice('The amplitude of |1⟩ is ' + b + '. The probability of reading 1 is the amplitude:', 'Squared', ['Itself', 'Doubled']),
         calc('Probability = amplitude squared, as a % (× 100):', `${b}^2 × 100`, b * b * 100, '%', sig(b * b * 100), 0.01));
     }
-    const th = pick(r, [30, 60, 90, 120]), p = Math.sin(((th / 2) * Math.PI) / 180) ** 2 * 100;
+    const th = pick(r, [30, 60, 90, 120, 150, 180]), p = Math.sin(((th / 2) * Math.PI) / 180) ** 2 * 100;
     return walk(ask(`A qubit in |0⟩ is rotated by θ = ${th}° about the X axis, giving cos(θ/2)|0⟩ - i·sin(θ/2)|1⟩. Probability of measuring 1, in %?`, qty(p, '%', 0.02, sig(p)), `sin²(${th / 2}°) = ${sig(p)}%. A π rotation (180°) flips the qubit completely.`, 'sin²(θ/2).'),
       'the Born rule after a rotation', `${idea} After the rotation, the amplitude of |1⟩ is sin(θ/2) (the factor -i only changes its phase, not its size). So the probability of 1 is sin²(θ/2).`,
       calc('Half the angle, θ/2, in degrees:', `${th} / 2`, th / 2, '', String(th / 2), 0.001),
@@ -456,7 +470,7 @@ export const qubitPractice = practice('practice-qubit', 'Qubit Drills', 'state s
       calc('Probability = amplitude squared, as a %:', `${sig(Math.sin(((th / 2) * Math.PI) / 180), 4)}^2 × 100`, p, '%', sig(p), 0.02));
   },
   (r, d) => {
-    const f = pick(r, [0.99, 0.995, 0.999]);
+    const f = pick(r, [0.99, 0.995, 0.999, 0.9965, 0.998, 0.9985]);
     const idea = 'If each gate succeeds with probability f (its fidelity), and errors are independent, then a circuit of n gates runs error-free with probability f^n: the chances multiply. Even very good gates compound into a poor result over many operations.';
     if (d < 3) {
       const n = pick(r, [50, 100, 500]), p = f ** n * 100;
@@ -498,12 +512,16 @@ export const qubitPractice = practice('practice-qubit', 'Qubit Drills', 'state s
       count(`Physical qubits per logical one, 2 × d² - 1 with d = ${dd}:`, `2 × ${dd}^2 - 1`, per),
       count(`For ${l} logical qubits:`, `${per} × ${l}`, l * per));
   },
-  (r) => concept(r, [
+  (r, d) => concept(r, [...atLevel(2, [
     ['Why does a transmon need a Josephson junction?', 'Its nonlinearity unevens the energy levels', ['To connect the qubit to ground through a resistor', 'To make the aluminium film superconduct', 'To cool the qubit below the fridge temperature'], 'the Josephson junction', 'A plain LC circuit has evenly spaced energy levels, so a pulse meant to drive 0↔1 would also drive 1↔2. A Josephson junction acts as a nonlinear inductor, making the spacing uneven so that the qubit\'s two lowest levels can be addressed on their own.', ['Unevenly spaced levels let a pulse drive:', 'Only the 0↔1 transition', ['Every transition equally', 'No transition']], 'It is a nonlinear inductor, so the lowest two levels can be addressed alone.'],
     ['Trapped ions vs superconducting qubits: which pairing is right?', 'Ions: slow, high fidelity. SC: fast, shorter coherence', ['Ions: fast, lower fidelity. SC: slow, longer coherence', 'Both: fast gates, but only SC needs a vacuum chamber', 'Both: identical speed, coherence and gate fidelity'], 'qubit platforms', 'Each platform is a trade-off. Trapped ions are identical atoms isolated in vacuum: very long coherence and accurate gates, but slow. Superconducting circuits are made with chip technology and have fast gates, but the qubits decohere sooner.', ['Fast gates but shorter coherence describes:', 'Superconducting qubits', ['Trapped ions held in a vacuum', 'Neither type']]],
     ['What is the difference between T1 and T2?', 'T1: energy relaxation. T2: phase coherence', ['T1 and T2 are two names for the same time', 'T2 is always longer than 2·T1', 'T1 is the gate time; T2 the readout time'], 'T1 and T2', 'T1 measures how fast the qubit loses energy (falls from |1⟩ to |0⟩). T2 measures how fast it loses the phase relationship of a superposition. Energy loss always destroys the phase too, so T2 can never be more than 2 × T1; other noise shortens it further.', ['Losing energy also destroys phase, so T2 is at most:', '2 × T1', ['T1 ÷ 2', '10 × T1']], 'T2 ≤ 2·T1, because losing energy also destroys the phase.'],
     ['Why can\'t you copy an unknown qubit to protect it?', 'The no-cloning theorem forbids it', ['Qubits are too small to duplicate', 'Copying would be far too slow', 'It is allowed, but very expensive'], 'no cloning', 'A law of quantum mechanics (no-cloning) forbids making a perfect copy of an unknown quantum state, and measuring it destroys the superposition. So quantum error correction encodes the data across entangled qubits and uses parity checks that find errors without learning the data.', ['Quantum error correction spreads the information across:', 'Many entangled qubits', ['Many copies of the same qubit', 'Classical bits']], 'So error correction spreads information across entangled qubits instead.'],
-  ], (why) => `${why}.`),
+  ]),
+    ...atLevel(1, [['What is a qubit?', 'A two-level quantum system in superposition', ['A classical bit stored in a leaky capacitor cell', 'A logic gate with two inputs', 'A laser pulse of fixed length'], 'qubits', 'A qubit is a quantum system with two basis states, |0⟩ and |1⟩, that can be in a superposition of both. Measurement gives 0 or 1 with probabilities set by the amplitudes.', ['A qubit can be in:', 'A superposition of 0 and 1', ['Only 0', 'Only 1']]]]),
+    ...atLevel(2, [['What does a single-qubit gate do?', 'A unitary operation on the qubit state', ['A measurement that collapses the state', 'A copy of the state into another qubit', 'A reset to the ground state only'], 'quantum gates', 'Gates are reversible, unitary operations that rotate the state vector. Measurement is different: it is not unitary and gives a random outcome.', ['Quantum gates (other than measurement) are:', 'Reversible', ['Irreversible', 'Random']]]]),
+    ...atLevel(3, [['Why is the no-cloning theorem a problem for error correction?', 'You cannot copy a qubit to check it', ['Copies would slow the gates down', 'Measuring always destroys the qubit forever', 'Qubits cannot hold more than one bit'], 'no-cloning', 'No-cloning forbids making an unknown quantum state copy. Classical error correction copies bits to compare them, so quantum codes must spread the information over several qubits and measure parities instead.', ['No-cloning means an unknown qubit state:', 'Cannot be copied', ['Can be copied freely']]]]),
+  ], (why) => `${why}.`, d),
 ]);
 
 export const qubitBoss = boss({
@@ -551,7 +569,7 @@ export const qctrlPractice = practice('practice-qctrl', 'Quantum Control Drills'
       calc('New length = old length ÷ amplitude scale, in ns:', `${t0} / ${s}`, t, 'ns', sig(t), 0.02));
   },
   (r, d) => {
-    const a = pick(r, [10, 20, 30]), al = 10 ** (a / 10);
+    const a = pick(r, d === 3 ? [10, 15, 20, 25, 30, 40] : [10, 20, 30]), al = 10 ** (a / 10);
     const idea = 'An attenuator of A dB lets through only 1 ÷ 10^(A/10) of the power. It also adds its own thermal noise, at the temperature it sits at. So the noise temperature at its output is (noise in ÷ attenuation) + (its own temperature × (1 - 1/attenuation)). The hot noise from room temperature is reduced at each cold stage, but never below that stage\'s own temperature.';
     if (d === 1) return walk(ask(`A ${a} dB attenuator passes what fraction of the input power? (answer as 1/N: give N)`, qty(al, '', 0.01, String(al)), `10^(${a}/10) = ${al}: only 1/${al} gets through.`, 'Undo the dB.'),
       'attenuation in dB', idea,
@@ -604,12 +622,16 @@ export const qctrlPractice = practice('practice-qctrl', 'Quantum Control Drills'
       calc('One channel: fs GS/s × 2 bytes per sample, in GB/s:', `${fs} × 2`, fs * 2, 'GB/s', String(fs * 2), 0.001),
       calc('Total = channels × that, in GB/s:', `${q * 2} × ${fs * 2}`, bw, 'GB/s', sig(bw), 0.02));
   },
-  (r) => concept(r, [
+  (r, d) => concept(r, [...atLevel(2, [
     ['Why do drive lines have attenuators at several cold stages?', 'To replace room-temperature noise with colder noise', ['To save power in the room-temperature control electronics', 'To slow the pulses so the qubits can follow them', 'Because the qubits need only weak signals to work'], 'attenuators in the fridge', 'A room-temperature cable carries 300 K thermal noise. An attenuator reduces the signal AND the noise by the same factor, then adds its own (colder) noise at its own temperature. Several stages step the noise down toward the coldest temperature, where the last attenuator sits.', ['The last attenuator should be at:', 'The coldest stage', ['Room temperature, at the source', 'The 4 K stage']], 'A room-temperature source sends thermal noise down the line; each cold attenuator cuts it and adds only its own, colder noise.'],
     ['Why is a quantum-limited amplifier (JPA or TWPA) placed first in the readout chain?', 'The first stage dominates the noise', ['It is the cheapest amplifier', 'It filters the drive pulses', 'It cools the qubit during readout'], 'first-stage amplifiers', 'From the Friis formula, the noise of a chain is dominated by its first stage. A readout signal is only a few photons, so any noise added before the first gain stage ruins it. Quantum-limited amplifiers add almost no noise beyond the quantum minimum.', ['The noise of an amplifier chain is dominated by:', 'The first stage', ['The last, highest-gain stage', 'The cables']], 'By Friis, the first stage dominates, and these add close to the minimum quantum noise.'],
     ['Why must the error-correction decoder be fast?', 'Otherwise its syndrome backlog grows without bound', ['It does not have to be: it can decode everything afterwards', 'To save power in the room-temperature controller', 'Because qubits are fast, so everything must be'], 'real-time decoding', 'Error correction produces a new set of parity measurements (a syndrome) about every microsecond. A classical decoder must work out the corrections from each one. If it is slower than the arrival rate, the queue grows forever, and logical operations that wait on it stall.', ['If decoding is slower than syndromes arrive, the backlog:', 'Grows without bound', ['Shrinks', 'Stays constant']], 'Syndromes arrive about every microsecond.'],
     ['What does DRAG pulse shaping fix?', 'Leakage into the third level', ['LO leakage in the IQ mixer', 'Thermal noise on the drive line', 'Crosstalk between readout resonators'], 'DRAG pulses', 'A short pulse has a wide frequency spread, and a transmon\'s 1↔2 transition is close to its 0↔1 transition, so the pulse can accidentally excite the third level (leakage). DRAG adds a derivative of the pulse on the quadrature channel, which cancels the unwanted frequencies.', ['DRAG cancels frequency content that would excite:', 'The third level (leakage)', ['The readout resonator', 'The 0↔1 transition itself']], 'It adds a derivative component on the quadrature channel.'],
-  ], (why) => `${why}.`),
+  ]),
+    ...atLevel(1, [['What does a cryostat do for a qubit chip?', 'Keeps the chip cold to protect its quantum states', ['Cools the room for the operators', 'Holds the classical control PCB', 'Stores the qubit data permanently on a cold server'], 'cryostats', 'Superconducting qubits work only near absolute zero, where thermal noise is small enough that the quantum states survive long enough to be used.', ['Superconducting qubits need:', 'Temperatures near absolute zero', ['Room temperature']]]]),
+    ...atLevel(2, [['What does a readout resonator do?', 'Couples a qubit to a line for readout', ['Stores the qubit state for later use', 'Generates the microwave clock for the chip', 'Filters out all heat from the chip'], 'readout resonators', 'A readout resonator is a microwave resonator whose frequency depends on the qubit state. A probe tone sent along the line picks up that shift, which tells the state apart.', ['The readout frequency depends on:', 'The qubit state', ['The room temperature']]]]),
+    ...atLevel(3, [['Why does a qubit control pulse need a precise shape?', 'Wrong shapes leak into other levels', ['Shapes set the qubit\'s final frequency', 'Pulses without shape cannot reach the chip', 'Square pulses are always illegal'], 'pulse shaping', 'A sharp pulse has spectral content at other transmon levels, so population leaks out of the qubit subspace. Shaped pulses such as DRAG keep the error small.', ['Leakage means population moves to:', 'Other energy levels', ['The ground state only']]]]),
+  ], (why) => `${why}.`, d),
 ]);
 
 export const qctrlBoss = boss({
