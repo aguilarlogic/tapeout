@@ -164,6 +164,15 @@ export function recordBest(game: string, score: number): boolean {
 export function resetAll() {
   cache = blank();
   save();
+  // Lab drafts (saveDraft) live under their own keys; drop them too or old solutions reappear in the editors.
+  try {
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const k = localStorage.key(i);
+      if (k?.startsWith('tapeout.draft.')) localStorage.removeItem(k);
+    }
+  } catch {
+    /* storage unavailable - nothing persisted to clear */
+  }
 }
 
 // Per-level scratch storage (editor contents, board state...)

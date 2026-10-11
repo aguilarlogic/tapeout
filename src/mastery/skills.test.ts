@@ -37,6 +37,14 @@ describe('skill matrix', () => {
       if (!x.id.startsWith('cap-')) expect(SKILLS.some((s) => s.practice.includes(x.id) || s.boss.includes(x.id)), `${x.id} in a skill`).toBe(true);
     }
   });
+  it('every curriculum module belongs to a skill (except drills, final and cap-*)', () => {
+    const placed = new Set(SKILLS.flatMap((s) => [...s.learn, ...s.practice, ...s.boss]));
+    const orphans = ALL_MODULES
+      .filter((m) => m.kind !== 'drills' && m.kind !== 'final' && !m.id.startsWith('cap-'))
+      .map((m) => m.id)
+      .filter((id) => !placed.has(id));
+    expect(orphans, 'curriculum modules that count toward no skill').toEqual([]);
+  });
   it('explains what is planned for any unbuilt tier', () => {
     for (const s of SKILLS) if (skillCeiling(s) < 3) expect(s.plan, s.id).toBeTruthy();
   });
