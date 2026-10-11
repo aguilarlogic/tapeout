@@ -145,7 +145,7 @@ export const ACTS: Act[] = [
       { name: 'Hardware/software interface', modules: [...drill('asm'), ...isa('isa-first', 'isa-branch', 'isa-loop', 'isa-array', 'isa-strlen', 'isa-popcount', 'isa-mul', 'isa-gcd', 'isa-copy', 'isa-reverse', 'isa-abi', 'isa-fix-signed', 'isa-fix-max', 'isa-fib', 'isa-sort'), bossMod('boss-asm'), ...isa('isa-boss-str', 'isa-boss-perf', 'isa-boss-rec')] },
       { name: 'Microarchitecture', modules: [...drill('alu'), ...rv('rv-alu', 'rv-branch', 'rv-mem', 'rv-mext'), bossMod('boss-uarch'), ...rv('rv-boss'), incident('inc-datapath')] },
       { name: 'Clocks & resets', modules: [...drill('clk'), ...cdc('cdc-sync', 'cdc-pulse', 'cdc-gray', 'cdc-handshake'), bossMod('boss-cdc'), ...cdc('cdc-fifo'), incident('inc-crossing')] },
-      { name: 'Pipelines', modules: [...drill('pipe'), ...arch('pipe-fwd', 'pipe-branch', 'pipe-sched', 'pipe-unroll'), ...arch('pipe-boss')] },
+      { name: 'Pipelines', modules: [...drill('pipe'), ...arch('pipe-fwd', 'pipe-branch', 'pipe-sched', 'pipe-unroll'), ...arch('pipe-boss'), incident('inc-pipeline')] },
     ],
   },
   {
@@ -168,10 +168,10 @@ export const ACTS: Act[] = [
       { name: 'Random & coverage', modules: [...drill('crv'), ...tb('tb-rand', 'tb-rand-dist', 'tb-rand-arr'), bossMod('boss-crv'), ...tb('tb-cov', 'tb-cov-holes'), prac('practice-cov'), ...mods(SCENARIOS, 'cov', 'cov'), bossMod('boss-coverage'), incident('inc-cov')] },
       { name: 'UVM', modules: [...drill('uvm'), ...mods(UVM_PUZZLES, 'uvm', 'uvm'), bossMod('boss-uvm'), ...tb('tbu-seq', 'tbu-driver', 'tbu-monsb', 'tbu-config', 'tbu-factory', 'tbu-cov', 'tbu-phases', 'tbu-boss'), incident('inc-uvm')] },
       { name: 'Assertions & formal', modules: [...drill('sva'), ...sva('sva-latency', 'sva-reg', 'sva-arbiter', 'sva-fifo', 'sva-valid-ready', 'sva-fsm', 'sva-repeat', 'sva-cover'), bossMod('boss-sva'), ...sva('sva-boss-burst'), ...drill('formal'), ...sva('formal-assume', 'formal-depth', 'formal-fix'), bossMod('boss-formal'), ...sva('formal-boss-wrap'), incident('inc-formal')] },
-      { name: 'Out-of-order', modules: [...drill('ooo'), ...arch('ooo-rename', 'ooo-window', 'ooo-diagnose'), bossMod('boss-cpu'), ...arch('ooo-boss')] },
-      { name: 'Memory hierarchy', modules: [...drill('cache'), ...arch('cache-predict', 'cache-block', 'cache-conflict', 'cache-policy', 'cache-tile', 'cache-write'), ...drill('coherence', 'dram'), bossMod('boss-mem'), ...arch('cache-boss')] },
-      { name: 'Interconnect', modules: [...drill('bus'), bossMod('boss-protocols'), ...drill('noc', 'serdes'), bossMod('boss-interconnect')] },
-      { name: 'Modeling', modules: [...drill('perf'), bossMod('boss-perf')] },
+      { name: 'Out-of-order', modules: [...drill('ooo'), ...arch('ooo-rename', 'ooo-window', 'ooo-diagnose'), bossMod('boss-cpu'), ...arch('ooo-boss'), incident('inc-ooo')] },
+      { name: 'Memory hierarchy', modules: [...drill('cache'), ...arch('cache-predict', 'cache-block', 'cache-conflict', 'cache-policy', 'cache-tile', 'cache-write'), ...drill('coherence', 'dram'), bossMod('boss-mem'), ...arch('cache-boss'), incident('inc-memhier')] },
+      { name: 'Interconnect', modules: [...drill('bus'), bossMod('boss-protocols'), ...drill('noc', 'serdes'), bossMod('boss-interconnect'), incident('inc-noc')] },
+      { name: 'Modeling', modules: [...drill('perf'), bossMod('boss-perf'), incident('inc-model')] },
       {
         name: 'Tapeout', modules: [
           { id: 'drills', kind: 'drills', title: 'Interview Gauntlet', concept: 'spaced-repetition interview questions', xp: 150, route: '#/drills' },
