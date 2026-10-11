@@ -430,6 +430,8 @@ select.blank.wrong { border-color: var(--err); color: var(--err); }
 .src-view { margin: 0 0 8px; }
 .src-view summary { cursor: pointer; font-size: 12px; color: var(--text-dim); margin-bottom: 4px; }
 .src-view .src { margin: 0; max-height: 220px; overflow: auto; padding: 8px 10px; border-radius: 6px; background: rgba(138,148,166,.12); font-size: 12px; white-space: pre; }
+/* The read-only copy reuses the editor's overlay class (ed-hl is absolutely placed over an editor). Here it must flow in the panel. */
+.src-view .src { position: static; inset: auto; pointer-events: auto; }
 .cex-wrap { overflow-x: auto; margin-top: 6px; }
 table.cex { border-collapse: collapse; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; }
 table.cex th, table.cex td { padding: 2px 7px; border: 1px solid rgba(138,148,166,.3); text-align: center; }
