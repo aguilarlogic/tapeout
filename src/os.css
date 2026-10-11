@@ -9,37 +9,53 @@
   --term-hl: #fbbf24;
   --term-err: #f87171;
   --term-ok: #4ade80;
-  --desk-a: #0a1117;
-  --desk-b: #0d1a20;
-  --desk-line: rgba(94, 234, 212, 0.05);
-  --win-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
-  --taskbar: #0c131a;
-  /* TAPE-OS design tokens (U16). Stage 1: aliases of the current palette, so nothing changes yet. Stage 2 gives
-     each theme its own values under [data-theme]. Chrome rules read these, never the page palette. */
-  --os-surface: var(--bg);
-  --os-chrome: var(--panel);
-  --os-chrome-2: var(--panel-2);
-  --os-border: var(--border);
-  --os-text: var(--text);
-  --os-text-dim: var(--text-dim);
-  --os-accent: var(--accent);
-  --os-accent-ink: var(--accent-ink);
-  --os-err: var(--err);
-  --os-taskbar: var(--taskbar);
-  --os-win-shadow: var(--win-shadow);
+  /* Theme-free tokens. The colours come from the theme blocks below, which Settings > Theme chooses on <html>. */
   --os-radius: 12px;
   --os-radius-sm: 8px;
   --os-font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --os-font-mono: var(--mono);
 }
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme='dark']) {
-    --desk-a: #dfe8ee;
-    --desk-b: #cfdde6;
-    --desk-line: rgba(13, 148, 136, 0.08);
-    --win-shadow: 0 18px 50px rgba(20, 40, 60, 0.25);
-    --taskbar: #f7fafc;
-  }
+/* TAPE-OS (the default): the dark terminal look, mono headings, the terminal's phosphor teal for the accent. */
+:root[data-theme='tapeout'] {
+  --os-surface: #0a1015;
+  --os-chrome: #0e1820;
+  --os-chrome-2: #16262f;
+  --os-border: #1f3742;
+  --os-text: #d4e8e2;
+  --os-text-dim: #8ea6a3;
+  --os-accent: #5eead4;
+  --os-accent-text: #5eead4;
+  --os-accent-ink: #04201d;
+  --os-ok: #4ade80;
+  --os-warn: #fbbf24;
+  --os-err: #f87171;
+  --os-taskbar: #070d12;
+  --os-win-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+  --os-desk-a: #0a1117;
+  --os-desk-b: #0d1a20;
+  --os-desk-line: rgba(94, 234, 212, 0.05);
+  --os-title-font: var(--mono);
+}
+/* Light: the look TAPE-OS had before U16, for bright rooms. Chosen in Settings > Theme. */
+:root[data-theme='light'] {
+  --os-surface: #f5f7fa;
+  --os-chrome: #ffffff;
+  --os-chrome-2: #f3f6f9;
+  --os-border: #d8e0e8;
+  --os-text: #17212b;
+  --os-text-dim: #5b6b7b;
+  --os-accent: #0f766e;
+  --os-accent-text: #115e59;
+  --os-accent-ink: #ffffff;
+  --os-ok: #047857;
+  --os-warn: #b45309;
+  --os-err: #b91c1c;
+  --os-taskbar: #f7fafc;
+  --os-win-shadow: 0 18px 50px rgba(20, 40, 60, 0.25);
+  --os-desk-a: #dfe8ee;
+  --os-desk-b: #cfdde6;
+  --os-desk-line: rgba(13, 148, 136, 0.08);
+  --os-title-font: var(--os-font-sans);
 }
 :root[data-theme='dark'] { color-scheme: dark; }
 
@@ -50,9 +66,9 @@ body { display: block; }
 .desktop {
   position: relative; overflow: hidden; max-width: none; padding: 0; margin: 0;
   background:
-    linear-gradient(var(--desk-line) 1px, transparent 1px) 0 0 / 32px 32px,
-    linear-gradient(90deg, var(--desk-line) 1px, transparent 1px) 0 0 / 32px 32px,
-    radial-gradient(ellipse at 70% 30%, var(--desk-b), var(--desk-a) 70%);
+    linear-gradient(var(--os-desk-line) 1px, transparent 1px) 0 0 / 32px 32px,
+    linear-gradient(90deg, var(--os-desk-line) 1px, transparent 1px) 0 0 / 32px 32px,
+    radial-gradient(ellipse at 70% 30%, var(--os-desk-b), var(--os-desk-a) 70%);
 }
 .desk-icons { position: absolute; top: 16px; right: 16px; display: flex; flex-direction: column; gap: 10px; z-index: 1; }
 .desk-icon { font: inherit; display: flex; flex-direction: column; align-items: center; gap: 4px; width: 84px; padding: 8px 4px; border: 1px solid transparent; border-radius: 10px; background: transparent; color: var(--os-text); cursor: pointer; }
@@ -69,18 +85,18 @@ body { display: block; }
 .win.min { display: none; }
 .win.max { left: 6px !important; top: 6px !important; width: calc(100% - 12px) !important; height: calc(100% - 12px) !important; resize: none; }
 @keyframes win-in { from { transform: scale(0.97) translateY(6px); opacity: 0; } }
-.win-bar { display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 12px; background: var(--os-chrome); border-bottom: 1px solid var(--os-border); cursor: grab; user-select: none; touch-action: none; flex: none; }
+.win-bar { color: var(--os-text); display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 12px; background: var(--os-chrome); border-bottom: 1px solid var(--os-border); cursor: grab; user-select: none; touch-action: none; flex: none; }
 .win-bar:active { cursor: grabbing; }
 .win-icon { font-family: var(--mono); font-size: 0.8rem; color: var(--os-accent); font-weight: 700; min-width: 18px; }
-.win-title { font-size: 0.85rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.win-title { font-family: var(--os-title-font); font-size: 0.85rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .win-btn { font: inherit; width: 28px; height: 24px; border-radius: 6px; border: 1px solid transparent; background: transparent; color: var(--os-text-dim); cursor: pointer; line-height: 1; }
 .win-btn:hover { background: var(--os-chrome-2); color: var(--os-text); }
 .win-btn.close:hover { background: var(--os-err); color: #fff; }
-.win-body { flex: 1; overflow: auto; padding: 14px 16px; min-height: 0; }
+.win-body { background: var(--bg); color: var(--text); flex: 1; overflow: auto; padding: 14px 16px; min-height: 0; }
 .win-body > .level { max-width: 1480px; margin: 0 auto; }
 
 /* ---------------------------------------------------------------- taskbar */
-.taskbar { position: relative; display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--os-taskbar); border-top: 1px solid var(--os-border); z-index: 900; min-width: 0; }
+.taskbar { color: var(--os-text); position: relative; display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--os-taskbar); border-top: 1px solid var(--os-border); z-index: 900; min-width: 0; }
 .start { font: inherit; display: flex; align-items: center; gap: 8px; font-weight: 800; letter-spacing: 0.02em; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--os-border); background: var(--os-chrome); color: var(--os-text); cursor: pointer; flex: none; }
 .start:hover { border-color: var(--os-accent); }
 /* Task buttons shrink (down to their icon) so that many windows never run under the tray. */
@@ -91,9 +107,10 @@ body { display: block; }
 .task-label { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tray { display: flex; align-items: center; gap: 10px; font-size: 0.82rem; flex: none; }
 .tray-rank { font-weight: 700; }
+.tray .dim { color: var(--os-text-dim); }
 .start-rank { display: none; padding: 0 10px 8px; font-size: 0.82rem; color: var(--os-text-dim); }
 .clock { font-family: var(--mono); color: var(--os-text-dim); }
-.start-menu { position: absolute; bottom: calc(100% + 6px); left: 8px; width: 270px; max-height: 70vh; overflow: auto; background: var(--os-chrome); border: 1px solid var(--os-border); border-radius: 12px; box-shadow: var(--os-win-shadow); padding: 6px; }
+.start-menu { color: var(--os-text); position: absolute; bottom: calc(100% + 6px); left: 8px; width: 270px; max-height: 70vh; overflow: auto; background: var(--os-chrome); border: 1px solid var(--os-border); border-radius: 12px; box-shadow: var(--os-win-shadow); padding: 6px; }
 .start-menu[hidden] { display: none; }
 .start-head { display: flex; justify-content: space-between; padding: 8px 10px; border-bottom: 1px solid var(--os-border); margin-bottom: 4px; }
 .start-item { font: inherit; display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 7px 10px; border: 0; border-radius: 8px; background: transparent; color: var(--os-text); cursor: pointer; font-size: 0.9rem; }
@@ -179,7 +196,7 @@ body { display: block; }
 .term-done .recap { margin: 8px 0 0; padding-left: 1.2em; color: var(--term-fg); }
 
 /* ---------------------------------------------------------------- mentor bubble */
-.mentor-bubble { position: fixed; right: 16px; bottom: 62px; z-index: 950; display: flex; gap: 10px; align-items: flex-start; max-width: min(420px, calc(100vw - 32px)); padding: 10px 14px 10px 10px; background: var(--term-bg); color: var(--term-fg); border: 1px solid color-mix(in srgb, var(--term-ai) 50%, transparent); border-radius: 14px; box-shadow: var(--win-shadow), 0 0 24px color-mix(in srgb, var(--term-ai) 18%, transparent); font-family: var(--mono); font-size: 13px; cursor: pointer; animation: pop 0.22s ease-out; }
+.mentor-bubble { position: fixed; right: 16px; bottom: 62px; z-index: 950; display: flex; gap: 10px; align-items: flex-start; max-width: min(420px, calc(100vw - 32px)); padding: 10px 14px 10px 10px; background: var(--term-bg); color: var(--term-fg); border: 1px solid color-mix(in srgb, var(--term-ai) 50%, transparent); border-radius: 14px; box-shadow: var(--os-win-shadow), 0 0 24px color-mix(in srgb, var(--term-ai) 18%, transparent); font-family: var(--mono); font-size: 13px; cursor: pointer; animation: pop 0.22s ease-out; }
 .mentor-bubble.bye { opacity: 0; transform: translateY(8px); transition: all 0.25s; }
 .mb-text { display: flex; flex-direction: column; gap: 2px; }
 .mb-text b { color: var(--term-ai); }
@@ -503,21 +520,21 @@ a.tier:hover { border-color: var(--accent); text-decoration: none; }
 
 /* ---------------------------------------------------------------- in-OS confirm dialog (replaces confirm()) */
 .confirm-bg { position: fixed; inset: 0; z-index: 1100; display: grid; place-items: center; padding: 16px; background: rgba(2, 6, 9, 0.66); }
-.confirm-dialog { width: min(480px, 100%); max-height: calc(100vh - 32px); overflow: auto; background: var(--term-bg); color: var(--term-fg); border: 1px solid var(--term-ai); border-radius: 10px; box-shadow: var(--win-shadow); font-family: var(--mono); }
-.confirm-dialog.danger { border-color: var(--term-err); }
-.confirm-bar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid color-mix(in srgb, var(--term-ai) 25%, transparent); font-size: 0.85rem; }
-.confirm-dialog.danger .confirm-bar { border-bottom-color: color-mix(in srgb, var(--term-err) 35%, transparent); }
-.confirm-icon { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 4px; background: var(--term-ai); color: var(--term-bg); font-weight: 700; }
-.confirm-dialog.danger .confirm-icon { background: var(--term-err); }
-.confirm-title { font-weight: 700; }
+.confirm-dialog { width: min(480px, 100%); max-height: calc(100vh - 32px); overflow: auto; background: var(--os-surface); color: var(--os-text); border: 1px solid var(--os-accent); border-radius: 10px; box-shadow: var(--os-win-shadow); font-family: var(--mono); }
+.confirm-dialog.danger { border-color: var(--os-err); }
+.confirm-bar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid color-mix(in srgb, var(--os-accent) 25%, transparent); font-size: 0.85rem; }
+.confirm-dialog.danger .confirm-bar { border-bottom-color: color-mix(in srgb, var(--os-err) 35%, transparent); }
+.confirm-icon { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 4px; background: var(--os-accent); color: var(--os-surface); font-weight: 700; }
+.confirm-dialog.danger .confirm-icon { background: var(--os-err); }
+.confirm-title { font-family: var(--os-title-font); font-weight: 700; }
 .confirm-body { padding: 14px 16px 4px; font-size: 0.9rem; line-height: 1.5; }
 .confirm-body p { margin: 0 0 8px; }
 .confirm-field { display: grid; gap: 6px; padding: 8px 16px 4px; font-size: 0.8rem; }
-.confirm-type { font: inherit; background: var(--term-bg); color: var(--term-you); border: 1px solid var(--term-dim); border-radius: 6px; padding: 7px 9px; }
-.confirm-type:focus-visible { outline: 2px solid var(--term-ai); outline-offset: 1px; }
+.confirm-type { font: inherit; background: var(--os-surface); color: var(--os-text); border: 1px solid var(--os-text-dim); border-radius: 6px; padding: 7px 9px; }
+.confirm-type:focus-visible { outline: 2px solid var(--os-accent); outline-offset: 1px; }
 .confirm-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 12px 16px 14px; }
 .confirm-actions .btn { font-family: var(--mono); }
-.confirm-dialog .btn.ghost { color: var(--term-fg); border-color: var(--term-dim); }
+.confirm-dialog .btn.ghost { color: var(--os-text); border-color: var(--os-text-dim); }
 .confirm-actions .spacer { flex: 1; }
 .btn.danger { background: var(--term-err); border-color: var(--term-err); color: #1a0606; font-weight: 700; }
 .btn.danger:hover { filter: brightness(1.08); }

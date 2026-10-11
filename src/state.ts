@@ -1,3 +1,4 @@
+import { normaliseTheme, type Theme } from './os/theme';
 // Player progress, persisted in localStorage. Everything degrades gracefully if storage is unavailable.
 
 export interface LevelRecord {
@@ -28,6 +29,8 @@ export interface Prefs {
   text: 'normal' | 'large' | 'larger';
   /** Overrides the system's reduced-motion setting. 'system' follows it. */
   motion: 'system' | 'reduce' | 'full';
+  /** The TAPE-OS theme: the dark terminal look (default) or Light. Applied as data-theme on <html>. */
+  theme: Theme;
 }
 
 export interface Progress {
@@ -50,7 +53,7 @@ export const SCHEMA_VERSION = 1;
 let cache: Progress | null = null;
 
 function blank(): Progress {
-  return { schema: SCHEMA_VERSION, levels: {}, cards: {}, prefs: { speed: 'normal', text: 'normal', motion: 'system' }, best: {} };
+  return { schema: SCHEMA_VERSION, levels: {}, cards: {}, prefs: { speed: 'normal', text: 'normal', motion: 'system', theme: 'tapeout' }, best: {} };
 }
 
 /**
@@ -287,6 +290,7 @@ export function applyDisplayPrefs() {
   const p = cache?.prefs;
   const root = document.documentElement;
   root.dataset.text = p?.text ?? 'normal';
+  root.dataset.theme = normaliseTheme(p?.theme);
   if (p?.motion && p.motion !== 'system') root.dataset.motion = p.motion;
   else delete root.dataset.motion;
 }
@@ -439,6 +443,7 @@ export function readBackup(text: string): ReadResult {
   }
   const progress = migrate({ schema: schema as number, levels, cards, best, profile, prefs: { ...blank().prefs, ...(isObj(src.prefs) ? src.prefs : {}) } as Prefs });
   progress.prefs.speed = ['slow', 'normal', 'fast', 'instant'].includes(progress.prefs.speed) ? progress.prefs.speed : 'normal';
+  progress.prefs.theme = normaliseTheme(progress.prefs.theme);
   const exported = typeof data.exported === 'string' ? data.exported : '';
   return {
     ok: true,

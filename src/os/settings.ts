@@ -5,6 +5,7 @@ import { PACES, prefersReducedMotion, type Token, typeInto } from '../term/typew
 import { h, toast } from '../ui/dom';
 import { askConfirm } from '../ui/modal';
 import { radioStep } from './keys';
+import type { Theme } from './theme';
 
 const SPEEDS: { id: Prefs['speed']; name: string; blurb: string }[] = [
   { id: 'slow', name: 'Slow', blurb: `about ${PACES.slow.cps} characters a second, with long pauses: plenty of time to read` },
@@ -17,6 +18,11 @@ const TEXT: { id: Prefs['text']; name: string }[] = [
   { id: 'normal', name: 'Normal' },
   { id: 'large', name: 'Large' },
   { id: 'larger', name: 'Larger' },
+];
+
+const THEME_OPTIONS: { id: Theme; name: string; blurb: string }[] = [
+  { id: 'tapeout', name: 'TAPE-OS', blurb: 'the dark terminal look: mono titles and the phosphor accent (the default)' },
+  { id: 'light', name: 'Light', blurb: 'the light look, for bright rooms' },
 ];
 
 const MOTION: { id: Prefs['motion']; name: string; blurb: string }[] = [
@@ -171,6 +177,7 @@ export function settingsApp(): HTMLElement {
   const motionLine = h('p', { class: 'note' }, motionNote());
   const motionOptions = choice('Reduced motion', MOTION, () => prefs().motion, (id) => { setPrefs({ motion: id }); motionLine.textContent = motionNote(); play(); });
   const textOptions = choice('Text size', TEXT, () => prefs().text, (id) => setPrefs({ text: id }));
+  const themeOptions = choice('Theme', THEME_OPTIONS, () => prefs().theme, (id) => setPrefs({ theme: id }));
 
   // ---- the danger zone
   const resetFlow = () => {
@@ -199,6 +206,10 @@ export function settingsApp(): HTMLElement {
       preview),
     h('section', { class: 'panel' },
       h('h3', null, 'Screen'),
+      h('h4', null, 'Theme'),
+      h('p', { class: 'dim' }, 'TAPE-OS is the dark look of the terminal. Light is the bright look. Windows, the taskbar and the dialogs follow it.'),
+      themeOptions,
+      h('h4', null, 'Text size'),
       h('p', { class: 'dim' }, 'Text size makes the contents of every window bigger. The desktop and taskbar keep their size.'),
       textOptions,
       h('h4', null, 'Reduced motion'),

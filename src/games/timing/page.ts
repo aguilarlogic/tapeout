@@ -51,7 +51,7 @@ export function timingPage(id: string): HTMLElement {
   const renderSchematic = () => {
     const maxX = Math.max(...level.nodes.map((n) => n.x)), maxY = Math.max(...level.nodes.map((n) => n.y));
     const W = PAD * 2 + maxX * COL_W + GATE_W, H = PAD * 2 + maxY * ROW_H + 46;
-    const root = svg('svg', { viewBox: `0 0 ${W} ${H}`, class: 'sta-svg', role: 'img', 'aria-label': 'Logic schematic' });
+    const root = svg('svg', { viewBox: `0 0 ${W} ${H}`, class: 'sta-svg', role: 'group', 'aria-label': 'Logic schematic' }); // a group, not an image: it holds the focusable nodes
 
     for (const e of level.edges) {
       const a = nodeById.get(e.from)!, b = nodeById.get(e.to)!;
@@ -91,7 +91,12 @@ export function timingPage(id: string): HTMLElement {
         g.append(svg('text', { x: p.x + GATE_W / 2, y: p.y + 18, 'text-anchor': 'middle' }, `${n.label}${size > 1 ? ` X${size}` : ''}${lvt ? ' L' : ''}`));
         g.append(svg('text', { x: p.x + GATE_W / 2, y: p.y + 36, 'text-anchor': 'middle', class: 'sub' }, `${rep.gateDelay[n.id].toFixed(2)} ns`));
       }
+      // The name is what the node is and its figures. The figures are drawn beside the node, not inside it, so the
+      // node's own content is only its shape (axe compares a control's visible text with its name).
+      const texts = [...g.querySelectorAll('text')];
+      g.setAttribute('aria-label', `${n.kind === 'ff' ? 'Flip-flop' : 'Gate'} ${texts.map((t) => t.textContent ?? '').join(', ')}`);
       root.append(g);
+      for (const t of texts) { t.setAttribute('aria-hidden', 'true'); t.setAttribute('pointer-events', 'none'); root.append(t); }
     }
     schematicHost.replaceChildren(root);
     if (focusKey) { (root.querySelector(`[data-key="${focusKey}"]`) as SVGElement | null)?.focus({ preventScroll: true }); focusKey = null; }
