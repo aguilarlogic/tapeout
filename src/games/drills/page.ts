@@ -76,7 +76,10 @@ export function drillsPage(deckParam?: string): HTMLElement {
   };
 
   const ask = (card: Card, done: (ok: boolean) => void, n: number, total: number, deck?: string) => {
-    const order = card.c.map((_, j) => j).sort(() => Math.random() - 0.5);
+    // A fair Fisher-Yates shuffle. Sorting with a random comparator is biased: it left the stored second option in the
+    // second or third slot three times in four, and most cards store the answer second.
+    const order = card.c.map((_, j) => j);
+    for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
     const deckName = DECKS.find((d) => d.id === card.deck)!.name;
     const explain = h('div', { class: 'explain' });
     const nextBtn = h('button', { class: 'btn primary', style: 'display:none' }, n + 1 < total ? 'Next question →' : 'Finish');
