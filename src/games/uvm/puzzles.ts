@@ -192,4 +192,80 @@ endclass`,
       { options: ['sqr', 'drv', 'mon'], answer: 'sqr', why: 'Sequences run on a sequencer.' },
     ],
   },
+  {
+    kind: 'code',
+    id: 'uvm-config',
+    title: 'Hand Me the Config',
+    concept: 'uvm_config_db set and get',
+    xp: 200,
+    brief: `
+      <p>Tests tune components without touching them. The test <b>publishes</b> a value into the <b>config_db</b>, and a
+      component <b>retrieves</b> it by name. Two rules catch most mistakes: the parent must set the value <i>before</i> it
+      creates the child, and the type must match exactly on both sides.</p>
+      <p>The search starts at the <i>context</i> you pass in, and the instance name is relative to it. If the get fails,
+      the component quietly keeps its default, so this bug is easy to miss.</p>
+      <p>Pick the right word for every blank.</p>`,
+    code: `class alu_test extends uvm_test;
+  \`uvm_component_utils(alu_test)
+  alu_env env;
+
+  function void build_phase(uvm_phase phase);
+    super.build_phase(phase);
+    uvm_config_db#(int unsigned)::{{0}}(this, "env*", "num_txns", 250);
+    env = alu_env::type_id::create("env", this);
+  endfunction
+endclass
+
+class alu_env extends uvm_env;
+  \`uvm_component_utils(alu_env)
+  int unsigned num_txns = 100;
+
+  function void build_phase(uvm_phase phase);
+    super.build_phase(phase);
+    if (!uvm_config_db#(int unsigned)::{{1}}({{2}}, "", "num_txns", num_txns))
+      \`uvm_info("CFG", "num_txns not set, using 100", UVM_LOW)
+  endfunction
+endclass`,
+    blanks: [
+      { options: ['set', 'get', 'exists'], answer: 'set', why: 'The parent publishes the value with set(). The test calls it before it creates the env, so the value is waiting when the env builds.' },
+      { options: ['get', 'set', 'exists'], answer: 'get', why: 'The child fetches the value with get(). If nothing matches, get() returns 0 and the default of 100 stays.' },
+      { options: ['this', 'null', 'get_parent()'], answer: 'this', why: 'The search starts at env, so the empty instance name matches the "env*" pattern set by the test. null starts at the top of the tree, and get_parent() is the test itself, so both miss.' },
+    ],
+  },
+  {
+    kind: 'code',
+    id: 'uvm-override',
+    title: 'Swap the Driver',
+    concept: 'uvm_factory type overrides',
+    xp: 200,
+    brief: `
+      <p>The factory lets a test change a component without editing the environment. Components never call <code>new</code>
+      for a driver: they ask <code>type_id::create</code>. A test registers an <b>override</b> first, and every later create
+      of the original type builds the replacement instead.</p>
+      <ul><li><b>set_type_override</b> swaps every instance of a type.</li>
+      <li><b>set_inst_override</b> swaps only the instance found at one path.</li></ul>
+      <p>Register the override in the test's <code>build_phase</code>, before the env is created. The replacement must
+      extend the original, so the environment still gets a driver it can use.</p>
+      <p>Pick the right word for every blank.</p>`,
+    code: `class err_driver extends alu_driver;
+  \`uvm_component_utils(err_driver)
+  // same handshake as alu_driver, but it corrupts one operand on the pins
+endclass
+
+class alu_test extends uvm_test;
+  \`uvm_component_utils(alu_test)
+  alu_env env;
+
+  function void build_phase(uvm_phase phase);
+    super.build_phase(phase);
+    {{0}}::type_id::{{1}}({{2}}::get_type());
+    env = alu_env::type_id::create("env", this);
+  endfunction
+endclass`,
+    blanks: [
+      { options: ['alu_driver', 'alu_monitor', 'alu_env'], answer: 'alu_driver', why: 'You name the type being replaced. After this, every create of alu_driver builds the override instead.' },
+      { options: ['set_inst_override', 'set_type_override', 'create'], answer: 'set_type_override', why: 'set_type_override swaps every instance of the type. set_inst_override only changes one instance, found by its path. create builds an object and changes nothing.' },
+      { options: ['alu_driver', 'err_driver', 'alu_monitor'], answer: 'err_driver', why: 'The override is the replacement. It extends alu_driver, so it has the same ports and handshake.' },
+    ],
+  },
 ];
