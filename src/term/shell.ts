@@ -18,7 +18,8 @@ import { HELP_KEYS, HELP_ROWS } from './help';
 import { best, levelRecord, load, playerName, prefs, Prefs, Profile, profile, rank, RANKS, recordBest, recordMix, resetAll, setPrefs, setProfile, totalXp, updateCard } from '../state';
 import { h, stars as starEls } from '../ui/dom';
 import { runIncident } from './incident';
-import { Interrupted, Redirect, rich, Terminal } from './terminal';
+import { Interrupted, Redirect, rich, setFastForward, Terminal } from './terminal';
+import { clearRun, loadRun, type RunDraft, runSnapshot, saveRun, stepDescription } from './resume';
 
 const pickOne = <T>(xs: T[]) => xs[Math.floor(Math.random() * xs.length)];
 const PRAISE = ['Correct.', 'Yes.', 'Exactly.', 'Nice.', 'Right on.', 'That\'s it.'];
@@ -85,6 +86,11 @@ export class Shell {
     const next = recommended();
     await t.say(pickOne([`Welcome back, {name}.`, `Hey, {name}. Good to see you again.`, `{name}! I kept your workstation warm.`]), 'happy');
     t.print(`rank: **${r.title}** · ${xp} XP · tapeout readiness ${readiness()}%${r.next ? ` · ${r.next.xp - xp} XP to ${r.next.title}` : ''}`);
+    // A lesson a reload interrupted (U29): offer to pick it up, or to start fresh with `next`.
+    const run = loadRun();
+    const interrupted = run && findLesson(run.id);
+    if (run && !interrupted) clearRun();
+    if (interrupted) return t.say(`You were in the middle of **${interrupted.title}**. Type \`resume\` to pick up at ${this.where(interrupted, run!.step)}, or \`next\` to start fresh.`);
     if (next) await t.say(`Next up: **${next.title}** (${KIND_LABEL[next.kind].toLowerCase()}, ${findModule(next.id)!.act.name}). Type \`next\` or click below. Or ask me anything, like \`what is a latch\`.`);
     else await t.say('You have finished everything. Every block of your chip is signed off. Want to replay something for stars, or run the arcade?', 'proud');
   }
@@ -151,6 +157,8 @@ export class Shell {
         if (!m) return t.print(`No module called "${arg}".${didYouMean(closestMatches(arg, ALL_MODULES))} Try \`ls\`.`, 'err');
         return this.openModule(m);
       }
+      case 'resume':
+        return this.resume();
       case 'play': case 'arcade': case 'game': case 'games': {
         if (!arg) this.printGames();
         const g = arg ? MINIGAMES.find((x) => x.id === arg.toLowerCase() || x.title.toLowerCase().includes(arg.toLowerCase())) : MINIGAMES.find((x) => x.id === randomGame());
@@ -549,7 +557,7 @@ export class Shell {
 
   // ---------------------------------------------------------------- lessons
 
-  async runLesson(id: string) {
+  async runLesson(id: string, resume?: RunDraft) {
     if (findIncident(id)) return this.incident(id);
     const exam = id === FINAL_ID;
     const bossDef = findBoss(id);
@@ -558,17 +566,35 @@ export class Shell {
     if (this.busy) return;
     this.busy = true;
     try {
-      await this.lesson(lesson, exam ? 'final' : bossDef ? 'boss' : 'lesson');
+      await this.lesson(lesson, exam ? 'final' : bossDef ? 'boss' : 'lesson', resume);
     } catch (e) {
       if (e instanceof Interrupted) { if (!(e instanceof Redirect)) this.term.print('(lesson paused, run it again any time)', 'dim'); }
       else throw e;
     } finally {
       this.busy = false;
       setMood('neutral');
+      setFastForward(false);
+      // Finished, failed, quit or left for another command: the saved place is no longer needed (U29).
+      if (loadRun()?.id === lesson.id) clearRun();
     }
   }
 
-  private async lesson(l: Lesson, mode: 'lesson' | 'final' | 'boss') {
+  /** `resume`: pick up the lesson a reload interrupted, at the step it had reached (U29). */
+  private resume() {
+    const run = loadRun();
+    const l = run && findLesson(run.id);
+    if (run && (!l || run.step >= l.steps.length)) clearRun();
+    if (!run || !l || run.step >= l.steps.length) return this.term.say('Nothing to pick up. Type `next` to start a lesson.', 'thinking');
+    return this.runLesson(run.id, run);
+  }
+
+  /** The step a resume picks up at, as the player would recognise it. */
+  private where(l: Lesson, i: number) {
+    const d = stepDescription(l, i);
+    return d ? `“${d}”` : 'the start';
+  }
+
+  private async lesson(l: Lesson, mode: 'lesson' | 'final' | 'boss', resume?: RunDraft) {
     const t = this.term;
     const f = findModule(l.id);
     const exam = mode !== 'lesson';
@@ -581,10 +607,21 @@ export class Shell {
     const rnd = Math.random;
     // The practice set that drills this lesson's skill, so "teach me" can point at it.
     const topic = SKILLS.find((s) => s.learn.includes(l.id))?.id;
-    let asked = 0, firstTry = 0;
+    // A resumed run replays the lines before its stored step at once, and keeps the grading it had (U29).
+    const start = resume?.step ?? 0;
+    let asked = resume?.asked ?? 0, firstTry = resume?.firstTry ?? 0;
+    if (resume) { t.print(`picking up where you left off, at ${this.where(l, start)}`, 'dim'); setFastForward(true); }
     for (let i = 0; i < l.steps.length; i++) {
+      if (resume && i === start) setFastForward(false);
+      if (mode === 'lesson') saveRun(runSnapshot(l.id, i, asked, firstTry));
       const s = l.steps[i];
       const nextIsQuestion = (() => { const n = l.steps[i + 1]; return !n || n.t === 'ask' || n.t === 'mc' || n.t === 'gen' || n.t === 'app' || n.t === 'art'; })();
+      // Before the stored step: the context only. Pauses, games and answered questions are not repeated.
+      if (i < start) {
+        if (s.t === 'say') await t.say(s.text, s.mood);
+        else if (s.t === 'art') void t.art(s.text, s.caption);
+        continue;
+      }
       if (s.t === 'say') {
         await t.say(s.text, s.mood);
         if (!nextIsQuestion) await t.pause();

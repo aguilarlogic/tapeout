@@ -7,6 +7,7 @@ export const HELP_ROWS: [string, string][] = [
   ['map', 'open the campaign map'],
   ['ls [act]', 'list the curriculum (e.g. `ls 3`)'],
   ['learn <name>', 'open any lesson or lab (e.g. `learn cache`)'],
+  ['resume', 'pick up a lesson that a reload interrupted'],
   ['play [game]', 'the arcade: minigames TAPEOUT built'],
   ['quiz', 'a quick interview question'],
   ['practice [skill]', `${PRACTICE_COUNT} scored problems per set; no argument = a daily mix; --endless keeps going`],

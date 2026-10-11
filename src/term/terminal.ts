@@ -6,7 +6,7 @@ import type { Mood } from '../lessons/types';
 import { setMood, setTalking } from '../os/avatar';
 import { playerName, prefs } from '../state';
 import { h } from '../ui/dom';
-import { animate, heldKey, Output, type Pace, paceFor, prefersReducedMotion, progressBar, revealPre, revealRows, spinFrame, spokenLine, type Token, typeInto, wait } from './typewriter';
+import { animate, heldKey, INSTANT, Output, type Pace, paceFor, prefersReducedMotion, progressBar, revealPre, revealRows, spinFrame, spokenLine, type Token, typeInto, wait } from './typewriter';
 
 export class Interrupted extends Error {
   constructor() { super('interrupted'); }
@@ -15,7 +15,10 @@ export class Interrupted extends Error {
 /** The player typed a command at a menu instead of picking an option; the shell runs it next. */
 export class Redirect extends Interrupted {}
 
-export const pace = (): Pace => paceFor(prefs().speed, prefersReducedMotion());
+/** While a lesson is replayed up to a resume point (U29), everything prints at once: no typing, no pauses. */
+let fastForward = false;
+export const setFastForward = (on: boolean) => { fastForward = on; };
+export const pace = (): Pace => (fastForward ? INSTANT : paceFor(prefs().speed, prefersReducedMotion()));
 
 export interface Span { kind: 'text' | 'b' | 'code'; text: string }
 
