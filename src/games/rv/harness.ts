@@ -133,7 +133,11 @@ export function runProgram(d: Design, src: string, name: string, hidden: boolean
 
 export interface ProgramSpec { name: string; src: string; hidden: boolean }
 
-export function evaluateCore(coreSrc: string, programs: ProgramSpec[]): CoreReport {
+/**
+ * `stopOnFail`: stop after the first program that fails (for "is this bug caught at all?" checks). The page leaves it
+ * off, because it shows every program's result.
+ */
+export function evaluateCore(coreSrc: string, programs: ProgramSpec[], opts: { stopOnFail?: boolean } = {}): CoreReport {
   const report: CoreReport = { lints: [], results: [], passed: false };
   let ast;
   try { ast = parseModule(coreSrc); new Design(ast); }
@@ -152,6 +156,7 @@ export function evaluateCore(coreSrc: string, programs: ProgramSpec[]): CoreRepo
       if (e instanceof AsmError) { report.error = { message: `internal: test program does not assemble: ${e.message}`, phase: 'program' }; return report; }
       throw e;
     }
+    if (opts.stopOnFail && !report.results[report.results.length - 1].ok) break;
   }
   report.passed = report.results.length > 0 && report.results.every((r) => r.ok);
   return report;
