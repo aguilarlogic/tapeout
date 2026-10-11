@@ -1,5 +1,7 @@
-// Map.app: the campaign as a chip. Each act is a block of the die; every module is a node on a trace.
-import { ACTS, Act, actProgress, KIND_LABEL, ModKind, readiness, recommended } from '../curriculum';
+// Map.app: the campaign as a chip. The current chip is a floorplan of its blocks; below it, every act is a list of modules on a trace.
+import './chip.css';
+import { ACTS, actProgress, KIND_LABEL, ModKind, readiness, recommended } from '../curriculum';
+import { blockLine, blockProgress, Chip, chipSummary, currentChip, slotProgress, SlotState } from '../chip';
 import { levelRecord, rank, RANKS, totalXp } from '../state';
 import { h, stars, svg } from '../ui/dom';
 
@@ -7,32 +9,48 @@ const ICON: Record<ModKind, string> = {
   lesson: '›_', practice: '∞', boss: '♛', incident: '☎', logic: '⊼', cmos: '⊥', rtl: '{}', debug: '⚑', cov: '◎', uvm: '⧉', clab: '∿', code: '</>', shell: '$_', sva: '|->', tb: 'tb', cdc: '⇄', isa: 'rv', arch: '▤', rv: '⌬', dft: '⊘', pd: '▥', sta2: '⏱', layout: '▤', sig: '∿', spec: '◈', sta: '⏱', pcb: '▦', drills: '?!', final: '★',
 };
 
-/** The die floorplan: one block per act, whose standard-cell rows light up with progress. */
-export function die(onPick?: (a: Act) => void): SVGSVGElement {
-  const root = svg('svg', { viewBox: '0 0 320 320', class: 'die', role: 'img', 'aria-label': 'Your chip: each block fills in as you complete an act' });
-  root.append(svg('rect', { x: 4, y: 4, width: 312, height: 312, rx: 10, class: `pkg${readiness() === 100 ? ' done' : ''}` }));
-  const pads = 14, lit = readiness() / 100;
-  for (let i = 0; i < pads; i++) {
-    const o = 30 + i * (260 / (pads - 1)) - 5;
-    for (const [x, y] of [[o, 14], [o, 296], [14, o], [296, o]]) root.append(svg('rect', { x, y, width: 10, height: 10, rx: 1.5, class: `pad${i / pads < lit ? ' lit' : ''}` }));
-  }
-  root.append(svg('rect', { x: 32, y: 32, width: 256, height: 256, class: 'diebody' }));
-  const boxes: [number, number, number, number][] = [
-    [40, 40, 116, 66], [164, 40, 116, 66], [40, 114, 150, 80], [198, 114, 82, 80], [40, 202, 116, 42], [164, 202, 116, 42],
-    [40, 252, 240, 30],
-  ];
-  ACTS.forEach((a, i) => {
-    const [x, y, w, hh] = boxes[i];
-    const frac = actProgress(a).frac;
-    const g = svg('g', { class: 'region', tabindex: 0, role: 'button', 'aria-label': `Act ${a.n}: ${a.name}, ${Math.round(frac * 100)}%` });
-    if (onPick) { g.addEventListener('click', () => onPick(a)); g.addEventListener('keydown', (e) => { if ((e as KeyboardEvent).key === 'Enter') onPick(a); }); }
-    g.append(svg('rect', { x, y, width: w, height: hh, class: `blk${frac === 1 ? ' done' : ''}` }));
-    const rows = Math.floor((hh - 22) / 7), on = Math.round(rows * frac);
-    for (let r = 0; r < rows; r++) g.append(svg('rect', { x: x + 6, y: y + 18 + r * 7, width: w - 12, height: 4, class: `row${r < on ? ' lit' : ''}` }));
-    g.append(svg('text', { x: x + 6, y: y + 12, class: 'blk-label' }, `${a.n} · ${a.region}`));
+const STATE_WORD: Record<SlotState, string> = { empty: 'not built yet', half: 'started', built: 'built' };
+
+/** The chip as a floorplan: one rectangle per block, one cell per slot. Built slots are lit; unbuilt blocks are dim. */
+function floorplan(chip: Chip): SVGSVGElement {
+  const W = 360, pad = 8, gap = 6, rowH = 104, n = chip.blocks.length;
+  const cols = n <= 3 ? n : n === 4 ? 2 : 3;
+  const rows = Math.ceil(n / cols);
+  const H = rows * rowH + (rows + 1) * gap;
+  const label = `${chip.id} floorplan. ${chip.blocks.map((b) => `${b.name}: ${blockLine(b)}`).join('. ')}.`;
+  const root = svg('svg', { viewBox: `0 0 ${W} ${H}`, class: 'chip-fp', role: 'img', 'aria-label': label });
+  chip.blocks.forEach((b, i) => {
+    const row = Math.floor(i / cols), inRow = Math.min(cols, n - row * cols), col = i - row * cols;
+    const bw = (W - 2 * pad - (inRow - 1) * gap) / inRow;
+    const x = pad + col * (bw + gap), y = gap + row * (rowH + gap);
+    const p = blockProgress(b);
+    const cls = ['chip-blk', p.done ? 'done' : '', p.built + p.half === 0 ? 'dim' : ''].filter(Boolean).join(' ');
+    const g = svg('g', { class: cls });
+    g.append(svg('rect', { x, y, width: bw, height: rowH, rx: 6, class: 'chip-box' }));
+    g.append(svg('text', { x: x + 8, y: y + 19, class: 'chip-blk-name' }, b.name));
+    // The slots sit in a small grid under the block name.
+    const ax = x + 8, ay = y + 30, aw = bw - 16, ah = rowH - 38, k = b.slots.length;
+    const sc = Math.min(k, Math.ceil(Math.sqrt((k * aw) / ah)));
+    const sr = Math.ceil(k / sc), sg = 3;
+    const cw = (aw - (sc - 1) * sg) / sc, ch = Math.min(26, (ah - (sr - 1) * sg) / sr);
+    b.slots.forEach((s, j) => {
+      const st = slotProgress(s).state;
+      const cell = svg('rect', { x: ax + (j % sc) * (cw + sg), y: ay + Math.floor(j / sc) * (ch + sg), width: cw, height: ch, rx: 2, class: `chip-slot ${st}` });
+      cell.append(svg('title', {}, `${s.name}: ${s.what}. ${STATE_WORD[st]}.`));
+      g.append(cell);
+    });
     root.append(g);
   });
   return root;
+}
+
+/** The current chip's floorplan with its caption. */
+function chipFigure(): HTMLElement {
+  const chip = currentChip();
+  return h('figure', { class: 'chip-figure' },
+    h('p', { class: 'chip-name' }, `${chip.id} · ${chip.name}`),
+    floorplan(chip),
+    h('figcaption', { class: 'chip-cap' }, chipSummary(chip)));
 }
 
 export function mapApp(): HTMLElement {
@@ -58,10 +76,9 @@ export function mapApp(): HTMLElement {
         })))));
   });
   const root = h('div', { class: 'map' });
-  const scrollTo = (a: Act) => root.querySelector(`#act-${a.n}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   root.append(
     h('div', { class: 'map-top' },
-      h('div', { class: 'map-die' }, die(scrollTo)),
+      h('div', { class: 'map-die' }, chipFigure()),
       h('div', { class: 'map-summary' },
         h('p', { class: 'kicker' }, `Tapeout readiness ${readiness()}%`),
         h('h2', null, 'From electrons to architecture'),
