@@ -12,11 +12,14 @@ import { BOSSES, findBoss, findPractice, PRACTICE, problem } from '../practice';
 import { gradePractice, PRACTICE_COUNT, PRACTICE_HARD, PRACTICE_PASS, PRACTICE_START, rampStep, type Boss, type Difficulty, type PracticeSet } from '../practice/types';
 import { setMood } from '../os/avatar';
 import { launchGame, randomGame } from '../os/launch';
-import { best, levelRecord, load, playerName, prefs, Prefs, Profile, profile, rank, RANKS, recordBest, resetAll, setPrefs, setProfile, totalXp, updateCard } from '../state';
+import { best, dailyGoal, levelRecord, load, playerName, prefs, Prefs, Profile, profile, rank, RANKS, recordBest, resetAll, setPrefs, setProfile, totalXp, updateCard } from '../state';
 import { h, stars as starEls } from '../ui/dom';
 import { runIncident } from './incident';
 import { Interrupted, Redirect, rich, Terminal } from './terminal';
-import { award, promotionLine } from '../mastery/promotion';
+import { award, promotionLine, type Promotion } from '../mastery/promotion';
+import { finishGoal, type GoalResult } from '../daily';
+import { dayKey, MILESTONE_XP, MIX_RECORD, streakLine } from '../streak';
+import { signsOff } from './stakes';
 
 const pickOne = <T>(xs: T[]) => xs[Math.floor(Math.random() * xs.length)];
 const PRAISE = ['Correct.', 'Yes.', 'Exactly.', 'Nice.', 'Right on.', 'That\'s it.'];
@@ -30,6 +33,8 @@ export class Shell {
   private busy = false;
   /** Set by `question()` when the player was walked through the problem instead of solving it. */
   private taught = false;
+  /** Set by `question()` when the player skipped the problem and did not walk through it. */
+  private skipped = false;
 
   constructor(public term: Terminal, private go: (route: string) => void) {}
 
@@ -347,8 +352,9 @@ export class Shell {
     if (!q || q === 'mix' || q === 'daily') {
       const learned = PRACTICE.filter((p) => SKILLS.some((s) => s.practice.includes(p.id) && (skillLevel(s) >= 1 || !!levelRecord(p.id))));
       if (!learned.length) return t.say('The daily mix draws from topics you have already learned. Finish a lesson first (try `next`), then come back.', 'thinking');
-      const day = new Date().toISOString().slice(0, 10);
-      return this.guarded(() => this.practiceRun(learned, { id: `mix-${day}`, title: 'Daily Mix', concept: `${learned.length} topics you have learned`, xp: 40, endless, mix: true }));
+      // One record for every Daily Mix: it keeps the best result. The daily goal and its streak are shown up front.
+      if (!endless) t.print(streakLine(dailyGoal(), dayKey()), 'dim');
+      return this.guarded(() => this.practiceRun(learned, { id: MIX_RECORD, title: 'Daily Mix', concept: `${learned.length} topics you have learned`, xp: 40, endless, mix: true }));
     }
     const skill = findSkill(q);
     const set = findPractice(q) ?? findPractice(`practice-${q}`) ?? (skill ? skill.practice.map(findPractice).find(Boolean) : undefined);
@@ -422,10 +428,19 @@ export class Shell {
       return;
     }
     const grade = gradePractice(results);
-    const { gained, promotedTo } = grade ? award(o.id, o.xp, grade) : { gained: 0, promotedTo: undefined };
+    // A Daily Mix finishes the day's goal (the streak, and milestone bonuses) and banks its best result; other sets use award().
+    let gained = 0, promotedTo: Promotion | undefined, goal: GoalResult | undefined;
+    if (o.mix) {
+      goal = finishGoal(grade ? { xp: o.xp, stars: grade } : undefined);
+      ({ gained, promotedTo } = goal);
+    } else if (grade) ({ gained, promotedTo } = award(o.id, o.xp, grade));
     void t.block(h('div', { class: 'term-done' },
       h('div', null, h('b', null, grade ? 'PRACTICE PASSED' : 'PRACTICE RUN COMPLETE'), ' ', grade ? starEls(grade) : null),
       h('div', { class: 'dim' }, `${ok}/${PRACTICE_COUNT} first try · ${hard} at hard${grade ? ` · ${gained ? `+${gained} XP` : 'no new XP'}` : ` · need ${PRACTICE_PASS} with ${PRACTICE_HARD} hard to pass`}`)), 'type', 2);
+    if (goal) {
+      t.print(streakLine(dailyGoal(), dayKey()), 'dim');
+      for (const m of goal.reached) await t.say(`**${m} days played.** That is a milestone: +${MILESTONE_XP} XP, paid once.`, 'proud');
+    }
     if (promotedTo) await t.say(promotionLine(promotedTo), 'excited');
     await t.say(grade === 3 ? 'Near perfect at full difficulty. This topic is yours.' : grade ? 'Passed. That is practised, not just aware: it counts toward your skill level.' : ok >= 6 ? 'Close. The hard ones are where it counts; run it again.' : 'Keep at it. Every miss came with an explanation; a second run always goes better.', grade ? 'proud' : 'thinking');
     const next = grade && !o.mix ? neighbours(o.id).next : undefined;
@@ -576,6 +591,7 @@ export class Shell {
       h('b', null, l.title), h('span', { class: 'dim' }, l.concept)), 'type', 2.5);
     const rnd = Math.random;
     let asked = 0, firstTry = 0;
+    const skippedQs: { n: number; q: Question }[] = [];
     for (let i = 0; i < l.steps.length; i++) {
       const s = l.steps[i];
       const nextIsQuestion = (() => { const n = l.steps[i + 1]; return !n || n.t === 'ask' || n.t === 'mc' || n.t === 'gen' || n.t === 'app' || n.t === 'art'; })();
@@ -594,8 +610,11 @@ export class Shell {
         const q = s.t === 'gen' ? s.make(rnd) : s;
         asked++;
         if (await this.question(q, exam)) firstTry++;
+        else if (this.skipped) skippedQs.push({ n: asked, q });
       }
     }
+    // A lesson skipped by more than half stays unsigned: no level record, no XP, nothing lights on the chip.
+    if (mode === 'lesson' && !signsOff(asked, skippedQs.length)) return this.unsigned(l, asked, skippedQs);
     // grading
     const misses = asked - firstTry;
     let st: number;
@@ -631,6 +650,24 @@ export class Shell {
     }
   }
 
+  /** The sign-off card for a lesson skipped by more than half: how many were skipped, and a walkthrough for each one. */
+  private async unsigned(l: Lesson, asked: number, skipped: { n: number; q: Question }[]) {
+    const t = this.term;
+    void t.block(h('div', { class: 'term-done' },
+      h('div', null, h('b', null, 'LESSON NOT SIGNED OFF')),
+      h('div', { class: 'dim' }, `${skipped.length} of ${asked} questions skipped. Skipping more than half does not sign a lesson off: no level, no XP yet.`)), 'type', 1.6);
+    await t.say('Skipping is fine, but I cannot count a lesson you mostly skipped. Walk through the questions you skipped, then try it again.', 'concerned');
+    const open = skipped.filter((x) => x.q.teach);
+    for (const x of skipped.filter((y) => !y.q.teach)) t.print(`Question ${x.n} has no walkthrough. Its answer was shown when you skipped it.`, 'dim');
+    for (;;) {
+      const opts = [...open.map((x) => `Walk me through question ${x.n}`), 'Try this lesson again', 'Back to the shell'];
+      const pick = await t.choose(opts, 'next>', (v) => this.queue.push(v));
+      if (pick < open.length) { const [x] = open.splice(pick, 1); await this.walkThrough(x.q); continue; }
+      if (opts[pick] === 'Try this lesson again') this.queue.push(`learn ${l.id}`);
+      return;
+    }
+  }
+
   /** Say a question; a ```fenced``` part is shown as a code block (logs, source, schematics). */
   private async pose(text: string) {
     void this.term.beat();
@@ -647,6 +684,7 @@ export class Shell {
   private async question(q: Question, exam: boolean): Promise<boolean> {
     const t = this.term;
     this.taught = false;
+    this.skipped = false;
     const teach = !exam && q.teach ? q.teach : undefined;
     if (q.t === 'mc') {
       await this.pose(q.q);
@@ -663,7 +701,7 @@ export class Shell {
     }
     await this.pose(q.q);
     const tries = exam ? 1 : 3;
-    let first = true;
+    let first = true, gaveUp = false;
     for (let k = 0; k < tries; k++) {
       const v = (await t.ask({ prompt: 'answer>', chips: exam ? [] : [...(q.hint ? ['hint'] : []), ...(teach ? [{ label: 'teach me how', value: 'teach me' }] : []), 'skip'] })).trim();
       const lc = v.toLowerCase();
@@ -682,7 +720,7 @@ export class Shell {
         k--;
         continue;
       }
-      if (!exam && ['skip', 'idk', "i don't know", 'pass', 'give up'].includes(lc)) break;
+      if (!exam && ['skip', 'idk', "i don't know", 'pass', 'give up'].includes(lc)) { gaveUp = true; break; }
       if (!v) { k--; continue; }
       if (q.a.check(v)) {
         if (exam) t.print('✓', 'ok');
@@ -695,6 +733,7 @@ export class Shell {
     }
     if (exam) { t.print(`✗ answer: ${q.a.canonical}`, 'err'); return false; }
     if (teach) { await this.offerWalk(q); if (this.taught) return false; }
+    this.skipped = gaveUp;
     await t.say(`The answer is **${q.a.canonical}**. ${q.why}`, 'concerned');
     return false;
   }
