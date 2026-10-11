@@ -637,7 +637,7 @@ Also checked, no finding: syntax errors are line-numbered in isa, cdc, rv, sva a
 
 **Fix.** All four are fixed. Every lab section now passes, in light and dark.
 
-### U45 · Lab briefs: unnamed landmark and skipped heading level (Sev 2, Pri 3) ✅ done (shared brief)
+### U45 · Lab briefs: unnamed landmark and skipped heading level (Sev 2, Pri 3) ✅ done (shared brief, then the five lab panels and the logic table header)
 **Fix.** The brief `aside` is named "Lab brief", and its sub-headings are level 3.
 **Open.** The heading order is still wrong in the circuit, logic, isa, arch and uvm panels, and the logic lab has an empty `th`.
 
