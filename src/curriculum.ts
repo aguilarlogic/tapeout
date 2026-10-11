@@ -117,11 +117,20 @@ const shell = (...ids: string[]): Module[] => ids.flatMap((id) => mods(SHELL_LEV
 /** Circuit Lab missions by id, in the order given. */
 const clab = (...ids: string[]): Module[] => ids.flatMap((id) => mods(CIRCUIT_LEVELS, 'clab', 'clab', (x) => x.id === id));
 
+/** The Verilog levels that belong to the first hour rather than the Verilog chapter. */
+const FIRST_RTL = ['gates', 'half-adder-v'];
+
 export const ACTS: Act[] = [
   {
     id: 'foundations', n: 1, name: 'Foundations', tagline: 'Numbers, circuits, signals, the math and physics under every chip', region: 'STD CELLS',
     chapters: [
-      { name: 'Numbers', modules: [...drill('bits', 'twos'), bossMod('boss-numbers')] },
+      // The first hour for a total beginner: light a lamp, bits, gates, a half adder (bit 0 of their chip's ALU),
+      // the first incident on that half adder, then the same half adder in Verilog. See the First Hour Spec.
+      {
+        name: 'Your first chip', modules: [...logic(['first-wire']), lesson('bits'), lesson('bool'), ...logic(['logic-not', 'logic-and', 'logic-half']),
+          incident('inc-demo-board'), ...mods(RTL_LEVELS, 'rtl', 'rtl', (x) => FIRST_RTL.includes(x.id))],
+      },
+      { name: 'Numbers', modules: [prac('practice-bits'), ...drill('twos'), bossMod('boss-numbers')] },
       { name: 'Circuits', modules: [...drill('ohm', 'rc'), ...clab('clab-divider', 'clab-led'), bossMod('boss-circuits1'), ...clab('clab-boss-ohm'), ...drill('kcl'), ...clab('clab-thevenin', 'clab-bridge'), bossMod('boss-kcl'), ...clab('clab-boss-kcl'), ...drill('ac'), ...clab('clab-lowpass'), bossMod('boss-ac'), ...clab('clab-boss-ac')] },
       { name: 'Calculus & linear algebra', modules: [...drill('calc'), bossMod('boss-calc'), ...drill('linalg'), bossMod('boss-linalg')] },
       { name: 'Differential equations', modules: [...drill('ode'), ...clab('clab-debounce', 'clab-rlc'), bossMod('boss-ode'), ...clab('clab-boss-ode')] },
@@ -149,10 +158,10 @@ export const ACTS: Act[] = [
   {
     id: 'digital', n: 3, name: 'Digital Design', tagline: 'Logic, state, Verilog, datapaths and clocking', region: 'CPU CORE',
     chapters: [
-      { name: 'Logic', modules: [...drill('bool'), ...logic(['logic-not', 'logic-and', 'logic-or', 'logic-xor'])] },
-      { name: 'Building blocks', modules: [...drill('comb'), ...logic(['logic-mux', 'logic-half', 'logic-full'])] },
+      { name: 'Logic', modules: [prac('practice-bool'), ...logic(['logic-or', 'logic-xor'])] },
+      { name: 'Building blocks', modules: [...drill('comb'), ...logic(['logic-mux', 'logic-full'])] },
       { name: 'Memory & state', modules: [...drill('seq'), ...logic(['logic-latch', 'logic-counter']), ...drill('fsm'), bossMod('boss-logic')] },
-      { name: 'Verilog', modules: [...drill('verilog'), ...mods(RTL_LEVELS, 'rtl', 'rtl'), bossMod('boss-hdl')] },
+      { name: 'Verilog', modules: [...drill('verilog'), ...mods(RTL_LEVELS, 'rtl', 'rtl', (x) => !FIRST_RTL.includes(x.id)), bossMod('boss-hdl')] },
       { name: 'Microarchitecture', modules: [...drill('alu'), ...rv('rv-alu', 'rv-branch', 'rv-mem', 'rv-mext'), bossMod('boss-uarch'), ...rv('rv-boss')] },
       { name: 'Clocks & resets', modules: [...drill('clk'), ...cdc('cdc-sync', 'cdc-pulse', 'cdc-gray', 'cdc-handshake'), bossMod('boss-cdc'), ...cdc('cdc-fifo')] },
     ],

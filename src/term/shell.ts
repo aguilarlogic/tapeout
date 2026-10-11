@@ -99,10 +99,18 @@ export class Shell {
     const prof: Profile = { name, background: 'new', goal: 'unsure', since: Date.now() };
     setProfile(prof);
     await t.say(`Nice to meet you, ${name}.`, 'wink');
-    await t.say('How much do you already know about electronics and computers?');
-    const bg = await t.choose(['Nothing yet. Start me from zero.', "Some. I'm studying EE, CE or CS.", 'A lot. I work in (or near) the industry.']);
+    // One question for a total beginner, then straight to building something; the job question waits until they
+    // have seen the work. Players who already know some of it get the full set of questions and the plan.
+    await t.say('One question before we start: have you ever built a circuit or written code?');
+    if ((await t.choose(['Never. Start me from zero.', 'Yes, I have.'])) === 0) {
+      await t.say('Perfect. Zero is a great place to start, and you will not read a chapter first. In the next hour you build the first piece of your own chip. We start by lighting a lamp.', 'excited');
+      this.queue.push('next');
+      return;
+    }
+    await t.say('How much do you know?');
+    const bg = 1 + await t.choose(["Some. I'm studying EE, CE or CS.", 'A lot. I work in (or near) the industry.']);
     prof.background = (['new', 'student', 'pro'] as const)[bg];
-    await t.say(['Perfect. Everybody starts somewhere, and zero is a great place to start.', 'Great, then you know the basics. We can move fast and fill the gaps.', 'Excellent. Then I will skip the pleasantries and aim for the hard stuff.'][bg], 'happy');
+    await t.say(['Great, then you know the basics. We can move fast and fill the gaps.', 'Excellent. Then I will skip the pleasantries and aim for the hard stuff.'][bg - 1], 'happy');
     await t.say('And what do you want to become?');
     const goal = await t.choose(['Digital design engineer (RTL)', 'Verification engineer (DV)', 'Physical design / timing engineer', 'Hardware / board engineer', 'Computer architect', 'A specialist: analog, RF, memory, AI chips, security, quantum...', 'Not sure yet, show me everything']);
     prof.goal = (['design', 'verif', 'pd', 'board', 'arch', 'special', 'unsure'] as const)[goal];

@@ -102,5 +102,5 @@ export const finishLab = (level: { id: string; xp: number }, hintsUsed: number) 
 /** Bank a pass and show the signoff. Empty notes are dropped. */
 export function finish(levelId: string, xp: number, stars: number, notes: string[] = []) {
   const { gained, promotedTo } = award(levelId, xp, stars);
-  celebrate(stars, gained, notes.filter(Boolean), nextHref(levelId), promotedTo);
+  celebrate(stars, gained, notes.filter(Boolean), nextHref(levelId), promotedTo, xp);
 }
