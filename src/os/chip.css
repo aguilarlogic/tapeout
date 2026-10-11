@@ -6,7 +6,7 @@
 .chip-blk.done .chip-box { stroke: var(--accent); stroke-width: 2.5; }
 .chip-blk.dim .chip-box { stroke-dasharray: 5 4; }
 .chip-blk.dim { opacity: 0.6; }
-.chip-blk-name { font-size: 14px; font-weight: 600; fill: var(--text); }
+.chip-blk-name { font-weight: 600; fill: var(--text); }
 .chip-slot { fill: var(--code-bg); stroke: var(--border); stroke-width: 1; }
 .chip-slot.half { fill: var(--accent); fill-opacity: 0.35; stroke: var(--accent); stroke-dasharray: 3 2; }
 .chip-slot.built { fill: var(--accent); stroke: var(--accent); }
