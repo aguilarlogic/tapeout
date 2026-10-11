@@ -62,7 +62,7 @@ export const twos: Lesson = {
     }),
     mc('What range fits in an **8-bit signed** number?', ['0 to 255', '-127 to +127', '-128 to +127', '-256 to +255'], 2, 'n bits signed = -2^(n-1) to 2^(n-1) - 1. There is one more negative number than positive because zero takes a slot on the positive side.'),
     say('The beautiful part: an adder does not care. The same circuit that adds unsigned numbers adds signed ones. The only difference is how you **read** the result, and how you detect **overflow**.'),
-    mc('In 4-bit signed math, what is `0111 + 0001` (7 + 1)?', ['1000 = +8', '1000 = -8, overflow', '0000, with a carry', 'The adder refuses'], 1, '+8 does not fit in 4-bit signed, so the result wraps to -8. Signed overflow happens when two numbers of the same sign produce a result with the other sign.'),
+    mc('In 4-bit signed math, what is `0111 + 0001` (7 + 1)?', ['1000 = +8, no overflow', '1000 = -8, overflow', '0000 with a carry out', '0111, it saturates'], 1, '+8 does not fit in 4-bit signed, so the result wraps to -8. Signed overflow happens when two numbers of the same sign produce a result with the other sign.'),
     say('Last trick: to widen a signed number, copy the top bit into the new bits. That is **sign extension**. Zero-extending a negative number would turn it into a big positive one.'),
     ask('Sign-extend 4-bit `1010` to 8 bits.', bin(0b11111010, 8), '1010 is negative (top bit 1), so the four new bits are all 1: 1111 1010. Both mean -6.', 'Copy the top bit into the four new positions.'),
     say('That is the whole secret of signed arithmetic, {name}. In Verilog, forgetting it is one of the most common bugs you will ever see in code review.', 'wink'),
@@ -100,7 +100,7 @@ export const bool: Lesson = {
       ]);
       return ask(f.q, expr(f.c, ['a', 'b', 'c'], f.fn), f.why, 'Think about which rows of the truth table must be 1, then OR together a term for each.');
     }),
-    mc('Why do chip designers love **NAND**?', ['It is the fastest gate', 'Any logic function can be built from NANDs alone', 'It uses no power', 'It is required by Verilog'], 1, 'NAND (and NOR) are universal. In CMOS a NAND is also cheap: 4 transistors. Next, you will prove it by building other gates from NANDs.'),
+    mc('Why do chip designers love **NAND**?', ['It switches faster than any other gate', 'Any logic function can be built from it', 'It needs fewer transistors than NOT', 'Synthesis tools can only map to NAND gates'], 1, 'Any logic function can be built from NANDs alone: NAND (and NOR) are universal. In CMOS a NAND is also cheap: 4 transistors. Next, you will prove it by building other gates from NANDs.'),
     say('Enough theory. Time to build.', 'excited'),
   ],
   recap: ['AND = both, OR = either, XOR = different.', 'NAND and NOR are universal gates.', 'De Morgan: !(A&B) = !A|!B and !(A|B) = !A&!B.', 'Any truth table can be written as an OR of AND terms (sum of products).'],
@@ -172,7 +172,7 @@ export const rc: Lesson = {
       return ask(`R = ${R / 1000} kΩ, C = ${C * 1e9} nF. What is τ in **µs**?`, qty(tau, 'us'), `τ = RC = ${R} × ${C * 1e9}e-9 = ${tau.toPrecision(3)} µs.`, 'Multiply R in ohms by C in farads to get seconds, then convert to µs.');
     }),
     say('Why does a chip designer care? Every wire in a chip has resistance, and every gate input is a tiny capacitor. **Every signal is an RC circuit.** That delay is what timing analysis measures.'),
-    mc('A gate drives a long wire to 10 inputs. How do you make it switch **faster**?', ['Add more loads', 'Use a stronger (lower-resistance) driver', 'Make the wire longer', 'Lower the clock frequency'], 1, 'Delay ≈ R_driver × C_load. A bigger driver (lower R) or less capacitance (shorter wire, fewer loads) both help. You will do exactly this in the timing lab.'),
+    mc('A gate drives a long wire to 10 inputs. How do you make it switch **faster**?', ['Use a smaller driver, it switches faster', 'Use a stronger, lower-resistance driver', 'Add a capacitor at the far end', 'Lower the clock frequency'], 1, 'Delay ≈ R_driver × C_load. A bigger driver (lower R) or less capacitance (shorter wire, fewer loads) both help. You will do exactly this in the timing lab.'),
     say('An RC also makes a **low-pass filter**: slow signals get through, fast ones are smoothed away. The corner frequency is f = 1 / (2πRC).'),
     gen((r) => {
       const R = pick(r, [1000, 1600, 10000]);
@@ -182,7 +182,7 @@ export const rc: Lesson = {
     }),
     app('rcscope', 'I will open the scope. Tune R and C until the waveform matches what I ask for.', 3),
     say('One more thing: when millions of gates switch at once, they gulp current from the supply in nanoseconds. The wires to the power supply are too slow (inductance!), so we park **decoupling capacitors** right next to the chip as local charge reservoirs.'),
-    mc('Where should a decoupling capacitor go?', ['Anywhere on the board', 'As close as possible to the chip\'s power pin', 'Next to the power connector', 'On a separate board'], 1, 'The loop between the cap and the pin should be as short as possible: shorter loop, less inductance, faster charge delivery. You will route this yourself in the board lab.'),
+    mc('Where should a decoupling capacitor go?', ['Anywhere on the same power net', 'Right next to the chip\'s power pin', 'Next to the board\'s power connector', 'Between the regulator and the connector'], 1, 'As close as possible to the pin. The loop between the cap and the pin should be as short as possible: shorter loop, less inductance, faster charge delivery. You will route this yourself in the board lab.'),
   ],
   recap: ['τ = RC; ~63% after 1τ, ~99% after 5τ.', 'Gate delay ≈ R_driver × C_load: every wire is an RC.', 'Low-pass corner: f = 1/(2πRC).', 'Decoupling caps are local charge reservoirs: keep them close.'],
 };
@@ -212,13 +212,13 @@ export const mos: Lesson = {
       └─┤ NMOS
          │
         GND          the CMOS inverter`),
-    mc('Why does a CMOS gate burn almost no power when it is **not switching**?', ['The transistors are too small', 'There is never a path from VDD to GND in steady state', 'The clock is off', 'Capacitors store the power'], 1, 'One network is always off, so no DC current flows. Power is mostly spent charging capacitances when things switch, which is why P ≈ αCV²f.'),
+    mc('Why does a CMOS gate burn almost no power when it is **not switching**?', ['The transistors are too small to conduct', 'There is no DC path from VDD to GND', 'The clock is gated off when idle', 'Capacitors hold the output for free'], 1, 'In steady state one network is always off, so no DC current flows. Power is mostly spent charging capacitances when things switch, which is why P ≈ αCV²f.'),
     say('The rules for building a gate: in the pull-down, NMOS in **series** make AND, in **parallel** make OR. The pull-up is the **dual**: swap series and parallel.'),
     art(`
    NAND2:  pull-down = two NMOS in series   (both on -> Y pulled to 0)
            pull-up   = two PMOS in parallel (either on -> Y pulled to 1)`),
     ask('How many transistors are in a CMOS **NAND2**?', num(4), 'Two NMOS in series and two PMOS in parallel: 4 transistors.', 'One NMOS and one PMOS per input.'),
-    mc('Why is there no 4-transistor CMOS **AND** gate?', ['There is one, it is just rare', 'A single CMOS stage is always inverting, so AND = NAND + inverter = 6', 'AND needs a clock', 'PMOS cannot be in series'], 1, 'NMOS pull down, PMOS pull up, so a single stage can only produce inverting functions (NAND, NOR, AOI...). AND needs a NAND followed by an inverter. That is why standard cell libraries are full of inverting gates.'),
+    mc('Why is there no 4-transistor CMOS **AND** gate?', ['There is one, but it is rarely used', 'A single CMOS stage is always inverting', 'PMOS transistors cannot sit in series', 'AND needs a clock to hold its output'], 1, 'NMOS pull down, PMOS pull up, so a single stage can only produce inverting functions (NAND, NOR, AOI...). AND needs a NAND followed by an inverter: 4 + 2 = 6 transistors. That is why standard cell libraries are full of inverting gates.'),
     say('Enough talk. I have a transistor-level lab ready for you, {name}. Let us see if you can build these by hand.', 'excited'),
   ],
   recap: ['NMOS: on with gate=1, pulls down. PMOS: on with gate=0, pulls up.', 'CMOS: complementary pull-up/pull-down; no static current.', 'Series in pull-down = parallel in pull-up (duality).', 'Single CMOS stages are inverting: NAND2 = 4T, AND2 = 6T.'],
