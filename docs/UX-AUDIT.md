@@ -546,7 +546,7 @@ This pass covered every area in Part B with four agents. The ids run U24 to U56.
 ### U49 · An unfinished shell line waits at a bare ">" with no explanation (Sev 2, Pri 2) ✅ done
 **Fix.** One dim line now says what is still open (an unclosed quote, for example) and that Ctrl+C cancels it (`src/games/shell/page.ts`).
 
-### U50 · No runaway probe for sva and tb yet (Sev 2, Pri 2) · open
+### U50 · No runaway probe for sva and tb yet (Sev 2, Pri 2) ✅ done (both labs probed safe: bounded with a plain message; the read-only design panel no longer draws over the header)
 The rv and cdc subsets reject `while`, so no runaway loop can be written there. The isa lab stops after 200,000 instructions and stays responsive. The probes for tb and sva were not valid programs, so neither was tested. Next step: probe sva with declared signals and a large delay range.
 
 Also checked, no finding: syntax errors are line-numbered in isa, cdc, rv, sva and tb. Input latency after a click is 1–10 ms in every lab.
@@ -644,11 +644,11 @@ Also checked, no finding: syntax errors are line-numbered in isa, cdc, rv, sva a
 ### U46 · Settings option groups aren't proper radio groups (Sev 3, Pri 3) ✅ done
 **Fix.** Each group has one Tab stop, and the arrow keys, Home and End move and choose (`src/os/settings.ts`, `radioStep`).
 
-### U51 · The schematic editor can't be used from the keyboard (Sev 4, Pri 3) · Decision
+### U51 · The schematic editor can't be used from the keyboard (Sev 4, Pri 3) · Decision ✅ done (arrow-key cursor over pins, Enter wires two pins, A adds a part, announcements in a live region)
 **Seen.** On `#/logic/logic-not` no key adds a part or starts a wire. That takes a drag or a click on each pin.
 **Proposed.** A keyboard editing mode: a cursor that moves over the pins, Enter to wire two pins, and a key to add a part.
 
-### U52 · The logic schematic is drawn at 0.41 scale at 390 px (Sev 3, Pri 3) · Decision (with U22)
+### U52 · The logic schematic is drawn at 0.41 scale at 390 px (Sev 3, Pri 3) · Decision (with U22) ✅ done (tap one pin then another to wire, 44 px touch targets, zoom and pan; 1:1 at phone width)
 **Seen.** The 760×440 drawing is rendered at 310×179 px.
 **Proposed.** A zoom control, or a taller canvas that pans. This is part of the U22 decision.
 
@@ -656,18 +656,24 @@ Also checked, no finding: syntax errors are line-numbered in isa, cdc, rv, sva a
 **Code.** `src/games/arch/page.ts`.
 **Proposed.** A history like U41's.
 
-### U54 · Coverage lab: removing a phase is instant, with no confirmation or undo (Sev 2, Pri 2) · open
+### U54 · Coverage lab: removing a phase is instant, with no confirmation or undo (Sev 2, Pri 2) ✅ done (Undo button and Ctrl+Z for phase add, remove and edit)
 **Code.** `src/games/coverage/page.ts`, `phases.splice` (found by reading the code; not clicked in the browser).
 **Proposed.** Add an undo, as in U41.
 
-### U55 · UVM Builder: a wrong placement says "doesn't belong" without saying where the part goes (Sev 2, Pri 2) · open
+### U55 · UVM Builder: a wrong placement says "doesn't belong" without saying where the part goes (Sev 2, Pri 2) ✅ done (each part type has a one-line role hint)
 **Code.** `src/games/uvm/page.ts`, the slot's `onclick`.
 **Proposed.** A hint drawn from the slot's role.
 
-### U56 · Arch status gives only counts: "N of M goals not met" (Sev 1, Pri 1) · open
+### U56 · Arch status gives only counts: "N of M goals not met" (Sev 1, Pri 1) ✅ done (the status line names the first goal not met)
 **Proposed.** Name the first failing goal in the status line (`src/games/arch/page.ts`, `run()`).
 
 ### Not covered
 - Keyboard placement in the PCB router: the R, V, E, L and Ctrl+Z keys exist, but cursor movement wasn't checked.
 - Undo in the circuit lab's text editor.
+
+### U57 · A deep link to a lesson pauses it at once (Sev 2, Pri 2) ✅ done
+**Reproduce.** Do a fresh load of `dist/index.html#/learn/kcl`, with no clicks. The lesson prints its question, then "(lesson paused, run it again any time)". Typing `learn kcl` at the desktop works.
+**Cause.** On boot, `route()` calls `shell.run()`, which queues the command and calls `term.interrupt()`. Nothing is waiting yet, so the interrupt is stored as a pending flag. The lesson's first `ask()` then consumes it and pauses.
+**Fix.** The shell drops any pending interrupt when it takes a command from its queue (`Terminal.dropPendingInterrupt()`). Interrupting a running command or a waiting question is unchanged.
+**Verified.** A Playwright reproduction before and after, at `instant` and `normal` speed. `#/practice/bits` and the lab deep links were checked too: they never had the problem.
 
