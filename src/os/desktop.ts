@@ -28,6 +28,7 @@ import { launchGame } from './launch';
 import { mapApp } from './map';
 import { settingsApp } from './settings';
 import { bindMentorLog } from './mentor';
+import { buildRegions } from './regions';
 import { getWindow, initWM, openWindow } from './wm';
 
 const LABS: Record<string, (id: string) => HTMLElement> = {
@@ -37,16 +38,12 @@ const LABS: Record<string, (id: string) => HTMLElement> = {
 let term: Terminal;
 let shell: Shell;
 
+// TAPEOUT's terminal is docked in the mentor column for the whole session; its size comes from the layout (os.css).
 function openTerminal() {
-  const d = document.getElementById('desktop')!;
-  const wide = d.clientWidth >= 1100;
   const content = h('div', { class: 'term-window' },
-    h('div', { class: 'term-side' }, avatar(84), h('div', { class: 'term-side-name' }, 'TAPEOUT'), h('div', { class: 'term-side-sub' }, 'mentor · v1.0')),
+    h('div', { class: 'term-side' }, avatar(56), h('div', { class: 'term-side-name' }, 'TAPEOUT'), h('div', { class: 'term-side-sub' }, 'mentor · v1.0')),
     term.el);
-  const w = openWindow({
-    id: 'term', title: 'tapeout — mentor', icon: '›_', content,
-    x: 16, y: 16, w: wide ? Math.min(760, d.clientWidth * 0.5) : d.clientWidth, h: d.clientHeight - 32,
-  });
+  const w = openWindow({ id: 'term', title: 'tapeout — mentor', icon: '›_', content, region: 'mentor' });
   term.focus();
   return w;
 }
@@ -187,10 +184,12 @@ async function bootScreen(first: boolean) {
 
 export async function bootDesktop() {
   const os = document.getElementById('os')!;
-  const desktop = h('main', { id: 'desktop', class: 'desktop' }, wallpaper(), icons());
+  // The mentor column (left) and the workspace (right). The wallpaper and icons belong to the workspace.
+  const { desktop, workspace } = buildRegions();
+  workspace.append(wallpaper(), icons());
   const bar = taskbar();
   os.replaceChildren(desktop, bar);
-  initWM(desktop, bar.querySelector('.tasks') as HTMLElement);
+  initWM(bar.querySelector('.tasks') as HTMLElement);
   term = new Terminal();
   shell = new Shell(term, (r) => { if (location.hash === r) route(); else location.hash = r; });
   bindMentorLog((text) => {

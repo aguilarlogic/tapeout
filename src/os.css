@@ -23,10 +23,22 @@ html, body { height: 100%; overflow: hidden; }
 body { display: block; }
 #os { position: fixed; inset: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto; }
 
-.desktop { position: relative; overflow: hidden; max-width: none; padding: 0; margin: 0; background: #0b0420; }
+/* The desktop is two fixed regions, never overlapping. The mentor column (TAPEOUT's terminal and its speech bubble)
+   docks on the left at a fixed width; the workspace (labs, maps, icons, wallpaper) takes the rest. Below 960px the
+   mentor column stacks on top of the workspace instead, so nothing scrolls sideways. See src/os/regions.ts. */
+.desktop {
+  position: relative; overflow: hidden; max-width: none; padding: 0; margin: 0; background: #0b0420;
+  display: grid; grid-template-columns: clamp(300px, 30vw, 440px) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr);
+}
+.mentor-region { position: relative; isolation: isolate; min-width: 0; min-height: 0; overflow: hidden; background: var(--term-bg); border-right: 1px solid #13232b; }
+.workspace { position: relative; isolation: isolate; min-width: 0; min-height: 0; overflow: hidden; background: #0b0420; }
+@media (max-width: 959px) {
+  .desktop { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 42fr) minmax(0, 58fr); }
+  .mentor-region { border-right: 0; border-bottom: 1px solid #13232b; }
+}
 
 /* The retrowave wallpaper. It stays a night scene in the light theme too; windows are opaque, so only the
-   desktop icons sit on it, and they carry their own light labels. The horizon is at 62% of the height. */
+   desktop icons sit on it, and they carry their own light labels. The horizon is at 62% of the workspace height. */
 .desk-bg {
   --horizon: 62%;
   position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: hidden;
@@ -78,6 +90,10 @@ body { display: block; }
 .win.focused { border-color: color-mix(in srgb, var(--accent) 55%, var(--border)); }
 .win.min { display: none; }
 .win.max { left: 6px !important; top: 6px !important; width: calc(100% - 12px) !important; height: calc(100% - 12px) !important; resize: none; }
+/* The terminal in the mentor column: it fills the column and has no window controls. */
+.win.docked { inset: 0; z-index: 1 !important; width: auto; height: auto; min-width: 0; min-height: 0; border: 0; border-radius: 0; box-shadow: none; resize: none; animation: none; }
+.win.docked .win-bar { cursor: default; }
+.win.docked .win-btn { display: none; }
 @keyframes win-in { from { transform: scale(0.97) translateY(6px); opacity: 0; } }
 .win-bar { display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 12px; background: var(--panel); border-bottom: 1px solid var(--border); cursor: grab; user-select: none; touch-action: none; flex: none; }
 .win-bar:active { cursor: grabbing; }
@@ -129,6 +145,11 @@ body { display: block; }
 .term-side { width: 132px; flex: none; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 18px 8px; border-right: 1px solid #13232b; background: linear-gradient(#0a151b, #060a0e); }
 .term-side-name { font-family: var(--mono); font-weight: 800; color: var(--term-ai); letter-spacing: 0.12em; margin-top: 8px; text-shadow: 0 0 8px color-mix(in srgb, var(--term-ai) 60%, transparent); }
 .term-side-sub { font-family: var(--mono); font-size: 0.7rem; color: var(--term-dim); }
+/* In the mentor column the identity becomes a header strip: avatar on the left, name and role beside it. */
+.mentor-region .term-window { flex-direction: column; }
+.mentor-region .term-side { width: auto; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: 12px; padding: 10px 14px; border-right: 0; border-bottom: 1px solid #13232b; }
+.mentor-region .term-side .avatar { grid-row: 1 / 3; }
+.mentor-region .term-side-name { margin-top: 0; }
 .term { position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; font-family: var(--mono); font-size: 14px; line-height: 1.55; color: var(--term-fg); padding: 12px 14px 10px; cursor: text; }
 .term::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: repeating-linear-gradient(to bottom, rgba(255, 255, 255, 0.018) 0 1px, transparent 1px 3px); }
 .term-out { flex: 1; overflow-y: auto; overflow-x: hidden; padding-right: 4px; scrollbar-width: thin; scrollbar-color: #1f3440 transparent; }
@@ -184,7 +205,10 @@ body { display: block; }
 .term-done .recap { margin: 8px 0 0; padding-left: 1.2em; color: var(--term-fg); }
 
 /* ---------------------------------------------------------------- mentor bubble */
-.mentor-bubble { position: fixed; right: 16px; bottom: 62px; z-index: 950; display: flex; gap: 10px; align-items: flex-start; max-width: min(420px, calc(100vw - 32px)); padding: 10px 14px 10px 10px; background: var(--term-bg); color: var(--term-fg); border: 1px solid color-mix(in srgb, var(--term-ai) 50%, transparent); border-radius: 14px; box-shadow: var(--win-shadow), 0 0 24px color-mix(in srgb, var(--term-ai) 18%, transparent); font-family: var(--mono); font-size: 13px; cursor: pointer; animation: pop 0.22s ease-out; }
+/* The bubble lives inside the mentor column (a child of .mentor-region), just under TAPEOUT's header strip, so it
+   covers the older terminal log rather than the mentor's name, the input line or the workspace. */
+.mentor-region > .mentor-bubble { position: absolute; top: 140px; left: 10px; right: 10px; z-index: 5; max-height: calc(100% - 150px); overflow: auto; max-width: none; }
+.mentor-bubble { display: flex; gap: 10px; align-items: flex-start; padding: 10px 14px 10px 10px; background: var(--term-bg); color: var(--term-fg); border: 1px solid color-mix(in srgb, var(--term-ai) 50%, transparent); border-radius: 14px; box-shadow: var(--win-shadow), 0 0 24px color-mix(in srgb, var(--term-ai) 18%, transparent); font-family: var(--mono); font-size: 13px; cursor: pointer; animation: pop 0.22s ease-out; }
 .mentor-bubble.bye { opacity: 0; transform: translateY(8px); transition: all 0.25s; }
 .mb-text { display: flex; flex-direction: column; gap: 2px; }
 .mb-text b { color: var(--term-ai); }
@@ -369,10 +393,10 @@ table.tt th.exp, table.tt td.exp { color: var(--wave-exp); }
   .logic-grid { grid-template-columns: minmax(0, 1fr); }
   .term-act { grid-template-columns: 50px minmax(0, 1fr) 36px; }
   .term-act .bar { display: none; }
-  .mentor-bubble { bottom: 60px; right: 8px; left: 8px; max-width: none; }
 }
 @media (prefers-reduced-motion: reduce) {
   .win, .mentor-bubble, .node.next, .av-eyes, .avatar.talking .av-mouth, .desk-grid { animation: none !important; }
+  .mentor-bubble.bye, .boot { transition: none; }
 }
 
 /* ---------------------------------------------------------------- skills (the audit, live) */
@@ -470,4 +494,15 @@ a.tier:hover { border-color: var(--accent); text-decoration: none; }
   .boss-intro .enter.flash { animation: none; }
   .incident-page .hdr { animation: none; }
   .win-loading { display: none; }
+}
+
+/* Labs fit their window, not the screen: beside the mentor column the workspace is narrower than the viewport. */
+.win-body { container-type: inline-size; }
+@container (max-width: 1100px) {
+  .logic-grid { grid-template-columns: minmax(0, 1fr) minmax(240px, 300px); }
+  .pcb-grid, .sta-grid, .cov-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .logic-grid > .brief, .pcb-grid > .brief, .sta-grid > .brief, .cov-grid > .brief { grid-column: 1 / -1; }
+}
+@container (max-width: 700px) {
+  .level-grid, .logic-grid, .pcb-grid, .sta-grid, .cov-grid { grid-template-columns: minmax(0, 1fr); }
 }

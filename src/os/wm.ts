@@ -1,13 +1,18 @@
 // A tiny window manager: draggable, resizable, minimizable windows plus taskbar buttons.
+// Windows live in one of two regions (see regions.ts). The mentor region holds one docked window (the terminal)
+// that fills its column and cannot be moved, minimized or closed. The workspace holds floating windows.
 import { pace } from '../term/terminal';
 import { animate, progressBar, spinFrame, type Token } from '../term/typewriter';
 import { h } from '../ui/dom';
+import { type Region, regionEl } from './regions';
 
 export interface WinOpts {
   id: string;
   title: string;
   icon?: string;
   content: HTMLElement;
+  /** Which region the window opens in. Defaults to the workspace; 'mentor' docks it into the mentor column. */
+  region?: Region;
   w?: number;
   h?: number;
   x?: number;
@@ -31,7 +36,6 @@ export interface Win {
   onClose?: () => void;
 }
 
-let desktop: HTMLElement;
 let tasks: HTMLElement;
 let z = 10;
 const wins = new Map<string, Win>();
@@ -39,8 +43,7 @@ const listeners = new Set<() => void>();
 export const onWindowsChange = (f: () => void) => listeners.add(f);
 const changed = () => listeners.forEach((f) => f());
 
-export function initWM(d: HTMLElement, taskArea: HTMLElement) {
-  desktop = d;
+export function initWM(taskArea: HTMLElement) {
   tasks = taskArea;
 }
 
@@ -89,26 +92,30 @@ export function openWindow(o: WinOpts): Win {
     if (o.loading) loadingScreen(existing.body, o.loading);
     return existing;
   }
+  const region = o.region ?? 'workspace';
+  const docked = region === 'mentor';
+  const host = regionEl(region);
+  if (!host) throw new Error(`desktop region "${region}" is not built yet`);
+
   const titleEl = h('span', { class: 'win-title' }, o.title);
   const body = h('div', { class: 'win-body' }, o.content);
   const btnMin = h('button', { class: 'win-btn', title: 'Minimize', 'aria-label': 'Minimize' }, '–');
   const btnMax = h('button', { class: 'win-btn', title: 'Maximize', 'aria-label': 'Maximize' }, '□');
   const btnClose = h('button', { class: 'win-btn close', title: 'Close', 'aria-label': 'Close' }, '×');
   const bar = h('div', { class: 'win-bar' }, h('span', { class: 'win-icon', 'aria-hidden': 'true' }, o.icon ?? '▣'), titleEl, h('span', { class: 'spacer' }), btnMin, btnMax, btnClose);
-  const el = h('section', { class: 'win', role: 'dialog', 'aria-label': o.title }, bar, body);
+  const el = h('section', { class: docked ? 'win docked' : 'win', role: 'dialog', 'aria-label': o.title }, bar, body);
 
-  const dw = desktop.clientWidth, dh = desktop.clientHeight;
-  const w = Math.min(o.w ?? 900, dw - 16), hh = Math.min(o.h ?? 600, dh - 16);
-  const cascade = (wins.size % 5) * 26;
-  el.style.width = `${w}px`;
-  el.style.height = `${hh}px`;
-  // New windows prefer the free space to the right of the terminal, so TAPEOUT stays visible.
-  const term = wins.get('term')?.el;
-  const right = term && !term.classList.contains('min') ? term.offsetLeft + term.offsetWidth + 12 : 0;
-  const autoX = right && dw - right >= w + 8 ? right + Math.min(cascade, dw - right - w - 8) : (dw - w) / 2 + cascade;
-  el.style.left = `${Math.max(8, Math.min(dw - w - 8, o.x ?? autoX))}px`;
-  el.style.top = `${Math.max(8, Math.min(dh - hh - 8, o.y ?? 20 + cascade))}px`;
-  if (o.maximized) el.classList.add('max');
+  // Docked windows fill their region through CSS; floating ones are sized and placed here.
+  if (!docked) {
+    const dw = host.clientWidth, dh = host.clientHeight;
+    const w = Math.min(o.w ?? 900, dw - 16), hh = Math.min(o.h ?? 600, dh - 16);
+    const cascade = (wins.size % 5) * 26;
+    el.style.width = `${w}px`;
+    el.style.height = `${hh}px`;
+    el.style.left = `${Math.max(8, Math.min(dw - w - 8, o.x ?? (dw - w) / 2 + cascade))}px`;
+    el.style.top = `${Math.max(8, Math.min(dh - hh - 8, o.y ?? 20 + cascade))}px`;
+    if (o.maximized) el.classList.add('max');
+  }
 
   const taskBtn = h('button', { class: 'task', title: o.title }, h('span', { class: 'task-icon' }, o.icon ?? '▣'), h('span', { class: 'task-label' }, o.title));
 
@@ -134,34 +141,36 @@ export function openWindow(o: WinOpts): Win {
       if (next) wins.get(next)!.focus();
     },
     minimize() {
+      if (docked) return; // the mentor column is always on screen
       el.classList.add('min');
       el.classList.remove('focused');
       taskBtn.classList.remove('on');
       changed();
     },
   };
-  btnClose.addEventListener('click', () => { const cb = win.onClose; win.close(); cb?.(); });
+  const toggleMax = () => { if (!docked) el.classList.toggle('max'); };
+  btnClose.addEventListener('click', () => { if (docked) return; const cb = win.onClose; win.close(); cb?.(); });
   btnMin.addEventListener('click', () => win.minimize());
-  btnMax.addEventListener('click', () => el.classList.toggle('max'));
-  bar.addEventListener('dblclick', (e) => { if (!(e.target as HTMLElement).closest('button')) el.classList.toggle('max'); });
+  btnMax.addEventListener('click', toggleMax);
+  bar.addEventListener('dblclick', (e) => { if (!(e.target as HTMLElement).closest('button')) toggleMax(); });
   el.addEventListener('pointerdown', () => { if (!el.classList.contains('focused')) win.focus(); }, true);
   taskBtn.addEventListener('click', () => (el.classList.contains('focused') ? win.minimize() : win.focus()));
 
-  // dragging by the title bar
+  // dragging by the title bar (floating windows only)
   bar.addEventListener('pointerdown', (e) => {
-    if ((e.target as HTMLElement).closest('button') || el.classList.contains('max') || small()) return;
+    if (docked || (e.target as HTMLElement).closest('button') || el.classList.contains('max') || small()) return;
     const sx = e.clientX, sy = e.clientY, ox = el.offsetLeft, oy = el.offsetTop;
     bar.setPointerCapture(e.pointerId);
     const move = (ev: PointerEvent) => {
-      el.style.left = `${Math.max(-el.offsetWidth + 80, Math.min(desktop.clientWidth - 80, ox + ev.clientX - sx))}px`;
-      el.style.top = `${Math.max(0, Math.min(desktop.clientHeight - 40, oy + ev.clientY - sy))}px`;
+      el.style.left = `${Math.max(-el.offsetWidth + 80, Math.min(host.clientWidth - 80, ox + ev.clientX - sx))}px`;
+      el.style.top = `${Math.max(0, Math.min(host.clientHeight - 40, oy + ev.clientY - sy))}px`;
     };
     const up = () => { bar.removeEventListener('pointermove', move); bar.removeEventListener('pointerup', up); };
     bar.addEventListener('pointermove', move);
     bar.addEventListener('pointerup', up);
   });
 
-  desktop.append(el);
+  host.append(el);
   tasks.append(taskBtn);
   wins.set(o.id, win);
   win.focus();
