@@ -710,7 +710,9 @@ export class Shell {
       }
       first = false;
       if (exam) break;
-      if (k < tries - 1) await t.say(k === 0 ? `Not quite.${q.hint ? ` ${q.hint}` : ' Try again.'}${teach ? ' Or type `teach me` and I will walk you through the method.' : ''}` : 'Still not it. One more try.', 'concerned');
+      // A near miss names the kind of slip in place of "Not quite." It never gives the value, and exams never show it.
+      const near = q.a.near?.(v);
+      if (k < tries - 1) await t.say(k === 0 ? `${near ?? 'Not quite.'}${q.hint ? ` ${q.hint}` : ' Try again.'}${teach ? ' Or type `teach me` and I will walk you through the method.' : ''}` : (near ? `${near} One more try.` : 'Still not it. One more try.'), 'concerned');
     }
     if (exam) { t.print(`✗ answer: ${q.a.canonical}`, 'err'); return false; }
     if (teach) { await this.offerWalk(q); if (this.taught) return false; }

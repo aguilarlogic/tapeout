@@ -4,6 +4,33 @@
 export interface Answer {
   canonical: string;
   check(input: string): boolean;
+  /**
+   * For a wrong answer: name the KIND of slip (prefix, sign, unit kind, off by one, wrong base). Never the value.
+   * Undefined when the answer is far off, or when there is nothing useful to say.
+   */
+  near?(input: string): string | undefined;
+}
+
+export const NEAR_OFF_BY_ONE = 'Very close: check whether you counted from 0 or 1.';
+export const NEAR_WRONG_BASE = 'Right value, wrong base.';
+const NEAR_PREFIX = 'Check your prefix (k, M, m, µ, n…).';
+
+/** The kind of quantity each base unit measures, for "That is a voltage; the question asks for a current." */
+const KIND: [string, string][] = [['V', 'a voltage'], ['A', 'a current'], ['Ω', 'a resistance'], ['F', 'a capacitance'], ['Hz', 'a frequency'], ['s', 'a time'], ['W', 'a power'], ['C', 'a charge'], ['J', 'an energy']];
+const kindOf = (unit: string) => KIND.find(([u]) => u === unit)?.[1];
+
+/** The unit the player typed, if it names a different kind of quantity (with or without an SI prefix). */
+function wrongKind(input: string, unit: string): string | undefined {
+  const rest = input.trim().replace(/,/g, '').replace(/\s+/g, '').replace(/^-?\d*\.?\d+(?:e[-+]?\d+)?/, '').toLowerCase();
+  if (!rest) return undefined;
+  for (const [u, kind] of KIND) {
+    if (u === unit) continue;
+    for (const alias of UNIT_ALIASES[u] ?? []) {
+      if (rest === alias.toLowerCase()) return kind;
+      for (const pre of Object.keys(SI)) if (pre && rest === pre + alias.toLowerCase()) return kind;
+    }
+  }
+  return undefined;
 }
 
 const clean = (s: string) => s.trim().toLowerCase().replace(/[\s_]/g, '');
@@ -90,7 +117,18 @@ export function parseQuantity(input: string, unit = ''): number | null {
 
 /** Integer answer; accepts any base notation. */
 export function num(value: number): Answer {
-  return { canonical: String(value), check: (s) => parseInteger(s) === value };
+  return {
+    canonical: String(value),
+    check: (s) => parseInteger(s) === value,
+    near: (s) => {
+      const t = s.trim().replace(/[\s_]/g, '');
+      const dec = parseInteger(s);
+      if (dec !== null && Math.abs(dec - value) === 1) return NEAR_OFF_BY_ONE;
+      // Hex digits typed for a decimal answer: "1F" for 31.
+      if (/^[0-9a-f]+$/i.test(t) && parseInt(t, 16) === value) return NEAR_WRONG_BASE;
+      return undefined;
+    },
+  };
 }
 
 /** Binary answer. Leading zeros and 0b / n'b prefixes are fine. */
@@ -109,6 +147,7 @@ export function bin(value: number, width = 0): Answer {
 /** Hex answer. 0x / n'h prefixes and a trailing h are fine. */
 export function hexa(value: number, width = 0): Answer {
   const canonical = value.toString(16).toUpperCase().padStart(width, '0');
+  const hexValue = (c: string) => (/^[0-9a-f]+h?$/.test(c) ? parseInt(c.replace(/h$/, ''), 16) : parseInteger(c, 16));
   return {
     canonical,
     check: (s) => {
@@ -116,6 +155,15 @@ export function hexa(value: number, width = 0): Answer {
       if (/^[0-9a-f]+h?$/.test(c)) return parseInt(c.replace(/h$/, ''), 16) === value; // bare hex digits, even "0b"
       if (/^\d*'[bd]|^0b/.test(c)) return false;
       return parseInteger(c, 16) === value;
+    },
+    near: (s) => {
+      const c = clean(s);
+      const hex = hexValue(c);
+      if (hex !== null && Math.abs(hex - value) === 1) return NEAR_OFF_BY_ONE;
+      // The same number typed in decimal ("31") or with a decimal prefix ("8'd31").
+      const dec = /^\d+$/.test(c) ? Number(c) : /^\d+'d\d+$/.test(c) ? Number(c.split("'d")[1]) : null;
+      if (dec === value) return NEAR_WRONG_BASE;
+      return undefined;
     },
   };
 }
@@ -138,6 +186,20 @@ export function qty(value: number, unit: string, tol = 0.03, display?: string): 
       if (v === null) return false;
       if (value === 0) return Math.abs(v) < 1e-9;
       return Math.abs(v - value) / Math.abs(value) <= tol;
+    },
+    near: (s) => {
+      const v = parseQuantity(s, unit);
+      if (v !== null && value !== 0) {
+        if (Math.abs(v + value) / Math.abs(value) <= tol) return 'Check the sign.';
+        // Right digits, off by a power of 1000: say the prefix is wrong, not which prefix it should be.
+        for (const e of [-4, -3, -2, -1, 1, 2, 3, 4]) {
+          if (Math.abs(Math.abs(v) / (Math.abs(value) * 1000 ** e) - 1) <= tol) return NEAR_PREFIX;
+        }
+      }
+      const base = splitUnit(unit)[1];
+      const kind = wrongKind(s, base), want = kindOf(base);
+      if (kind && want) return `That is ${kind}; the question asks for ${want}.`;
+      return undefined;
     },
   };
 }

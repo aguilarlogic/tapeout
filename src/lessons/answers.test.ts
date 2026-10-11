@@ -47,6 +47,57 @@ describe('integers', () => {
   });
 });
 
+// Near misses name the kind of slip and never give the value away.
+describe('near-miss messages', () => {
+  const correctValueLeaks = (msg: string, values: string[]) => values.some((v) => msg.includes(v));
+
+  it('a quantity off by a power of 1000 names the prefix, not which one', () => {
+    const a = qty(4700, 'Ω');
+    for (const typed of ['4.7', '4.7M', '0.0047']) {
+      const msg = a.near!(typed);
+      expect(msg, typed).toMatch(/prefix/i);
+      expect(correctValueLeaks(msg!, ['4700', '4.7k', '4.7 k', '4,700', '4.7 kΩ'])).toBe(false);
+    }
+  });
+  it('a quantity with the sign flipped says so', () => {
+    expect(qty(4700, 'Ω').near!('-4.7k')).toMatch(/sign/i);
+  });
+  it('a quantity in the wrong kind of unit names the kind it is, and the kind asked for', () => {
+    expect(qty(1e-3, 'A').near!('1 V')).toBe('That is a voltage; the question asks for a current.');
+    expect(qty(5, 'V').near!('5 Ω')).toBe('That is a resistance; the question asks for a voltage.');
+    // A prefixed unit ("mA") names the kind of its base unit, as a lesson question does.
+    expect(qty(5, 'mA').near!('5 V')).toBe('That is a voltage; the question asks for a current.');
+  });
+  it('a far-off answer gives no near message', () => {
+    expect(qty(4700, 'Ω').near!('5k')).toBeUndefined();
+    expect(qty(4700, 'Ω').near!('12')).toBeUndefined();
+  });
+  it('a correct answer gives no near message', () => {
+    expect(qty(4700, 'Ω').near!('4.8k')).toBeUndefined();
+  });
+  it('an integer off by one says to check counting from 0 or 1', () => {
+    expect(num(10).near!('11')).toMatch(/0 or 1/);
+    expect(num(10).near!('9')).toMatch(/0 or 1/);
+  });
+  it('an integer off by more than one gives no near message', () => {
+    expect(num(10).near!('12')).toBeUndefined();
+    expect(num(10).near!('abc')).toBeUndefined();
+  });
+  it('the right value in the wrong base says so, for hex answers typed in decimal', () => {
+    expect(hexa(31).near!('31')).toBe('Right value, wrong base.');
+    expect(hexa(31).near!("8'd31")).toBe('Right value, wrong base.');
+  });
+  it('the right value in the wrong base says so, for integer answers typed in hex', () => {
+    expect(num(31).near!('1F')).toBe('Right value, wrong base.');
+  });
+  it('a hex answer one off gets the counting message, and no message names the answer', () => {
+    expect(hexa(31).near!('1E')).toMatch(/0 or 1/);
+    for (const [a, typed] of [[hexa(31), '31'], [num(31), '1F'], [num(10), '11']] as const) {
+      expect(correctValueLeaks(a.near!(typed)!, ['31', '1F', '1f', '0x1F', '10', '0x0A'])).toBe(false);
+    }
+  });
+});
+
 describe('boolean expressions', () => {
   const xor = expr('a^b', ['a', 'b'], (v) => v.a !== v.b);
   it('reads the word XOR as ^', () => {
