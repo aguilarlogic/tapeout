@@ -299,7 +299,7 @@ decks it has never been taught. The first impression is a backlog.
 **Fix.** Label unseen cards "new", not "due". Show decks for topics the player has not met yet as locked or
 "preview", or sort them after the decks the player has studied. Keep the spaced-repetition logic as it is.
 
-### U16 · Two visual languages, and the main reward is hidden (Sev 3, Pri 4) · Decision
+### U16 · Two visual languages, and the main reward is hidden (Sev 3, Pri 4) · Decision ✅ done (option c: TAPE-OS dark theme by default, Light in Settings, live die on the desktop)
 
 **Confirmed in screenshots.** The terminal is a dark, mono, phosphor-teal retro UI. Every other window (labs,
 Map.app, Skills.app, the minigames, Settings) is a light, rounded, sans-serif dashboard. The "retro TAPE-OS" fantasy

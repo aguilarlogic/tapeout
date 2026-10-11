@@ -26,14 +26,15 @@ export function die(onPick?: (a: Act) => void, opts: { glow?: number[] } = {}): 
   ACTS.forEach((a, i) => {
     const [x, y, w, hh] = boxes[i];
     const frac = fracs[i];
-    const label = signedOffLabel(a.n, a.name, frac);
+    // The name starts with the visible label (label-in-name), then says what the block means.
+    const shown = `${a.n} ${DIE_NAME[a.n] ?? a.region}`, label = `${shown}: ${signedOffLabel(a.n, a.name, frac)}`;
     const g = svg('g', { class: `region${opts.glow?.includes(i) ? ' glow' : ''}`, tabindex: 0, role: 'button', 'aria-label': label });
     g.append(svg('title', {}, label));
     if (onPick) { g.addEventListener('click', () => onPick(a)); g.addEventListener('keydown', (e) => { if ((e as KeyboardEvent).key === 'Enter') onPick(a); }); }
     g.append(svg('rect', { x, y, width: w, height: hh, class: `blk${frac === 1 ? ' done' : ''}` }));
     const rows = Math.floor((hh - 22) / 7), on = litRows(frac, rows);
     for (let r = 0; r < rows; r++) g.append(deco(svg('rect', { x: x + 6, y: y + 18 + r * 7, width: w - 12, height: 4, class: `row${r < on ? ' lit' : ''}` })));
-    g.append(deco(svg('text', { x: x + 6, y: y + 12, class: 'blk-label' }, `${a.n} ${DIE_NAME[a.n] ?? a.region}`)));
+    g.append(deco(svg('text', { x: x + 6, y: y + 12, class: 'blk-label' }, shown)));
     root.append(g);
   });
   return root;
