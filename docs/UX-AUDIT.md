@@ -652,7 +652,7 @@ Also checked, no finding: syntax errors are line-numbered in isa, cdc, rv, sva a
 **Seen.** The 760×440 drawing is rendered at 310×179 px.
 **Proposed.** A zoom control, or a taller canvas that pans. This is part of the U22 decision.
 
-### U53 · Arch labs can't undo a single change; Reset clears everything (Sev 2, Pri 2) · Decision
+### U53 · Arch labs can't undo a single change; Reset clears everything (Sev 2, Pri 2) · Decision ✅ done (Undo button, Ctrl+Z, 100-step history, undoable Reset)
 **Code.** `src/games/arch/page.ts`.
 **Proposed.** A history like U41's.
 
