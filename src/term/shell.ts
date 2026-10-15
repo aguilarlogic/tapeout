@@ -20,6 +20,7 @@ import { award, promotionLine, type Promotion } from '../mastery/promotion';
 import { finishGoal, type GoalResult } from '../daily';
 import { dayKey, MILESTONE_XP, MIX_RECORD, streakLine } from '../streak';
 import { signsOff } from './stakes';
+import { pick as pickRecall, pool as poolRecall, record as recordRecall } from '../recall';
 import { readableReport, recordQuit, recordStep } from '../steplog';
 import { GOAL_CHOICES, progressReport, runWrap, wrapDue } from './wrap';
 
@@ -112,8 +113,30 @@ export class Shell {
     const next = recommended();
     await t.say(pickOne([`Welcome back, {name}.`, `Hey, {name}. Good to see you again.`, `{name}! I kept your workstation warm.`]), 'happy');
     t.print(`rank: **${r.title}** · ${xp} XP · tapeout readiness ${readiness()}%${r.next ? ` · ${r.next.xp - xp} XP to ${r.next.title}` : ''}`);
+    await this.recall();
     if (next) await t.say(`Next up: **${next.title}** (${KIND_LABEL[next.kind].toLowerCase()}, ${findModule(next.id)!.act.name}). Type \`next\` or click below. Or ask me anything, like \`what is a latch\`.`);
     else await t.say('You have finished everything. Every block of your chip is signed off. Want to replay something for stars, or run the arcade?', 'proud');
+  }
+
+  /** On return: up to three quick questions from lessons already finished, on a spaced schedule. Skippable. */
+  private async recall() {
+    const t = this.term;
+    const items = pickRecall(poolRecall());
+    if (!items.length) return;
+    const go = await t.choose(['Warm up with 3 quick questions', 'Skip, take me to my next step'], 'warm-up>');
+    if (go !== 0) return;
+    await t.say('Quick warm-up. These come from things you already did. No hints, no score.', 'happy');
+    let right = 0;
+    for (const it of items) {
+      await t.say(it.q.q, 'thinking');
+      const order = this.order(it.q.options);
+      const pick = await t.choose(order.map((j) => it.q.options[j]), 'answer>');
+      const ok = order[pick] === it.q.a;
+      recordRecall(it.key, ok);
+      if (ok) right++;
+      else await t.say(`Not quite. ${it.q.why} It will come back soon.`, 'concerned');
+    }
+    await t.say(right === items.length ? 'All right. Nice memory.' : `${right} of ${items.length}. Good, now it will stick better.`, right === items.length ? 'proud' : 'happy');
   }
 
   /** Four quick questions that decide whether to skip ahead. Returns how many were right. No hints, no pressure. */
