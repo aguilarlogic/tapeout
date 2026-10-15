@@ -58,7 +58,7 @@ export const GLOSSARY: Entry[] = [
   E('fsm|state machine|mealy|moore', 'Finite state machine. Moore outputs depend on state only; Mealy outputs also depend on inputs.', 'fsm'),
   E('one-hot|one hot', 'State encoding with one flip-flop per state: more flops, simpler and faster logic.', 'fsm'),
   E('verilog|systemverilog|rtl', 'Hardware description languages. RTL (register-transfer level) describes registers and the logic between them.', 'verilog'),
-  E('non-blocking|nonblocking|blocking assignment|<=', 'In Verilog, <= (non-blocking) updates after all right-hand sides are sampled: use it in clocked blocks. = is blocking: use it in combinational blocks.', 'verilog'),
+  E('non-blocking|nonblocking|blocking assignment|<=', 'In Verilog, <= (non-blocking) updates after all right-hand sides are sampled: use it in clocked blocks. = is blocking: use it in combinational blocks.', 'verilog-seq'),
   E('carry lookahead|kogge-stone|prefix adder', 'Fast adders that compute carries with generate/propagate signals in log2(n) levels.', 'alu'),
   E('booth|wallace tree|multiplier', 'Multipliers: Booth recoding halves the partial products; Wallace/Dadda trees reduce them in O(log n) levels.', 'alu'),
   E('metastability|synchronizer|cdc|clock domain crossing', 'A flop sampling an asynchronous change can hang between 0 and 1. Synchronizer flops make failure exponentially unlikely.', 'clk'),

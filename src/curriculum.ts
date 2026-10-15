@@ -144,7 +144,7 @@ export const ACTS: Act[] = [
       { name: 'Logic', modules: [prac('practice-bool'), lesson('demorgan'), ...logic(['logic-not', 'logic-and', 'logic-or', 'logic-xor']), incident('inc-logic')] },
       { name: 'Building blocks', modules: [lesson('mux'), ...logic(['logic-enable', 'logic-mux']), lesson('decoder'), ...logic(['logic-dec']), lesson('adder'), ...logic(['logic-full']), lesson('compare'), ...logic(['logic-cmp']), prac('practice-comb'), incident('inc-adder')] },
       { name: 'Memory & state', modules: [lesson('seq'), ...logic(['logic-dff', 'logic-toggle', 'logic-counter']), prac('practice-seq'), ...logic(['logic-latch']), ...drill('fsm'), bossMod('boss-logic'), incident('inc-controller')] },
-      { name: 'Verilog', modules: [...drill('verilog'), ...before(mods(RTL_LEVELS, 'rtl', 'rtl', (x) => !FIRST_RTL.includes(x.id)), 'seg7', lesson('hex')), bossMod('boss-numbers'), incident('inc-numbers'), bossMod('boss-hdl'), incident('inc-rtl')] },
+      { name: 'Verilog', modules: [lesson('verilog'), ...before(before(mods(RTL_LEVELS, 'rtl', 'rtl', (x) => !FIRST_RTL.includes(x.id)), 'mux4', lesson('verilog-seq'), prac('practice-verilog')), 'seg7', lesson('hex')), bossMod('boss-numbers'), incident('inc-numbers'), bossMod('boss-hdl'), incident('inc-rtl')] },
     ],
   },
   {

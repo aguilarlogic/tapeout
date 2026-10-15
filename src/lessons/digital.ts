@@ -207,32 +207,70 @@ export const fsm: Lesson = {
 export const verilog: Lesson = {
   id: 'verilog',
   title: 'Hello, Verilog',
-  concept: 'modules, assign, always, <= vs =',
+  concept: 'modules, assign, reading hardware as code',
   xp: 80,
   steps: [
-    say('Nobody draws a billion gates by hand. We **describe** hardware in a language and let synthesis tools build the gates. The language of the industry is **Verilog** and its big brother **SystemVerilog**.'),
-    say('Big mindset shift, {name}: Verilog looks like code, but it is not a program that runs line by line. Every statement is a piece of hardware, and it all runs **at the same time**.'),
+    say('Nobody draws a billion gates by hand. Instead, we **write down** what the hardware is, and a tool builds the gates. The language is **Verilog**.'),
+    say('**Why this matters:** this is how real chips are made. You already built a half adder from gates. Now you will say the same thing in words.'),
+    say('Here is your half adder, drawn on the left and written as code on the right. Match the parts.'),
     art(`
-  module and_or (
-    input  wire a, b, c,
-    output wire y
-  );
-    assign y = (a & b) | c;   // continuous: a wire with gates on it
-  endmodule`),
-    mc('What does `assign y = (a & b) | c;` build?', ['A flip-flop', 'An AND gate feeding an OR gate', 'An OR gate feeding an AND gate', 'Nothing until it is called'], 1, 'assign describes combinational logic that is always active, like soldering gates together.'),
-    say('Registers come from `always` blocks triggered by a clock edge. Inside them, use the **non-blocking** assignment `<=`.'),
+   a --+--[XOR]-- sum        assign sum   = a ^ b;
+       |                     assign carry = a & b;
+   b --+--[AND]-- carry
+
+   XOR is ^     AND is &`, 'the same circuit as a picture and as code'),
+    say('Each `assign` line is **one gate**, wired up for good. `assign sum = a ^ b;` reads "sum is always a XOR b". It is not a step that runs once. It is a part that is always there.'),
+    say('One big difference from normal coding: the lines do **not** run in order. All the gates work at the same time, because real gates do.'),
+    say('**Predict:** read the code, then guess before you check.', 'happy'),
+    art(`
+  assign y = a & b;     // a = 1, b = 0`),
+    mc('With a = 1 and b = 0, what is y?', ['0', '1'], 0, '& is AND. AND needs both inputs to be 1, and b is 0.'),
+    art(`
+  assign y = (a & b) | c;   // a = 0, b = 1, c = 1`),
+    mc('With a = 0, b = 1, c = 1, what is y?', ['0', '1'], 1, 'a & b is 0, but c is 1. OR gives 1 when either side is 1.'),
+    mc('What does `assign y = (a & b) | c;` build?', ['A flip-flop', 'An AND gate feeding an OR gate', 'An OR gate feeding an AND gate'], 1, 'The brackets go first: AND, then OR. It is just gates soldered together.'),
+    say('**Modify:** now change one thing.'),
+    mc('To turn `assign y = a & b;` into a gate that is 1 when **either** input is 1, which change do you make?', ['Change & to |', 'Change & to ^', 'Change y to a'], 0, '| is OR. It is 1 when at least one input is 1.'),
+    ask('How many bits is `{4\'b1010, 2\'b11}`? (Curly brackets glue pieces side by side.)', num(6), 'Glue 4 bits and 2 bits: 4 + 2 = 6 bits.', 'Add up the widths inside the brackets.'),
+    say('You now know enough to write real modules. The lab has a simulator that checks every input, then shows a waveform. Write five modules with `assign` before we add anything new.', 'excited'),
+  ],
+  recap: ['Verilog describes hardware, it is not a list of steps.', 'Each assign line is a gate (or a few) that is always there.', '& is AND, | is OR, ^ is XOR, ~ is NOT.', 'Everything works at the same time.'],
+};
+
+export const verilogSeq: Lesson = {
+  id: 'verilog-seq',
+  title: 'Verilog: Memory and Clocks',
+  concept: 'always @(posedge clk), <= vs =',
+  xp: 80,
+  steps: [
+    say('So far every line was a gate. To write **memory** in Verilog we need one new kind of block. It is the code version of a flip-flop: it copies its input on each clock tick.'),
+    say('**Why this matters:** registers, counters and state machines all use this block.'),
+    art(`
+  always @(posedge clk) begin
+    q <= d;      // on each tick, q copies d
+  end`, 'a flip-flop in code'),
+    say('`posedge clk` means "on the rising tick of the clock". Inside the block we use `<=`. Think of it as "gets the value on the tick".'),
+    mc('What does that block build?', ['A flip-flop', 'An AND gate', 'Nothing'], 0, 'It stores d into q on every clock tick. That is a flip-flop.'),
     art(`
   always @(posedge clk) begin
     if (rst) count <= 0;
     else     count <= count + 1;   // a register with an adder feeding it
-  end`),
-    mc('Two flops: `always @(posedge clk) begin b <= a; c <= b; end`. What is c one clock later?', ['The new value of a', 'The old value of b', 'Undefined', 'Zero'], 1, 'Non-blocking assignments all sample their right-hand sides before any of them update. So c gets the old b, which gives you a two-stage shift register. With blocking `=`, c would get a directly and the pipeline would collapse.'),
-    say('The rule of thumb that will save your career: **`<=` in clocked blocks, `=` in combinational blocks**. And in combinational blocks, assign every output on every path, or you will infer a latch.'),
-    mc('`always @(*) if (en) y = d;` What hardware does this infer?', ['A mux', 'A flip-flop', 'A latch', 'A wire'], 2, 'When en is 0, y must hold its value, and holding without a clock is a latch. Add an else branch or a default at the top.'),
-    ask('What is the width of `{4\'b1010, 2\'b11}`?', num(6), 'Concatenation joins the pieces: 4 + 2 = 6 bits, value 101011.', 'Add up the widths inside the braces.'),
-    say('That is enough to start. The RTL lab has a real simulator: you write the module, it runs against a golden model, and you get a waveform. Go make something.', 'excited'),
+  end`, 'a counter'),
+    mc('Two flops: `always @(posedge clk) begin b <= a; c <= b; end`. What is c one clock later?', ['The new value of a', 'The old value of b', 'Zero'], 1, 'Every <= reads its right side before any of them change. So c gets the old b. That gives you a two-step shift register.'),
+    say('The rule: **use `<=` in clocked blocks.** Use `=` only in blocks without a clock, which come next.'),
+    art(`
+  always @(*) begin
+    case (sel)
+      2'd0: y = a;
+      2'd1: y = b;
+      default: y = 0;
+    endcase
+  end`, 'a block without a clock'),
+    say('`always @(*)` with no clock builds plain gates, like `assign`, but lets you use `case` and `if`. Give every output a value on **every path**, or the tool will build a latch you did not want.'),
+    mc('`always @(*) if (en) y = d;` What does this build?', ['A mux', 'A flip-flop', 'A latch'], 2, 'When en is 0, y has to hold its old value, and holding without a clock is a latch. Add an else branch, or a default value at the top.'),
+    say('That is all the Verilog you need to start building clocked designs.', 'happy'),
   ],
-  recap: ['Verilog describes hardware; everything runs in parallel.', 'assign = combinational wires; always @(posedge clk) = registers.', 'Use <= in clocked blocks, = in combinational ones.', 'Incomplete assignments in combinational blocks infer latches.'],
+  recap: ['always @(posedge clk) with <= builds registers.', 'always @(*) with = builds plain logic.', 'Give every output a value on every path, or you get a latch.'],
 };
 
 export const alu: Lesson = {
@@ -333,4 +371,4 @@ export const clk: Lesson = {
   recap: ['CTS builds a low-skew clock tree; skew is spatial, jitter temporal.', 'Resets: assert async, deassert sync (reset synchronizer).', 'Metastability can\'t be avoided; MTBF grows as e^(t/τ) with each synchronizer flop.', 'Multi-bit crossings: Gray codes, handshakes, async FIFOs.', 'Never put combinational logic right before a synchronizer.'],
 };
 
-export const DIGITAL_LESSONS = [mux, decoder, adder, compare, seq, fsm, verilog, alu, clk];
+export const DIGITAL_LESSONS = [mux, decoder, adder, compare, seq, fsm, verilog, verilogSeq, alu, clk];

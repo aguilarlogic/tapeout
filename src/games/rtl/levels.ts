@@ -120,6 +120,31 @@ endmodule`,
     hints: ['Each output gets its own assign line. Use ^ for sum and & for carry.', 'Try a = 1, b = 1: sum should be 0 and carry 1, because 1 + 1 = 10 in binary.'],
   },
   {
+    id: 'full-adder-v',
+    track: 'rtl',
+    title: 'Full Adder in Verilog',
+    concept: 'three inputs, two outputs, assign only',
+    xp: 100,
+    brief: `
+      <p>A <b>full adder</b> adds three bits: <code>a</code>, <code>b</code> and a <b>carry in</b> (<code>cin</code>) from the column to its right.
+      The sum is 1 when an odd number of the three are 1. The carry out is 1 when at least two of them are 1.</p>
+      <p>Change one thing at a time. Start from the half adder you wrote: its <code>sum</code> line only needs one more <code>^</code>.</p>
+      <h4>Spec</h4>
+      <ul><li><code>sum = a ^ b ^ cin</code></li><li><code>cout = (a &amp; b) | (cin &amp; (a ^ b))</code></li></ul>`,
+    starter: `module full_adder(input a, input b, input cin, output sum, output cout);
+  // TODO sum: 1 when an odd number of a, b, cin are 1
+  // TODO cout: 1 when at least two of a, b, cin are 1
+
+endmodule
+`,
+    golden: `module full_adder(input a, input b, input cin, output sum, output cout);
+  assign sum = a ^ b ^ cin;
+  assign cout = (a & b) | (cin & (a ^ b));
+endmodule`,
+    stimulus: () => ({ vectors: exhaustive([['a', 1], ['b', 1], ['cin', 1]]) }),
+    hints: ['sum is just the half adder sum with one more XOR: a ^ b ^ cin.', 'cout: a carry happens if a and b are both 1, or if one of them is 1 and cin is 1.'],
+  },
+  {
     id: 'mux2',
     track: 'rtl',
     title: 'Choose Wisely',
