@@ -20,6 +20,7 @@ import { award, promotionLine, type Promotion } from '../mastery/promotion';
 import { finishGoal, type GoalResult } from '../daily';
 import { dayKey, MILESTONE_XP, MIX_RECORD, streakLine } from '../streak';
 import { signsOff } from './stakes';
+import { readableReport, recordQuit, recordStep } from '../steplog';
 import { GOAL_CHOICES, progressReport, runWrap, wrapDue } from './wrap';
 
 const pickOne = <T>(xs: T[]) => xs[Math.floor(Math.random() * xs.length)];
@@ -36,6 +37,11 @@ export class Shell {
   private taught = false;
   /** Set by `question()` when the player skipped the problem and did not walk through it. */
   private skipped = false;
+  /** Hints given on the current question (the hint ladder), and whether the player ended up shown the answer. */
+  private rung = 0;
+  private revealed = false;
+  /** The lesson step the player is on, so a quit can be logged. */
+  private at: { id: string; step: number } | null = null;
   /** The shell is idle, waiting at its prompt. */
   private atPrompt = false;
 
@@ -266,10 +272,10 @@ export class Shell {
   /** `log export`: the progress report as JSON, copied to the clipboard when the browser allows it, else shown. */
   private async logExport() {
     const t = this.term;
-    const text = JSON.stringify(progressReport(), null, 2);
+    const text = `${readableReport()}\n\n--- progress (JSON) ---\n${JSON.stringify(progressReport(), null, 2)}`;
     let copied = false;
     try { await navigator.clipboard.writeText(text); copied = true; } catch { /* no clipboard here: show it below */ }
-    if (copied) return t.print(`Copied your progress log to the clipboard (${text.length} characters).`, 'dim');
+    if (copied) return t.print(`Copied your playtest log (per-step summary and progress) to the clipboard (${text.length} characters).`, 'dim');
     void t.block(h('figure', { class: 'term-art' }, h('pre', null, text)), 'instant');
     t.print('The clipboard is not available here. Copy the log above.', 'dim');
   }
@@ -605,10 +611,11 @@ export class Shell {
     try {
       await this.lesson(lesson, exam ? 'final' : bossDef ? 'boss' : 'lesson');
     } catch (e) {
-      if (e instanceof Interrupted) { if (!(e instanceof Redirect)) this.term.print('(lesson paused, run it again any time)', 'dim'); }
+      if (e instanceof Interrupted) { if (this.at) recordQuit(this.at.id, this.at.step); if (!(e instanceof Redirect)) this.term.print('(lesson paused, run it again any time)', 'dim'); }
       else throw e;
     } finally {
       this.busy = false;
+      this.at = null;
       setMood('neutral');
     }
   }
@@ -626,6 +633,7 @@ export class Shell {
     const rnd = Math.random;
     let asked = 0, firstTry = 0;
     const skippedQs: { n: number; q: Question }[] = [];
+    const comeBack: Question[] = [];
     for (let i = 0; i < l.steps.length; i++) {
       const s = l.steps[i];
       const nextIsQuestion = (() => { const n = l.steps[i + 1]; return !n || n.t === 'ask' || n.t === 'mc' || n.t === 'gen' || n.t === 'app' || n.t === 'art'; })();
@@ -643,9 +651,21 @@ export class Shell {
       } else {
         const q = s.t === 'gen' ? s.make(rnd) : s;
         asked++;
-        if (await this.question(q, exam)) firstTry++;
+        this.at = { id: l.id, step: i };
+        const t0 = Date.now();
+        this.rung = 0;
+        this.revealed = false;
+        const ok = await this.question(q, exam);
+        if (mode === 'lesson') recordStep(l.id, i, q.q, { firstTry: ok && this.rung === 0, hints: this.rung, secs: (Date.now() - t0) / 1000, skipped: this.skipped });
+        if (ok) firstTry++;
         else if (this.skipped) skippedQs.push({ n: asked, q });
+        if (!ok && this.revealed && mode === 'lesson') comeBack.push(q);
       }
+    }
+    // Hint ladder, last rung: a question the player was shown the answer to comes back once, near the end.
+    if (comeBack.length) {
+      await t.say('One more look at ' + (comeBack.length === 1 ? 'a question' : 'some questions') + ' from earlier. You have seen how it works now.', 'happy');
+      for (const q of comeBack) { this.rung = 0; this.revealed = false; await this.question(q, false); }
     }
     // A lesson skipped by more than half stays unsigned: no level record, no XP, nothing lights on the chip.
     if (mode === 'lesson' && !signsOff(asked, skippedQs.length)) return this.unsigned(l, asked, skippedQs);
@@ -734,15 +754,15 @@ export class Shell {
       return ok;
     }
     await this.pose(q.q);
-    const tries = exam ? 1 : 3;
+    const tries = exam ? 1 : 4;
     let first = true, gaveUp = false;
     for (let k = 0; k < tries; k++) {
-      const v = (await t.ask({ prompt: 'answer>', chips: exam ? [] : [...(q.hint ? ['hint'] : []), ...(teach ? [{ label: 'teach me how', value: 'teach me' }] : []), 'skip'] })).trim();
+      const v = (await t.ask({ prompt: 'answer>', chips: exam ? [] : ['hint', ...(teach ? [{ label: 'teach me how', value: 'teach me' }] : []), 'skip'] })).trim();
       const lc = v.toLowerCase();
-      if (teach && TEACH_WORDS.test(lc)) { await this.walkThrough(q); return false; }
+      if (teach && TEACH_WORDS.test(lc)) { this.rung = Math.max(this.rung, 3); await this.walkThrough(q); return false; }
       if (!exam && (lc === 'hint' || lc === 'h' || lc === '?')) {
         first = false;
-        await t.say(q.hint ? `Hint: ${q.hint}${teach ? ' (Still stuck? Type `teach me` and I will walk you through it.)' : ''}` : 'No hint for this one, sorry. Give it your best guess.', 'thinking');
+        await t.say(this.ladder(q, !!teach), 'thinking');
         k--;
         continue;
       }
@@ -763,13 +783,34 @@ export class Shell {
       }
       first = false;
       if (exam) break;
-      if (k < tries - 1) await t.say(k === 0 ? `Not quite.${q.hint ? ` ${q.hint}` : ' Try again.'}${teach ? ' Or type `teach me` and I will walk you through the method.' : ''}` : 'Still not it. One more try.', 'concerned');
+      // A miss climbs the hint ladder: a nudge, then a bigger hint, then a worked example, then the answer.
+      if (k < tries - 1) await t.say(`Not quite. ${this.ladder(q, !!teach)}`, 'concerned');
     }
     if (exam) { t.print(`✗ answer: ${q.a.canonical}`, 'err'); return false; }
     if (teach) { await this.offerWalk(q); if (this.taught) return false; }
     this.skipped = gaveUp;
-    await t.say(`The answer is **${q.a.canonical}**. ${q.why}`, 'concerned');
+    this.revealed = true;
+    await t.say(`The answer is **${q.a.canonical}**. ${q.why} We will come back to this one in a moment.`, 'concerned');
     return false;
+  }
+
+  /**
+   * The hint ladder for a typed answer. Each call goes one rung up: a nudge, a bigger hint (the shape of the answer,
+   * or the walk-through if the question has one), then a worked example. After that, the answer is shown and the
+   * question comes back later.
+   */
+  private ladder(q: Question, teach: boolean): string {
+    const rung = this.rung++;
+    if (rung === 0) return q.t === 'ask' && q.hint ? `Nudge: ${q.hint}${teach ? ' (Still stuck? Type `teach me` and I will walk you through it.)' : ''}` : 'Nudge: read the question again, and try the smallest piece of it first.';
+    if (rung === 1) {
+      const c = q.t === 'ask' ? q.a.canonical : '';
+      const shape = /^-?\d+$/.test(c) ? `The answer is a whole number with ${c.replace('-', '').length} digit${c.replace('-', '').length === 1 ? '' : 's'}.`
+        : /^[01]+$/.test(c) ? `The answer is ${c.length} bits long, only 0s and 1s.`
+          : c ? `The answer starts with "${c[0]}".` : 'Think about what each choice would do.';
+      return `Bigger hint: ${shape}${teach ? ' Or type `teach me` for a walk-through.' : ''}`;
+    }
+    if (rung === 2) return `Worked example: ${q.why} Now type the answer yourself.`;
+    return 'That is every hint I have. Type `skip` and I will show the answer and bring it back later.';
   }
 
   /** Display order for options: shuffled, unless the options refer to each other ("both of the above"). */
