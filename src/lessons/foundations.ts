@@ -158,32 +158,46 @@ export const twos: Lesson = {
   concept: "two's complement, overflow, sign extension",
   xp: 70,
   steps: [
-    say('Hardware has no minus sign. So how does a chip store -5? The answer is a trick called **two\'s complement**, and every CPU uses it.'),
-    say('The idea: the top bit is worth a **negative** amount. In 4 bits the weights are -8, 4, 2, 1.'),
+    say('So far our lamps only count up from 0. But a chip also needs numbers **below zero**, like a temperature of -5. It has no minus sign, so it uses a trick with the lamps.'),
+    say('**Why this matters:** every CPU stores negative numbers this way. You will see it when your chip subtracts.'),
+    say('**Step 1: one lamp is worth less than zero.** With 4 lamps the weights were 8, 4, 2, 1. Now we change just the left one to **-8**. The weights are -8, 4, 2, 1.'),
     art(`
   weights:  -8   4   2   1
-   0111  =        4 + 2 + 1  =  +7   (largest)
-   1000  =  -8               =  -8   (smallest)
-   1111  =  -8 + 4 + 2 + 1   =  -1`),
-    ask('In 4-bit two\'s complement, what is `1110`?', num(-2), '-8 + 4 + 2 = -2.', 'The top bit is worth -8 and the rest are normal.'),
-    say('To **negate** a number: invert every bit, then add 1. That is why it is called the two\'s complement.'),
+   0111  =        4 + 2 + 1  =  +7
+   1000  =  -8               =  -8
+   1111  =  -8 + 4 + 2 + 1   =  -1`, 'the left lamp counts as minus'),
+    mc('In 4 lamps with weights -8, 4, 2, 1, what is `1000`?', ['8', '-8'], 1, 'Only the left lamp is on, and it is worth -8.'),
+    ask('What is `1110`? Add up the weights that are on: -8 + 4 + 2.', num(-2), '-8 + 4 + 2 = -2.', 'Add the weights where the lamp is on. The left one is -8.'),
+    say('**Step 2: flipping the sign.** To turn +5 into -5: flip every lamp, then add 1. Here is one done for you.'),
     art(`
    +5  =  0101
-  invert: 1010
-   + 1 :  1011  =  -8 + 2 + 1  =  -5  ✓`),
+  flip :  1010
+   + 1 :  1011  =  -8 + 2 + 1  =  -5  ok`, 'worked example: make -5'),
+    mc('To turn +3 (`0011`) into -3, you first flip every lamp. What do you get?', ['1100', '0011', '1101'], 0, 'Flipping 0011 gives 1100. Then you add 1 to get 1101, which is -3.'),
     gen((r) => {
       const v = between(r, 2, 7);
       const neg = (16 - v) & 15;
-      return ask(`Write **-${v}** in 4-bit two's complement.`, bin(neg, 4), `+${v} = ${v.toString(2).padStart(4, '0')}; invert and add 1 -> ${neg.toString(2).padStart(4, '0')}.`, 'Write the positive value, flip every bit, add 1.');
+      return ask(`Write **-${v}** in 4 lamps. Start with +${v}, flip every lamp, then add 1.`, bin(neg, 4), `+${v} = ${v.toString(2).padStart(4, '0')}; flip and add 1 -> ${neg.toString(2).padStart(4, '0')}.`, 'Write the positive value, flip every lamp, add 1.');
     }),
-    mc('What range fits in an **8-bit signed** number?', ['0 to 255', '-127 to +127', '-128 to +127', '-256 to +255'], 2, 'n bits signed = -2^(n-1) to 2^(n-1) - 1. There is one more negative number than positive because zero takes a slot on the positive side.'),
-    say('The beautiful part: an adder does not care. The same circuit that adds unsigned numbers adds signed ones. The only difference is how you **read** the result, and how you detect **overflow**.'),
-    mc('In 4-bit signed math, what is `0111 + 0001` (7 + 1)?', ['1000 = +8, no overflow', '1000 = -8, overflow', '0000 with a carry out', '0111, it saturates'], 1, '+8 does not fit in 4-bit signed, so the result wraps to -8. Signed overflow happens when two numbers of the same sign produce a result with the other sign.'),
-    say('Last trick: to widen a signed number, copy the top bit into the new bits. That is **sign extension**. Zero-extending a negative number would turn it into a big positive one.'),
-    ask('Sign-extend 4-bit `1010` to 8 bits.', bin(0b11111010, 8), '1010 is negative (top bit 1), so the four new bits are all 1: 1111 1010. Both mean -6.', 'Copy the top bit into the four new positions.'),
-    say('That is the whole secret of signed arithmetic, {name}. In Verilog, forgetting it is one of the most common bugs you will ever see in code review.', 'wink'),
+    say('**Step 3: how far can it go?** 4 lamps can show -8 up to +7. There is one more negative number than positive, because zero uses up one slot on the positive side.'),
+    mc('What is the biggest number 4 lamps can show this way?', ['+7', '+8', '+15'], 0, '0111 is 4 + 2 + 1 = 7. Adding one more would need a lamp worth 8, and that lamp is now -8.'),
+    say('**Step 4: going over the edge.** The adder does not care about signs. It just adds. So if the answer is too big, it **wraps around**, like an odometer. This is called **overflow**.'),
+    art(`
+    0111   (+7)
+  + 0001   (+1)
+  ------
+    1000   (-8)   <- too big, wrapped round`, 'worked example: overflow'),
+    mc('4 lamps: 0111 + 0001 gives 1000. Why is it -8 and not +8?', ['+8 does not fit, so it wrapped around to -8', 'The adder is broken'], 0, 'The biggest number is +7. One more wraps around to the smallest, -8.'),
+    say('**Step 5: making a number longer.** To go from 4 lamps to 8, copy the left lamp into all the new lamps. This is called **sign extension**. It keeps the same value.'),
+    art(`
+   4 lamps:   1010   (-6)
+   8 lamps: 1111 1010   (still -6)
+            ^^^^ copies of the left lamp`, 'worked example: sign extension'),
+    ask('Make `0101` (+5) into 8 lamps by copying the left lamp.', bin(0b00000101, 8), 'The left lamp is 0, so the four new lamps are 0: 0000 0101. Still +5.', 'Copy the left lamp four times in front.'),
+    ask('Make `1010` (-6) into 8 lamps by copying the left lamp.', bin(0b11111010, 8), 'The left lamp is 1, so the four new lamps are 1: 1111 1010. Still -6.', 'Copy the left lamp four times in front.'),
+    say('That is all of it, {name}. Forgetting sign extension is one of the most common bugs in real chip code.', 'wink'),
   ],
-  recap: ['Two\'s complement: the MSB has negative weight.', 'Negate = invert all bits, add 1.', 'n-bit signed range: -2^(n-1) .. 2^(n-1)-1.', 'Widen signed values with sign extension, not zero extension.'],
+  recap: ['The left lamp is worth minus its weight (-8 for 4 lamps).', 'To flip the sign: flip every lamp, add 1.', 'Too big a number wraps around: overflow.', 'To make a number longer, copy the left lamp: sign extension.'],
 };
 
 export const bool: Lesson = {
