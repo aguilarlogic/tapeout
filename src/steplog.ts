@@ -29,6 +29,22 @@ export interface StepLog {
   steps: Record<string, StepRecord>;
   /** Where players left a lesson part-way: lesson id, step index, count. */
   quits: Record<string, number>;
+  /** Logic Lab plays, by lab id. */
+  labs: Record<string, LabRecord>;
+}
+
+/** How a Logic Lab goes: how long until the first wire, how many "Test it" runs, and whether the first run passed. */
+export interface LabRecord {
+  /** Times the lab was opened and a first wire was made. */
+  wired: number;
+  /** Seconds from opening the lab to the first wire, summed over `wired`. */
+  firstWireSecs: number;
+  /** "Test it" runs. */
+  tests: number;
+  /** Runs that passed. */
+  wins: number;
+  /** Wins that came on the first run of a visit. */
+  firstTryWins: number;
 }
 
 /** Steps below this first-try rate get split or get a worked example (the tuning rule for the beginner chapters). */
@@ -39,7 +55,7 @@ export const TARGET_RATE = 0.85;
 const KEY = 'tapeout.steplog.v1';
 let cache: StepLog | null = null;
 
-const blank = (): StepLog => ({ steps: {}, quits: {} });
+const blank = (): StepLog => ({ steps: {}, quits: {}, labs: {} });
 
 export function loadLog(): StepLog {
   if (cache) return cache;
@@ -81,6 +97,26 @@ export function recordQuit(lesson: string, step: number) {
   saveLog();
 }
 
+const blankLab = (): LabRecord => ({ wired: 0, firstWireSecs: 0, tests: 0, wins: 0, firstTryWins: 0 });
+
+/** The first wire of a lab visit, `secs` after the lab opened. */
+export function recordLabFirstWire(lab: string, secs: number) {
+  const log = loadLog();
+  const r = (log.labs[lab] ??= blankLab());
+  r.wired++;
+  r.firstWireSecs += secs;
+  saveLog();
+}
+
+/** One "Test it" run. `attempt` counts the runs in this visit, starting at 1. */
+export function recordLabTest(lab: string, passed: boolean, attempt: number) {
+  const log = loadLog();
+  const r = (log.labs[lab] ??= blankLab());
+  r.tests++;
+  if (passed) { r.wins++; if (attempt === 1) r.firstTryWins++; }
+  saveLog();
+}
+
 export interface StepSummary extends StepRecord {
   rate: number;
   avgHints: number;
@@ -108,7 +144,8 @@ const pct = (x: number) => `${Math.round(x * 100)}%`;
 export function readableReport(log: StepLog = loadLog()): string {
   const rows = summarize(log);
   const quits = Object.entries(log.quits).sort((a, b) => b[1] - a[1]);
-  if (!rows.length && !quits.length) return 'No step data yet. Play a lesson, then run this again.';
+  const labs = Object.entries(log.labs ?? {}).sort((a, b) => a[0].localeCompare(b[0]));
+  if (!rows.length && !quits.length && !labs.length) return 'No step data yet. Play a lesson, then run this again.';
   const tries = rows.reduce((n, r) => n + r.tries, 0);
   const ok = rows.reduce((n, r) => n + r.firstTry, 0);
   const out: string[] = [
@@ -123,6 +160,14 @@ export function readableReport(log: StepLog = loadLog()): string {
   if (quits.length) {
     out.push('', 'QUIT POINTS (lesson#step, times)');
     for (const [k, n] of quits) out.push(`  ${k}  x${n}`);
+  }
+  if (labs.length) {
+    out.push('', 'LOGIC LABS (lab, avg time to first wire, Test it runs per win, first-try wins)');
+    for (const [id, r] of labs) {
+      const wire = r.wired ? `${Math.round(r.firstWireSecs / r.wired)}s to first wire` : 'no wire yet';
+      const per = r.wins ? (r.tests / r.wins).toFixed(1) : '-';
+      out.push(`  ${id.padEnd(14)} ${wire.padEnd(20)} ${r.tests} runs, ${r.wins} wins (${per} runs per win)  first-try ${r.wins ? pct(r.firstTryWins / r.wins) : '-'}`);
+    }
   }
   const flagged = rows.filter((r) => r.flagged);
   out.push('', flagged.length ? `${flagged.length} step(s) under ${pct(SPLIT_BELOW)}: ${flagged.map((r) => `${r.lesson}#${r.step + 1}`).join(', ')}` : `No step is under ${pct(SPLIT_BELOW)}.`);
