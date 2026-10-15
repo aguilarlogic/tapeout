@@ -15,6 +15,18 @@ Goal: find the steps where a total beginner gets stuck. Aim for about 85% right 
 - [ ] Wants to stop. Where?
 - [ ] Smiles, says "oh!", or explains it back to you. These are the good moments, note where.
 
+## Logic labs (the circuit boards)
+Watch the first four labs: First Wire, First NOT, Both Switches (AND) and Enable. On a phone, test both upright and on its side.
+- [ ] Time from opening the lab to the first wire. Over 60 seconds means the board does not say what to do.
+- [ ] Tries to drag from a part's body instead of a dot, or misses a dot more than twice.
+- [ ] Taps a part and reads its one-line explanation. Did it help?
+- [ ] Presses "Test it". Does the tester watch the rows play, and read what the lamp did when a row is wrong?
+- [ ] Opens Hint after a wrong row. Which rung solved it?
+- [ ] Reaction to "Circuit works!": smile, "oh!", or skips straight past it?
+- [ ] Zooms, pans or presses Fit without being told. Gets lost on the board?
+
+Ask: "What did the lamp tell you when it was wrong?" and "What did you just build?"
+
 ## Ask after 20 minutes
 1. In your own words, what is a bit?
 2. What does an AND gate do?
@@ -27,7 +39,8 @@ In the game terminal, type `log export`. It copies a per-step report to the clip
 - the overall first-try rate against the 85% target,
 - each lesson step with first-try %, hints used, seconds spent and skips,
 - steps marked `SPLIT OR ADD A WORKED EXAMPLE` (under 70%),
-- where players quit.
+- where players quit,
+- a LOGIC LABS section: time to first wire, Test it runs per win and first-try wins for each lab.
 
 Nothing is sent over the network. The data lives in that browser only, so run `log export` on the tester's own machine and paste the result to the team.
 
@@ -35,3 +48,5 @@ Nothing is sent over the network. The data lives in that browser only, so run `l
 - Under 70% first try: split the step in two or add a worked example before it.
 - Many quits at one step: that step teaches more than one idea. Split it.
 - A word the tester asked about: define it the first time it appears, in plain words.
+- A lab with more than 3 Test it runs per win, or under 50% first-try wins in Act 1: add a pre-placed part or a sharper hint.
+- Time to first wire over 60 seconds: the goal line or the coach line is not clear enough.
