@@ -53,9 +53,52 @@ function frame(ctx: GameCtx, max: number) {
 
 const btn = (label: string, onclick: () => void, cls = 'btn small') => h('button', { class: cls, onclick }, label);
 
+// ---------------------------------------------------------------- lamps (the gentle first bit game)
+const lamps: MiniGame = {
+  id: 'lamps', title: 'Lamps', icon: '01', lesson: 'bits', rounds: 4,
+  blurb: 'Click the lamps to make the target number. No clock, no pressure.',
+  play(ctx) {
+    const f = frame(ctx, ctx.rounds);
+    let n = 0;
+    const next = () => {
+      if (n >= ctx.rounds) return f.done();
+      f.round = n;
+      // Round 1 uses three lamps (0-7); the rest use four (0-15). The running sum is always on screen.
+      const width = n === 0 ? 3 : 4;
+      const target = int(ctx.r, 1, (1 << width) - 1);
+      let v = 0;
+      let slips = 0;
+      const bits = Array.from({ length: width }, (_, i) => width - 1 - i);
+      const cells = bits.map((b) => h('button', { class: 'bit', onclick: () => { v ^= 1 << b; render(); } }));
+      const readout = h('div', { class: 'mg-readout' });
+      const render = () => {
+        cells.forEach((c, i) => { const on = (v >> bits[i]) & 1; c.textContent = on ? '1' : '0'; c.classList.toggle('on', !!on); });
+        const parts = bits.filter((b) => (v >> b) & 1).map((b) => String(1 << b));
+        readout.textContent = parts.length ? `${parts.join(' + ')} = ${v}` : 'all lamps off = 0';
+        if (v === target) {
+          if (slips <= 3) f.point();
+          f.note('That is it. Lamps that are on add up to the target.', 'ok');
+          cells.forEach((c) => ((c as HTMLButtonElement).disabled = true));
+          n++;
+          setTimeout(next, 1100);
+        } else if (v > target) { slips++; f.note('Too big. Turn off the largest lamp and try a smaller one.'); }
+        else f.note('Add up the lamps that are on. Keep going until you reach the target.');
+      };
+      f.stage.replaceChildren(
+        h('div', { class: 'mg-target' }, 'make ', h('b', null, String(target))),
+        h('div', { class: 'bits' }, ...bits.map((b, i) => h('div', { class: 'bitcol' }, h('small', null, `worth ${1 << b}`), cells[i]))),
+        readout,
+      );
+      f.buttons();
+      render();
+    };
+    next();
+  },
+};
+
 // ---------------------------------------------------------------- bit flipper
 const bitflip: MiniGame = {
-  id: 'bitflip', title: 'Bit Flipper', icon: '01', lesson: 'bits', rounds: 5,
+  id: 'bitflip', title: 'Bit Flipper', icon: '01', lesson: 'hex', rounds: 5,
   blurb: 'Flip the switches until the byte matches the target. Beat the clock for points.',
   play(ctx) {
     const f = frame(ctx, ctx.rounds);
@@ -98,7 +141,7 @@ const bitflip: MiniGame = {
 
 // ---------------------------------------------------------------- truth tables
 const truth: MiniGame = {
-  id: 'truth', title: 'Truth Table', icon: 'TT', lesson: 'bool', rounds: 4,
+  id: 'truth', title: 'Truth Table', icon: 'TT', lesson: 'demorgan', rounds: 4,
   blurb: 'Fill in the output column for each expression. First try scores.',
   play(ctx) {
     const f = frame(ctx, ctx.rounds);
@@ -531,5 +574,5 @@ function hsWave(hs: ReturnType<typeof hsRound>, marked: number[], toggle: (i: nu
   return s;
 }
 
-export const MINIGAMES: MiniGame[] = [bitflip, truth, divider, rcscope, fftrace, cache, branch, mesi, handshake];
+export const MINIGAMES: MiniGame[] = [lamps, bitflip, truth, divider, rcscope, fftrace, cache, branch, mesi, handshake];
 export const findGame = (id: string) => MINIGAMES.find((g) => g.id === id);

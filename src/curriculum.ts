@@ -129,11 +129,11 @@ export const ACTS: Act[] = [
       // The first hour for a total beginner: light a lamp, bits, gates, a half adder (bit 0 of their chip's ALU),
       // the first incident on that half adder, then the same half adder in Verilog. See the First Hour Spec.
       {
-        name: 'Your first chip', modules: [...logic(['first-wire']), lesson('bits'), lesson('bool'), ...logic(['logic-not', 'logic-and', 'logic-half']),
+        name: 'Your first chip', modules: [...logic(['first-wire']), lesson('bits'), lesson('bool'), ...logic(['first-not', 'first-and', 'logic-half']),
           incident('inc-demo-board'), ...mods(RTL_LEVELS, 'rtl', 'rtl', (x) => FIRST_RTL.includes(x.id))],
       },
-      { name: 'Numbers', modules: [prac('practice-bits'), ...drill('twos'), bossMod('boss-numbers'), incident('inc-numbers')] },
-      { name: 'Logic', modules: [prac('practice-bool'), ...logic(['logic-or', 'logic-xor']), incident('inc-logic')] },
+      { name: 'Numbers', modules: [lesson('hex'), prac('practice-bits'), ...drill('twos'), bossMod('boss-numbers'), incident('inc-numbers')] },
+      { name: 'Logic', modules: [prac('practice-bool'), lesson('demorgan'), ...logic(['logic-not', 'logic-and', 'logic-or', 'logic-xor']), incident('inc-logic')] },
       { name: 'Building blocks', modules: [...drill('comb'), ...logic(['logic-mux', 'logic-full']), incident('inc-adder')] },
       { name: 'Memory & state', modules: [...drill('seq'), ...logic(['logic-latch', 'logic-counter']), ...drill('fsm'), bossMod('boss-logic'), incident('inc-controller')] },
       { name: 'Verilog', modules: [...drill('verilog'), ...mods(RTL_LEVELS, 'rtl', 'rtl', (x) => !FIRST_RTL.includes(x.id)), bossMod('boss-hdl'), incident('inc-rtl')] },

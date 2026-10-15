@@ -4,36 +4,74 @@ import { app, art, ask, between, gen, Lesson, mc, pick, say } from './types';
 
 export const bits: Lesson = {
   id: 'bits',
-  title: 'Ones and Zeros',
-  concept: 'binary, bits, bytes, hex',
+  title: 'Switches and Lamps',
+  concept: 'a bit is a switch; counting with lamps',
+  xp: 50,
+  steps: [
+    say("Hi {name}. Let's start with the smallest idea in every computer: a **switch**. It is either **on** or **off**. Nothing in between."),
+    art(`
+   switch UP    ->  lamp ON     =  1
+   switch DOWN  ->  lamp OFF    =  0`, 'one switch = one bit'),
+    say('A chip is made of a huge number of tiny switches. We write **on** as `1` and **off** as `0`. One switch holding a 0 or a 1 is called a **bit**.'),
+    mc('A switch is down. What does its bit say?', ['0', '1'], 0, 'Down means off, and off is 0.'),
+    say('One bit can only say two things. To say bigger things, we put **more switches in a row**. Each lamp is worth a number, and every lamp is worth **double** the one to its right.'),
+    art(`
+   lamp:      [ ]    [ ]    [ ]
+   worth:      4      2      1`, 'three lamps, worth 4, 2 and 1'),
+    say('To make a number, add up the lamps that are **on**. Watch me make 5:'),
+    art(`
+   Make 5:     [ON]   [off]   [ON]
+                4       2       1
+                4   +   0   +   1   =  5
+
+   written down:  1       0       1      ->  101`, 'worked example'),
+    say('The 4-lamp is on and the 1-lamp is on. 4 + 1 = 5. We write the lamps left to right as `101`. That is **binary**.'),
+    ask('Your turn. The lamps read `011`. Which number is that?', num(3), '011: the 2-lamp and the 1-lamp are on, so 2 + 1 = 3.', 'Only add the lamps that show 1. Skip the 0s.'),
+    app('lamps', "Let's practice with real lamps. Click them to make each target number. There is no clock.", 4),
+    gen((r) => {
+      const v = between(r, 1, 7);
+      return ask(`Now backwards. Show **${v}** with three lamps (worth 4, 2, 1). Type the lamps, like 101.`, bin(v, 3), `${v} = ${[4, 2, 1].filter((w) => v & w).join(' + ')}, so the lamps read ${v.toString(2).padStart(3, '0')}.`, 'Start with the biggest lamp, 4. Does it fit in the number? Then try 2, then 1.');
+    }),
+    mc('You have 3 lamps. How many different patterns can they make (all-off counts)?', ['3', '6', '8', '9'], 2, 'Each lamp is on or off, and every extra lamp doubles the choices: 2 x 2 x 2 = 8. They show the numbers 0 to 7.'),
+    ask('Add a fourth lamp, worth 8. What is the biggest number four lamps can show?', num(15), '8 + 4 + 2 + 1 = 15, with every lamp on.', 'Turn every lamp on and add them up.'),
+    say('Why do chips use only on and off? A wire is easy to make **high or low**. It is very hard to make it hold "a little bit in between" reliably. Two states means almost no mistakes.'),
+    say('You can already read binary. Next you will make switches decide things, which is what a **logic gate** does.', 'proud'),
+  ],
+  recap: ['A bit is a switch: 1 is on, 0 is off.', 'Each lamp is worth double the one to its right: 1, 2, 4, 8...', 'Add up the lamps that are on to get the number.', 'n lamps make 2^n patterns: 3 lamps show 0 to 7, 4 lamps show 0 to 15.'],
+};
+
+export const hex: Lesson = {
+  id: 'hex',
+  title: 'Bytes and Hex',
+  concept: 'bytes, 8-bit numbers, hex',
   xp: 60,
   steps: [
-    say("Let's start at the very bottom, {name}. Every chip ever made, from a calculator to a GPU, is billions of wires that are either **high** or **low**."),
-    say('We call high `1` and low `0`. One wire holds one **bit**. Line bits up and you can count, just like decimal, except each column is worth **twice** the one to its right instead of ten times.'),
+    say('You can count with lamps already, {name}. Real chips use **eight** lamps at a time. Eight bits in a row is called a **byte**, and it is about the size of one letter on your screen.'),
     art(`
   bit:     7    6    5    4    3    2    1    0
   weight: 128   64   32   16    8    4    2    1
 
   0b1011  =  8 + 0 + 2 + 1  =  11`, 'place values of an 8-bit number'),
+    say('Same idea as before: every lamp is worth double the one to its right, there are just more of them.'),
     ask('What is binary `0110` in decimal?', num(6), '0110 = 4 + 2 = 6.', 'Add the weights of the columns with a 1: 8, 4, 2, 1 from the left.'),
     gen((r) => {
       const v = between(r, 9, 31);
       return ask(`Your turn in reverse: write **${v}** in binary.`, bin(v), `${v} = ${[16, 8, 4, 2, 1].filter((w) => v & w).join(' + ')}, so ${v.toString(2)}.`, 'Take out the biggest power of two that fits (16, 8, 4, 2, 1) and repeat with what is left.');
     }),
-    say('Binary strings get long fast, so engineers write them in **hexadecimal**: one hex digit is exactly four bits (a nibble). Digits go 0-9 then A-F for 10-15.'),
+    say('Eight 1s and 0s are hard to read at a glance. So engineers use a shorter way to write them, called **hexadecimal** (hex for short): one hex digit stands for exactly four bits (a nibble). Digits go 0-9 then A-F for 10-15.'),
     art(`
   1101 0110   (binary)
      D    6   (hex)   ->  0xD6  =  214`),
-    app('bitflip', "Let me pull up a little toy I made. Flip the switches to match the number. Get quick at this and every hex dump you ever read gets easier.", 5),
+    app('bitflip', 'Here is a toy. Flip the eight switches to match the number. Some targets are written in hex, so use the nibble trick.', 4),
     gen((r) => {
       const v = between(r, 0x1a, 0xfe);
       return ask(`Convert binary \`${v.toString(2).padStart(8, '0').replace(/(....)(....)/, '$1 $2')}\` to hex.`, hexa(v, 2), `Each nibble maps to one hex digit: ${v.toString(16).toUpperCase().padStart(2, '0')}.`, 'Split it into two groups of four and convert each group on its own.');
     }),
     mc('How many different values can **8 bits** represent?', ['8', '255', '256', '512'], 2, '2^8 = 256 values: 0 through 255. The max value is 255, but there are 256 of them, a classic off-by-one.'),
     ask('How many bits do you need to count from 0 to 1000?', num(10), '2^9 = 512 is too few, 2^10 = 1024 covers it. In Verilog you would write `$clog2(1001)`.', 'Find the smallest power of two that is bigger than 1000.'),
-    say('Nice. You now speak the native language of every chip on Earth.', 'proud'),
+    say('Nice. Now you can read the numbers engineers write every day.', 'proud'),
   ],
-  recap: ['Each bit position is worth twice the one to its right.', 'One hex digit = 4 bits; two = one byte.', 'n bits hold 2^n values: 0 to 2^n - 1.', 'Bits needed for N values = ceil(log2 N).'],
+  recap: ['Eight bits make a byte.', 'One hex digit = 4 bits; two = one byte.', 'n bits hold 2^n values: 0 to 2^n - 1.', 'Bits needed for N values = ceil(log2 N).'],
 };
 
 export const twos: Lesson = {
@@ -72,20 +110,65 @@ export const twos: Lesson = {
 
 export const bool: Lesson = {
   id: 'bool',
-  title: 'Thinking in Logic',
-  concept: 'gates, truth tables, De Morgan',
+  title: 'Gates: Switches That Decide',
+  concept: 'AND, OR, NOT, XOR in plain words',
+  xp: 60,
+  steps: [
+    say('A single switch just sits there. A **logic gate** is a tiny part that looks at its input switches and **decides** what its output lamp does. There are only a few kinds, and we will meet them one at a time.'),
+    say('First, **AND**. Think of a door that opens only if you have the key **and** you know the code. You need both.'),
+    art(`
+   key  code | door (AND)
+    0    0   |   0
+    0    1   |   0
+    1    0   |   0
+    1    1   |   1      <- only when BOTH are 1`, 'AND: the output is 1 only if both inputs are 1'),
+    mc('An AND gate gets inputs 1 and 0. What does it output?', ['0', '1'], 0, 'AND needs both inputs to be 1. One of them is 0, so the output is 0.'),
+    say('Second, **OR**. Think of a hallway light with two switches. The light turns on if **either** switch is on, or both.'),
+    art(`
+   A B | OR
+   0 0 |  0
+   0 1 |  1
+   1 0 |  1
+   1 1 |  1      <- 1 if AT LEAST ONE input is 1`, 'OR: the output is 1 if either input is 1'),
+    mc('An OR gate gets inputs 0 and 1. What does it output?', ['0', '1'], 1, 'OR only needs one input to be 1. B is 1, so the output is 1.'),
+    say('Third, **NOT**. It has one input and it simply **flips** it. 1 becomes 0, and 0 becomes 1.'),
+    mc('A NOT gate gets a 0. What does it output?', ['0', '1'], 1, 'NOT flips its input, so 0 becomes 1.'),
+    say('Last, **XOR**, said "ex-or". It lights up when the two inputs are **different**.'),
+    art(`
+   A B | XOR
+   0 0 |  0     same -> 0
+   0 1 |  1     different -> 1
+   1 0 |  1     different -> 1
+   1 1 |  0     same -> 0`, 'XOR: 1 when the inputs differ'),
+    mc('Which gate outputs 1 only when its two inputs **differ**?', ['AND', 'OR', 'XOR', 'NOT'], 2, 'XOR is the "difference detector". You will use it to build an adder in a moment.'),
+    gen((r) => {
+      const g = pick(r, [
+        { n: 'AND', f: (x: number, y: number) => x & y },
+        { n: 'OR', f: (x: number, y: number) => x | y },
+        { n: 'XOR', f: (x: number, y: number) => x ^ y },
+      ]);
+      const x = between(r, 0, 1), y = between(r, 0, 1);
+      return ask(`A ${g.n} gate gets A = ${x} and B = ${y}. What is its output?`, num(g.f(x, y)), `${g.n}(${x}, ${y}) = ${g.f(x, y)}.`, 'Say the rule out loud: AND wants both, OR wants either, XOR wants different.');
+    }),
+    say('Four gates, and you can already read any of them. Now you get to wire them up yourself.', 'excited'),
+  ],
+  recap: ['AND: 1 only if both inputs are 1.', 'OR: 1 if at least one input is 1.', 'NOT: flips its input.', 'XOR: 1 when the two inputs are different.'],
+};
+
+export const demorgan: Lesson = {
+  id: 'demorgan',
+  title: 'NAND, NOR and De Morgan',
+  concept: 'NAND, NOR, De Morgan, universal gates',
   xp: 70,
   steps: [
-    say('Bits are the nouns. **Logic gates** are the verbs. There are only a handful, and every digital circuit is built from them.'),
+    say('You know AND, OR, NOT and XOR. Two more gates come up all the time: **NAND** is AND with its output flipped, and **NOR** is OR with its output flipped.'),
     art(`
-   A B | AND  OR  XOR  NAND  NOR       NOT A
-   0 0 |  0    0   0     1    1          1
+   A B | AND  OR  XOR  NAND  NOR
+   0 0 |  0    0   0     1    1
    0 1 |  0    1   1     1    0
-   1 0 |  0    1   1     1    0          0
+   1 0 |  0    1   1     1    0
    1 1 |  1    1   0     0    0`, 'the gates you will use every day'),
-    say('Read them as sentences. AND: "both". OR: "either". XOR: "different". NAND and NOR are just AND and OR with the output inverted.'),
-    mc('Which gate outputs 1 only when its two inputs **differ**?', ['AND', 'OR', 'XOR', 'NOR'], 2, 'XOR is the "difference detector". It is the heart of adders, parity and comparators.'),
-    app('truth', 'Here, fill in some truth tables for me. Click an output cell to flip it.', 4),
+    app('truth', 'Fill in some truth tables for me. Click an output cell to flip it.', 3),
     say('Now the most useful law in digital design, **De Morgan\'s**. To push an inversion through a gate, flip the gate: AND becomes OR and vice versa.'),
     art(`
    !(A & B)  ==  !A | !B       NAND = OR of inverted inputs
@@ -103,7 +186,7 @@ export const bool: Lesson = {
     mc('Why do chip designers love **NAND**?', ['It switches faster than any other gate', 'Any logic function can be built from it', 'It needs fewer transistors than NOT', 'Synthesis tools can only map to NAND gates'], 1, 'Any logic function can be built from NANDs alone: NAND (and NOR) are universal. In CMOS a NAND is also cheap: 4 transistors. Next, you will prove it by building other gates from NANDs.'),
     say('Enough theory. Time to build.', 'excited'),
   ],
-  recap: ['AND = both, OR = either, XOR = different.', 'NAND and NOR are universal gates.', 'De Morgan: !(A&B) = !A|!B and !(A|B) = !A&!B.', 'Any truth table can be written as an OR of AND terms (sum of products).'],
+  recap: ['NAND = AND flipped, NOR = OR flipped.', 'NAND and NOR are universal gates.', 'De Morgan: !(A&B) = !A|!B and !(A|B) = !A&!B.', 'Any truth table can be written as an OR of AND terms (sum of products).'],
 };
 
 export const ohm: Lesson = {
@@ -224,4 +307,4 @@ export const mos: Lesson = {
   recap: ['NMOS: on with gate=1, pulls down. PMOS: on with gate=0, pulls up.', 'CMOS: complementary pull-up/pull-down; no static current.', 'Series in pull-down = parallel in pull-up (duality).', 'Single CMOS stages are inverting: NAND2 = 4T, AND2 = 6T.'],
 };
 
-export const FOUNDATION_LESSONS = [bits, twos, bool, ohm, rc, mos];
+export const FOUNDATION_LESSONS = [bits, hex, twos, bool, demorgan, ohm, rc, mos];

@@ -7,7 +7,7 @@ const E = (terms: string, def: string, lesson?: string): Entry => ({ terms: term
 
 export const GLOSSARY: Entry[] = [
   E('bit|binary', 'A single binary digit, 0 or 1: one wire, high or low. Binary counts in powers of two.', 'bits'),
-  E('hex|hexadecimal|nibble', 'Base 16. One hex digit = 4 bits (a nibble), so a byte is two hex digits: 0xD6 = 1101 0110.', 'bits'),
+  E('hex|hexadecimal|nibble', 'Base 16. One hex digit = 4 bits (a nibble), so a byte is two hex digits: 0xD6 = 1101 0110.', 'hex'),
   E("two's complement|twos complement|signed", 'The standard way to store signed integers: the top bit has negative weight. Negate by inverting all bits and adding 1.', 'twos'),
   E('overflow', 'A result that does not fit in the available bits. Signed overflow: adding two numbers of the same sign gives a result of the other sign.', 'twos'),
   E('sign extension', 'Widening a signed number by copying its top bit into the new bits, so its value is preserved.', 'twos'),
@@ -48,8 +48,8 @@ export const GLOSSARY: Entry[] = [
   E('virtual memory|page table|paging|page fault', 'Each process gets a private address space; the MMU translates pages via page tables. Missing pages trap as page faults.', 'os'),
   E('mutex|race condition|deadlock', 'A race: interleaved accesses give wrong results. A mutex serializes them. Deadlock: a cycle of threads each waiting on the next.', 'os'),
   E('dma|interrupt|polling', 'Ways to do I/O: polling (CPU checks), interrupts (device signals), DMA (device moves data itself).', 'os'),
-  E('de morgan|demorgan', '!(A & B) = !A | !B and !(A | B) = !A & !B. Push an inversion through a gate by flipping AND/OR.', 'bool'),
-  E('nand|nor|universal gate', 'NAND and NOR are universal: any logic function can be built from either alone.', 'bool'),
+  E('de morgan|demorgan', '!(A & B) = !A | !B and !(A | B) = !A & !B. Push an inversion through a gate by flipping AND/OR.', 'demorgan'),
+  E('nand|nor|universal gate', 'NAND and NOR are universal: any logic function can be built from either alone.', 'demorgan'),
   E('mux|multiplexer', 'Selects one of several inputs with select bits: N inputs need log2(N) selects.', 'comb'),
   E('full adder|half adder|ripple carry', 'A half adder adds two bits (sum = a^b, carry = a&b). Full adders also take a carry-in and chain into ripple-carry adders.', 'comb'),
   E('latch', 'A level-sensitive storage element: transparent while enabled. In RTL, an unintended latch comes from an incomplete combinational assignment.', 'seq'),

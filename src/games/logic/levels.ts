@@ -65,6 +65,22 @@ export const LOGIC_LEVELS: LogicLevel[] = [
     solve: (b) => { b.wire(IN(b, 'in'), OUT(b, 'out')); },
   },
   {
+    id: 'first-not', title: 'Flip It', concept: 'a NOT gate flips a signal', xp: 40, mode: 'gate',
+    brief: '<p>A <b>NOT gate</b> flips a signal: 1 comes out as 0, and 0 comes out as 1.</p><p>Drag a <b>NOT</b> from the parts bin onto the board. Wire the switch <code>a</code> into it, and wire its output to the lamp <code>y</code>. Then click the switch: the lamp should do the <b>opposite</b>.</p>',
+    palette: ['NOT'], inputs: ['a'], outputs: ['y'], par: 1,
+    spec: truth((i) => ({ y: bit(!i.a) })),
+    hints: ['Add one NOT. Its input is on the left and its output is on the right.', 'Wire a to the NOT, then the NOT to y.'],
+    solve: (b) => { const g = b.add('NOT'); b.wire(IN(b, 'a'), a(g)).wire(y(g), OUT(b, 'y')); },
+  },
+  {
+    id: 'first-and', title: 'Both Switches', concept: 'an AND gate needs both inputs', xp: 50, mode: 'gate',
+    brief: '<p>An <b>AND gate</b> lights its lamp only when <b>both</b> switches are on.</p><p>Drag an <b>AND</b> onto the board. Wire switches <code>a</code> and <code>b</code> into its two inputs, and its output to the lamp <code>y</code>. Click the switches to check all four combinations.</p>',
+    palette: ['AND'], inputs: ['a', 'b'], outputs: ['y'], par: 1,
+    spec: truth((i) => ({ y: bit(i.a && i.b) })),
+    hints: ['One AND gate is enough.', 'Wire a to the top input, b to the bottom input, and the output to y.'],
+    solve: (b) => { const g = b.add('AND'); b.wire(IN(b, 'a'), a(g)).wire(IN(b, 'b'), bb(g)).wire(y(g), OUT(b, 'y')); },
+  },
+  {
     id: 'logic-not', title: 'NAND Is Universal', concept: 'NOT from NAND', xp: 60, mode: 'gate',
     brief: '<p>Your only part is a 2-input <b>NAND</b>. Build an inverter: <code>y = !a</code>.</p><p>Drag a NAND from the parts bin, then drag from pin to pin to wire it. Click an input switch to toggle it and watch the signals light up.</p>',
     palette: ['NAND'], inputs: ['a'], outputs: ['y'], par: 1,
@@ -119,10 +135,10 @@ export const LOGIC_LEVELS: LogicLevel[] = [
   },
   {
     id: 'logic-half', title: 'Half Adder', concept: 'sum and carry', xp: 70, mode: 'gate',
-    brief: '<p>Add two bits: <code>sum</code> is the low bit and <code>carry</code> the high bit of <code>a + b</code>.</p>',
-    palette: ['XOR', 'AND', 'OR', 'NOT', 'NAND'], inputs: ['a', 'b'], outputs: ['sum', 'carry'], par: 2,
+    brief: '<p>Let\'s add two bits. Here is every case:</p><table class="mini"><tr><th>a</th><th>b</th><th>a + b</th><th>sum</th><th>carry</th></tr><tr><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td></tr><tr><td>0</td><td>1</td><td>1</td><td>1</td><td>0</td></tr><tr><td>1</td><td>0</td><td>1</td><td>1</td><td>0</td></tr><tr><td>1</td><td>1</td><td>2 (written 10)</td><td>0</td><td>1</td></tr></table><p><code>sum</code> is the right-hand digit and <code>carry</code> is the left-hand digit. Look at the two columns: one of them is an <b>XOR</b> and the other is an <b>AND</b>. Wire one of each. This is bit 0 of your chip\'s adder.</p>',
+    palette: ['XOR', 'AND'], inputs: ['a', 'b'], outputs: ['sum', 'carry'], par: 2,
     spec: truth((i) => ({ sum: bit(i.a ^ i.b), carry: bit(i.a & i.b) })),
-    hints: ['1 + 1 = 10 in binary.', 'sum = a ^ b, carry = a & b.'],
+    hints: ['sum is 1 when the inputs are different. Which gate says "different"?', 'carry is 1 only when both inputs are 1. Which gate says "both"?', 'Connect a and b to both gates. The XOR goes to sum and the AND goes to carry.'],
     solve: (b) => {
       const x = b.add('XOR'), n = b.add('AND');
       b.wire(IN(b, 'a'), a(x)).wire(IN(b, 'b'), bb(x)).wire(IN(b, 'a'), a(n)).wire(IN(b, 'b'), bb(n));

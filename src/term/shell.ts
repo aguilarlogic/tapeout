@@ -126,8 +126,8 @@ export class Shell {
     await t.say(`Nice to meet you, ${name}.`, 'wink');
     // One question for a total beginner, then straight to building something; the job question waits until they
     // have seen the work. Players who already know some of it get the full set of questions and the plan.
-    await t.say('One question before we start: have you ever built a circuit or written code?');
-    if ((await t.choose(['Never. Start me from zero.', 'Yes, I have.'])) === 0) {
+    await t.say('One question before we start: have you built circuits or written code before? Either answer is fine.');
+    if ((await t.choose(['Start me from zero.', 'I already know some of this.'])) === 0) {
       await t.say('Perfect. Zero is a great place to start, and you will not read a chapter first. In the next hour you build the first piece of your own chip. We start by lighting a lamp.', 'excited');
       this.queue.push('next');
       return;
