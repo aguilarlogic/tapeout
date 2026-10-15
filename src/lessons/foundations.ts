@@ -4,36 +4,152 @@ import { app, art, ask, between, gen, Lesson, mc, pick, say } from './types';
 
 export const bits: Lesson = {
   id: 'bits',
-  title: 'Ones and Zeros',
-  concept: 'binary, bits, bytes, hex',
+  title: 'Switches and Lamps',
+  concept: 'a bit is a switch; counting with lamps',
+  xp: 50,
+  steps: [
+    // 1. One lamp.
+    say("Hi {name}. Let's start with the smallest idea in every computer: a **switch**. It is either **on** or **off**. Nothing in between."),
+    say('**Why this matters:** every wire inside the chip you are about to build is one of these switches.'),
+    art(`
+   switch UP    ->  lamp ON   = 1
+   switch DOWN  ->  lamp OFF  = 0`, 'one switch = one bit'),
+    say('A chip is made of a huge number of tiny switches. We write **on** as `1` and **off** as `0`. One switch holding a 0 or a 1 is called a **bit**.'),
+    mc('A switch is down. What does its bit say?', ['0', '1'], 0, 'Down means off, and off is 0.'),
+    // 2. Two lamps count 0 to 3.
+    say('One lamp can only say two things. Put **two lamps** side by side and they can say four: 0, 1, 2 and 3. The left lamp is worth **2**, the right lamp is worth **1**. Add up the lamps that are on.'),
+    art(`
+   worth:     2     1
+            [off] [off]  = 0
+            [off] [ON ]  = 1
+            [ON ] [off]  = 2
+            [ON ] [ON ]  = 2 + 1 = 3`, 'two lamps count 0 to 3'),
+    mc('Two lamps: the left one (worth 2) is on, the right one (worth 1) is off. Which number is that?', ['1', '2', '3'], 1, 'Only the 2-lamp is on, so the number is 2.'),
+    ask('Your turn. The lamps read `11`. Which number is that?', num(3), 'Both lamps are on: 2 + 1 = 3.', 'Add the worth of each lamp that shows 1.'),
+    gen((r) => {
+      const v = between(r, 0, 3);
+      return ask(`Now backwards. Show **${v}** with two lamps (worth 2 and 1). Type the lamps, like 10.`, bin(v, 2), `${v} = ${[2, 1].filter((w) => v & w).join(' + ') || '0'}, so the lamps read ${v.toString(2).padStart(2, '0')}.`, 'Is the 2-lamp needed? Then is the 1-lamp needed?');
+    }),
+    // 3. Four lamps count 0 to 15, next to the decimal columns they know.
+    say('Now four lamps. You already count with columns: in the number 1000 the columns are worth 1, 10, 100 and 1000, and **each column is worth ten times the one to its right**. Lamps work the same way, but each lamp is worth **two times** the one to its right.'),
+    art(`
+   columns you know:
+     1000   100   10   1    (x10 each)
+   lamps:
+        8     4    2   1    (x2 each)`, 'decimal columns next to lamp columns'),
+    say('To make a number, add up the lamps that are on. Watch me make 13:'),
+    art(`
+   Make 13:  [ON ] [ON ] [off] [ON ]
+               8     4     2     1
+             8 + 4 + 0 + 1 = 13
+
+   written:    1     1     0     1
+                  so: 1101`, 'worked example'),
+    mc('To make 13 we used the 8-lamp and the 1-lamp. Which other lamp was on?', ['The 2-lamp', 'The 4-lamp'], 1, '8 + 4 + 1 = 13. The 2-lamp stays off.'),
+    ask('Your turn. The lamps read `0110`. Which number is that?', num(6), '0110: the 4-lamp and the 2-lamp are on, so 4 + 2 = 6.', 'Only add the lamps that show 1. Skip the 0s.'),
+    app('lamps', "Let's practice with real lamps. Click them to make each target number. There is no clock.", 4),
+    gen((r) => {
+      const v = between(r, 1, 15);
+      return ask(`Now backwards. Show **${v}** with four lamps (worth 8, 4, 2, 1). Type the lamps, like 1010.`, bin(v, 4), `${v} = ${[8, 4, 2, 1].filter((w) => v & w).join(' + ')}, so the lamps read ${v.toString(2).padStart(4, '0')}.`, 'Start with the biggest lamp, 8. Does it fit in the number? Then try 4, then 2, then 1.');
+    }),
+    mc('You have 4 lamps. How many different patterns can they make (all-off counts)?', ['4', '8', '15', '16'], 3, 'Each lamp is on or off, and every extra lamp doubles the choices: 2 x 2 x 2 x 2 = 16. They show the numbers 0 to 15.'),
+    say('Why do chips use only on and off? A wire is easy to make **high or low**. It is very hard to make it hold "a little bit in between" reliably. Two states means almost no mistakes.'),
+    say('You can already read binary. Next you will make switches decide things, which is what a **logic gate** does.', 'proud'),
+  ],
+  recap: ['A bit is a switch: 1 is on, 0 is off.', 'Each lamp is worth double the one to its right: 1, 2, 4, 8.', 'Add up the lamps that are on to get the number.', 'Four lamps show 0 to 15.'],
+};
+
+export const bitadd: Lesson = {
+  id: 'bitadd',
+  title: 'Adding with Lamps',
+  concept: 'adding binary numbers, carry',
   xp: 60,
   steps: [
-    say("Let's start at the very bottom, {name}. Every chip ever made, from a calculator to a GPU, is billions of wires that are either **high** or **low**."),
-    say('We call high `1` and low `0`. One wire holds one **bit**. Line bits up and you can count, just like decimal, except each column is worth **twice** the one to its right instead of ten times.'),
+    say('You can already add numbers with columns. When a column gets too full, you **carry** to the next one. Lamps work the same way, and the half adder you built does exactly this.'),
+    say('**Why this matters:** the adder in your chip is just this, done by gates, millions of times a second.'),
     art(`
-  bit:     7    6    5    4    3    2    1    0
-  weight: 128   64   32   16    8    4    2    1
+   decimal:  9 + 1 = 10
+     a column is full at 10:
+     write 0, carry 1
 
-  0b1011  =  8 + 0 + 2 + 1  =  11`, 'place values of an 8-bit number'),
-    ask('What is binary `0110` in decimal?', num(6), '0110 = 4 + 2 = 6.', 'Add the weights of the columns with a 1: 8, 4, 2, 1 from the left.'),
-    gen((r) => {
-      const v = between(r, 9, 31);
-      return ask(`Your turn in reverse: write **${v}** in binary.`, bin(v), `${v} = ${[16, 8, 4, 2, 1].filter((w) => v & w).join(' + ')}, so ${v.toString(2)}.`, 'Take out the biggest power of two that fits (16, 8, 4, 2, 1) and repeat with what is left.');
-    }),
-    say('Binary strings get long fast, so engineers write them in **hexadecimal**: one hex digit is exactly four bits (a nibble). Digits go 0-9 then A-F for 10-15.'),
+   lamps:    1 + 1 = 10
+     a column is full at 2:
+     write 0, carry 1`, 'a column carries when it is full'),
+    say('In decimal a column holds 0 to 9. A lamp column holds only 0 or 1. So **1 + 1 is already full**: write 0 and carry 1. Watch me add 3 + 1:'),
     art(`
-  1101 0110   (binary)
-     D    6   (hex)   ->  0xD6  =  214`),
-    app('bitflip', "Let me pull up a little toy I made. Flip the switches to match the number. Get quick at this and every hex dump you ever read gets easier.", 5),
+   carries:    1  1
+   3 =       0  0  1  1
+   1 =     + 0  0  0  1
+             ---------
+   4 =       0  1  0  0
+
+   1st: 1 + 1 = 10, write 0, carry 1
+   2nd: 1 + 0 + carry = 10, write 0,
+        carry 1
+   3rd: 0 + 0 + carry = 1, write 1`, 'worked example: 0011 + 0001'),
+    mc('In the right-hand lamp column, 1 + 1 gives what?', ['Write 2, carry nothing', 'Write 0, carry 1', 'Write 1, carry 1'], 1, 'A lamp column is full at 2. So 1 + 1 = 10: write 0 and carry the 1.'),
+    ask('Your turn. Add `0010` and `0001`. Type the answer in lamps.', bin(3, 4), '0010 is 2 and 0001 is 1. 2 + 1 = 3, which is 0011. No lamp column got full, so nothing carried.', 'The right column is 0 + 1. The next column is 1 + 0.'),
+    gen((r) => {
+      const a = between(r, 1, 7), b = between(r, 1, 7);
+      return ask(`Add \`${a.toString(2).padStart(4, '0')}\` and \`${b.toString(2).padStart(4, '0')}\`. Type the answer in lamps (4 lamps).`, bin(a + b, 4), `${a} + ${b} = ${a + b}, which is ${(a + b).toString(2).padStart(4, '0')} in lamps. Carry from the right whenever a column is full.`, 'Go one column at a time from the right. Carry a 1 whenever a column adds up to 2.');
+    }),
+    mc('Which two inputs make the half adder\'s **carry** light come on?', ['Only A on', 'Only B on', 'Both A and B on'], 2, 'The carry is 1 only when 1 + 1 fills the column. That means both inputs are on.'),
+    say('You just did what the half adder does: the sum lamp is the column you write, and the carry lamp is the 1 you carry.', 'proud'),
+  ],
+  recap: ['A lamp column is full at 2, so 1 + 1 = 10.', 'Write the right-hand digit and carry the left-hand digit.', 'Work one column at a time, from the right.', 'The half adder\'s sum and carry are exactly this.'],
+};
+
+export const hex: Lesson = {
+  id: 'hex',
+  title: 'Hex: Nicknames for Four Lamps',
+  concept: 'hexadecimal as nicknames for groups of four lamps',
+  xp: 70,
+  steps: [
+    say('Here is a problem. You have to read this row of sixteen lamps out loud to a friend:'),
+    art(`
+   1 0 1 1 0 0 1 1 1 1 1 0 0 1 0 1`, 'sixteen lamps in a row'),
+    ask('How many 1s are in that row? Take your time and count.', num(10), 'There are 10 ones. That was slow and easy to get wrong, and engineers read rows like this all day.', 'Count the 1s one by one. Try touching each one.'),
+    say('Long rows of lamps are painful. Here is the fix: **cut the row into groups of four**. Four lamps count 0 to 15, so each group is one number from 0 to 15.'),
+    art(`
+   1011  0011  1110  0101
+    11     3    14     5
+   four groups, each a number 0-15`),
+    say('Two of those numbers need two digits (11 and 14). That is awkward. We ran out of digits after 9! So for 10 to 15 we borrow letters: **A = 10, B = 11, C = 12, D = 13, E = 14, F = 15**. This is **hexadecimal**, or **hex**: a nickname for each group of four lamps.'),
+    art(`
+   0000 = 0     1000 = 8
+   0001 = 1     1001 = 9
+   0010 = 2     1010 = A
+   0011 = 3     1011 = B
+   0100 = 4     1100 = C
+   0101 = 5     1101 = D
+   0110 = 6     1110 = E
+   0111 = 7     1111 = F`, 'the chart: four lamps and their nickname'),
+    say('Watch me: the group `1011` is 8 + 2 + 1 = 11, and 11 is **B**. So `1011` has the nickname B.'),
+    mc('Look at the chart. What is the nickname for `1010`?', ['9', 'A', 'B', 'C'], 1, '1010 is 8 + 2 = 10, and 10 is the letter A.'),
+    ask('Your turn, with the chart above. What is the hex nickname for `1101`?', hexa(13, 1), '1101 is 8 + 4 + 1 = 13, and 13 is D.', 'Add up the lamps (8, 4, 2, 1), then look the number up: 10 is A, 11 is B, 12 is C, 13 is D.'),
+    gen((r) => {
+      const v = between(r, 10, 15);
+      return ask(`What is the hex nickname for \`${v.toString(2)}\` (4 lamps)?`, hexa(v, 1), `${v.toString(2)} is ${v}, and ${v} is ${v.toString(16).toUpperCase()}.`, 'Add up the lamps, then use the letters: 10 is A, 11 is B, 12 is C, 13 is D, 14 is E, 15 is F.');
+    }),
+    say('Now the chart goes away. You will use it less each time, and it is okay to peek with a hint.'),
+    gen((r) => {
+      const v = between(r, 1, 15);
+      return ask(`No chart this time. What is the hex nickname for \`${v.toString(2).padStart(4, '0')}\`?`, hexa(v, 1), `${v.toString(2).padStart(4, '0')} is ${v}, so its nickname is ${v.toString(16).toUpperCase()}.`, 'Add up the lamps (8, 4, 2, 1). From 10 up, use A to F.');
+    }),
+    say('A byte is eight lamps: **two groups of four, so two hex digits**. Each group gets its own nickname. In Verilog you write a hex number as `8\'hD6`, which means "an 8-lamp number, hex, D6".'),
+    art(`
+   1101 0110   eight lamps (a byte)
+     D    6    two hex digits: D6
+   Verilog writes it: 8'hD6`, 'a byte is two hex digits'),
     gen((r) => {
       const v = between(r, 0x1a, 0xfe);
-      return ask(`Convert binary \`${v.toString(2).padStart(8, '0').replace(/(....)(....)/, '$1 $2')}\` to hex.`, hexa(v, 2), `Each nibble maps to one hex digit: ${v.toString(16).toUpperCase().padStart(2, '0')}.`, 'Split it into two groups of four and convert each group on its own.');
+      return ask(`Write this byte as two hex digits: \`${v.toString(2).padStart(8, '0').replace(/(....)(....)/, '$1 $2')}\``, hexa(v, 2), `Each group of four is one nickname: ${v.toString(16).toUpperCase().padStart(2, '0')}.`, 'Do the left group of four, then the right group of four, one at a time.');
     }),
-    mc('How many different values can **8 bits** represent?', ['8', '255', '256', '512'], 2, '2^8 = 256 values: 0 through 255. The max value is 255, but there are 256 of them, a classic off-by-one.'),
-    ask('How many bits do you need to count from 0 to 1000?', num(10), '2^9 = 512 is too few, 2^10 = 1024 covers it. In Verilog you would write `$clog2(1001)`.', 'Find the smallest power of two that is bigger than 1000.'),
-    say('Nice. You now speak the native language of every chip on Earth.', 'proud'),
+    app('bitflip', 'Here is a toy. Flip the eight lamps to match the number. Some targets are written in hex, so use the groups-of-four trick.', 4),
+    mc('Why do engineers use hex?', ['It is a short way to write long rows of lamps', 'Chips store numbers in letters', 'It is faster for the chip to add'], 0, 'Hex is only a shorthand for people. The chip still works with 1s and 0s. Four lamps become one hex digit, so long rows become short.'),
+    say('Now you can read the numbers engineers write every day.', 'proud'),
   ],
-  recap: ['Each bit position is worth twice the one to its right.', 'One hex digit = 4 bits; two = one byte.', 'n bits hold 2^n values: 0 to 2^n - 1.', 'Bits needed for N values = ceil(log2 N).'],
+  recap: ['A group of four lamps is a number from 0 to 15.', 'Hex gives each group a one-character nickname: 0-9, then A to F for 10 to 15.', 'A byte (eight lamps) is two hex digits.', 'Hex is only a shorthand for people; the chip uses 1s and 0s.'],
 };
 
 export const twos: Lesson = {
@@ -42,50 +158,110 @@ export const twos: Lesson = {
   concept: "two's complement, overflow, sign extension",
   xp: 70,
   steps: [
-    say('Hardware has no minus sign. So how does a chip store -5? The answer is a trick called **two\'s complement**, and every CPU uses it.'),
-    say('The idea: the top bit is worth a **negative** amount. In 4 bits the weights are -8, 4, 2, 1.'),
+    say('So far our lamps only count up from 0. But a chip also needs numbers **below zero**, like a temperature of -5. It has no minus sign, so it uses a trick with the lamps.'),
+    say('**Why this matters:** every CPU stores negative numbers this way. You will see it when your chip subtracts.'),
+    say('**Step 1: one lamp is worth less than zero.** With 4 lamps the weights were 8, 4, 2, 1. Now we change just the left one to **-8**. The weights are -8, 4, 2, 1.'),
     art(`
   weights:  -8   4   2   1
-   0111  =        4 + 2 + 1  =  +7   (largest)
-   1000  =  -8               =  -8   (smallest)
-   1111  =  -8 + 4 + 2 + 1   =  -1`),
-    ask('In 4-bit two\'s complement, what is `1110`?', num(-2), '-8 + 4 + 2 = -2.', 'The top bit is worth -8 and the rest are normal.'),
-    say('To **negate** a number: invert every bit, then add 1. That is why it is called the two\'s complement.'),
+   0111  =        4 + 2 + 1  =  +7
+   1000  =  -8               =  -8
+   1111  =  -8 + 4 + 2 + 1   =  -1`, 'the left lamp counts as minus'),
+    mc('In 4 lamps with weights -8, 4, 2, 1, what is `1000`?', ['8', '-8'], 1, 'Only the left lamp is on, and it is worth -8.'),
+    ask('What is `1110`? Add up the weights that are on: -8 + 4 + 2.', num(-2), '-8 + 4 + 2 = -2.', 'Add the weights where the lamp is on. The left one is -8.'),
+    say('**Step 2: flipping the sign.** To turn +5 into -5: flip every lamp, then add 1. Here is one done for you.'),
     art(`
    +5  =  0101
-  invert: 1010
-   + 1 :  1011  =  -8 + 2 + 1  =  -5  ✓`),
+  flip :  1010
+   + 1 :  1011  =  -8 + 2 + 1  =  -5  ok`, 'worked example: make -5'),
+    mc('To turn +3 (`0011`) into -3, you first flip every lamp. What do you get?', ['1100', '0011', '1101'], 0, 'Flipping 0011 gives 1100. Then you add 1 to get 1101, which is -3.'),
     gen((r) => {
       const v = between(r, 2, 7);
       const neg = (16 - v) & 15;
-      return ask(`Write **-${v}** in 4-bit two's complement.`, bin(neg, 4), `+${v} = ${v.toString(2).padStart(4, '0')}; invert and add 1 -> ${neg.toString(2).padStart(4, '0')}.`, 'Write the positive value, flip every bit, add 1.');
+      return ask(`Write **-${v}** in 4 lamps. Start with +${v}, flip every lamp, then add 1.`, bin(neg, 4), `+${v} = ${v.toString(2).padStart(4, '0')}; flip and add 1 -> ${neg.toString(2).padStart(4, '0')}.`, 'Write the positive value, flip every lamp, add 1.');
     }),
-    mc('What range fits in an **8-bit signed** number?', ['0 to 255', '-127 to +127', '-128 to +127', '-256 to +255'], 2, 'n bits signed = -2^(n-1) to 2^(n-1) - 1. There is one more negative number than positive because zero takes a slot on the positive side.'),
-    say('The beautiful part: an adder does not care. The same circuit that adds unsigned numbers adds signed ones. The only difference is how you **read** the result, and how you detect **overflow**.'),
-    mc('In 4-bit signed math, what is `0111 + 0001` (7 + 1)?', ['1000 = +8, no overflow', '1000 = -8, overflow', '0000 with a carry out', '0111, it saturates'], 1, '+8 does not fit in 4-bit signed, so the result wraps to -8. Signed overflow happens when two numbers of the same sign produce a result with the other sign.'),
-    say('Last trick: to widen a signed number, copy the top bit into the new bits. That is **sign extension**. Zero-extending a negative number would turn it into a big positive one.'),
-    ask('Sign-extend 4-bit `1010` to 8 bits.', bin(0b11111010, 8), '1010 is negative (top bit 1), so the four new bits are all 1: 1111 1010. Both mean -6.', 'Copy the top bit into the four new positions.'),
-    say('That is the whole secret of signed arithmetic, {name}. In Verilog, forgetting it is one of the most common bugs you will ever see in code review.', 'wink'),
+    say('**Step 3: how far can it go?** 4 lamps can show -8 up to +7. There is one more negative number than positive, because zero uses up one slot on the positive side.'),
+    mc('What is the biggest number 4 lamps can show this way?', ['+7', '+8', '+15'], 0, '0111 is 4 + 2 + 1 = 7. Adding one more would need a lamp worth 8, and that lamp is now -8.'),
+    say('**Step 4: going over the edge.** The adder does not care about signs. It just adds. So if the answer is too big, it **wraps around**, like an odometer. This is called **overflow**.'),
+    art(`
+    0111   (+7)
+  + 0001   (+1)
+  ------
+    1000   (-8)   <- too big, wrapped round`, 'worked example: overflow'),
+    mc('4 lamps: 0111 + 0001 gives 1000. Why is it -8 and not +8?', ['+8 does not fit, so it wrapped around to -8', 'The adder is broken'], 0, 'The biggest number is +7. One more wraps around to the smallest, -8.'),
+    say('**Step 5: making a number longer.** To go from 4 lamps to 8, copy the left lamp into all the new lamps. This is called **sign extension**. It keeps the same value.'),
+    art(`
+   4 lamps:   1010   (-6)
+   8 lamps: 1111 1010   (still -6)
+            ^^^^ copies of the left lamp`, 'worked example: sign extension'),
+    ask('Make `0101` (+5) into 8 lamps by copying the left lamp.', bin(0b00000101, 8), 'The left lamp is 0, so the four new lamps are 0: 0000 0101. Still +5.', 'Copy the left lamp four times in front.'),
+    ask('Make `1010` (-6) into 8 lamps by copying the left lamp.', bin(0b11111010, 8), 'The left lamp is 1, so the four new lamps are 1: 1111 1010. Still -6.', 'Copy the left lamp four times in front.'),
+    say('That is all of it, {name}. Forgetting sign extension is one of the most common bugs in real chip code.', 'wink'),
   ],
-  recap: ['Two\'s complement: the MSB has negative weight.', 'Negate = invert all bits, add 1.', 'n-bit signed range: -2^(n-1) .. 2^(n-1)-1.', 'Widen signed values with sign extension, not zero extension.'],
+  recap: ['The left lamp is worth minus its weight (-8 for 4 lamps).', 'To flip the sign: flip every lamp, add 1.', 'Too big a number wraps around: overflow.', 'To make a number longer, copy the left lamp: sign extension.'],
 };
 
 export const bool: Lesson = {
   id: 'bool',
-  title: 'Thinking in Logic',
-  concept: 'gates, truth tables, De Morgan',
+  title: 'Gates: Switches That Decide',
+  concept: 'AND, OR, NOT, XOR in plain words',
+  xp: 60,
+  steps: [
+    say('A single switch just sits there. A **logic gate** is a tiny part that looks at its input switches and **decides** what its output lamp does. There are only a few kinds, and we will meet them one at a time.'),
+    say('**Why this matters:** gates are the parts your chip\'s adder is made of.'),
+    say('First, **AND**. Think of a door that opens only if you have the key **and** you know the code. You need both.'),
+    art(`
+   key  code | door (AND)
+    0    0   |   0
+    0    1   |   0
+    1    0   |   0
+    1    1   |   1      <- only when BOTH are 1`, 'AND: the output is 1 only if both inputs are 1'),
+    mc('An AND gate gets inputs 1 and 0. What does it output?', ['0', '1'], 0, 'AND needs both inputs to be 1. One of them is 0, so the output is 0.'),
+    say('Second, **OR**. Think of a hallway light with two switches. The light turns on if **either** switch is on, or both.'),
+    art(`
+   A B | OR
+   0 0 |  0
+   0 1 |  1
+   1 0 |  1
+   1 1 |  1      <- 1 if AT LEAST ONE input is 1`, 'OR: the output is 1 if either input is 1'),
+    mc('An OR gate gets inputs 0 and 1. What does it output?', ['0', '1'], 1, 'OR only needs one input to be 1. B is 1, so the output is 1.'),
+    say('Third, **NOT**. It has one input and it simply **flips** it. 1 becomes 0, and 0 becomes 1.'),
+    mc('A NOT gate gets a 0. What does it output?', ['0', '1'], 1, 'NOT flips its input, so 0 becomes 1.'),
+    say('Last, **XOR**, said "ex-or". It lights up when the two inputs are **different**.'),
+    art(`
+   A B | XOR
+   0 0 |  0     same -> 0
+   0 1 |  1     different -> 1
+   1 0 |  1     different -> 1
+   1 1 |  0     same -> 0`, 'XOR: 1 when the inputs differ'),
+    mc('Which gate outputs 1 only when its two inputs **differ**?', ['AND', 'OR', 'XOR', 'NOT'], 2, 'XOR is the "difference detector". You will use it to build an adder in a moment.'),
+    gen((r) => {
+      const g = pick(r, [
+        { n: 'AND', f: (x: number, y: number) => x & y },
+        { n: 'OR', f: (x: number, y: number) => x | y },
+        { n: 'XOR', f: (x: number, y: number) => x ^ y },
+      ]);
+      const x = between(r, 0, 1), y = between(r, 0, 1);
+      return ask(`A ${g.n} gate gets A = ${x} and B = ${y}. What is its output?`, num(g.f(x, y)), `${g.n}(${x}, ${y}) = ${g.f(x, y)}.`, 'Say the rule out loud: AND wants both, OR wants either, XOR wants different.');
+    }),
+    say('Four gates, and you can already read any of them. Now you get to wire them up yourself.', 'excited'),
+  ],
+  recap: ['AND: 1 only if both inputs are 1.', 'OR: 1 if at least one input is 1.', 'NOT: flips its input.', 'XOR: 1 when the two inputs are different.'],
+};
+
+export const demorgan: Lesson = {
+  id: 'demorgan',
+  title: 'NAND, NOR and De Morgan',
+  concept: 'NAND, NOR, De Morgan, universal gates',
   xp: 70,
   steps: [
-    say('Bits are the nouns. **Logic gates** are the verbs. There are only a handful, and every digital circuit is built from them.'),
+    say('You know AND, OR, NOT and XOR. Two more gates come up all the time: **NAND** is AND with its output flipped, and **NOR** is OR with its output flipped.'),
     art(`
-   A B | AND  OR  XOR  NAND  NOR       NOT A
-   0 0 |  0    0   0     1    1          1
+   A B | AND  OR  XOR  NAND  NOR
+   0 0 |  0    0   0     1    1
    0 1 |  0    1   1     1    0
-   1 0 |  0    1   1     1    0          0
+   1 0 |  0    1   1     1    0
    1 1 |  1    1   0     0    0`, 'the gates you will use every day'),
-    say('Read them as sentences. AND: "both". OR: "either". XOR: "different". NAND and NOR are just AND and OR with the output inverted.'),
-    mc('Which gate outputs 1 only when its two inputs **differ**?', ['AND', 'OR', 'XOR', 'NOR'], 2, 'XOR is the "difference detector". It is the heart of adders, parity and comparators.'),
-    app('truth', 'Here, fill in some truth tables for me. Click an output cell to flip it.', 4),
+    app('truth', 'Fill in some truth tables for me. Click an output cell to flip it.', 3),
     say('Now the most useful law in digital design, **De Morgan\'s**. To push an inversion through a gate, flip the gate: AND becomes OR and vice versa.'),
     art(`
    !(A & B)  ==  !A | !B       NAND = OR of inverted inputs
@@ -100,10 +276,10 @@ export const bool: Lesson = {
       ]);
       return ask(f.q, expr(f.c, ['a', 'b', 'c'], f.fn), f.why, 'Think about which rows of the truth table must be 1, then OR together a term for each.');
     }),
-    mc('Why do chip designers love **NAND**?', ['It switches faster than any other gate', 'Any logic function can be built from it', 'It needs fewer transistors than NOT', 'Synthesis tools can only map to NAND gates'], 1, 'Any logic function can be built from NANDs alone: NAND (and NOR) are universal. In CMOS a NAND is also cheap: 4 transistors. Next, you will prove it by building other gates from NANDs.'),
+    mc('Why do chip designers love **NAND**?', ['It switches faster than any other gate', 'Any logic function can be built from it', 'It needs fewer transistors than NOT', 'Synthesis tools can only map to NAND gates'], 1, 'Any logic function can be built from NANDs alone: NAND (and NOR) are universal. In CMOS a NAND is also cheap: 4 transistors. If you like a challenge, you can try building other gates from NANDs.'),
     say('Enough theory. Time to build.', 'excited'),
   ],
-  recap: ['AND = both, OR = either, XOR = different.', 'NAND and NOR are universal gates.', 'De Morgan: !(A&B) = !A|!B and !(A|B) = !A&!B.', 'Any truth table can be written as an OR of AND terms (sum of products).'],
+  recap: ['NAND = AND flipped, NOR = OR flipped.', 'NAND and NOR are universal gates.', 'De Morgan: !(A&B) = !A|!B and !(A|B) = !A&!B.', 'Any truth table can be written as an OR of AND terms (sum of products).'],
 };
 
 export const ohm: Lesson = {
@@ -224,4 +400,4 @@ export const mos: Lesson = {
   recap: ['NMOS: on with gate=1, pulls down. PMOS: on with gate=0, pulls up.', 'CMOS: complementary pull-up/pull-down; no static current.', 'Series in pull-down = parallel in pull-up (duality).', 'Single CMOS stages are inverting: NAND2 = 4T, AND2 = 6T.'],
 };
 
-export const FOUNDATION_LESSONS = [bits, twos, bool, ohm, rc, mos];
+export const FOUNDATION_LESSONS = [bits, bitadd, hex, twos, bool, demorgan, ohm, rc, mos];

@@ -20,6 +20,8 @@ import { award, promotionLine, type Promotion } from '../mastery/promotion';
 import { finishGoal, type GoalResult } from '../daily';
 import { dayKey, MILESTONE_XP, MIX_RECORD, streakLine } from '../streak';
 import { signsOff } from './stakes';
+import { pick as pickRecall, pool as poolRecall, record as recordRecall } from '../recall';
+import { readableReport, recordQuit, recordStep } from '../steplog';
 import { GOAL_CHOICES, progressReport, runWrap, wrapDue } from './wrap';
 
 const pickOne = <T>(xs: T[]) => xs[Math.floor(Math.random() * xs.length)];
@@ -36,6 +38,11 @@ export class Shell {
   private taught = false;
   /** Set by `question()` when the player skipped the problem and did not walk through it. */
   private skipped = false;
+  /** Hints given on the current question (the hint ladder), and whether the player ended up shown the answer. */
+  private rung = 0;
+  private revealed = false;
+  /** The lesson step the player is on, so a quit can be logged. */
+  private at: { id: string; step: number } | null = null;
   /** The shell is idle, waiting at its prompt. */
   private atPrompt = false;
 
@@ -106,8 +113,51 @@ export class Shell {
     const next = recommended();
     await t.say(pickOne([`Welcome back, {name}.`, `Hey, {name}. Good to see you again.`, `{name}! I kept your workstation warm.`]), 'happy');
     t.print(`rank: **${r.title}** · ${xp} XP · tapeout readiness ${readiness()}%${r.next ? ` · ${r.next.xp - xp} XP to ${r.next.title}` : ''}`);
+    await this.recall();
     if (next) await t.say(`Next up: **${next.title}** (${KIND_LABEL[next.kind].toLowerCase()}, ${findModule(next.id)!.act.name}). Type \`next\` or click below. Or ask me anything, like \`what is a latch\`.`);
     else await t.say('You have finished everything. Every block of your chip is signed off. Want to replay something for stars, or run the arcade?', 'proud');
+  }
+
+  /** On return: up to three quick questions from lessons already finished, on a spaced schedule. Skippable. */
+  private async recall() {
+    const t = this.term;
+    const items = pickRecall(poolRecall());
+    if (!items.length) return;
+    const go = await t.choose(['Warm up with 3 quick questions', 'Skip, take me to my next step'], 'warm-up>');
+    if (go !== 0) return;
+    await t.say('Quick warm-up. These come from things you already did. No hints, no score.', 'happy');
+    let right = 0;
+    for (const it of items) {
+      await t.say(it.q.q, 'thinking');
+      const order = this.order(it.q.options);
+      const pick = await t.choose(order.map((j) => it.q.options[j]), 'answer>');
+      const ok = order[pick] === it.q.a;
+      recordRecall(it.key, ok);
+      if (ok) right++;
+      else await t.say(`Not quite. ${it.q.why} It will come back soon.`, 'concerned');
+    }
+    await t.say(right === items.length ? 'All right. Nice memory.' : `${right} of ${items.length}. Good, now it will stick better.`, right === items.length ? 'proud' : 'happy');
+  }
+
+  /** Four quick questions that decide whether to skip ahead. Returns how many were right. No hints, no pressure. */
+  private async placement(): Promise<number> {
+    const t = this.term;
+    const qs: [string, string[], number][] = [
+      ['A row of three lamps reads on, off, on. Each lamp is worth 4, 2 and 1. Which number is that?', ['3', '5', '6', '7'], 1],
+      ['An AND gate gets a 1 on one input and a 0 on the other. What does it output?', ['0', '1', 'It depends on the gate size'], 0],
+      ['A half adder adds two bits. What are its two outputs?', ['sum and carry', 'clock and reset', 'read and write'], 0],
+      ['In Verilog, what does `assign y = a & b;` describe?', ['An AND gate that is always connected', 'A line that runs once at the start', 'A value stored in memory'], 0],
+    ];
+    let right = 0;
+    for (let i = 0; i < qs.length; i++) {
+      const [q, opts, a] = qs[i];
+      await t.say(`**Question ${i + 1} of ${qs.length}.** ${q}`, 'thinking');
+      const order = this.order(opts);
+      const pick = await t.choose([...order.map((j) => opts[j]), "I don't know"], 'answer>');
+      if (pick < order.length && order[pick] === a) right++;
+    }
+    t.print(`${right} of ${qs.length} right`, 'dim');
+    return right;
   }
 
   private async onboard() {
@@ -124,18 +174,22 @@ export class Shell {
     const prof: Profile = { name, background: 'new', goal: 'unsure', since: Date.now() };
     setProfile(prof);
     await t.say(`Nice to meet you, ${name}.`, 'wink');
-    // One question for a total beginner, then straight to building something; the job question waits until they
-    // have seen the work. Players who already know some of it get the full set of questions and the plan.
-    await t.say('One question before we start: have you ever built a circuit or written code?');
-    if ((await t.choose(['Never. Start me from zero.', 'Yes, I have.'])) === 0) {
+    // No self-rating: a beginner starts from zero, and anyone who wants to skip ahead proves it with four quick
+    // questions. Self-ratings are unreliable, so the answers decide the path, not the player's description of themselves.
+    await t.say('How do you want to start?');
+    if ((await t.choose(['Start me from zero.', 'Let me skip ahead. Ask me four quick questions.'])) === 0) {
       await t.say('Perfect. Zero is a great place to start, and you will not read a chapter first. In the next hour you build the first piece of your own chip. We start by lighting a lamp.', 'excited');
       this.queue.push('next');
       return;
     }
-    await t.say('How much do you know?');
-    const bg = 1 + await t.choose(["Some. I'm studying EE, CE or CS.", 'A lot. I work in (or near) the industry.']);
-    prof.background = (['new', 'student', 'pro'] as const)[bg];
-    await t.say(['Great, then you know the basics. We can move fast and fill the gaps.', 'Excellent. Then I will skip the pleasantries and aim for the hard stuff.'][bg - 1], 'happy');
+    const right = await this.placement();
+    if (right < 3) {
+      await t.say(right === 0 ? 'No problem at all. Those were meant to be tricky if you have not seen them. We will start from zero, and it goes fast.' : 'You know a little. We will start from the beginning and you will move quickly through the parts you know.', 'happy');
+      this.queue.push('next');
+      return;
+    }
+    prof.background = 'student';
+    await t.say('You clearly know the basics. We can move fast and fill the gaps. You can jump anywhere any time with `ls` and `learn <name>`.', 'happy');
     await t.say('And what do you want to become?');
     const goal = await t.choose(GOAL_CHOICES.map(([label]) => label));
     prof.goal = GOAL_CHOICES[goal][1];
@@ -266,10 +320,10 @@ export class Shell {
   /** `log export`: the progress report as JSON, copied to the clipboard when the browser allows it, else shown. */
   private async logExport() {
     const t = this.term;
-    const text = JSON.stringify(progressReport(), null, 2);
+    const text = `${readableReport()}\n\n--- progress (JSON) ---\n${JSON.stringify(progressReport(), null, 2)}`;
     let copied = false;
     try { await navigator.clipboard.writeText(text); copied = true; } catch { /* no clipboard here: show it below */ }
-    if (copied) return t.print(`Copied your progress log to the clipboard (${text.length} characters).`, 'dim');
+    if (copied) return t.print(`Copied your playtest log (per-step summary and progress) to the clipboard (${text.length} characters).`, 'dim');
     void t.block(h('figure', { class: 'term-art' }, h('pre', null, text)), 'instant');
     t.print('The clipboard is not available here. Copy the log above.', 'dim');
   }
@@ -605,10 +659,11 @@ export class Shell {
     try {
       await this.lesson(lesson, exam ? 'final' : bossDef ? 'boss' : 'lesson');
     } catch (e) {
-      if (e instanceof Interrupted) { if (!(e instanceof Redirect)) this.term.print('(lesson paused, run it again any time)', 'dim'); }
+      if (e instanceof Interrupted) { if (this.at) recordQuit(this.at.id, this.at.step); if (!(e instanceof Redirect)) this.term.print('(lesson paused, run it again any time)', 'dim'); }
       else throw e;
     } finally {
       this.busy = false;
+      this.at = null;
       setMood('neutral');
     }
   }
@@ -626,6 +681,7 @@ export class Shell {
     const rnd = Math.random;
     let asked = 0, firstTry = 0;
     const skippedQs: { n: number; q: Question }[] = [];
+    const comeBack: Question[] = [];
     for (let i = 0; i < l.steps.length; i++) {
       const s = l.steps[i];
       const nextIsQuestion = (() => { const n = l.steps[i + 1]; return !n || n.t === 'ask' || n.t === 'mc' || n.t === 'gen' || n.t === 'app' || n.t === 'art'; })();
@@ -643,9 +699,21 @@ export class Shell {
       } else {
         const q = s.t === 'gen' ? s.make(rnd) : s;
         asked++;
-        if (await this.question(q, exam)) firstTry++;
+        this.at = { id: l.id, step: i };
+        const t0 = Date.now();
+        this.rung = 0;
+        this.revealed = false;
+        const ok = await this.question(q, exam);
+        if (mode === 'lesson') recordStep(l.id, i, q.q, { firstTry: ok && this.rung === 0, hints: this.rung, secs: (Date.now() - t0) / 1000, skipped: this.skipped });
+        if (ok) firstTry++;
         else if (this.skipped) skippedQs.push({ n: asked, q });
+        if (!ok && this.revealed && !this.skipped && mode === 'lesson') comeBack.push(q);
       }
+    }
+    // Hint ladder, last rung: a question the player was shown the answer to comes back once, near the end.
+    if (comeBack.length) {
+      await t.say('One more look at ' + (comeBack.length === 1 ? 'a question' : 'some questions') + ' from earlier. You have seen how it works now.', 'happy');
+      for (const q of comeBack) { this.rung = 0; this.revealed = false; await this.question(q, false); }
     }
     // A lesson skipped by more than half stays unsigned: no level record, no XP, nothing lights on the chip.
     if (mode === 'lesson' && !signsOff(asked, skippedQs.length)) return this.unsigned(l, asked, skippedQs);
@@ -734,15 +802,15 @@ export class Shell {
       return ok;
     }
     await this.pose(q.q);
-    const tries = exam ? 1 : 3;
+    const tries = exam ? 1 : 4;
     let first = true, gaveUp = false;
     for (let k = 0; k < tries; k++) {
-      const v = (await t.ask({ prompt: 'answer>', chips: exam ? [] : [...(q.hint ? ['hint'] : []), ...(teach ? [{ label: 'teach me how', value: 'teach me' }] : []), 'skip'] })).trim();
+      const v = (await t.ask({ prompt: 'answer>', chips: exam ? [] : ['hint', ...(teach ? [{ label: 'teach me how', value: 'teach me' }] : []), 'skip'] })).trim();
       const lc = v.toLowerCase();
-      if (teach && TEACH_WORDS.test(lc)) { await this.walkThrough(q); return false; }
+      if (teach && TEACH_WORDS.test(lc)) { this.rung = Math.max(this.rung, 3); await this.walkThrough(q); return false; }
       if (!exam && (lc === 'hint' || lc === 'h' || lc === '?')) {
         first = false;
-        await t.say(q.hint ? `Hint: ${q.hint}${teach ? ' (Still stuck? Type `teach me` and I will walk you through it.)' : ''}` : 'No hint for this one, sorry. Give it your best guess.', 'thinking');
+        await t.say(this.ladder(q, !!teach), 'thinking');
         k--;
         continue;
       }
@@ -763,13 +831,34 @@ export class Shell {
       }
       first = false;
       if (exam) break;
-      if (k < tries - 1) await t.say(k === 0 ? `Not quite.${q.hint ? ` ${q.hint}` : ' Try again.'}${teach ? ' Or type `teach me` and I will walk you through the method.' : ''}` : 'Still not it. One more try.', 'concerned');
+      // A miss climbs the hint ladder: a nudge, then a bigger hint, then a worked example, then the answer.
+      if (k < tries - 1) await t.say(`Not quite. ${this.ladder(q, !!teach)}`, 'concerned');
     }
     if (exam) { t.print(`✗ answer: ${q.a.canonical}`, 'err'); return false; }
     if (teach) { await this.offerWalk(q); if (this.taught) return false; }
     this.skipped = gaveUp;
-    await t.say(`The answer is **${q.a.canonical}**. ${q.why}`, 'concerned');
+    this.revealed = true;
+    await t.say(`The answer is **${q.a.canonical}**. ${q.why} We will come back to this one in a moment.`, 'concerned');
     return false;
+  }
+
+  /**
+   * The hint ladder for a typed answer. Each call goes one rung up: a nudge, a bigger hint (the shape of the answer,
+   * or the walk-through if the question has one), then a worked example. After that, the answer is shown and the
+   * question comes back later.
+   */
+  private ladder(q: Question, teach: boolean): string {
+    const rung = this.rung++;
+    if (rung === 0) return q.t === 'ask' && q.hint ? `Nudge: ${q.hint}${teach ? ' (Still stuck? Type `teach me` and I will walk you through it.)' : ''}` : 'Nudge: read the question again, and try the smallest piece of it first.';
+    if (rung === 1) {
+      const c = q.t === 'ask' ? q.a.canonical : '';
+      const shape = /^-?\d+$/.test(c) ? `The answer is a whole number with ${c.replace('-', '').length} digit${c.replace('-', '').length === 1 ? '' : 's'}.`
+        : /^[01]+$/.test(c) ? `The answer is ${c.length} bits long, only 0s and 1s.`
+          : c ? `The answer starts with "${c[0]}".` : 'Think about what each choice would do.';
+      return `Bigger hint: ${shape}${teach ? ' Or type `teach me` for a walk-through.' : ''}`;
+    }
+    if (rung === 2) return `Worked example: ${q.why} Now type the answer yourself.`;
+    return 'That is every hint I have. Type `skip` and I will show the answer and bring it back later.';
   }
 
   /** Display order for options: shuffled, unless the options refer to each other ("both of the above"). */

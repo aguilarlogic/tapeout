@@ -1,6 +1,7 @@
 // TAPEOUT's minigames. Each one renders into a desktop window, runs a few rounds and reports a score.
 import type { Mood, Rng } from '../lessons/types';
 import { h, svg } from '../ui/dom';
+import { hexTaught } from '../hexgate';
 import {
   bpNext, bpPredict, BP_STATES, bpStream, CACHE, cacheRun, cacheStream, CAP_VALUES, DIV_TARGETS, DIV_TOL, divOut, ffRound,
   hsRound, int, Mesi, mesiOps, mesiStep, RC_TARGETS, RC_TOL, rcMetric, RES_VALUES, rows, TRUTH_ROUNDS,
@@ -10,6 +11,8 @@ export interface GameCtx {
   host: HTMLElement;
   r: Rng;
   rounds: number;
+  /** Opened from inside a lesson, rather than from the arcade. */
+  fromLesson?: boolean;
   finish: (score: number, max: number) => void;
   say: (text: string, mood?: Mood) => void;
 }
@@ -53,31 +56,79 @@ function frame(ctx: GameCtx, max: number) {
 
 const btn = (label: string, onclick: () => void, cls = 'btn small') => h('button', { class: cls, onclick }, label);
 
-// ---------------------------------------------------------------- bit flipper
-const bitflip: MiniGame = {
-  id: 'bitflip', title: 'Bit Flipper', icon: '01', lesson: 'bits', rounds: 5,
-  blurb: 'Flip the switches until the byte matches the target. Beat the clock for points.',
+// ---------------------------------------------------------------- lamps (the gentle first bit game)
+const lamps: MiniGame = {
+  id: 'lamps', title: 'Lamps', icon: '01', lesson: 'bits', rounds: 4,
+  blurb: 'Click the lamps to make the target number. No clock, no pressure.',
   play(ctx) {
     const f = frame(ctx, ctx.rounds);
     let n = 0;
     const next = () => {
       if (n >= ctx.rounds) return f.done();
       f.round = n;
-      const target = int(ctx.r, 1, 255);
-      const asHex = n % 2 === 1;
+      // Round 1 uses three lamps (0-7); the rest use four (0-15). The running sum is always on screen.
+      const width = n === 0 ? 3 : 4;
+      const target = int(ctx.r, 1, (1 << width) - 1);
+      let v = 0;
+      let slips = 0;
+      const bits = Array.from({ length: width }, (_, i) => width - 1 - i);
+      const cells = bits.map((b) => h('button', { class: 'bit', onclick: () => { v ^= 1 << b; render(); } }));
+      const readout = h('div', { class: 'mg-readout' });
+      const render = () => {
+        cells.forEach((c, i) => { const on = (v >> bits[i]) & 1; c.textContent = on ? '1' : '0'; c.classList.toggle('on', !!on); });
+        const parts = bits.filter((b) => (v >> b) & 1).map((b) => String(1 << b));
+        readout.textContent = parts.length ? `${parts.join(' + ')} = ${v}` : 'all lamps off = 0';
+        if (v === target) {
+          if (slips <= 3) f.point();
+          f.note('That is it. Lamps that are on add up to the target.', 'ok');
+          cells.forEach((c) => ((c as HTMLButtonElement).disabled = true));
+          n++;
+          setTimeout(next, 1100);
+        } else if (v > target) { slips++; f.note('Too big. Turn off the largest lamp and try a smaller one.'); }
+        else f.note('Add up the lamps that are on. Keep going until you reach the target.');
+      };
+      f.stage.replaceChildren(
+        h('div', { class: 'mg-target' }, 'make ', h('b', null, String(target))),
+        h('div', { class: 'bits' }, ...bits.map((b, i) => h('div', { class: 'bitcol' }, h('small', null, `worth ${1 << b}`), cells[i]))),
+        readout,
+      );
+      f.buttons();
+      render();
+    };
+    next();
+  },
+};
+
+// ---------------------------------------------------------------- bit flipper
+const bitflip: MiniGame = {
+  id: 'bitflip', title: 'Bit Flipper', icon: '01', lesson: 'hex', rounds: 5,
+  blurb: 'Flip the lamps until the number matches the target. Starts with four lamps and no clock.',
+  play(ctx) {
+    const f = frame(ctx, ctx.rounds);
+    // Four lamps and decimal targets until hex has been taught (the hex lesson itself opens it with hex targets).
+    const hexMode = hexTaught() || !!ctx.fromLesson;
+    const width = hexMode ? 8 : 4;
+    // The clock is opt-in: off by default, switched on with the button. With it on, a round scores only under 15 s.
+    let timed = false;
+    let n = 0;
+    const next = () => {
+      if (n >= ctx.rounds) return f.done();
+      f.round = n;
+      const target = int(ctx.r, 1, (1 << width) - 1);
+      const asHex = hexMode && n % 2 === 1;
       let v = 0;
       const t0 = performance.now();
-      const bits = Array.from({ length: 8 }, (_, i) => 7 - i);
+      const bits = Array.from({ length: width }, (_, i) => width - 1 - i);
       const cells = bits.map((b) => h('button', { class: 'bit', onclick: () => { v ^= 1 << b; render(); } }));
       const readout = h('div', { class: 'mg-readout' });
       const render = () => {
         cells.forEach((c, i) => { const on = (v >> bits[i]) & 1; c.textContent = String(on); c.classList.toggle('on', !!on); });
-        readout.textContent = `= ${v}  ·  0x${v.toString(16).toUpperCase().padStart(2, '0')}`;
+        readout.textContent = hexMode ? `= ${v}  ·  0x${v.toString(16).toUpperCase().padStart(2, '0')}` : `= ${v}`;
         if (v === target) {
           const secs = (performance.now() - t0) / 1000;
-          const fast = secs < 15;
+          const fast = !timed || secs < 15;
           if (fast) f.point();
-          f.note(fast ? `Match in ${secs.toFixed(1)} s!` : `Match, but ${secs.toFixed(1)} s. Under 15 s scores.`, fast ? 'ok' : '');
+          f.note(!timed ? 'Match!' : fast ? `Match in ${secs.toFixed(1)} s!` : `Match, but ${secs.toFixed(1)} s. Under 15 s scores.`, fast ? 'ok' : '');
           cells.forEach((c) => ((c as HTMLButtonElement).disabled = true));
           n++;
           setTimeout(next, 900);
@@ -88,8 +139,9 @@ const bitflip: MiniGame = {
         h('div', { class: 'bits' }, ...bits.map((b, i) => h('div', { class: 'bitcol' }, h('small', null, String(1 << b)), cells[i]))),
         readout,
       );
-      f.note(asHex ? 'Hex: each digit is a nibble (4 bits).' : 'Decimal: add up the weights of the 1s.');
-      f.buttons();
+      f.note(asHex ? 'Hex: each digit is a group of four lamps.' : 'Add up the worth of the lamps that are on.');
+      const clock = btn(timed ? 'Clock: on' : 'Clock: off', () => { timed = !timed; clock.textContent = timed ? 'Clock: on' : 'Clock: off'; });
+      f.buttons(clock);
       render();
     };
     next();
@@ -98,7 +150,7 @@ const bitflip: MiniGame = {
 
 // ---------------------------------------------------------------- truth tables
 const truth: MiniGame = {
-  id: 'truth', title: 'Truth Table', icon: 'TT', lesson: 'bool', rounds: 4,
+  id: 'truth', title: 'Truth Table', icon: 'TT', lesson: 'demorgan', rounds: 4,
   blurb: 'Fill in the output column for each expression. First try scores.',
   play(ctx) {
     const f = frame(ctx, ctx.rounds);
@@ -531,5 +583,5 @@ function hsWave(hs: ReturnType<typeof hsRound>, marked: number[], toggle: (i: nu
   return s;
 }
 
-export const MINIGAMES: MiniGame[] = [bitflip, truth, divider, rcscope, fftrace, cache, branch, mesi, handshake];
+export const MINIGAMES: MiniGame[] = [lamps, bitflip, truth, divider, rcscope, fftrace, cache, branch, mesi, handshake];
 export const findGame = (id: string) => MINIGAMES.find((g) => g.id === id);
