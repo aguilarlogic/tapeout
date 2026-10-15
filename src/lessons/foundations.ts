@@ -12,19 +12,18 @@ export const bits: Lesson = {
     say("Hi {name}. Let's start with the smallest idea in every computer: a **switch**. It is either **on** or **off**. Nothing in between."),
     say('**Why this matters:** every wire inside the chip you are about to build is one of these switches.'),
     art(`
-   switch UP    ->  lamp ON     =  1
-   switch DOWN  ->  lamp OFF    =  0`, 'one switch = one bit'),
+   switch UP    ->  lamp ON   = 1
+   switch DOWN  ->  lamp OFF  = 0`, 'one switch = one bit'),
     say('A chip is made of a huge number of tiny switches. We write **on** as `1` and **off** as `0`. One switch holding a 0 or a 1 is called a **bit**.'),
     mc('A switch is down. What does its bit say?', ['0', '1'], 0, 'Down means off, and off is 0.'),
     // 2. Two lamps count 0 to 3.
     say('One lamp can only say two things. Put **two lamps** side by side and they can say four: 0, 1, 2 and 3. The left lamp is worth **2**, the right lamp is worth **1**. Add up the lamps that are on.'),
     art(`
-   lamps:     [off] [off]   = 0 + 0 = 0
-              [off] [ON ]   = 0 + 1 = 1
-              [ON ] [off]   = 2 + 0 = 2
-              [ON ] [ON ]   = 2 + 1 = 3
-
-   worth:       2     1`, 'two lamps count 0 to 3'),
+   worth:     2     1
+            [off] [off]  = 0
+            [off] [ON ]  = 1
+            [ON ] [off]  = 2
+            [ON ] [ON ]  = 2 + 1 = 3`, 'two lamps count 0 to 3'),
     mc('Two lamps: the left one (worth 2) is on, the right one (worth 1) is off. Which number is that?', ['1', '2', '3'], 1, 'Only the 2-lamp is on, so the number is 2.'),
     ask('Your turn. The lamps read `11`. Which number is that?', num(3), 'Both lamps are on: 2 + 1 = 3.', 'Add the worth of each lamp that shows 1.'),
     gen((r) => {
@@ -34,15 +33,18 @@ export const bits: Lesson = {
     // 3. Four lamps count 0 to 15, next to the decimal columns they know.
     say('Now four lamps. You already count with columns: in the number 1000 the columns are worth 1, 10, 100 and 1000, and **each column is worth ten times the one to its right**. Lamps work the same way, but each lamp is worth **two times** the one to its right.'),
     art(`
-   the columns you know:   1000   100   10   1     (x10 each step)
-   the lamps:                8      4    2    1     (x2 each step)`, 'decimal columns next to lamp columns'),
+   columns you know:
+     1000   100   10   1    (x10 each)
+   lamps:
+        8     4    2   1    (x2 each)`, 'decimal columns next to lamp columns'),
     say('To make a number, add up the lamps that are on. Watch me make 13:'),
     art(`
-   Make 13:    [ON ] [ON ] [off] [ON ]
-                 8     4     2     1
-                 8  +  4  +  0  +  1   =  13
+   Make 13:  [ON ] [ON ] [off] [ON ]
+               8     4     2     1
+             8 + 4 + 0 + 1 = 13
 
-   written down:  1     1     0     1      ->  1101`, 'worked example'),
+   written:    1     1     0     1
+                  so: 1101`, 'worked example'),
     mc('To make 13 we used the 8-lamp and the 1-lamp. Which other lamp was on?', ['The 2-lamp', 'The 4-lamp'], 1, '8 + 4 + 1 = 13. The 2-lamp stays off.'),
     ask('Your turn. The lamps read `0110`. Which number is that?', num(6), '0110: the 4-lamp and the 2-lamp are on, so 4 + 2 = 6.', 'Only add the lamps that show 1. Skip the 0s.'),
     app('lamps', "Let's practice with real lamps. Click them to make each target number. There is no clock.", 4),
@@ -66,22 +68,25 @@ export const bitadd: Lesson = {
     say('You can already add numbers with columns. When a column gets too full, you **carry** to the next one. Lamps work the same way, and the half adder you built does exactly this.'),
     say('**Why this matters:** the adder in your chip is just this, done by gates, millions of times a second.'),
     art(`
-   decimal:   9 + 1 = 10      the ones column is full at 10:
-                              write 0, carry 1 to the next column
+   decimal:  9 + 1 = 10
+     a column is full at 10:
+     write 0, carry 1
 
-   lamps:     1 + 1 = 10      a lamp column is full at 2:
-                              write 0, carry 1 to the next lamp`, 'a column carries when it is full'),
+   lamps:    1 + 1 = 10
+     a column is full at 2:
+     write 0, carry 1`, 'a column carries when it is full'),
     say('In decimal a column holds 0 to 9. A lamp column holds only 0 or 1. So **1 + 1 is already full**: write 0 and carry 1. Watch me add 3 + 1:'),
     art(`
-   carries:     1  1
-   3 =        0  0  1  1
-   1 =      + 0  0  0  1
-              ---------
-   4 =        0  1  0  0
+   carries:    1  1
+   3 =       0  0  1  1
+   1 =     + 0  0  0  1
+             ---------
+   4 =       0  1  0  0
 
-   right lamp:   1 + 1 = 10  -> write 0, carry 1
-   next lamp:    1 + 1(carry) = 10  -> write 0, carry 1
-   next lamp:    0 + 0 + 1(carry) = 1  -> write 1`, 'worked example: 0011 + 0001'),
+   1st: 1 + 1 = 10, write 0, carry 1
+   2nd: 1 + 0 + carry = 10, write 0,
+        carry 1
+   3rd: 0 + 0 + carry = 1, write 1`, 'worked example: 0011 + 0001'),
     mc('In the right-hand lamp column, 1 + 1 gives what?', ['Write 2, carry nothing', 'Write 0, carry 1', 'Write 1, carry 1'], 1, 'A lamp column is full at 2. So 1 + 1 = 10: write 0 and carry the 1.'),
     ask('Your turn. Add `0010` and `0001`. Type the answer in lamps.', bin(3, 4), '0010 is 2 and 0001 is 1. 2 + 1 = 3, which is 0011. No lamp column got full, so nothing carried.', 'The right column is 0 + 1. The next column is 1 + 0.'),
     gen((r) => {
@@ -106,15 +111,19 @@ export const hex: Lesson = {
     ask('How many 1s are in that row? Take your time and count.', num(10), 'There are 10 ones. That was slow and easy to get wrong, and engineers read rows like this all day.', 'Count the 1s one by one. Try touching each one.'),
     say('Long rows of lamps are painful. Here is the fix: **cut the row into groups of four**. Four lamps count 0 to 15, so each group is one number from 0 to 15.'),
     art(`
-   1011  0011  1110  0101      four groups of four lamps
-    11     3    14     5        each group as a number 0-15`),
+   1011  0011  1110  0101
+    11     3    14     5
+   four groups, each a number 0-15`),
     say('Two of those numbers need two digits (11 and 14). That is awkward. We ran out of digits after 9! So for 10 to 15 we borrow letters: **A = 10, B = 11, C = 12, D = 13, E = 14, F = 15**. This is **hexadecimal**, or **hex**: a nickname for each group of four lamps.'),
     art(`
-   lamps  nick     lamps  nick     lamps  nick     lamps  nick
-   0000    0       0100    4       1000    8       1100    C
-   0001    1       0101    5       1001    9       1101    D
-   0010    2       0110    6       1010    A       1110    E
-   0011    3       0111    7       1011    B       1111    F`, 'the chart: four lamps and their hex nickname'),
+   0000 = 0     1000 = 8
+   0001 = 1     1001 = 9
+   0010 = 2     1010 = A
+   0011 = 3     1011 = B
+   0100 = 4     1100 = C
+   0101 = 5     1101 = D
+   0110 = 6     1110 = E
+   0111 = 7     1111 = F`, 'the chart: four lamps and their nickname'),
     say('Watch me: the group `1011` is 8 + 2 + 1 = 11, and 11 is **B**. So `1011` has the nickname B.'),
     mc('Look at the chart. What is the nickname for `1010`?', ['9', 'A', 'B', 'C'], 1, '1010 is 8 + 2 = 10, and 10 is the letter A.'),
     ask('Your turn, with the chart above. What is the hex nickname for `1101`?', hexa(13, 1), '1101 is 8 + 4 + 1 = 13, and 13 is D.', 'Add up the lamps (8, 4, 2, 1), then look the number up: 10 is A, 11 is B, 12 is C, 13 is D.'),
@@ -129,8 +138,9 @@ export const hex: Lesson = {
     }),
     say('A byte is eight lamps: **two groups of four, so two hex digits**. Each group gets its own nickname. In Verilog you write a hex number as `8\'hD6`, which means "an 8-lamp number, hex, D6".'),
     art(`
-   1101 0110     eight lamps (a byte)
-     D    6      two hex digits   ->  D6   (Verilog: 8'hD6)`, 'a byte is two hex digits'),
+   1101 0110   eight lamps (a byte)
+     D    6    two hex digits: D6
+   Verilog writes it: 8'hD6`, 'a byte is two hex digits'),
     gen((r) => {
       const v = between(r, 0x1a, 0xfe);
       return ask(`Write this byte as two hex digits: \`${v.toString(2).padStart(8, '0').replace(/(....)(....)/, '$1 $2')}\``, hexa(v, 2), `Each group of four is one nickname: ${v.toString(16).toUpperCase().padStart(2, '0')}.`, 'Do the left group of four, then the right group of four, one at a time.');
