@@ -142,8 +142,8 @@ export const ACTS: Act[] = [
       },
       { name: 'Numbers', modules: [lesson('bitadd'), prac('practice-bits'), ...drill('twos'), incident('inc-lamp-board')] },
       { name: 'Logic', modules: [prac('practice-bool'), lesson('demorgan'), ...logic(['logic-not', 'logic-and', 'logic-or', 'logic-xor']), incident('inc-logic')] },
-      { name: 'Building blocks', modules: [...drill('comb'), ...logic(['logic-mux', 'logic-full']), incident('inc-adder')] },
-      { name: 'Memory & state', modules: [...drill('seq'), ...logic(['logic-latch', 'logic-counter']), ...drill('fsm'), bossMod('boss-logic'), incident('inc-controller')] },
+      { name: 'Building blocks', modules: [lesson('mux'), ...logic(['logic-enable', 'logic-mux']), lesson('decoder'), ...logic(['logic-dec']), lesson('adder'), ...logic(['logic-full']), lesson('compare'), ...logic(['logic-cmp']), prac('practice-comb'), incident('inc-adder')] },
+      { name: 'Memory & state', modules: [lesson('seq'), ...logic(['logic-dff', 'logic-toggle', 'logic-counter']), prac('practice-seq'), ...logic(['logic-latch']), ...drill('fsm'), bossMod('boss-logic'), incident('inc-controller')] },
       { name: 'Verilog', modules: [...drill('verilog'), ...before(mods(RTL_LEVELS, 'rtl', 'rtl', (x) => !FIRST_RTL.includes(x.id)), 'seg7', lesson('hex')), bossMod('boss-numbers'), incident('inc-numbers'), bossMod('boss-hdl'), incident('inc-rtl')] },
     ],
   },
@@ -257,7 +257,7 @@ export function startAct(): number {
 }
 
 /** NAND-only puzzles: good practice, but a beginner builds with the real gates first and meets these as challenges. */
-const OPTIONAL_CHALLENGES = new Set(['logic-not', 'logic-and', 'logic-or', 'logic-xor']);
+const OPTIONAL_CHALLENGES = new Set(['logic-not', 'logic-and', 'logic-or', 'logic-xor', 'logic-latch']);
 for (const a of ACTS) for (const c of a.chapters) for (const m of c.modules) if (OPTIONAL_CHALLENGES.has(m.id)) m.optional = true;
 
 const PATH_CHAPTERS: Chapter[] = ACTS.filter((a) => a.kind !== 'detour').flatMap((a) => a.chapters);
