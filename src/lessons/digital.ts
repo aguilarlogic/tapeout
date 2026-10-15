@@ -223,10 +223,12 @@ export const verilog: Lesson = {
     say('One big difference from normal coding: the lines do **not** run in order. All the gates work at the same time, because real gates do.'),
     say('**Predict:** read the code, then guess before you check.', 'happy'),
     art(`
-  assign y = a & b;     // a = 1, b = 0`),
+  assign y = a & b;
+  // a = 1, b = 0`),
     mc('With a = 1 and b = 0, what is y?', ['0', '1'], 0, '& is AND. AND needs both inputs to be 1, and b is 0.'),
     art(`
-  assign y = (a & b) | c;   // a = 0, b = 1, c = 1`),
+  assign y = (a & b) | c;
+  // a = 0, b = 1, c = 1`),
     mc('With a = 0, b = 1, c = 1, what is y?', ['0', '1'], 1, 'a & b is 0, but c is 1. OR gives 1 when either side is 1.'),
     mc('What does `assign y = (a & b) | c;` build?', ['A flip-flop', 'An AND gate feeding an OR gate', 'An OR gate feeding an AND gate'], 1, 'The brackets go first: AND, then OR. It is just gates soldered together.'),
     say('**Modify:** now change one thing.'),
