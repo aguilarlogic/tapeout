@@ -29,7 +29,7 @@ import { mapApp } from './map';
 import { settingsApp } from './settings';
 import { bindMentorLog } from './mentor';
 import { buildRegions } from './regions';
-import { getWindow, initWM, openWindow } from './wm';
+import { focusedWindow, getWindow, initWM, onWindowsChange, openWindow } from './wm';
 
 const LABS: Record<string, (id: string) => HTMLElement> = {
   logic: logicPage, rtl: rtlPage, pcb: pcbPage, sta: timingPage, cov: coveragePage, uvm: uvmPage, clab: circuitPage, code: codePage, shell: shellPage, sva: svaPage, tb: svPage, cdc: cdcPage, isa: isaPage, arch: archPage, rv: rvPage, dft: archPage, pd: archPage, sta2: archPage, layout: archPage, sig: archPage, spec: archPage,
@@ -190,6 +190,12 @@ export async function bootDesktop() {
   const bar = taskbar();
   os.replaceChildren(desktop, bar);
   initWM(bar.querySelector('.tasks') as HTMLElement);
+  // On a phone an open lab takes the whole screen; TAPEOUT's column comes back when the lab closes or loses focus.
+  onWindowsChange(() => {
+    const lab = focusedWindow() === 'lab';
+    desktop.classList.toggle('lab-open', lab);
+    if (!lab) desktop.classList.remove('mentor-peek');
+  });
   term = new Terminal();
   shell = new Shell(term, (r) => { if (location.hash === r) route(); else location.hash = r; });
   bindMentorLog((text) => {

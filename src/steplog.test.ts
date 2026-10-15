@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { readableReport, recordQuit, recordStep, resetLog, summarize, SPLIT_BELOW } from './steplog';
+import { readableReport, recordLabFirstWire, recordLabTest, recordQuit, recordStep, resetLog, summarize, SPLIT_BELOW } from './steplog';
 
 const mem = new Map<string, string>();
 Object.defineProperty(globalThis, 'localStorage', {
@@ -43,5 +43,17 @@ describe('step log', () => {
     recordQuit('bits', 5);
     resetLog();
     expect(readableReport()).toMatch(/bits#5\s+x1/);
+  });
+
+  it('logs each lab: time to first wire, Test it runs and first-try wins', () => {
+    recordLabFirstWire('logic-mux', 30);
+    recordLabFirstWire('logic-mux', 10);
+    recordLabTest('logic-mux', false, 1);
+    recordLabTest('logic-mux', true, 2);
+    recordLabTest('first-and', true, 1);
+    const r = readableReport();
+    expect(r).toMatch(/LOGIC LABS/);
+    expect(r).toMatch(/logic-mux\s+20s to first wire\s+2 runs, 1 wins \(2\.0 runs per win\)\s+first-try 0%/);
+    expect(r).toMatch(/first-and\s+no wire yet\s+1 runs, 1 wins .*first-try 100%/);
   });
 });

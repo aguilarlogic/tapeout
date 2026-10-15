@@ -3,7 +3,7 @@
 // click or key press, and it is resumed then, because browsers refuse audio before a user gesture.
 import { prefs } from '../state';
 
-export type Cue = 'pass' | 'fail' | 'promote';
+export type Cue = 'pass' | 'fail' | 'promote' | 'step';
 
 interface Tone {
   at: number; // seconds after the cue starts
@@ -20,6 +20,8 @@ const CUES: Record<Cue, Tone[]> = {
     { at: 0, f: 659.25, len: 0.14, wave: 'sine', level: 0.07 },
     { at: 0.08, f: 987.77, len: 0.22, wave: 'sine', level: 0.07 },
   ],
+  // A tiny tick for each row of a Logic Lab test run. About 0.06 s.
+  step: [{ at: 0, f: 880, len: 0.06, wave: 'sine', level: 0.03 }],
   // One soft falling blip. About 0.16 s.
   fail: [{ at: 0, f: 330, to: 200, len: 0.16, wave: 'triangle', level: 0.05 }],
   // A brighter four-note jingle (C E G C'), triangle waves. About 0.7 s.

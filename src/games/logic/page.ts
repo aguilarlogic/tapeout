@@ -1,308 +1,737 @@
-// Logic Lab: a drag-and-wire schematic editor with live simulation, for gate-level and transistor-level levels.
+// Logic Lab: the board is the toy. It fills the window, every part says what it is, wires route themselves around
+// parts, and "Test it" flips the switches through every row so the lamps light up one by one. Works with a mouse,
+// a finger, or a keyboard for the basics (Delete, Escape, Ctrl+Z).
+import { findModule, neighbours } from '../../curriculum';
+import { award, promotionLine } from '../../mastery/promotion';
+import { setMood } from '../../os/avatar';
 import { mentorSay } from '../../os/mentor';
-import { clearDraft, levelRecord, loadDraft, saveDraft } from '../../state';
-import { h, svg, toast } from '../../ui/dom';
-import { levelHeader } from '../../ui/layout';
-import { Circuit, counts, Kind, Part, PINS, Sim, SIZE, starsFor, V, verify } from './circuit';
-import { CANVAS, findLogicLevel, starter } from './levels';
-import { finish, HINT_NOTE } from '../../ui/labkit';
+import { levelRecord, loadDraft, playerName, saveDraft } from '../../state';
+import { recordLabFirstWire, recordLabTest } from '../../steplog';
+import { h, stars as starEls, svg } from '../../ui/dom';
+import { praise } from '../../ui/layout';
+import { playCue } from '../../ui/sound';
+import { Bits, Circuit, combos, counts, Kind, Part, PINS, Sim, starsFor, V, verify } from './circuit';
+import { fits, freeSpot, GRID, isOutput, K, layoutLab, partSize, pinXY, snap } from './board';
+import { findLogicLevel, LogicLevel } from './levels';
+import { hitPin, KIND_NAME, partInfo, partLabel, partShapes, pinDotR, vcls } from './parts';
+import { route, Routing, wirePath } from './route';
+import { Frame, testRun } from './run';
+import { KIND_COLOR, themeStyle } from './theme';
 
-const GRID = 10;
-const snap = (v: number) => Math.round(v / GRID) * GRID;
-const vcls = (v: V) => (v === 1 ? 'v1' : v === 0 ? 'v0' : v === 'x' ? 'vx' : 'vz');
+/** The first labs show faint outlines where their gates go, so the player learns wiring before layout. */
+const SLOT_LABS = new Set(['first-not', 'first-and', 'logic-enable']);
+const DRAFT = 'logic2';
 
-/** Local-coordinate SVG drawing for each part (inside its SIZE box). */
-function symbol(p: Part, value: (pin: string) => V, inputVal?: 0 | 1): SVGGElement {
-  const g = svg('g', { class: `sym k-${p.kind}` });
-  const stub = (x1: number, y1: number, x2: number, y2: number, pin: string) => g.append(svg('line', { x1, y1, x2, y2, class: `stub ${vcls(value(pin))}` }));
-  const body = (d: string) => g.append(svg('path', { d, class: 'body' }));
-  const bubble = (cx: number, cy: number) => g.append(svg('circle', { cx, cy, r: 4, class: 'body bubble' }));
-  const two = () => { stub(0, 10, 12, 10, 'a'); stub(0, 30, 12, 30, 'b'); };
-  switch (p.kind) {
-    case 'AND': two(); body('M12,2 H32 A18,18 0 0 1 32,38 H12 Z'); stub(50, 20, 60, 20, 'y'); break;
-    case 'NAND': two(); body('M12,2 H28 A18,18 0 0 1 28,38 H12 Z'); bubble(50, 20); stub(54, 20, 60, 20, 'y'); break;
-    case 'OR': two(); body('M10,2 Q30,2 50,20 Q30,38 10,38 Q20,20 10,2 Z'); stub(50, 20, 60, 20, 'y'); break;
-    case 'NOR': two(); body('M10,2 Q28,2 45,20 Q28,38 10,38 Q20,20 10,2 Z'); bubble(49, 20); stub(53, 20, 60, 20, 'y'); break;
-    case 'XOR': two(); body('M14,2 Q32,2 50,20 Q32,38 14,38 Q24,20 14,2 Z'); g.append(svg('path', { d: 'M8,2 Q18,20 8,38', class: 'body open' })); stub(50, 20, 60, 20, 'y'); break;
-    case 'NOT': stub(0, 20, 14, 20, 'a'); body('M14,6 L44,20 L14,34 Z'); bubble(48, 20); stub(52, 20, 60, 20, 'y'); break;
-    case 'DFF':
-      stub(0, 20, 12, 20, 'd'); stub(48, 20, 60, 20, 'q');
-      body('M12,2 H48 V48 H12 Z');
-      g.append(svg('path', { d: 'M12,36 L19,41 L12,46', class: 'body open' }), svg('text', { x: 16, y: 24, class: 'sym-t' }, 'D'), svg('text', { x: 36, y: 24, class: 'sym-t' }, 'Q'));
-      break;
-    case 'NMOS': case 'PMOS': {
-      const pm = p.kind === 'PMOS';
-      const top = pm ? 's' : 'd', bot = pm ? 'd' : 's';
-      stub(0, 30, pm ? 11 : 18, 30, 'g');
-      if (pm) bubble(14, 30);
-      g.append(svg('line', { x1: 19, y1: 14, x2: 19, y2: 46, class: 'body open' }), svg('line', { x1: 25, y1: 10, x2: 25, y2: 50, class: `chan ${vcls(value('g')) === (pm ? 'v0' : 'v1') ? 'on' : ''}` }));
-      stub(25, 14, 40, 14, top); stub(40, 14, 40, 0, top);
-      stub(25, 46, 40, 46, bot); stub(40, 46, 40, 60, bot);
-      g.append(svg('text', { x: 44, y: 34, class: 'sym-t' }, pm ? 'P' : 'N'));
-      break;
-    }
-    case 'VDD': stub(30, 30, 30, 12, 'y'); g.append(svg('line', { x1: 14, y1: 12, x2: 46, y2: 12, class: 'body open rail1' }), svg('text', { x: 16, y: 8, class: 'sym-t' }, 'VDD')); break;
-    case 'GND': stub(30, 0, 30, 12, 'y'); g.append(svg('path', { d: 'M14,12 H46 M20,18 H40 M26,24 H34', class: 'body open rail0' })); break;
-    case 'IN':
-      g.append(svg('rect', { x: 0, y: 6, width: 42, height: 28, rx: 6, class: `io in ${inputVal ? 'on' : ''}` }),
-        svg('text', { x: 8, y: 25, class: 'io-t' }, `${p.label}`), svg('text', { x: 30, y: 25, class: 'io-v' }, String(inputVal ?? 0)));
-      stub(42, 20, 60, 20, 'y');
-      break;
-    case 'OUT': {
-      const v = value('a');
-      stub(0, 20, 16, 20, 'a');
-      g.append(svg('circle', { cx: 30, cy: 20, r: 13, class: `lamp ${vcls(v)}` }), svg('text', { x: 26, y: 25, class: 'io-v' }, v === 'z' ? '-' : String(v)),
-        svg('text', { x: 46, y: 25, class: 'io-t' }, `${p.label}`));
-      break;
-    }
-  }
-  return g;
+const clone = <T>(x: T): T => JSON.parse(JSON.stringify(x)) as T;
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+const reducedMotion = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+const pick = <T>(xs: T[]) => xs[Math.floor(Math.random() * xs.length)];
+
+/** Steps of a sequence spec, with the switch settings in force at each step. */
+function rowsOf(level: LogicLevel): { ins: Bits; exp: Bits; label?: string }[] {
+  if (level.spec.kind === 'table') { const fn = level.spec.fn; return combos(level.inputs).map((ins) => ({ ins, exp: fn(ins) })); }
+  const ins: Bits = Object.fromEntries(level.inputs.map((n) => [n, 0]));
+  return level.spec.steps.map((st, i) => { Object.assign(ins, st.set ?? {}); return { ins: { ...ins }, exp: st.expect, label: st.note ?? `${st.tick ? 'tick ' : 'step '}${i + 1}` }; });
 }
-
-function pinPos(p: Part, pin: string): [number, number] {
-  const d = PINS[p.kind].find((x) => x.name === pin)!;
-  return [p.x + d.dx, p.y + d.dy];
-}
-const vertical = (p: Part, pin: string) => {
-  const d = PINS[p.kind].find((x) => x.name === pin)!;
-  return d.dy === 0 || d.dy === SIZE[p.kind][1];
-};
 
 export function logicPage(id: string): HTMLElement {
-  const level = findLogicLevel(id);
-  if (!level) return h('p', null, 'Unknown level.');
-  const key = `logic.${level.id}`;
-  let circ: Circuit = loadDraft<Circuit>(key) ?? starter(level);
+  const found = findLogicLevel(id);
+  if (!found) return h('p', null, 'Unknown level.');
+  const level: LogicLevel = found;
+  const layout = layoutLab(level);
+  const board = layout.board;
+  const key = `${DRAFT}.${level.id}`;
+  const optional = !!findModule(level.id)?.module.optional;
+  /** Core lessons score kindly: no par, and hints cost nothing. */
+  const kind = level.mode === 'gate' && !optional;
+  const slots = level.mode === 'gate' && !optional ? layout.slots : [];
+  const showSlots = SLOT_LABS.has(level.id);
+  const hasClock = level.palette.includes('DFF');
+  const rows = rowsOf(level);
+
+  /** A saved board is used only if it still has this lab's fixed parts; they go back to their spots. */
+  const sane = (c: Circuit | undefined): Circuit | undefined => {
+    if (!c?.parts || !c.wires) return undefined;
+    for (const f of layout.start.parts) {
+      const p = c.parts.find((q) => q.id === f.id);
+      if (!p || p.kind !== f.kind) return undefined;
+      p.x = f.x; p.y = f.y; p.fixed = true;
+    }
+    for (const p of c.parts) if (!p.fixed && (!PINS[p.kind] || !fits(c.parts, p.kind, snap(p.x), snap(p.y), board, p.id))) {
+      const s = freeSpot(c.parts, p.kind, board, [p.x, p.y], p.id);
+      if (!s) return undefined;
+      [p.x, p.y] = s;
+    }
+    return c;
+  };
+  let circ: Circuit = sane(loadDraft<Circuit>(key)) ?? clone(layout.start);
   const usage = loadDraft<{ hints: number }>(`${key}.usage`) ?? { hints: 0 };
+
   const inputs: Record<string, 0 | 1> = Object.fromEntries(level.inputs.map((n) => [n, 0]));
   let sim = new Sim(circ);
-  let cycles = 0;
-  let selected: { part?: string; wire?: number } = {};
-  let pending: string | null = null; // pin ref waiting for a second click
-  let rubber: { from: string; x: number; y: number } | null = null;
+  sim.settle(inputs);
+  let sel: { part?: string; wire?: number } = {};
+  let pending: string | null = null;
+  let wiring: { from: string; x: number; y: number; target?: string } | null = null;
+  let ghost: { kind: Kind; x: number; y: number; ok: boolean } | null = null;
+  let frame: Frame | null = null;
+  let rowState: ('idle' | 'cur' | 'ok' | 'bad')[] = rows.map(() => 'idle');
+  let running = false;
+  let pulsing = false;
+  let pointAt: string | undefined;
+  let nearPin: string | undefined;
+  const undo: string[] = [], redo: string[] = [];
+  const opened = Date.now();
+  let wiredOnce = false;
+  let attempts = 0;
 
-  const W = CANVAS.w, H = CANVAS.h;
-  const canvas = svg('svg', { viewBox: `0 0 ${W} ${H}`, class: 'logic-svg', tabindex: 0, role: 'application', 'aria-label': 'Schematic editor' });
-  const persist = () => saveDraft(key, circ);
-  const partOf = (idp: string) => circ.parts.find((p) => p.id === idp)!;
-
-  const resim = (fresh: boolean) => {
-    if (fresh) { sim = new Sim(circ); cycles = 0; }
-    sim.settle(inputs);
+  // ---------------------------------------------------------------- the board and its view
+  const host = h('div', { class: 'board' });
+  const canvas = svg('svg', { class: 'board-svg', role: 'application', tabindex: 0, 'aria-label': `Circuit board: ${level.title}`, preserveAspectRatio: 'xMidYMid meet' });
+  host.append(canvas);
+  let view = { x: 0, y: 0, w: board.w, h: board.h };
+  let autoFit = true;
+  let tr = false;
+  const size = () => ({ w: host.clientWidth || 640, h: host.clientHeight || 400 });
+  const scale = () => { const s = size(); return Math.min(s.w / view.w, s.h / view.h); };
+  const fitScale = () => { const s = size(); return Math.min(s.w / (bw() + GRID * 2), s.h / (bh() + GRID * 2)); };
+  const applyView = () => { canvas.setAttribute('viewBox', `${view.x} ${view.y} ${view.w} ${view.h}`); draw(); };
+  const bw = () => (tr ? board.h : board.w), bh = () => (tr ? board.w : board.h);
+  const fit = () => { view = { x: -GRID, y: -GRID, w: bw() + GRID * 2, h: bh() + GRID * 2 }; autoFit = true; applyView(); };
+  /** A wide board on a tall screen (a phone held upright) is shown on its side: signals flow down instead of right. */
+  const wantSide = () => { const s = size(); return s.h > s.w * 1.15 && board.w > board.h * 1.1; };
+  const zoomAt = (f: number, wx: number, wy: number) => {
+    const s0 = scale();
+    const s1 = Math.max(fitScale() * 0.9, Math.min(4, s0 * f));
+    const k = s0 / s1;
+    view = { x: wx - (wx - view.x) * k, y: wy - (wy - view.y) * k, w: view.w * k, h: view.h * k };
+    autoFit = false;
+    applyView();
   };
-
-  // ---- rendering
-  const draw = () => {
-    canvas.replaceChildren();
-    for (let x = GRID * 2; x < W; x += GRID * 2) for (let y = GRID * 2; y < H; y += GRID * 2) canvas.append(svg('circle', { cx: x, cy: y, r: 0.8, class: 'dot' }));
-    circ.wires.forEach((w, i) => {
-      const [pa, na] = w.a.split('.'), [pb, nb] = w.b.split('.');
-      const A = partOf(pa), B = partOf(pb);
-      if (!A || !B) return;
-      const [x1, y1] = pinPos(A, na), [x2, y2] = pinPos(B, nb);
-      let d: string;
-      if (!vertical(A, na) && !vertical(B, nb)) { const mx = snap((x1 + x2) / 2); d = `M${x1},${y1} H${mx} V${y2} H${x2}`; }
-      else { const my = snap((y1 + y2) / 2); d = `M${x1},${y1} V${my} H${x2} V${y2}`; }
-      const v = sim.pin(w.a);
-      const g = svg('g', { class: `wire ${vcls(v)}${selected.wire === i ? ' sel' : ''}${sim.shorts.has(sim.net(w.a)) ? ' short' : ''}` });
-      g.append(svg('path', { d, class: 'hit' }), svg('path', { d, class: 'line' }));
-      g.addEventListener('pointerdown', (e) => { e.stopPropagation(); selected = { wire: i }; draw(); });
-      g.addEventListener('dblclick', () => removeWire(i));
-      canvas.append(g);
-    });
-    for (const p of circ.parts) {
-      const g = svg('g', { class: `part${p.fixed ? ' fixed' : ''}${selected.part === p.id ? ' sel' : ''}`, transform: `translate(${p.x},${p.y})` });
-      const [w, hh] = SIZE[p.kind];
-      g.append(svg('rect', { x: -3, y: -3, width: w + 6, height: hh + 6, rx: 6, class: 'part-hit' }));
-      g.append(symbol(p, (pin) => sim.pin(`${p.id}.${pin}`), p.kind === 'IN' ? inputs[p.label!] : undefined));
-      for (const pin of PINS[p.kind]) {
-        const ref = `${p.id}.${pin.name}`;
-        const c = svg('circle', { cx: pin.dx, cy: pin.dy, r: 5, class: `pin ${vcls(sim.pin(ref))}${pending === ref ? ' pending' : ''}`, 'data-pin': ref });
-        c.append(svg('title', {}, `${p.label ?? p.kind} ${pin.name}`));
-        g.append(c);
-      }
-      g.addEventListener('pointerdown', (e) => partDown(e as PointerEvent, p));
-      canvas.append(g);
-    }
-    if (rubber) {
-      const [pid, pn] = rubber.from.split('.');
-      const [x1, y1] = pinPos(partOf(pid), pn);
-      canvas.append(svg('line', { x1, y1, x2: rubber.x, y2: rubber.y, class: 'rubber' }));
-    }
-    renderSide();
-  };
-
-  const toLocal = (e: PointerEvent): [number, number] => {
-    const pt = canvas.createSVGPoint();
-    pt.x = e.clientX;
-    pt.y = e.clientY;
+  const zoomCenter = (f: number) => zoomAt(f, view.x + view.w / 2, view.y + view.h / 2);
+  /** Screen point to board point. When the board is shown on its side, the two axes swap. */
+  const toLocal = (cx: number, cy: number): [number, number] => { const [x, y] = toSvg(cx, cy); return tr ? [y, x] : [x, y]; };
+  const toSvg = (cx: number, cy: number): [number, number] => {
     const m = canvas.getScreenCTM();
     if (!m) return [0, 0];
-    const q = pt.matrixTransform(m.inverse());
-    return [q.x, q.y];
+    const pt = new DOMPoint(cx, cy).matrixTransform(m.inverse());
+    return [pt.x, pt.y];
+  };
+  const resized = () => {
+    const side = wantSide();
+    if (side !== tr) { tr = side; fit(); } else if (autoFit) fit(); else draw();
+  };
+  if (typeof ResizeObserver === 'function') new ResizeObserver(resized).observe(host);
+
+  let routed: Routing | null = null, routedKey = '';
+  const getRoute = (): Routing => {
+    const k = JSON.stringify([circ.parts.map((p) => [p.id, p.x, p.y]), circ.wires]);
+    if (k !== routedKey || !routed) { routed = route(circ, board); routedKey = k; }
+    return routed;
+  };
+  const val = (ref: string): V => (frame ? frame.pins[ref] ?? 'z' : sim.pin(ref));
+  const switchOn = (label: string) => ((frame ? frame.inputs[label] : inputs[label]) ?? 0) as 0 | 1;
+  const partOf = (pid: string) => circ.parts.find((p) => p.id === pid);
+
+  /** True when a wire may join these two pins, or the reason it may not, in plain words. */
+  const canJoin = (a: string, b: string): true | string => {
+    if (a === b) return 'Pick a different dot to wire to.';
+    const A = partOf(a.split('.')[0]), B = partOf(b.split('.')[0]);
+    if (!A || !B) return 'That part is gone.';
+    if (isOutput(A.kind, a.split('.')[1]) && isOutput(B.kind, b.split('.')[1])) return "Two outputs can't share a wire: each one would try to set it to its own value. Wire an output to an input.";
+    if (sim.net(a) === sim.net(b) && sim.connected(a)) return 'Those two dots are already joined.';
+    return true;
   };
 
-  // ---- editing
-  const connect = (a: string, b: string) => {
-    if (a === b) return;
-    if (circ.wires.some((w) => (w.a === a && w.b === b) || (w.a === b && w.b === a))) return;
-    circ.wires.push({ a, b });
-    persist();
-    resim(true);
+  // ---------------------------------------------------------------- drawing
+  const S = (tag: keyof SVGElementTagNameMap, a: Record<string, unknown>, text?: string) => {
+    // On a board shown on its side, each text is flipped back about its own anchor, so it still reads upright.
+    if (tag === 'text' && tr) { const x = Number(a.x ?? 0), y = Number(a.y ?? 0); a = { ...a, transform: `matrix(0,1,1,0,${x - y},${y - x})` }; }
+    const el = svg(tag, a);
+    if (text !== undefined) el.textContent = text;
+    return el;
   };
-  const removeWire = (i: number) => { circ.wires.splice(i, 1); selected = {}; persist(); resim(true); draw(); };
-  const removePart = (pid: string) => {
-    const p = partOf(pid);
-    if (!p || p.fixed) { toast('Inputs, outputs and the main rails stay put.', 'info'); return; }
-    circ.parts = circ.parts.filter((x) => x.id !== pid);
-    circ.wires = circ.wires.filter((w) => !w.a.startsWith(`${pid}.`) && !w.b.startsWith(`${pid}.`));
-    selected = {};
+  const draw = () => {
+    const s = scale();
+    const r = getRoute();
+    const world = S('g', tr ? { transform: 'matrix(0,1,1,0,0,0)' } : {});
+    canvas.replaceChildren(world);
+    world.append(
+      S('defs', {}),
+      S('rect', { x: 0, y: 0, width: board.w, height: board.h, rx: 18, class: 'bd-bg' }),
+      S('path', { d: gridPath(board.w, board.h, GRID), class: 'bd-grid' }),
+      S('path', { d: gridPath(board.w, board.h, GRID * 5), class: 'bd-grid major' }),
+      S('rect', { x: 0, y: 0, width: board.w, height: board.h, rx: 18, class: 'bd-edge' }),
+    );
+    if (showSlots) {
+      for (const sl of slots) {
+        if (circ.parts.some((p) => !p.fixed && p.x === sl.x && p.y === sl.y)) continue;
+        const [w, hh] = partSize(sl.kind);
+        world.append(S('rect', { x: sl.x - 4, y: sl.y - 4, width: w + 8, height: hh + 8, rx: 12, class: 'bslot' }), S('text', { x: sl.x + w / 2, y: sl.y + hh / 2 + 8, class: 'bslot-t' }, `${KIND_NAME[sl.kind]} goes here`));
+      }
+    }
+    // Wires, under the parts.
+    for (const rw of r.wires) {
+      if (!rw.pts.length) continue;
+      const w = circ.wires[rw.wire];
+      const v = val(w.a);
+      const d = wirePath(rw.pts, r.hops, Math.max(7, 6 / s));
+      const g = S('g', { class: `wire ${vcls(v)}${sel.wire === rw.wire ? ' sel' : ''}`, 'data-wire': rw.wire });
+      g.append(S('path', { d, class: 'hit' }), S('path', { d, class: 'line' }));
+      if (pulsing && v === 1) g.append(S('path', { d, class: 'pulse' }));
+      world.append(g);
+    }
+    for (const [x, y] of r.dots) {
+      const rw = r.wires.find((q) => onPath(q.pts, x, y));
+      const v = rw ? val(circ.wires[rw.wire].a) : 'z';
+      world.append(S('circle', { cx: x, cy: y, r: Math.max(6, 4.5 / s), class: `dot ${vcls(v)}` }));
+    }
+    // Parts.
+    for (const p of circ.parts) {
+      const [w, hh] = partSize(p.kind);
+      const g = S('g', { class: `part k-${p.kind}${p.fixed ? ' fixed' : ''}${sel.part === p.id ? ' sel' : ''}${pointAt === p.id ? ' point' : ''}`, transform: `translate(${p.x},${p.y})`, style: `--kc:${KIND_COLOR[p.kind]}`, 'data-part': p.id });
+      g.append(S('rect', { x: -8, y: -8, width: w + 16, height: hh + 16, rx: 12, class: 'part-hit' }));
+      const inner = S('g', { transform: `scale(${K})` });
+      for (const sh of partShapes(p, (pin) => val(`${p.id}.${pin}`), p.kind === 'IN' ? switchOn(p.label ?? '') : undefined)) inner.append(S(sh.t, sh.a, sh.text));
+      g.append(inner, S('title', {}, partLabel(p)));
+      world.append(g);
+    }
+    // Pins on top, at a size that stays readable at any zoom.
+    const picked = wiring?.from ?? pending;
+    for (const p of circ.parts) {
+      for (const d of PINS[p.kind]) {
+        const ref = `${p.id}.${d.name}`;
+        const [x, y] = pinXY(p, d.name);
+        const can = picked && picked !== ref && canJoin(picked, ref) === true;
+        const cls = `pin ${vcls(val(ref))}${can ? ' can' : ''}${picked === ref ? ' picked' : ''}${nearPin === ref || wiring?.target === ref ? ' near' : ''}`;
+        world.append(S('circle', { cx: x, cy: y, r: pinDotR(s) * (nearPin === ref || wiring?.target === ref ? 1.35 : 1), class: cls, 'data-pin': ref }));
+      }
+    }
+    if (ghost) {
+      const [w, hh] = partSize(ghost.kind);
+      const g = S('g', { class: `part ghost k-${ghost.kind}${ghost.ok ? '' : ' blocked'}`, transform: `translate(${ghost.x},${ghost.y})`, style: `--kc:${KIND_COLOR[ghost.kind]}` });
+      const inner = S('g', { transform: `scale(${K})` });
+      for (const sh of partShapes({ id: 'ghost', kind: ghost.kind, x: 0, y: 0 }, () => 'z')) inner.append(S(sh.t, sh.a, sh.text));
+      g.append(S('rect', { x: -6, y: -6, width: w + 12, height: hh + 12, rx: 10, class: 'ghost-box' }), inner);
+      world.append(g);
+    }
+    if (wiring) {
+      const [pid, pin] = wiring.from.split('.');
+      const [x1, y1] = pinXY(partOf(pid)!, pin);
+      const tp = wiring.target ? partOf(wiring.target.split('.')[0]) : undefined;
+      const [x2, y2] = tp ? pinXY(tp, wiring.target!.split('.')[1]) : [wiring.x, wiring.y];
+      world.append(S('line', { x1, y1, x2, y2, class: `rubber${wiring.target ? ' snap' : ''}` }));
+    }
+    // A delete badge on whatever is selected.
+    const badge = (x: number, y: number) => {
+      const rr = Math.max(12, 16 / s);
+      const g = S('g', { class: 'del', 'data-del': '1', transform: `translate(${x},${y})` });
+      g.append(S('circle', { r: rr }), S('text', { y: rr * 0.38, 'font-size': rr * 1.1 }, '✕'), S('title', {}, 'Delete'));
+      world.append(g);
+    };
+    if (sel.wire !== undefined) {
+      const rw = r.wires.find((q) => q.wire === sel.wire);
+      if (rw?.pts.length) { const [x, y] = midpoint(rw.pts); badge(x, y); }
+    } else if (sel.part) {
+      const p = partOf(sel.part);
+      if (p && !p.fixed) badge(p.x + partSize(p.kind)[0] + 4, p.y - 4);
+    }
+  };
+
+  // ---------------------------------------------------------------- editing
+  const persist = () => saveDraft(key, circ);
+  /** Something on the board changed: re-simulate live, and forget the last test run. */
+  const changed = () => {
     persist();
-    resim(true);
+    sim = new Sim(circ);
+    sim.settle(inputs);
+    frame = null;
+    pointAt = undefined;
+    rowState = rows.map(() => 'idle');
     draw();
+    renderRows();
+    renderTools();
+  };
+  const mutate = (fn: () => void) => {
+    undo.push(JSON.stringify(circ));
+    if (undo.length > 200) undo.shift();
+    redo.length = 0;
+    fn();
+    changed();
+  };
+  const doUndo = () => { if (!undo.length || running) return; redo.push(JSON.stringify(circ)); circ = JSON.parse(undo.pop()!); sel = {}; changed(); };
+  const doRedo = () => { if (!redo.length || running) return; undo.push(JSON.stringify(circ)); circ = JSON.parse(redo.pop()!); sel = {}; changed(); };
+
+  const connect = (a: string, b: string) => {
+    const ok = canJoin(a, b);
+    if (ok !== true) { say(ok, 'warn'); return; }
+    mutate(() => circ.wires.push({ a, b }));
+    if (!wiredOnce) { wiredOnce = true; recordLabFirstWire(level.id, (Date.now() - opened) / 1000); }
+    say(circ.wires.length === 1 ? 'Wired! Tap a switch to see the signal travel, or press Test it.' : '', 'info');
   };
   const deleteSelected = () => {
-    if (selected.wire !== undefined) removeWire(selected.wire);
-    else if (selected.part) removePart(selected.part);
+    if (running) return;
+    if (sel.wire !== undefined) { const i = sel.wire; sel = {}; mutate(() => circ.wires.splice(i, 1)); say('Wire removed. Undo brings it back.', 'info'); return; }
+    const p = sel.part ? partOf(sel.part) : undefined;
+    if (!p) return;
+    if (p.fixed) { say('Switches and lamps stay where they are.', 'info'); return; }
+    sel = {};
+    mutate(() => {
+      circ.parts = circ.parts.filter((x) => x.id !== p.id);
+      circ.wires = circ.wires.filter((w) => !w.a.startsWith(`${p.id}.`) && !w.b.startsWith(`${p.id}.`));
+    });
   };
-
-  const addPart = (kind: Kind) => {
-    const [w, hh] = SIZE[kind];
-    const overlaps = (x: number, y: number) => circ.parts.some((p) => { const [pw, ph] = SIZE[p.kind]; return x < p.x + pw + 20 && x + w + 20 > p.x && y < p.y + ph + 20 && y + hh + 20 > p.y; });
-    let spot: [number, number] = [snap(W / 2 - w / 2), snap(H / 2 - hh / 2)];
-    outer: for (let y = 60; y < H - hh - 40; y += 40) for (let x = 110; x < W - w - 110; x += 40) if (!overlaps(x, y)) { spot = [x, y]; break outer; }
-    const pid = `${kind.toLowerCase()}_${Date.now().toString(36)}${Math.floor(Math.random() * 99)}`;
-    circ.parts.push({ id: pid, kind, x: spot[0], y: spot[1] });
-    selected = { part: pid };
-    persist();
-    resim(true);
+  /** Where a new part goes: the free spot made for it in this lab if there is one, else the nearest free spot. */
+  const spotFor = (kindOf: Kind, near?: [number, number]): [number, number] | undefined => {
+    if (!near) for (const sl of slots) if (sl.kind === kindOf && fits(circ.parts, kindOf, sl.x, sl.y, board)) return [sl.x, sl.y];
+    return freeSpot(circ.parts, kindOf, board, near);
+  };
+  const addPart = (kindOf: Kind, at?: [number, number]) => {
+    const spot = at && fits(circ.parts, kindOf, at[0], at[1], board) ? at : spotFor(kindOf, at);
+    if (!spot) { say('The board is full. Delete a part to make room.', 'warn'); return; }
+    const pid = `${kindOf.toLowerCase()}_${Date.now().toString(36)}${Math.floor(Math.random() * 99)}`;
+    mutate(() => circ.parts.push({ id: pid, kind: kindOf, x: spot[0], y: spot[1] }));
+    sel = { part: pid };
+    say(`${partInfo({ id: pid, kind: kindOf, x: 0, y: 0 })} Drag from its dots to wire it.`, 'info');
     draw();
   };
+  const setInput = (label: string, v: 0 | 1) => { inputs[label] = v; frame = null; sim.settle(inputs); draw(); renderRows(); };
 
-  const partDown = (e: PointerEvent, p: Part) => {
-    e.stopPropagation();
-    const pinEl = (e.target as Element).closest('[data-pin]');
-    if (pinEl) {
-      const ref = pinEl.getAttribute('data-pin')!;
-      if (pending && pending !== ref) { connect(pending, ref); pending = null; draw(); return; }
-      const [x, y] = toLocal(e);
-      rubber = { from: ref, x, y };
-      const sx = e.clientX, sy = e.clientY;
-      canvas.setPointerCapture(e.pointerId);
-      const move = (ev: PointerEvent) => { const [mx, my] = toLocal(ev); rubber = { from: ref, x: mx, y: my }; draw(); };
-      const up = (ev: PointerEvent) => {
-        canvas.removeEventListener('pointermove', move);
-        canvas.removeEventListener('pointerup', up);
-        rubber = null;
-        const target = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('[data-pin]')?.getAttribute('data-pin');
-        if (target && target !== ref) { connect(ref, target); pending = null; }
-        else if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < 5) pending = pending === ref ? null : ref;
+  // ---------------------------------------------------------------- pointer input on the board
+  type Gesture = { move(e: PointerEvent): void; up(e: PointerEvent): void };
+  let gesture: Gesture | null = null;
+  const touches = new Map<number, [number, number]>();
+  let pinch: { d0: number; s0: number } | null = null;
+
+  const pinGesture = (e: PointerEvent, from: string): Gesture => {
+    const sx = e.clientX, sy = e.clientY;
+    let moved = false;
+    const [wx, wy] = toLocal(e.clientX, e.clientY);
+    wiring = { from, x: wx, y: wy };
+    draw();
+    return {
+      move(ev) {
+        if (Math.hypot(ev.clientX - sx, ev.clientY - sy) > 6) moved = true;
+        const [x, y] = toLocal(ev.clientX, ev.clientY);
+        const target = hitPin(circ.parts, x, y, scale(), (ref) => ref !== from && canJoin(from, ref) === true, 1.6);
+        wiring = { from, x, y, target };
         draw();
-      };
-      canvas.addEventListener('pointermove', move);
-      canvas.addEventListener('pointerup', up);
+      },
+      up(ev) {
+        const target = wiring?.target;
+        wiring = null;
+        if (target) { pending = null; connect(from, target); return; }
+        if (!moved) {
+          pending = pending === from ? null : from;
+          if (pending) say('Now tap the dot you want to wire it to. The dots you can use are glowing.', 'info');
+        } else {
+          const [x, y] = toLocal(ev.clientX, ev.clientY);
+          const over = hitPin(circ.parts, x, y, scale(), (ref) => ref !== from);
+          const why = over ? canJoin(from, over) : true;
+          if (why !== true) say(why, 'warn');
+        }
+        draw();
+      },
+    };
+  };
+
+  const partGesture = (e: PointerEvent, p: Part): Gesture => {
+    const sx = e.clientX, sy = e.clientY;
+    const [wx0, wy0] = toLocal(e.clientX, e.clientY);
+    const ox = p.x, oy = p.y;
+    const before = JSON.stringify(circ);
+    let moved = false;
+    sel = { part: p.id };
+    pending = null;
+    draw();
+    return {
+      move(ev) {
+        if (p.fixed) return;
+        if (!moved && Math.hypot(ev.clientX - sx, ev.clientY - sy) < 6) return;
+        moved = true;
+        const [x, y] = toLocal(ev.clientX, ev.clientY);
+        const [w, hh] = partSize(p.kind);
+        p.x = Math.max(GRID, Math.min(board.w - w - GRID, snap(ox + x - wx0)));
+        p.y = Math.max(GRID, Math.min(board.h - hh - GRID, snap(oy + y - wy0)));
+        draw();
+      },
+      up() {
+        if (moved) {
+          if (!fits(circ.parts, p.kind, p.x, p.y, board, p.id)) [p.x, p.y] = freeSpot(circ.parts, p.kind, board, [p.x, p.y], p.id) ?? [ox, oy];
+          if (p.x !== ox || p.y !== oy) { undo.push(before); redo.length = 0; changed(); } else draw();
+          return;
+        }
+        if (p.kind === 'IN' && p.label) setInput(p.label, switchOn(p.label) ? 0 : 1);
+        say(partInfo(p), 'info');
+        draw();
+      },
+    };
+  };
+
+  const panGesture = (e: PointerEvent): Gesture => {
+    let lx = e.clientX, ly = e.clientY, moved = false;
+    const sx = lx, sy = ly;
+    return {
+      move(ev) {
+        if (!moved && Math.hypot(ev.clientX - sx, ev.clientY - sy) < 6) return;
+        moved = true;
+        const s = scale();
+        view.x -= (ev.clientX - lx) / s;
+        view.y -= (ev.clientY - ly) / s;
+        lx = ev.clientX; ly = ev.clientY;
+        autoFit = false;
+        applyView();
+      },
+      up() { if (!moved) { sel = {}; pending = null; draw(); } },
+    };
+  };
+
+  canvas.addEventListener('pointerdown', (e) => {
+    if (running) return;
+    canvas.focus({ preventScroll: true });
+    touches.set(e.pointerId, [e.clientX, e.clientY]);
+    canvas.setPointerCapture(e.pointerId);
+    if (touches.size === 2) {
+      // Two fingers: pinch to zoom. Whatever one finger had started is dropped.
+      const [a, b] = [...touches.values()];
+      pinch = { d0: Math.hypot(a[0] - b[0], a[1] - b[1]), s0: scale() };
+      wiring = null; gesture = null; ghost = null;
+      draw();
       return;
     }
-    selected = { part: p.id };
-    if (p.kind === 'IN') { inputs[p.label!] ^= 1; resim(false); draw(); return; }
-    if (p.fixed) { draw(); return; }
-    const [sx, sy] = toLocal(e);
-    const ox = p.x, oy = p.y;
-    canvas.setPointerCapture(e.pointerId);
-    const move = (ev: PointerEvent) => {
-      const [mx, my] = toLocal(ev);
-      const [w, hh] = SIZE[p.kind];
-      p.x = Math.max(0, Math.min(W - w, snap(ox + mx - sx)));
-      p.y = Math.max(0, Math.min(H - hh, snap(oy + my - sy)));
+    if (frame) { frame = null; draw(); }
+    pointAt = undefined;
+    const [wx, wy] = toLocal(e.clientX, e.clientY);
+    const t = e.target as Element;
+    if (t.closest('[data-del]')) { deleteSelected(); return; }
+    const pin = hitPin(circ.parts, wx, wy, scale());
+    if (pin) {
+      if (pending && pending !== pin) { const from = pending; pending = null; connect(from, pin); return; }
+      gesture = pinGesture(e, pin);
+      return;
+    }
+    const wireEl = t.closest('[data-wire]');
+    if (wireEl) {
+      sel = { wire: Number(wireEl.getAttribute('data-wire')) };
+      pending = null;
+      say('Tap the ✕ to delete this wire.', 'info');
       draw();
-    };
-    const up = () => { canvas.removeEventListener('pointermove', move); canvas.removeEventListener('pointerup', up); persist(); };
-    canvas.addEventListener('pointermove', move);
-    canvas.addEventListener('pointerup', up);
-    draw();
+      return;
+    }
+    const partEl = t.closest('[data-part]');
+    const p = partEl ? partOf(partEl.getAttribute('data-part')!) : undefined;
+    gesture = p ? partGesture(e, p) : panGesture(e);
+  });
+  canvas.addEventListener('pointermove', (e) => {
+    if (touches.has(e.pointerId)) touches.set(e.pointerId, [e.clientX, e.clientY]);
+    if (pinch && touches.size === 2) {
+      const [a, b] = [...touches.values()];
+      const d = Math.hypot(a[0] - b[0], a[1] - b[1]);
+      const [mx, my] = toSvg((a[0] + b[0]) / 2, (a[1] + b[1]) / 2);
+      zoomAt((pinch.s0 * (d / Math.max(1, pinch.d0))) / scale(), mx, my);
+      return;
+    }
+    if (gesture) { gesture.move(e); return; }
+    if (e.pointerType === 'mouse' && !running) {
+      const [x, y] = toLocal(e.clientX, e.clientY);
+      const near = hitPin(circ.parts, x, y, scale());
+      if (near !== nearPin) { nearPin = near; draw(); }
+    }
+  });
+  const end = (e: PointerEvent) => {
+    touches.delete(e.pointerId);
+    if (pinch) { if (touches.size < 2) pinch = null; return; }
+    const g = gesture;
+    gesture = null;
+    g?.up(e);
   };
-  canvas.addEventListener('pointerdown', () => { selected = {}; pending = null; draw(); });
+  canvas.addEventListener('pointerup', end);
+  canvas.addEventListener('pointercancel', (e) => { touches.delete(e.pointerId); pinch = null; gesture = null; wiring = null; draw(); });
+  canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const [x, y] = toSvg(e.clientX, e.clientY);
+    zoomAt(e.deltaY < 0 ? 1.15 : 1 / 1.15, x, y);
+  }, { passive: false });
   canvas.addEventListener('keydown', (e) => {
+    const mod = e.ctrlKey || e.metaKey;
+    if (mod && e.key.toLowerCase() === 'z') { e.preventDefault(); if (e.shiftKey) doRedo(); else doUndo(); return; }
+    if (mod && e.key.toLowerCase() === 'y') { e.preventDefault(); doRedo(); return; }
     if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); deleteSelected(); }
-    if (e.key === 'Escape') { pending = null; selected = {}; draw(); }
+    if (e.key === 'Escape') { pending = null; sel = {}; wiring = null; draw(); }
   });
 
-  // ---- side panel: live truth table / sequence
-  const side = h('div', { class: 'logic-side' });
-  const renderSide = () => {
-    const v = verify(circ, level.inputs, level.outputs, level.spec);
-    const cnt = circ.parts.filter((p) => counts(p.kind)).length;
-    const unit = level.mode === 'cmos' ? 'transistors' : 'parts';
-    side.replaceChildren(
-      h('div', { class: 'kpis' },
-        h('div', { class: `kpi ${cnt <= level.par ? 'good' : ''}` }, h('small', null, unit), h('b', null, `${cnt} / par ${level.par}`)),
-        h('div', { class: `kpi ${v.ok ? 'good' : 'bad'}` }, h('small', null, 'rows passing'), h('b', null, `${v.rows.filter((r) => r.ok).length}/${v.rows.length}`))),
-      h('h4', null, level.spec.kind === 'table' ? 'Truth table (live)' : 'Test sequence (live)'),
-      h('table', { class: 'tt logic-tt' },
-        h('tr', null, ...(level.spec.kind === 'seq' ? [h('th', null, 'step')] : []), ...level.inputs.map((n) => h('th', null, n)), ...level.outputs.map((n) => h('th', { class: 'exp' }, n)), ...level.outputs.map((n) => h('th', null, `your ${n}`)), h('th', null, '')),
-        ...v.rows.map((r, i) => h('tr', { class: r.ok ? 'ok' : 'bad' },
-          ...(level.spec.kind === 'seq' ? [h('td', null, `${r.tick ? 'clk↑ ' : ''}${r.note ?? i + 1}`)] : []),
-          ...level.inputs.map((n) => h('td', null, String(r.inputs[n]))),
-          ...level.outputs.map((n) => h('td', { class: 'exp' }, String(r.expected[n]))),
-          ...level.outputs.map((n) => h('td', { class: vcls(r.got[n]) }, r.got[n] === 'z' ? '-' : String(r.got[n]))),
-          h('td', null, r.ok ? '✓' : '✗')))),
-      ...(v.errors.length ? [h('ul', { class: 'messages' }, ...v.errors.slice(0, 3).map((e) => h('li', { class: 'msg err' }, e)))] : []),
-    );
+  // ---------------------------------------------------------------- dragging parts in from the tray
+  const binChip = (k: Kind) => {
+    const chip = h('button', { class: 'bin-part', style: `--kc:${KIND_COLOR[k]}`, title: partInfo({ id: k, kind: k, x: 0, y: 0 }), 'aria-label': `Add a ${KIND_NAME[k]}` }, h('b', null, KIND_NAME[k]), h('small', null, 'drag or tap'));
+    chip.addEventListener('pointerdown', (e) => {
+      if (running || e.button > 0) return;
+      e.preventDefault();
+      const sx = e.clientX, sy = e.clientY;
+      let moved = false;
+      const float = h('div', { class: 'bin-float', style: `--kc:${KIND_COLOR[k]};${themeStyle()}` }, KIND_NAME[k]);
+      chip.setPointerCapture(e.pointerId);
+      const overBoard = (ev: PointerEvent) => { const r = host.getBoundingClientRect(); return ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom; };
+      const move = (ev: PointerEvent) => {
+        if (!moved && Math.hypot(ev.clientX - sx, ev.clientY - sy) < 8) return;
+        if (!moved) { moved = true; document.body.append(float); }
+        float.style.left = `${ev.clientX}px`;
+        float.style.top = `${ev.clientY}px`;
+        if (overBoard(ev)) {
+          const [x, y] = toLocal(ev.clientX, ev.clientY);
+          const [w, hh] = partSize(k);
+          const gx = snap(x - w / 2), gy = snap(y - hh / 2);
+          ghost = { kind: k, x: gx, y: gy, ok: fits(circ.parts, k, gx, gy, board) };
+          float.classList.add('over');
+        } else { ghost = null; float.classList.remove('over'); }
+        draw();
+      };
+      const up = () => {
+        chip.removeEventListener('pointermove', move);
+        chip.removeEventListener('pointerup', up);
+        chip.removeEventListener('pointercancel', up);
+        float.remove();
+        const g = ghost;
+        ghost = null;
+        if (!moved) addPart(k);
+        else if (g) addPart(k, [g.x, g.y]);
+        else draw();
+      };
+      chip.addEventListener('pointermove', move);
+      chip.addEventListener('pointerup', up);
+      chip.addEventListener('pointercancel', up);
+    });
+    return chip;
   };
 
-  // ---- toolbar & brief
-  const hasClock = level.palette.includes('DFF');
-  const clockInfo = h('span', { class: 'dim small' });
-  const verifyBtn = h('button', { class: 'btn primary', onclick: () => doVerify() }, '✓ Verify');
-  const toolbar = h('div', { class: 'toolbar' },
-    verifyBtn,
-    hasClock ? h('button', { class: 'btn', onclick: () => { sim.tick(); sim.settle(inputs); cycles++; clockInfo.textContent = `${cycles} clock edge${cycles === 1 ? '' : 's'}`; draw(); } }, 'Clock ↑') : null,
-    hasClock ? h('button', { class: 'btn ghost', onclick: () => { resim(true); clockInfo.textContent = 'flops reset to 0'; draw(); } }, 'Reset flops') : null,
-    clockInfo,
-    h('span', { class: 'spacer' }),
-    h('button', { class: 'btn ghost small', onclick: deleteSelected, title: 'Delete / Backspace' }, 'Delete selected'),
-    h('button', { class: 'btn ghost small', onclick: () => { if (confirm('Clear the board?')) { circ = starter(level); clearDraft(key); resim(true); draw(); } } }, 'Clear'),
-  );
-
-  const doVerify = () => {
-    const v = verify(circ, level.inputs, level.outputs, level.spec);
-    if (!v.ok) {
-      const bad = v.rows.find((r) => !r.ok);
-      const msg = v.errors[0] ?? (bad ? `Not yet. With ${Object.entries(bad.inputs).map(([k, x]) => `${k}=${x}`).join(', ')}, ${level.outputs.map((o) => `${o} should be ${bad.expected[o]} but is ${bad.got[o]}`).join(', ')}.` : 'Not yet.');
-      mentorSay(msg, 'concerned');
-      toast('Verification failed. See the table on the right.', 'err');
-      return;
-    }
-    let st = starsFor(v, level.par);
-    st = Math.max(1, st - usage.hints);
-    finish(level.id, level.xp, st, [
-      v.count > level.par ? `You used ${v.count}; par is ${level.par}. Fewer parts earn more stars.` : '',
-      usage.hints ? HINT_NOTE : '',
-    ]);
+  // ---------------------------------------------------------------- the coach line, hints and the steps drawer
+  const coach = h('div', { class: 'coach', role: 'status', 'aria-live': 'polite' });
+  const say = (text: string, tone: 'info' | 'warn' | 'bad' | 'ok', extra?: HTMLElement) => {
+    coach.className = `coach ${tone}${text ? '' : ' empty'}`;
+    coach.replaceChildren(h('span', null, text), extra ?? '');
   };
-
   const hintList = h('ol', { class: 'hints' });
-  const hintBtn = h('button', { class: 'btn ghost small', onclick: () => { usage.hints = Math.min(level.hints.length, usage.hints + 1); saveDraft(`${key}.usage`, usage); renderHints(); mentorSay(`Hint: ${level.hints[usage.hints - 1]}`, 'thinking'); } });
+  const hintLabel = () => (usage.hints >= level.hints.length ? 'No more hints' : `Show a hint${kind ? '' : ' (costs a star)'}`);
+  const hintButtons: HTMLButtonElement[] = [];
+  const hintButton = (cls = 'btn small') => { const b = h('button', { class: cls, onclick: () => showHint() }, hintLabel()) as HTMLButtonElement; hintButtons.push(b); return b; };
   const renderHints = () => {
     hintList.replaceChildren(...level.hints.slice(0, usage.hints).map((t) => h('li', null, t)));
-    hintBtn.textContent = usage.hints >= level.hints.length ? 'No more hints' : `Ask TAPEOUT for a hint (${level.hints.length - usage.hints} left, costs a star)`;
-    (hintBtn as HTMLButtonElement).disabled = usage.hints >= level.hints.length;
+    for (const b of hintButtons) { b.textContent = hintLabel(); b.disabled = usage.hints >= level.hints.length; }
+    shortHint.disabled = headHint.disabled = usage.hints >= level.hints.length;
   };
-  renderHints();
+  const showHint = () => {
+    if (usage.hints >= level.hints.length) return;
+    usage.hints++;
+    saveDraft(`${key}.usage`, usage);
+    renderHints();
+    const t = level.hints[usage.hints - 1];
+    say(`Hint ${usage.hints} of ${level.hints.length}: ${t}`, 'info', usage.hints < level.hints.length ? hintButton('btn small ghost') : undefined);
+    renderHints();
+    mentorSay(`Hint: ${t}`, 'thinking');
+  };
 
-  const palette = h('div', { class: 'palette' }, ...level.palette.map((k) => h('button', { class: 'chip', onclick: () => addPart(k), title: `Add a ${k}` }, `+ ${k}`)));
-  const brief = h('aside', { class: 'brief panel' },
-    h('div', { class: 'tag' }, level.concept),
+  const drawer = h('aside', { class: 'drawer', 'aria-label': 'Steps', hidden: true },
+    h('div', { class: 'drawer-head' }, h('b', null, 'How to build it'), h('button', { class: 'btn small ghost', onclick: () => toggleDrawer(false), 'aria-label': 'Close steps' }, '✕ Close')),
     h('div', { class: 'brief-body', html: level.brief }),
-    h('h4', null, 'Parts bin'), palette,
-    h('p', { class: 'dim small' }, 'Drag parts to move them. Drag from pin to pin (or click one pin, then another) to wire. Click an input switch to toggle it. Select + Delete removes; double-click a wire to cut it.'),
-    h('div', { class: 'hint-box' }, hintBtn, hintList));
+    h('h4', null, 'Hints'), hintList, hintButton(),
+    h('h4', null, 'Controls'),
+    h('ul', { class: 'controls' },
+      h('li', null, 'Drag a part from the tray onto the board, or tap it to drop it in.'),
+      h('li', null, 'Drag from one dot to another to wire them. Or tap one dot, then the other.'),
+      h('li', null, 'Tap a switch to flip it. Tap a wire, then its ✕, to delete it.'),
+      h('li', null, 'Pinch or scroll to zoom. Drag the empty board to move around. Fit shows it all.')));
+  const toggleDrawer = (open?: boolean) => { drawer.hidden = open === undefined ? !drawer.hidden : !open; };
 
-  resim(true);
-  draw();
-  return h('div', { class: 'level' },
-    levelHeader(level.title, level.id, levelRecord(level.id)?.stars ?? 0, level.xp),
-    h('div', { class: 'level-grid logic-grid' }, brief,
-      h('section', { class: 'work panel' }, toolbar, h('div', { class: 'logic-wrap' }, canvas)),
-      h('aside', { class: 'panel' }, side)));
+  // ---------------------------------------------------------------- the table of rows
+  const rowsEl = h('div', { class: 'rows', role: 'list', 'aria-label': level.spec.kind === 'table' ? 'Every switch setting' : 'Test steps' });
+  const parBox = h('div', { class: 'lab-par' });
+  const renderRows = () => {
+    const live = !frame && !running && level.spec.kind === 'table' ? rows.findIndex((r) => level.inputs.every((n) => r.ins[n] === inputs[n])) : -1;
+    rowsEl.replaceChildren(
+      h('div', { class: 'row head', 'aria-hidden': 'true' },
+        h('span', { class: 'ins' }, ...level.inputs.map((n) => h('i', null, n))), h('span', { class: 'arrow' }, '→'), h('span', { class: 'outs' }, ...level.outputs.map((n) => h('i', null, n))), h('span', { class: 'mark' })),
+      ...rows.map((r, i) => {
+        const st = rowState[i];
+        return h('div', { class: `row ${st}${i === live ? ' live' : ''}`, role: 'listitem', 'aria-label': `${r.label ? `${r.label}: ` : ''}${level.inputs.map((n) => `${n} ${r.ins[n] ? 'on' : 'off'}`).join(', ')}; ${level.outputs.map((o) => `${o} ${r.exp[o] ? 'lit' : 'off'}`).join(', ')}${st === 'ok' ? ', passed' : st === 'bad' ? ', failed' : ''}` },
+          h('span', { class: 'ins' }, ...(r.label && level.spec.kind === 'seq' ? [h('em', null, r.label)] : []), ...level.inputs.map((n) => h('i', { class: r.ins[n] ? 'b1' : 'b0' }, String(r.ins[n])))),
+          h('span', { class: 'arrow' }, '→'),
+          h('span', { class: 'outs' }, ...level.outputs.map((o) => h('i', { class: `lamp-dot ${r.exp[o] ? 'b1' : 'b0'}`, title: `${o} should be ${r.exp[o] ? 'lit' : 'off'}` }))),
+          h('span', { class: 'mark' }, st === 'ok' ? '✓' : st === 'bad' ? '✗' : st === 'cur' ? '▶' : ''));
+      }));
+    if (!kind) {
+      const cnt = circ.parts.filter((p) => counts(p.kind)).length;
+      parBox.textContent = `${level.mode === 'cmos' ? 'transistors' : 'parts'} ${cnt} · par ${level.par}`;
+    }
+  };
+
+  // ---------------------------------------------------------------- the tray
+  const undoBtn = h('button', { class: 'btn tool', onclick: doUndo, title: 'Undo (Ctrl+Z)', 'aria-label': 'Undo' }, '↶') as HTMLButtonElement;
+  const redoBtn = h('button', { class: 'btn tool', onclick: doRedo, title: 'Redo (Ctrl+Y)', 'aria-label': 'Redo' }, '↷') as HTMLButtonElement;
+  const clearBtn = h('button', { class: 'btn tool', onclick: () => { if (running) return; sel = {}; mutate(() => { circ = clone(layout.start); }); say('Board cleared. Undo brings it back.', 'info'); } }, 'Clear') as HTMLButtonElement;
+  const testBtn = h('button', { class: 'btn test-it', onclick: () => void runTest() }, '▶ Test it') as HTMLButtonElement;
+  const clockBtns = hasClock ? [
+    h('button', { class: 'btn tool', onclick: () => { frame = null; sim.tick(); sim.settle(inputs); draw(); say('Tick! Every DFF copied its input.', 'info'); } }, 'Clock ↑'),
+    h('button', { class: 'btn tool', onclick: () => { frame = null; sim = new Sim(circ); sim.settle(inputs); draw(); say('The DFFs are back to 0.', 'info'); } }, 'Reset DFFs'),
+  ] : [];
+  const renderTools = () => {
+    undoBtn.disabled = running || !undo.length;
+    redoBtn.disabled = running || !redo.length;
+    clearBtn.disabled = running;
+    testBtn.disabled = running;
+    testBtn.textContent = running ? 'Testing…' : '▶ Test it';
+  };
+  const tray = h('div', { class: 'lab-tray' },
+    level.palette.length ? h('div', { class: 'lab-bin', role: 'group', 'aria-label': 'Parts' }, ...level.palette.map(binChip)) : h('div', { class: 'lab-bin empty' }, h('small', null, 'No parts to add: just wire it.')),
+    clockBtns.length ? h('div', { class: 'tools' }, ...clockBtns) : '',
+    testBtn);
+
+  // ---------------------------------------------------------------- Test it, and the win
+  const winCard = h('div', { class: 'win-card', hidden: true, role: 'dialog', 'aria-label': 'Circuit works' });
+  const starsSlot = h('span', { class: 'head-stars' }, starEls(levelRecord(level.id)?.stars ?? 0));
+
+  async function runTest() {
+    if (running) return;
+    running = true;
+    attempts++;
+    sel = {}; pending = null; pointAt = undefined; winCard.hidden = true;
+    renderTools();
+    const res = testRun(circ, level);
+    const fast = reducedMotion();
+    const stepMs = fast ? 0 : Math.max(260, Math.min(650, 3600 / res.frames.length));
+    rowState = rows.map(() => 'idle');
+    say('Testing every row…', 'info');
+    for (let k = 0; k < res.frames.length; k++) {
+      frame = res.frames[k];
+      rowState[k] = 'cur';
+      pulsing = !fast;
+      draw(); renderRows();
+      if (!fast) { playCue('step'); await sleep(stepMs); }
+      rowState[k] = frame.ok ? 'ok' : 'bad';
+      renderRows();
+      if (!frame.ok) break;
+    }
+    pulsing = false;
+    running = false;
+    recordLabTest(level.id, res.ok, attempts);
+    if (level.spec.kind === 'table' && frame) {
+      // Leave the switches where the run stopped, so the board shows that row live.
+      for (const n of level.inputs) inputs[n] = frame.inputs[n];
+      sim.settle(inputs);
+      frame = null;
+    }
+    renderTools();
+    if (res.ok) { win(); draw(); renderRows(); return; }
+    pointAt = res.problem?.part;
+    const text = res.problem?.text ?? 'Not yet.';
+    say(text, 'bad', usage.hints < level.hints.length ? hintButton('btn small') : undefined);
+    renderHints();
+    playCue('fail');
+    mentorSay(text, 'concerned');
+    draw(); renderRows();
+  }
+
+  function win() {
+    const v = verify(circ, level.inputs, level.outputs, level.spec);
+    const st = kind ? 3 : Math.max(1, starsFor(v, level.par) - usage.hints);
+    const { gained, promotedTo } = award(level.id, level.xp, st);
+    playCue(promotedTo ? 'promote' : 'pass');
+    const line = pick(praise(st, level.xp)).replace(/\{name\}/g, playerName());
+    setMood(st === 3 ? 'proud' : 'happy');
+    mentorSay(promotedTo ? `${line} ${promotionLine(promotedTo)}` : line, promotedTo ? 'excited' : st === 3 ? 'proud' : 'happy');
+    starsSlot.replaceChildren(starEls(levelRecord(level.id)?.stars ?? st));
+    canvas.classList.add('won');
+    setTimeout(() => canvas.classList.remove('won'), 2600);
+    say('Circuit works!', 'ok');
+    const next = neighbours(level.id).next;
+    const notes = [
+      !kind && v.count > level.par ? `You used ${v.count} parts; par is ${level.par}. Fewer parts earn more stars.` : '',
+      !kind && usage.hints ? 'Solve it without hints for another star.' : '',
+    ].filter(Boolean);
+    winCard.replaceChildren(
+      h('div', { class: 'win-kicker' }, 'Circuit works!'),
+      h('h3', null, `You built ${level.made}.`),
+      starEls(st),
+      h('p', { class: 'gain' }, gained > 0 ? `+${gained} XP` : 'No new XP: you already have a better result here.'),
+      promotedTo ? h('p', { class: 'promo' }, `Promoted to ${promotedTo.title}!`) : '',
+      ...notes.map((n) => h('p', { class: 'note' }, n)),
+      h('div', { class: 'win-actions' },
+        next ? h('a', { class: 'btn test-it', href: next.route }, `Next: ${next.title} →`) : h('a', { class: 'btn test-it', href: '#/map' }, 'Back to the map'),
+        h('button', { class: 'btn tool', onclick: () => { winCard.hidden = true; } }, 'Keep playing')));
+    winCard.hidden = false;
+  }
+
+  // ---------------------------------------------------------------- the page
+  const { prev, next } = neighbours(level.id);
+  const headHint = h('button', { class: 'btn tool narrow', onclick: () => showHint(), title: 'Show a hint' }, 'Hint') as HTMLButtonElement;
+  const head = h('header', { class: 'lab-head' },
+    h('a', { class: 'crumb', href: '#/map', title: 'Back to the map' }, '◈ Map'),
+    h('h2', null, level.title), starsSlot, h('span', { class: 'xp' }, `${level.xp} XP`),
+    h('span', { class: 'spacer' }),
+    h('button', { class: 'btn tool narrow', onclick: () => toggleDrawer() }, 'Steps'),
+    headHint,
+    h('button', { class: 'btn tool peek', onclick: () => document.getElementById('desktop')?.classList.toggle('mentor-peek'), title: 'Show or hide TAPEOUT' }, 'TAPEOUT'),
+    prev ? h('a', { class: 'btn tool wide', href: prev.route, title: `Back: ${prev.title}`, 'aria-label': `Back: ${prev.title}` }, '←') : '',
+    next ? h('a', { class: 'btn tool wide', href: next.route, title: `Next: ${next.title}`, 'aria-label': `Next: ${next.title}` }, '→') : '');
+  const shortHint = h('button', { class: 'btn tool wide', onclick: () => showHint(), title: 'Show a hint' }, 'Hint') as HTMLButtonElement;
+  const goal = h('div', { class: 'goal' },
+    h('span', { class: 'tag' }, level.concept),
+    h('p', null, level.goal),
+    h('button', { class: 'btn tool wide', onclick: () => toggleDrawer() }, 'Steps'),
+    shortHint);
+  const zoomTools = h('div', { class: 'zoom', role: 'group', 'aria-label': 'Zoom' },
+    h('button', { class: 'btn tool', onclick: () => zoomCenter(1 / 1.25), 'aria-label': 'Zoom out' }, '−'),
+    h('button', { class: 'btn tool', onclick: () => zoomCenter(1.25), 'aria-label': 'Zoom in' }, '+'),
+    h('button', { class: 'btn tool', onclick: fit, 'aria-label': 'Fit the whole board' }, 'Fit'));
+  const side = h('aside', { class: 'side' }, h('h4', null, level.spec.kind === 'table' ? 'Every switch setting' : 'Test steps'), kind ? '' : parBox, rowsEl);
+  const root = h('div', { class: `lab2${kind ? ' kind' : ''}`, style: themeStyle(), 'data-lab': level.id },
+    h('div', { class: 'lab2-grid' },
+      head, goal,
+      h('div', { class: 'main' }, h('div', { class: 'board-wrap' }, h('div', { class: 'board-bar' }, h('div', { class: 'edit', role: 'group', 'aria-label': 'Edit' }, undoBtn, redoBtn, clearBtn), zoomTools), host, coach, winCard), side),
+      tray),
+    drawer);
+
+  say(circ.wires.length ? '' : level.palette.length ? 'Drag a part onto the board, then drag from dot to dot to wire it.' : 'Drag from the switch\'s dot to the lamp\'s dot to make a wire.', 'info');
+  renderHints();
+  renderRows();
+  renderTools();
+  fit();
+  requestAnimationFrame(() => { tr = wantSide(); fit(); });
+
+  // Screenshot and test hook, only when the developer flag is set in this browser.
+  try {
+    if (localStorage.getItem('tapeout.dev') === '1') {
+      (globalThis as Record<string, unknown>).__tapeoutLab = {
+        solve: () => { circ = clone(layout.solved); changed(); },
+        test: () => runTest(),
+      };
+    }
+  } catch { /* no storage: no hook */ }
+  return root;
+}
+
+function gridPath(w: number, hgt: number, step: number): string {
+  let d = '';
+  for (let x = step; x < w; x += step) d += `M${x},0V${hgt}`;
+  for (let y = step; y < hgt; y += step) d += `M0,${y}H${w}`;
+  return d;
+}
+
+/** Is (x, y) on this polyline? */
+function onPath(pts: [number, number][], x: number, y: number): boolean {
+  for (let k = 1; k < pts.length; k++) {
+    const [x0, y0] = pts[k - 1], [x1, y1] = pts[k];
+    if (x0 === x1 && x === x0 && y >= Math.min(y0, y1) && y <= Math.max(y0, y1)) return true;
+    if (y0 === y1 && y === y0 && x >= Math.min(x0, x1) && x <= Math.max(x0, x1)) return true;
+  }
+  return false;
+}
+
+/** The middle of a polyline, by length. */
+function midpoint(pts: [number, number][]): [number, number] {
+  const seg = pts.slice(1).map((p, k) => Math.abs(p[0] - pts[k][0]) + Math.abs(p[1] - pts[k][1]));
+  let half = seg.reduce((s, v) => s + v, 0) / 2;
+  for (let k = 0; k < seg.length; k++) {
+    if (half <= seg[k]) { const t = seg[k] ? half / seg[k] : 0; return [pts[k][0] + (pts[k + 1][0] - pts[k][0]) * t, pts[k][1] + (pts[k + 1][1] - pts[k][1]) * t]; }
+    half -= seg[k];
+  }
+  return pts[0];
 }
