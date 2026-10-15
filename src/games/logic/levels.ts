@@ -58,15 +58,31 @@ function fet(b: Builder, kind: 'NMOS' | 'PMOS', g: string, top: string, bottom: 
 export const LOGIC_LEVELS: LogicLevel[] = [
   {
     id: 'first-wire', title: 'First Wire', concept: 'a wire carries a signal', xp: 40, mode: 'gate',
-    brief: '<p>Start here. A circuit is parts joined by wires. Three words you need:</p><ul><li><b>Switch</b> (labelled <code>in</code>, on the left): click it to turn it on (1) or off (0).</li><li><b>Wire</b>: a line that carries a 0 or a 1 from one pin to another.</li><li><b>Lamp</b> (labelled <code>out</code>, on the right): lights up when it receives a 1.</li></ul><p>Drag one wire from the switch\'s dot on its right to the lamp\'s dot on its left. Then click the switch: the lamp should follow it.</p>',
+    brief: '<p>Start here. A circuit is parts joined by wires. Three words you need:</p><ul><li><b>Switch</b> (labelled <code>in</code>, on the left): click it to turn it on (1) or off (0).</li><li><b>Wire</b>: a line that carries a 0 or a 1 from one pin to another.</li><li><b>Lamp</b> (labelled <code>out</code>, on the right): lights up when it receives a 1.</li></ul><p>Drag one wire from the switch\'s dot on its right to the lamp\'s dot on its left. Then click the switch: the lamp should follow it.</p><p class="note"><b>Why this matters:</b> every wire inside your chip carries a 0 or a 1 just like this one.</p>',
     palette: [], inputs: ['in'], outputs: ['out'], par: 0,
     spec: truth((i) => ({ out: bit(i.in) })),
     hints: ['No parts to add. A single wire is the whole circuit.', 'Press on the switch\'s right-hand dot, drag, and release on the lamp\'s left-hand dot.'],
     solve: (b) => { b.wire(IN(b, 'in'), OUT(b, 'out')); },
   },
   {
+    id: 'first-not', title: 'Flip It', concept: 'a NOT gate flips a signal', xp: 40, mode: 'gate',
+    brief: '<p>A <b>NOT gate</b> flips a signal: 1 comes out as 0, and 0 comes out as 1.</p><p>Drag a <b>NOT</b> from the parts bin onto the board. Wire the switch <code>a</code> into it, and wire its output to the lamp <code>y</code>. Then click the switch: the lamp should do the <b>opposite</b>.</p><p class="note"><b>Why this matters:</b> your chip\'s subtractor will use NOT gates to flip numbers.</p>',
+    palette: ['NOT'], inputs: ['a'], outputs: ['y'], par: 1,
+    spec: truth((i) => ({ y: bit(!i.a) })),
+    hints: ['Add one NOT. Its input is on the left and its output is on the right.', 'Wire a to the NOT, then the NOT to y.'],
+    solve: (b) => { const g = b.add('NOT'); b.wire(IN(b, 'a'), a(g)).wire(y(g), OUT(b, 'y')); },
+  },
+  {
+    id: 'first-and', title: 'Both Switches', concept: 'an AND gate needs both inputs', xp: 50, mode: 'gate',
+    brief: '<p>An <b>AND gate</b> lights its lamp only when <b>both</b> switches are on.</p><p>Drag an <b>AND</b> onto the board. Wire switches <code>a</code> and <code>b</code> into its two inputs, and its output to the lamp <code>y</code>. Click the switches to check all four combinations.</p><p class="note"><b>Why this matters:</b> AND is the carry part of your chip\'s adder, coming up next.</p>',
+    palette: ['AND'], inputs: ['a', 'b'], outputs: ['y'], par: 1,
+    spec: truth((i) => ({ y: bit(i.a && i.b) })),
+    hints: ['One AND gate is enough.', 'Wire a to the top input, b to the bottom input, and the output to y.'],
+    solve: (b) => { const g = b.add('AND'); b.wire(IN(b, 'a'), a(g)).wire(IN(b, 'b'), bb(g)).wire(y(g), OUT(b, 'y')); },
+  },
+  {
     id: 'logic-not', title: 'NAND Is Universal', concept: 'NOT from NAND', xp: 60, mode: 'gate',
-    brief: '<p>Your only part is a 2-input <b>NAND</b>. Build an inverter: <code>y = !a</code>.</p><p>Drag a NAND from the parts bin, then drag from pin to pin to wire it. Click an input switch to toggle it and watch the signals light up.</p>',
+    brief: '<p class="note"><b>Optional challenge.</b> You already built a NOT with the real gate. This version uses only NANDs, the way chips often do.</p><p>Your only part is a 2-input <b>NAND</b>. Build an inverter: <code>y = !a</code>.</p><p>Drag a NAND from the parts bin, then drag from pin to pin to wire it. Click an input switch to toggle it and watch the signals light up.</p>',
     palette: ['NAND'], inputs: ['a'], outputs: ['y'], par: 1,
     spec: truth((i) => ({ y: bit(!i.a) })),
     hints: ['What does NAND output when both of its inputs are the same?', 'Wire a to both NAND inputs.'],
@@ -74,7 +90,7 @@ export const LOGIC_LEVELS: LogicLevel[] = [
   },
   {
     id: 'logic-and', title: 'AND, the Hard Way', concept: 'AND from NANDs', xp: 60, mode: 'gate',
-    brief: '<p>Still only NANDs. Build <code>y = a &amp; b</code>.</p>',
+    brief: '<p class="note"><b>Optional challenge.</b></p><p>Still only NANDs. Build <code>y = a &amp; b</code>.</p>',
     palette: ['NAND'], inputs: ['a', 'b'], outputs: ['y'], par: 2,
     spec: truth((i) => ({ y: bit(i.a && i.b) })),
     hints: ['NAND is AND followed by NOT.', 'Invert a NAND\'s output with a second NAND wired as an inverter.'],
@@ -82,7 +98,7 @@ export const LOGIC_LEVELS: LogicLevel[] = [
   },
   {
     id: 'logic-or', title: 'De Morgan Builds OR', concept: 'OR from NANDs', xp: 70, mode: 'gate',
-    brief: '<p>Build <code>y = a | b</code> from NANDs.</p><p class="note">De Morgan: <code>a | b = !(!a &amp; !b)</code>.</p>',
+    brief: '<p class="note"><b>Optional challenge.</b></p><p>Build <code>y = a | b</code> from NANDs.</p><p class="note">De Morgan: <code>a | b = !(!a &amp; !b)</code>.</p>',
     palette: ['NAND'], inputs: ['a', 'b'], outputs: ['y'], par: 3,
     spec: truth((i) => ({ y: bit(i.a || i.b) })),
     hints: ['Invert each input with a NAND.', 'A NAND of the two inverted inputs is exactly OR.'],
@@ -94,7 +110,7 @@ export const LOGIC_LEVELS: LogicLevel[] = [
   },
   {
     id: 'logic-xor', title: 'Four NANDs to XOR', concept: 'XOR from NANDs', xp: 90, mode: 'gate',
-    brief: '<p>The classic interview puzzle: build <code>y = a ^ b</code> from NANDs. Five is easy. <b>Four</b> earns 3 stars.</p>',
+    brief: '<p class="note"><b>Optional challenge.</b></p><p>The classic interview puzzle: build <code>y = a ^ b</code> from NANDs. Five is easy. <b>Four</b> earns 3 stars.</p>',
     palette: ['NAND'], inputs: ['a', 'b'], outputs: ['y'], par: 4,
     spec: truth((i) => ({ y: bit(i.a !== i.b) })),
     hints: ['Start with n1 = NAND(a, b). It is shared by the next two gates.', 'n2 = NAND(a, n1), n3 = NAND(b, n1), y = NAND(n2, n3).'],
@@ -106,8 +122,16 @@ export const LOGIC_LEVELS: LogicLevel[] = [
     },
   },
   {
+    id: 'logic-enable', title: 'A Door Switch', concept: 'AND as a gate that lets a signal through', xp: 40, mode: 'gate',
+    brief: '<p>An AND gate can work like a <b>door</b>. Signal <code>a</code> wants to get through, and switch <code>s</code> is the door: when <code>s</code> is 1 the door is open and <code>y</code> follows <code>a</code>. When <code>s</code> is 0 the door is shut and <code>y</code> stays 0.</p><p>Build it with one AND.</p><p class="note"><b>Why this matters:</b> this door idea is the first half of a multiplexer, which chooses between two signals.</p>',
+    palette: ['AND'], inputs: ['a', 's'], outputs: ['y'], par: 1,
+    spec: truth((i) => ({ y: bit(i.a && i.s) })),
+    hints: ['One AND gate.', 'Wire a and s into the two inputs, and the output to y.'],
+    solve: (b) => { const g = b.add('AND'); b.wire(IN(b, 'a'), a(g)).wire(IN(b, 's'), bb(g)).wire(y(g), OUT(b, 'y')); },
+  },
+  {
     id: 'logic-mux', title: 'The Multiplexer', concept: '2:1 mux', xp: 80, mode: 'gate',
-    brief: '<p>Build a 2:1 mux: <code>y = s ? b : a</code>.</p><p>You have more parts now. Can you do it in 4 gates?</p>',
+    brief: '<p>A <b>mux</b> picks one of two signals. When <code>s</code> is 0, <code>y</code> is <code>a</code>. When <code>s</code> is 1, <code>y</code> is <code>b</code>. Build it from two doors and a joiner:</p><ol><li>Door 1: <code>a</code> AND (NOT <code>s</code>). It lets <code>a</code> through when <code>s</code> is 0.</li><li>Door 2: <code>b</code> AND <code>s</code>. It lets <code>b</code> through when <code>s</code> is 1.</li><li>Join the two doors with an OR. Only one door is ever open.</li></ol><p>That is 4 gates: a NOT, two ANDs and an OR. Wire them up and test all eight switch settings.</p>',
     palette: ['NAND', 'AND', 'OR', 'NOT'], inputs: ['a', 'b', 's'], outputs: ['y'], par: 4,
     spec: truth((i) => ({ y: i.s ? i.b : i.a })),
     hints: ['y = (a & !s) | (b & s).', 'AND-OR with an inverter is 4 gates. So is the all-NAND version: NAND-NAND is AND-OR.'],
@@ -119,10 +143,10 @@ export const LOGIC_LEVELS: LogicLevel[] = [
   },
   {
     id: 'logic-half', title: 'Half Adder', concept: 'sum and carry', xp: 70, mode: 'gate',
-    brief: '<p>Add two bits: <code>sum</code> is the low bit and <code>carry</code> the high bit of <code>a + b</code>.</p>',
-    palette: ['XOR', 'AND', 'OR', 'NOT', 'NAND'], inputs: ['a', 'b'], outputs: ['sum', 'carry'], par: 2,
+    brief: '<p>Let\'s add two bits. Here is every case:</p><table class="mini"><tr><th>a</th><th>b</th><th>a + b</th><th>sum</th><th>carry</th></tr><tr><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td></tr><tr><td>0</td><td>1</td><td>1</td><td>1</td><td>0</td></tr><tr><td>1</td><td>0</td><td>1</td><td>1</td><td>0</td></tr><tr><td>1</td><td>1</td><td>2 (written 10)</td><td>0</td><td>1</td></tr></table><p><code>sum</code> is the right-hand digit and <code>carry</code> is the left-hand digit. Look at the two columns: one of them is an <b>XOR</b> and the other is an <b>AND</b>. Wire one of each. This is bit 0 of your chip\'s adder.</p>',
+    palette: ['XOR', 'AND'], inputs: ['a', 'b'], outputs: ['sum', 'carry'], par: 2,
     spec: truth((i) => ({ sum: bit(i.a ^ i.b), carry: bit(i.a & i.b) })),
-    hints: ['1 + 1 = 10 in binary.', 'sum = a ^ b, carry = a & b.'],
+    hints: ['sum is 1 when the inputs are different. Which gate says "different"?', 'carry is 1 only when both inputs are 1. Which gate says "both"?', 'Connect a and b to both gates. The XOR goes to sum and the AND goes to carry.'],
     solve: (b) => {
       const x = b.add('XOR'), n = b.add('AND');
       b.wire(IN(b, 'a'), a(x)).wire(IN(b, 'b'), bb(x)).wire(IN(b, 'a'), a(n)).wire(IN(b, 'b'), bb(n));
@@ -141,6 +165,64 @@ export const LOGIC_LEVELS: LogicLevel[] = [
       b.wire(IN(b, 'a'), a(a1)).wire(IN(b, 'b'), bb(a1)).wire(y(x1), a(a2)).wire(IN(b, 'cin'), bb(a2));
       b.wire(y(a1), a(o)).wire(y(a2), bb(o)).wire(y(o), OUT(b, 'cout'));
     },
+  },
+  {
+    id: 'logic-dec', title: 'Decoder: Who Is Selected?', concept: '2-to-4 decoder', xp: 80, mode: 'gate',
+    brief: '<p>A <b>decoder</b> turns a number into one lit lamp. Two switches <code>a1 a0</code> make the numbers 0 to 3, and exactly one of four lamps lights: <code>y0</code> for 0, <code>y1</code> for 1, <code>y2</code> for 2, <code>y3</code> for 3.</p><p>Each lamp is an AND that checks for its own number. For example <code>y2</code> lights when <code>a1</code> is 1 <b>and</b> <code>a0</code> is 0, so it needs <code>a0</code> flipped by a NOT first.</p>',
+    palette: ['AND', 'NOT'], inputs: ['a1', 'a0'], outputs: ['y0', 'y1', 'y2', 'y3'], par: 6,
+    spec: truth((i) => { const n = (i.a1 << 1) | i.a0; return { y0: bit(n === 0), y1: bit(n === 1), y2: bit(n === 2), y3: bit(n === 3) }; }),
+    hints: ['You need NOT a1 and NOT a0. Make those first.', 'y0 = !a1 & !a0, y1 = !a1 & a0, y2 = a1 & !a0, y3 = a1 & a0.'],
+    solve: (b) => {
+      const n1 = b.add('NOT'), n0 = b.add('NOT'), g0 = b.add('AND'), g1 = b.add('AND'), g2 = b.add('AND'), g3 = b.add('AND');
+      b.wire(IN(b, 'a1'), a(n1)).wire(IN(b, 'a0'), a(n0));
+      b.wire(y(n1), a(g0)).wire(y(n0), bb(g0)).wire(y(g0), OUT(b, 'y0'));
+      b.wire(y(n1), a(g1)).wire(IN(b, 'a0'), bb(g1)).wire(y(g1), OUT(b, 'y1'));
+      b.wire(IN(b, 'a1'), a(g2)).wire(y(n0), bb(g2)).wire(y(g2), OUT(b, 'y2'));
+      b.wire(IN(b, 'a1'), a(g3)).wire(IN(b, 'a0'), bb(g3)).wire(y(g3), OUT(b, 'y3'));
+    },
+  },
+  {
+    id: 'logic-cmp', title: 'Compare Two Bits', concept: 'equal and greater-than for one bit', xp: 80, mode: 'gate',
+    brief: '<p>A <b>comparator</b> tells you how two numbers relate. For two single bits, <code>eq</code> lights when <code>a</code> and <code>b</code> are the <b>same</b>, and <code>gt</code> lights when <code>a</code> is bigger than <code>b</code> (that means <code>a</code> is 1 and <code>b</code> is 0).</p><p>Hint: you met a gate that says "different". "Same" is the opposite of different.</p>',
+    palette: ['XOR', 'NOT', 'AND'], inputs: ['a', 'b'], outputs: ['eq', 'gt'], par: 4,
+    spec: truth((i) => ({ eq: bit(i.a === i.b), gt: bit(i.a > i.b) })),
+    hints: ['XOR says different. Put a NOT after it to say the same.', 'gt is a AND (NOT b): a is 1 and b is 0.'],
+    solve: (b) => {
+      const x = b.add('XOR'), ne = b.add('NOT'), nb = b.add('NOT'), g = b.add('AND');
+      b.wire(IN(b, 'a'), a(x)).wire(IN(b, 'b'), bb(x)).wire(y(x), a(ne)).wire(y(ne), OUT(b, 'eq'));
+      b.wire(IN(b, 'b'), a(nb)).wire(IN(b, 'a'), a(g)).wire(y(nb), bb(g)).wire(y(g), OUT(b, 'gt'));
+    },
+  },
+  {
+    id: 'logic-dff', title: 'A Bit That Stays', concept: 'a flip-flop remembers its input', xp: 60, mode: 'gate',
+    brief: '<p>A <b>flip-flop</b> (the DFF part) is memory that listens only when the <b>clock ticks</b>. Between ticks it ignores its input and keeps what it last saw, like a switch that stays where you put it.</p><p>Wire the input <code>d</code> to the DFF and the DFF output to <code>q</code>. Then change <code>d</code> and press <b>Clock ↑</b> to step it. Watch that <code>q</code> only changes on a tick.</p><p class="note"><b>Why this matters:</b> every register in your chip is a row of these.</p>',
+    palette: ['DFF'], inputs: ['d'], outputs: ['q'], par: 1,
+    spec: {
+      kind: 'seq', steps: [
+        { set: { d: 1 }, expect: { q: 0 }, note: 'no tick yet, so q has not changed' },
+        { tick: true, expect: { q: 1 }, note: 'tick: q copies d' },
+        { set: { d: 0 }, expect: { q: 1 }, note: 'd changed, but there was no tick' },
+        { tick: true, expect: { q: 0 } },
+        { set: { d: 1 }, tick: true, expect: { q: 1 } },
+      ],
+    },
+    hints: ['One DFF. Its d pin is the input and its q pin is the output.', 'Wire the d switch to the DFF d pin, and the DFF q pin to the q lamp.'],
+    solve: (b) => { const f = b.add('DFF'); b.wire(IN(b, 'd'), `${f}.d`).wire(`${f}.q`, OUT(b, 'q')); },
+  },
+  {
+    id: 'logic-toggle', title: 'Flip Every Tick', concept: 'a flip-flop that toggles', xp: 70, mode: 'gate',
+    brief: '<p>Make a lamp that <b>flips on every clock tick</b>: off, on, off, on... It needs to know its own state, so feed the DFF output back to its input through a <b>NOT</b>.</p><p>Wire <code>q</code> into a NOT, the NOT into the DFF <code>d</code>, and <code>q</code> to the lamp. Press <b>Clock ↑</b> a few times.</p><p class="note"><b>Why this matters:</b> this is bit 0 of a counter, the first thing your chip counts with.</p>',
+    palette: ['DFF', 'NOT'], inputs: [], outputs: ['q'], par: 2,
+    spec: {
+      kind: 'seq', steps: [
+        { set: {}, expect: { q: 0 }, note: 'starts off' },
+        { tick: true, expect: { q: 1 } },
+        { tick: true, expect: { q: 0 } },
+        { tick: true, expect: { q: 1 } },
+      ],
+    },
+    hints: ['The DFF copies d on a tick. What should d be, to make q the opposite of what it is now?', 'd = NOT q. Wire q into a NOT, and the NOT back into d.'],
+    solve: (b) => { const f = b.add('DFF'), n = b.add('NOT'); b.wire(`${f}.q`, a(n)).wire(y(n), `${f}.d`).wire(`${f}.q`, OUT(b, 'q')); },
   },
   {
     id: 'logic-latch', title: 'One Bit of Memory', concept: 'SR latch, feedback', xp: 100, mode: 'gate',

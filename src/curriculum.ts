@@ -30,6 +30,8 @@ export interface Module {
   concept: string;
   xp: number;
   route: string;
+  /** A challenge the recommended path steps over; it still counts when done. */
+  optional?: boolean;
 }
 /** A chapter. A detour chapter names the main-path chapter (`need`) whose labs call it in. */
 export interface Chapter { name: string; need?: string; modules: Module[] }
@@ -119,6 +121,12 @@ const shell = (...ids: string[]): Module[] => ids.flatMap((id) => mods(SHELL_LEV
 /** Circuit Lab missions by id, in the order given. */
 const clab = (...ids: string[]): Module[] => ids.flatMap((id) => mods(CIRCUIT_LEVELS, 'clab', 'clab', (x) => x.id === id));
 
+/** `list` with `extra` inserted just before the module `id` (at the end if it is not there). */
+const before = (list: Module[], id: string, ...extra: Module[]): Module[] => {
+  const i = list.findIndex((m) => m.id === id);
+  return i < 0 ? [...list, ...extra] : [...list.slice(0, i), ...extra, ...list.slice(i)];
+};
+
 /** The Verilog levels that belong to the first hour rather than the Verilog chapter. */
 const FIRST_RTL = ['gates', 'half-adder-v'];
 
@@ -129,14 +137,14 @@ export const ACTS: Act[] = [
       // The first hour for a total beginner: light a lamp, bits, gates, a half adder (bit 0 of their chip's ALU),
       // the first incident on that half adder, then the same half adder in Verilog. See the First Hour Spec.
       {
-        name: 'Your first chip', modules: [...logic(['first-wire']), lesson('bits'), lesson('bool'), ...logic(['logic-not', 'logic-and', 'logic-half']),
+        name: 'Your first chip', modules: [...logic(['first-wire']), lesson('bits'), lesson('bool'), ...logic(['first-not', 'first-and', 'logic-half']),
           incident('inc-demo-board'), ...mods(RTL_LEVELS, 'rtl', 'rtl', (x) => FIRST_RTL.includes(x.id))],
       },
-      { name: 'Numbers', modules: [prac('practice-bits'), ...drill('twos'), bossMod('boss-numbers'), incident('inc-numbers')] },
-      { name: 'Logic', modules: [prac('practice-bool'), ...logic(['logic-or', 'logic-xor']), incident('inc-logic')] },
-      { name: 'Building blocks', modules: [...drill('comb'), ...logic(['logic-mux', 'logic-full']), incident('inc-adder')] },
-      { name: 'Memory & state', modules: [...drill('seq'), ...logic(['logic-latch', 'logic-counter']), ...drill('fsm'), bossMod('boss-logic'), incident('inc-controller')] },
-      { name: 'Verilog', modules: [...drill('verilog'), ...mods(RTL_LEVELS, 'rtl', 'rtl', (x) => !FIRST_RTL.includes(x.id)), bossMod('boss-hdl'), incident('inc-rtl')] },
+      { name: 'Numbers', modules: [lesson('bitadd'), prac('practice-bits'), ...drill('twos'), incident('inc-lamp-board')] },
+      { name: 'Logic', modules: [lesson('demorgan'), prac('practice-bool'), ...logic(['logic-not', 'logic-and', 'logic-or', 'logic-xor']), incident('inc-logic')] },
+      { name: 'Building blocks', modules: [lesson('mux'), ...logic(['logic-enable', 'logic-mux']), lesson('decoder'), ...logic(['logic-dec']), lesson('adder'), ...logic(['logic-full']), lesson('compare'), ...logic(['logic-cmp']), prac('practice-comb'), incident('inc-adder')] },
+      { name: 'Memory & state', modules: [lesson('seq'), ...logic(['logic-dff', 'logic-toggle', 'logic-counter']), prac('practice-seq'), ...logic(['logic-latch']), ...drill('fsm'), bossMod('boss-logic'), incident('inc-controller')] },
+      { name: 'Verilog', modules: [lesson('verilog'), ...before(before(mods(RTL_LEVELS, 'rtl', 'rtl', (x) => !FIRST_RTL.includes(x.id)), 'mux4', lesson('verilog-seq'), prac('practice-verilog')), 'seg7', lesson('hex')), bossMod('boss-numbers'), incident('inc-numbers'), bossMod('boss-hdl'), incident('inc-rtl')] },
     ],
   },
   {
@@ -248,6 +256,10 @@ export function startAct(): number {
   return { design: 1, verif: 3, pd: 2, board: 2, arch: 3, special: 6, unsure: 0 }[p.goal];
 }
 
+/** NAND-only puzzles: good practice, but a beginner builds with the real gates first and meets these as challenges. */
+const OPTIONAL_CHALLENGES = new Set(['logic-not', 'logic-and', 'logic-or', 'logic-xor', 'logic-latch']);
+for (const a of ACTS) for (const c of a.chapters) for (const m of c.modules) if (OPTIONAL_CHALLENGES.has(m.id)) m.optional = true;
+
 const PATH_CHAPTERS: Chapter[] = ACTS.filter((a) => a.kind !== 'detour').flatMap((a) => a.chapters);
 export const DETOURS: Chapter[] = ACTS.filter((a) => a.kind === 'detour').flatMap((a) => a.chapters);
 
@@ -264,7 +276,7 @@ export function recommended(): Module | undefined {
   for (const c of order) {
     due.add(c.name);
     for (const d of DETOURS) if (d.need && due.has(d.need)) { const m = d.modules.find((x) => !isDone(x)); if (m) return m; }
-    const m = c.modules.find((x) => !isDone(x));
+    const m = c.modules.find((x) => !isDone(x) && !x.optional);
     if (m) return m;
   }
   return ALL_MODULES.find((m) => !isDone(m));

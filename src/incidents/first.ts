@@ -104,4 +104,85 @@ export const demoBoardIncident: Incident = {
   ],
 };
 
-export const FIRST_INCIDENTS = [demoBoardIncident];
+
+// The Numbers chapter's incident: a four-lamp board that shows the wrong number. Binary and decimal only, no hex.
+const LAMPS = [8, 4, 2, 1];
+const lampsFor = (cause: string, n: number): string => {
+  const bit = (w: number): number => (n & w ? 1 : 0);
+  // What reaches each lamp (weights 8, 4, 2, 1), then what each lamp does with it.
+  let wire: number[] = LAMPS.map(bit);
+  if (cause === 'short') { const either = wire[0] | wire[1]; wire = [either, either, wire[2], wire[3]]; }
+  let lit: number[] = [...wire];
+  if (cause === 'swap') lit = [wire[0], wire[1], wire[3], wire[2]];
+  if (cause === 'dead') lit[0] = 0;
+  if (cause === 'invert') lit = lit.map((x) => 1 - x);
+  return lit.map((x) => (x ? 'ON' : 'off')).join(' ');
+};
+
+export const lampBoardIncident: Incident = {
+  id: 'inc-lamp-board',
+  title: 'The Lamp Board',
+  concept: 'a four-lamp board shows the wrong number. Find what is wrong with it.',
+  xp: 100,
+  budget: 60,
+  pager: 'PAGER · SEV-3 · The four-lamp counter board for the science fair shows the wrong number for some inputs. The lamps are worth 8, 4, 2 and 1 from left to right. You have 60 minutes of bench time.',
+  causes: [
+    {
+      id: 'swap', name: 'The wires to the 2-lamp and the 1-lamp are crossed',
+      fix: 'Swap the two wires back so each lamp has its own weight',
+      story: 'The wire for the 2s place went to the 1-lamp, and the wire for the 1s place went to the 2-lamp. Numbers that use only 4s and 8s looked fine. Any number with a 1 or a 2 in it showed up wrong.',
+    },
+    {
+      id: 'dead', name: 'The 8-lamp is burnt out',
+      fix: 'Replace the 8-lamp',
+      story: 'The 8-lamp never lights, so every number 8 or higher shows 8 too small. The wire for the 8s place was fine: the signal arrived, but the lamp could not light. Numbers under 8 looked perfect.',
+    },
+    {
+      id: 'labels', name: 'The numbers printed above the lamps are in the wrong order',
+      fix: 'Reprint the labels as 8, 4, 2, 1 from left to right',
+      story: 'The lamps were doing the right thing. The printed labels said 1, 2, 4, 8 from left to right, so anyone reading the board added the wrong weights. The lamp patterns matched real binary numbers all along.',
+    },
+    {
+      id: 'invert', name: 'All the lamps are wired the opposite way round, so on and off are swapped',
+      fix: 'Rewire the lamps so a 1 turns a lamp on',
+      story: 'Every lamp lit when its bit was 0 and went dark when its bit was 1. The board showed the opposite pattern of the number: showing 15 left every lamp dark, and showing 0 would have lit all four.',
+    },
+    {
+      id: 'short', name: 'The wires for the 4-lamp and the 8-lamp are touching',
+      fix: 'Separate the two wires and clean off the solder bridge',
+      story: 'A blob of solder joined the 4s wire to the 8s wire. If either one was on, both lamps lit. Numbers that needed neither a 4 nor an 8 looked fine, and numbers that needed just one of them lit both.',
+    },
+  ],
+  bandaids: [
+    {
+      text: 'Put a note on the board: "this board is a bit off, add or subtract to fix it"',
+      why: 'A note does not fix the board, and the error is different for every number. Anyone who trusts the lamps still reads the wrong value.',
+    },
+    {
+      text: 'Replace the whole board',
+      why: 'A new board is built the same way, so the same fault can come back. You would also still not know what went wrong.',
+    },
+  ],
+  instruments: [
+    {
+      cmd: 'show', args: ['1', '5', '15'], cost: 5,
+      what: 'set the board to a number (in decimal) and see which lamps light, left to right (8, 4, 2, 1)',
+      read: (w, arg) => `board set to ${arg}\nlamps (8 4 2 1): ${lampsFor(w.cause, Number(arg))}`,
+    },
+    {
+      cmd: 'labels', cost: 5,
+      what: 'read the numbers printed above the four lamps, left to right',
+      read: (w) => `printed above the lamps, left to right: ${w.cause === 'labels' ? '1  2  4  8' : '8  4  2  1'}`,
+    },
+    {
+      cmd: 'look', cost: 15,
+      what: 'a magnified look at the board: burnt parts, crossed wires and solder bridges',
+      read: (w) => `magnified look at the board\n${w.cause === 'swap' ? 'the wires to the 2-lamp and the 1-lamp cross over each other'
+        : w.cause === 'dead' ? 'the glass of the 8-lamp is dark and cracked'
+          : w.cause === 'short' ? 'a blob of solder joins the 4-lamp wire and the 8-lamp wire'
+            : 'no burnt parts, no crossed wires, no solder bridges. Everything looks neat.'}`,
+    },
+  ],
+};
+
+export const FIRST_INCIDENTS = [demoBoardIncident, lampBoardIncident];

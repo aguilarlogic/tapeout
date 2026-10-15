@@ -221,7 +221,7 @@ export const boolPractice = practice('practice-bool', 'Boolean Drills', 'truth t
       ['output is 1 when a is 0 or b is 1', ['a', 'b'], (v: Record<string, boolean>) => !v.a || v.b, '~a | b', 1],
       ['output is 0 only when both a and b are 1', ['a', 'b'], (v: Record<string, boolean>) => !(v.a && v.b), '~(a & b)', 1],
       ['output is 1 when at least two of a, b, c are 1 (majority)', ['a', 'b', 'c'], (v: Record<string, boolean>) => +v.a + +v.b + +v.c >= 2, 'a&b | a&c | b&c', 2],
-      ['output is a when s is 0 and b when s is 1 (a mux)', ['a', 'b', 's'], (v: Record<string, boolean>) => (v.s ? v.b : v.a), '~s&a | s&b', 2],
+      ['output is a when s is 0 and b when s is 1 (s picks which input to pass)', ['a', 'b', 's'], (v: Record<string, boolean>) => (v.s ? v.b : v.a), '~s&a | s&b', 2],
       ['output is 1 when a is 1 and neither b nor c is 1', ['a', 'b', 'c'], (v: Record<string, boolean>) => v.a && !v.b && !v.c, 'a & ~b & ~c', 2],
       ['output is 1 when a, b and c are all equal', ['a', 'b', 'c'], (v: Record<string, boolean>) => v.a === v.b && v.b === v.c, '(a & b & c) | (~a & ~b & ~c)', 2],
       ['output is 1 when a is 1, or b and c are both 1', ['a', 'b', 'c'], (v: Record<string, boolean>) => v.a || (v.b && v.c), 'a | b & c', 2],
