@@ -9,6 +9,7 @@ export const bits: Lesson = {
   xp: 50,
   steps: [
     say("Hi {name}. Let's start with the smallest idea in every computer: a **switch**. It is either **on** or **off**. Nothing in between."),
+    say('**Why this matters:** every wire inside the chip you are about to build is one of these switches.'),
     art(`
    switch UP    ->  lamp ON     =  1
    switch DOWN  ->  lamp OFF    =  0`, 'one switch = one bit'),
@@ -115,6 +116,7 @@ export const bool: Lesson = {
   xp: 60,
   steps: [
     say('A single switch just sits there. A **logic gate** is a tiny part that looks at its input switches and **decides** what its output lamp does. There are only a few kinds, and we will meet them one at a time.'),
+    say('**Why this matters:** gates are the parts your chip\'s adder is made of.'),
     say('First, **AND**. Think of a door that opens only if you have the key **and** you know the code. You need both.'),
     art(`
    key  code | door (AND)
@@ -183,7 +185,7 @@ export const demorgan: Lesson = {
       ]);
       return ask(f.q, expr(f.c, ['a', 'b', 'c'], f.fn), f.why, 'Think about which rows of the truth table must be 1, then OR together a term for each.');
     }),
-    mc('Why do chip designers love **NAND**?', ['It switches faster than any other gate', 'Any logic function can be built from it', 'It needs fewer transistors than NOT', 'Synthesis tools can only map to NAND gates'], 1, 'Any logic function can be built from NANDs alone: NAND (and NOR) are universal. In CMOS a NAND is also cheap: 4 transistors. Next, you will prove it by building other gates from NANDs.'),
+    mc('Why do chip designers love **NAND**?', ['It switches faster than any other gate', 'Any logic function can be built from it', 'It needs fewer transistors than NOT', 'Synthesis tools can only map to NAND gates'], 1, 'Any logic function can be built from NANDs alone: NAND (and NOR) are universal. In CMOS a NAND is also cheap: 4 transistors. If you like a challenge, you can try building other gates from NANDs.'),
     say('Enough theory. Time to build.', 'excited'),
   ],
   recap: ['NAND = AND flipped, NOR = OR flipped.', 'NAND and NOR are universal gates.', 'De Morgan: !(A&B) = !A|!B and !(A|B) = !A&!B.', 'Any truth table can be written as an OR of AND terms (sum of products).'],

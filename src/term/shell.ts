@@ -116,6 +116,27 @@ export class Shell {
     else await t.say('You have finished everything. Every block of your chip is signed off. Want to replay something for stars, or run the arcade?', 'proud');
   }
 
+  /** Four quick questions that decide whether to skip ahead. Returns how many were right. No hints, no pressure. */
+  private async placement(): Promise<number> {
+    const t = this.term;
+    const qs: [string, string[], number][] = [
+      ['A row of three lamps reads on, off, on. Each lamp is worth 4, 2 and 1. Which number is that?', ['3', '5', '6', '7'], 1],
+      ['An AND gate gets a 1 on one input and a 0 on the other. What does it output?', ['0', '1', 'It depends on the gate size'], 0],
+      ['A half adder adds two bits. What are its two outputs?', ['sum and carry', 'clock and reset', 'read and write'], 0],
+      ['In Verilog, what does `assign y = a & b;` describe?', ['An AND gate that is always connected', 'A line that runs once at the start', 'A value stored in memory'], 0],
+    ];
+    let right = 0;
+    for (let i = 0; i < qs.length; i++) {
+      const [q, opts, a] = qs[i];
+      await t.say(`**Question ${i + 1} of ${qs.length}.** ${q}`, 'thinking');
+      const order = this.order(opts);
+      const pick = await t.choose([...order.map((j) => opts[j]), "I don't know"], 'answer>');
+      if (pick < order.length && order[pick] === a) right++;
+    }
+    t.print(`${right} of ${qs.length} right`, 'dim');
+    return right;
+  }
+
   private async onboard() {
     const t = this.term;
     for (const line of ['memory check ........ 640K ought to be enough', 'mounting /pdk/sky130 ........ ok', 'loading mentor.ko ........ ok', 'starting tapeout-ai ........ ok']) t.print(line, 'dim');
@@ -130,18 +151,22 @@ export class Shell {
     const prof: Profile = { name, background: 'new', goal: 'unsure', since: Date.now() };
     setProfile(prof);
     await t.say(`Nice to meet you, ${name}.`, 'wink');
-    // One question for a total beginner, then straight to building something; the job question waits until they
-    // have seen the work. Players who already know some of it get the full set of questions and the plan.
-    await t.say('One question before we start: have you built circuits or written code before? Either answer is fine.');
-    if ((await t.choose(['Start me from zero.', 'I already know some of this.'])) === 0) {
+    // No self-rating: a beginner starts from zero, and anyone who wants to skip ahead proves it with four quick
+    // questions. Self-ratings are unreliable, so the answers decide the path, not the player's description of themselves.
+    await t.say('How do you want to start?');
+    if ((await t.choose(['Start me from zero.', 'Let me skip ahead. Ask me four quick questions.'])) === 0) {
       await t.say('Perfect. Zero is a great place to start, and you will not read a chapter first. In the next hour you build the first piece of your own chip. We start by lighting a lamp.', 'excited');
       this.queue.push('next');
       return;
     }
-    await t.say('How much do you know?');
-    const bg = 1 + await t.choose(["Some. I'm studying EE, CE or CS.", 'A lot. I work in (or near) the industry.']);
-    prof.background = (['new', 'student', 'pro'] as const)[bg];
-    await t.say(['Great, then you know the basics. We can move fast and fill the gaps.', 'Excellent. Then I will skip the pleasantries and aim for the hard stuff.'][bg - 1], 'happy');
+    const right = await this.placement();
+    if (right < 3) {
+      await t.say(right === 0 ? 'No problem at all. Those were meant to be tricky if you have not seen them. We will start from zero, and it goes fast.' : 'You know a little. We will start from the beginning and you will move quickly through the parts you know.', 'happy');
+      this.queue.push('next');
+      return;
+    }
+    prof.background = 'student';
+    await t.say('You clearly know the basics. We can move fast and fill the gaps. You can jump anywhere any time with `ls` and `learn <name>`.', 'happy');
     await t.say('And what do you want to become?');
     const goal = await t.choose(GOAL_CHOICES.map(([label]) => label));
     prof.goal = GOAL_CHOICES[goal][1];
@@ -659,7 +684,7 @@ export class Shell {
         if (mode === 'lesson') recordStep(l.id, i, q.q, { firstTry: ok && this.rung === 0, hints: this.rung, secs: (Date.now() - t0) / 1000, skipped: this.skipped });
         if (ok) firstTry++;
         else if (this.skipped) skippedQs.push({ n: asked, q });
-        if (!ok && this.revealed && mode === 'lesson') comeBack.push(q);
+        if (!ok && this.revealed && !this.skipped && mode === 'lesson') comeBack.push(q);
       }
     }
     // Hint ladder, last rung: a question the player was shown the answer to comes back once, near the end.

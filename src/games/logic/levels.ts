@@ -58,7 +58,7 @@ function fet(b: Builder, kind: 'NMOS' | 'PMOS', g: string, top: string, bottom: 
 export const LOGIC_LEVELS: LogicLevel[] = [
   {
     id: 'first-wire', title: 'First Wire', concept: 'a wire carries a signal', xp: 40, mode: 'gate',
-    brief: '<p>Start here. A circuit is parts joined by wires. Three words you need:</p><ul><li><b>Switch</b> (labelled <code>in</code>, on the left): click it to turn it on (1) or off (0).</li><li><b>Wire</b>: a line that carries a 0 or a 1 from one pin to another.</li><li><b>Lamp</b> (labelled <code>out</code>, on the right): lights up when it receives a 1.</li></ul><p>Drag one wire from the switch\'s dot on its right to the lamp\'s dot on its left. Then click the switch: the lamp should follow it.</p>',
+    brief: '<p>Start here. A circuit is parts joined by wires. Three words you need:</p><ul><li><b>Switch</b> (labelled <code>in</code>, on the left): click it to turn it on (1) or off (0).</li><li><b>Wire</b>: a line that carries a 0 or a 1 from one pin to another.</li><li><b>Lamp</b> (labelled <code>out</code>, on the right): lights up when it receives a 1.</li></ul><p>Drag one wire from the switch\'s dot on its right to the lamp\'s dot on its left. Then click the switch: the lamp should follow it.</p><p class="note"><b>Why this matters:</b> every wire inside your chip carries a 0 or a 1 just like this one.</p>',
     palette: [], inputs: ['in'], outputs: ['out'], par: 0,
     spec: truth((i) => ({ out: bit(i.in) })),
     hints: ['No parts to add. A single wire is the whole circuit.', 'Press on the switch\'s right-hand dot, drag, and release on the lamp\'s left-hand dot.'],
@@ -66,7 +66,7 @@ export const LOGIC_LEVELS: LogicLevel[] = [
   },
   {
     id: 'first-not', title: 'Flip It', concept: 'a NOT gate flips a signal', xp: 40, mode: 'gate',
-    brief: '<p>A <b>NOT gate</b> flips a signal: 1 comes out as 0, and 0 comes out as 1.</p><p>Drag a <b>NOT</b> from the parts bin onto the board. Wire the switch <code>a</code> into it, and wire its output to the lamp <code>y</code>. Then click the switch: the lamp should do the <b>opposite</b>.</p>',
+    brief: '<p>A <b>NOT gate</b> flips a signal: 1 comes out as 0, and 0 comes out as 1.</p><p>Drag a <b>NOT</b> from the parts bin onto the board. Wire the switch <code>a</code> into it, and wire its output to the lamp <code>y</code>. Then click the switch: the lamp should do the <b>opposite</b>.</p><p class="note"><b>Why this matters:</b> your chip\'s subtractor will use NOT gates to flip numbers.</p>',
     palette: ['NOT'], inputs: ['a'], outputs: ['y'], par: 1,
     spec: truth((i) => ({ y: bit(!i.a) })),
     hints: ['Add one NOT. Its input is on the left and its output is on the right.', 'Wire a to the NOT, then the NOT to y.'],
@@ -74,7 +74,7 @@ export const LOGIC_LEVELS: LogicLevel[] = [
   },
   {
     id: 'first-and', title: 'Both Switches', concept: 'an AND gate needs both inputs', xp: 50, mode: 'gate',
-    brief: '<p>An <b>AND gate</b> lights its lamp only when <b>both</b> switches are on.</p><p>Drag an <b>AND</b> onto the board. Wire switches <code>a</code> and <code>b</code> into its two inputs, and its output to the lamp <code>y</code>. Click the switches to check all four combinations.</p>',
+    brief: '<p>An <b>AND gate</b> lights its lamp only when <b>both</b> switches are on.</p><p>Drag an <b>AND</b> onto the board. Wire switches <code>a</code> and <code>b</code> into its two inputs, and its output to the lamp <code>y</code>. Click the switches to check all four combinations.</p><p class="note"><b>Why this matters:</b> AND is the carry part of your chip\'s adder, coming up next.</p>',
     palette: ['AND'], inputs: ['a', 'b'], outputs: ['y'], par: 1,
     spec: truth((i) => ({ y: bit(i.a && i.b) })),
     hints: ['One AND gate is enough.', 'Wire a to the top input, b to the bottom input, and the output to y.'],
@@ -82,7 +82,7 @@ export const LOGIC_LEVELS: LogicLevel[] = [
   },
   {
     id: 'logic-not', title: 'NAND Is Universal', concept: 'NOT from NAND', xp: 60, mode: 'gate',
-    brief: '<p>Your only part is a 2-input <b>NAND</b>. Build an inverter: <code>y = !a</code>.</p><p>Drag a NAND from the parts bin, then drag from pin to pin to wire it. Click an input switch to toggle it and watch the signals light up.</p>',
+    brief: '<p class="note"><b>Optional challenge.</b> You already built a NOT with the real gate. This version uses only NANDs, the way chips often do.</p><p>Your only part is a 2-input <b>NAND</b>. Build an inverter: <code>y = !a</code>.</p><p>Drag a NAND from the parts bin, then drag from pin to pin to wire it. Click an input switch to toggle it and watch the signals light up.</p>',
     palette: ['NAND'], inputs: ['a'], outputs: ['y'], par: 1,
     spec: truth((i) => ({ y: bit(!i.a) })),
     hints: ['What does NAND output when both of its inputs are the same?', 'Wire a to both NAND inputs.'],
@@ -90,7 +90,7 @@ export const LOGIC_LEVELS: LogicLevel[] = [
   },
   {
     id: 'logic-and', title: 'AND, the Hard Way', concept: 'AND from NANDs', xp: 60, mode: 'gate',
-    brief: '<p>Still only NANDs. Build <code>y = a &amp; b</code>.</p>',
+    brief: '<p class="note"><b>Optional challenge.</b></p><p>Still only NANDs. Build <code>y = a &amp; b</code>.</p>',
     palette: ['NAND'], inputs: ['a', 'b'], outputs: ['y'], par: 2,
     spec: truth((i) => ({ y: bit(i.a && i.b) })),
     hints: ['NAND is AND followed by NOT.', 'Invert a NAND\'s output with a second NAND wired as an inverter.'],
@@ -98,7 +98,7 @@ export const LOGIC_LEVELS: LogicLevel[] = [
   },
   {
     id: 'logic-or', title: 'De Morgan Builds OR', concept: 'OR from NANDs', xp: 70, mode: 'gate',
-    brief: '<p>Build <code>y = a | b</code> from NANDs.</p><p class="note">De Morgan: <code>a | b = !(!a &amp; !b)</code>.</p>',
+    brief: '<p class="note"><b>Optional challenge.</b></p><p>Build <code>y = a | b</code> from NANDs.</p><p class="note">De Morgan: <code>a | b = !(!a &amp; !b)</code>.</p>',
     palette: ['NAND'], inputs: ['a', 'b'], outputs: ['y'], par: 3,
     spec: truth((i) => ({ y: bit(i.a || i.b) })),
     hints: ['Invert each input with a NAND.', 'A NAND of the two inverted inputs is exactly OR.'],
@@ -110,7 +110,7 @@ export const LOGIC_LEVELS: LogicLevel[] = [
   },
   {
     id: 'logic-xor', title: 'Four NANDs to XOR', concept: 'XOR from NANDs', xp: 90, mode: 'gate',
-    brief: '<p>The classic interview puzzle: build <code>y = a ^ b</code> from NANDs. Five is easy. <b>Four</b> earns 3 stars.</p>',
+    brief: '<p class="note"><b>Optional challenge.</b></p><p>The classic interview puzzle: build <code>y = a ^ b</code> from NANDs. Five is easy. <b>Four</b> earns 3 stars.</p>',
     palette: ['NAND'], inputs: ['a', 'b'], outputs: ['y'], par: 4,
     spec: truth((i) => ({ y: bit(i.a !== i.b) })),
     hints: ['Start with n1 = NAND(a, b). It is shared by the next two gates.', 'n2 = NAND(a, n1), n3 = NAND(b, n1), y = NAND(n2, n3).'],

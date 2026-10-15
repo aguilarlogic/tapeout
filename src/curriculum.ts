@@ -30,6 +30,8 @@ export interface Module {
   concept: string;
   xp: number;
   route: string;
+  /** A challenge the recommended path steps over; it still counts when done. */
+  optional?: boolean;
 }
 /** A chapter. A detour chapter names the main-path chapter (`need`) whose labs call it in. */
 export interface Chapter { name: string; need?: string; modules: Module[] }
@@ -248,6 +250,10 @@ export function startAct(): number {
   return { design: 1, verif: 3, pd: 2, board: 2, arch: 3, special: 6, unsure: 0 }[p.goal];
 }
 
+/** NAND-only puzzles: good practice, but a beginner builds with the real gates first and meets these as challenges. */
+const OPTIONAL_CHALLENGES = new Set(['logic-not', 'logic-and', 'logic-or', 'logic-xor']);
+for (const a of ACTS) for (const c of a.chapters) for (const m of c.modules) if (OPTIONAL_CHALLENGES.has(m.id)) m.optional = true;
+
 const PATH_CHAPTERS: Chapter[] = ACTS.filter((a) => a.kind !== 'detour').flatMap((a) => a.chapters);
 export const DETOURS: Chapter[] = ACTS.filter((a) => a.kind === 'detour').flatMap((a) => a.chapters);
 
@@ -264,7 +270,7 @@ export function recommended(): Module | undefined {
   for (const c of order) {
     due.add(c.name);
     for (const d of DETOURS) if (d.need && due.has(d.need)) { const m = d.modules.find((x) => !isDone(x)); if (m) return m; }
-    const m = c.modules.find((x) => !isDone(x));
+    const m = c.modules.find((x) => !isDone(x) && !x.optional);
     if (m) return m;
   }
   return ALL_MODULES.find((m) => !isDone(m));

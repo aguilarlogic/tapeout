@@ -135,9 +135,10 @@ describe('lesson sign-off with skips', () => {
   });
 
   it('a wrong answer is a miss, not a skip', async () => {
-    const { shell } = harness(['0', '0', '0']);
+    // Four wrong tries climb the whole hint ladder, then the question comes back once near the end (answered right).
+    const { shell } = harness(['0', '0', '0', '0', '42']);
     await (shell as never as { lesson: (l: unknown, m: string) => Promise<void> }).lesson(lesson('all-wrong', [{}]), 'lesson');
-    // Three wrong tries on one question: one miss, not a skip, so the lesson still signs off (two stars for one or two misses).
+    // One miss, not a skip, so the lesson still signs off (two stars for one or two misses).
     expect(state.levelRecord('all-wrong')!.stars).toBe(2);
   });
 });
