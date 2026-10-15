@@ -121,6 +121,12 @@ const shell = (...ids: string[]): Module[] => ids.flatMap((id) => mods(SHELL_LEV
 /** Circuit Lab missions by id, in the order given. */
 const clab = (...ids: string[]): Module[] => ids.flatMap((id) => mods(CIRCUIT_LEVELS, 'clab', 'clab', (x) => x.id === id));
 
+/** `list` with `extra` inserted just before the module `id` (at the end if it is not there). */
+const before = (list: Module[], id: string, ...extra: Module[]): Module[] => {
+  const i = list.findIndex((m) => m.id === id);
+  return i < 0 ? [...list, ...extra] : [...list.slice(0, i), ...extra, ...list.slice(i)];
+};
+
 /** The Verilog levels that belong to the first hour rather than the Verilog chapter. */
 const FIRST_RTL = ['gates', 'half-adder-v'];
 
@@ -134,11 +140,11 @@ export const ACTS: Act[] = [
         name: 'Your first chip', modules: [...logic(['first-wire']), lesson('bits'), lesson('bool'), ...logic(['first-not', 'first-and', 'logic-half']),
           incident('inc-demo-board'), ...mods(RTL_LEVELS, 'rtl', 'rtl', (x) => FIRST_RTL.includes(x.id))],
       },
-      { name: 'Numbers', modules: [lesson('hex'), prac('practice-bits'), ...drill('twos'), bossMod('boss-numbers'), incident('inc-numbers')] },
+      { name: 'Numbers', modules: [lesson('bitadd'), prac('practice-bits'), ...drill('twos'), incident('inc-lamp-board')] },
       { name: 'Logic', modules: [prac('practice-bool'), lesson('demorgan'), ...logic(['logic-not', 'logic-and', 'logic-or', 'logic-xor']), incident('inc-logic')] },
       { name: 'Building blocks', modules: [...drill('comb'), ...logic(['logic-mux', 'logic-full']), incident('inc-adder')] },
       { name: 'Memory & state', modules: [...drill('seq'), ...logic(['logic-latch', 'logic-counter']), ...drill('fsm'), bossMod('boss-logic'), incident('inc-controller')] },
-      { name: 'Verilog', modules: [...drill('verilog'), ...mods(RTL_LEVELS, 'rtl', 'rtl', (x) => !FIRST_RTL.includes(x.id)), bossMod('boss-hdl'), incident('inc-rtl')] },
+      { name: 'Verilog', modules: [...drill('verilog'), ...before(mods(RTL_LEVELS, 'rtl', 'rtl', (x) => !FIRST_RTL.includes(x.id)), 'seg7', lesson('hex')), bossMod('boss-numbers'), incident('inc-numbers'), bossMod('boss-hdl'), incident('inc-rtl')] },
     ],
   },
   {

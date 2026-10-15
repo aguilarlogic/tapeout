@@ -29,6 +29,7 @@ export function launchGame(id: string, opts: { rounds?: number; fromLesson?: boo
       host,
       r: Math.random,
       rounds: opts.rounds ?? game.rounds,
+      fromLesson: opts.fromLesson,
       say: (t, m) => mentorSay(t, m),
       finish: (score, max) => {
         last = { score, max };

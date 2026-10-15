@@ -1,6 +1,7 @@
 // TAPEOUT's minigames. Each one renders into a desktop window, runs a few rounds and reports a score.
 import type { Mood, Rng } from '../lessons/types';
 import { h, svg } from '../ui/dom';
+import { hexTaught } from '../hexgate';
 import {
   bpNext, bpPredict, BP_STATES, bpStream, CACHE, cacheRun, cacheStream, CAP_VALUES, DIV_TARGETS, DIV_TOL, divOut, ffRound,
   hsRound, int, Mesi, mesiOps, mesiStep, RC_TARGETS, RC_TOL, rcMetric, RES_VALUES, rows, TRUTH_ROUNDS,
@@ -10,6 +11,8 @@ export interface GameCtx {
   host: HTMLElement;
   r: Rng;
   rounds: number;
+  /** Opened from inside a lesson, rather than from the arcade. */
+  fromLesson?: boolean;
   finish: (score: number, max: number) => void;
   say: (text: string, mood?: Mood) => void;
 }
@@ -99,28 +102,33 @@ const lamps: MiniGame = {
 // ---------------------------------------------------------------- bit flipper
 const bitflip: MiniGame = {
   id: 'bitflip', title: 'Bit Flipper', icon: '01', lesson: 'hex', rounds: 5,
-  blurb: 'Flip the switches until the byte matches the target. Beat the clock for points.',
+  blurb: 'Flip the lamps until the number matches the target. Starts with four lamps and no clock.',
   play(ctx) {
     const f = frame(ctx, ctx.rounds);
+    // Four lamps and decimal targets until hex has been taught (the hex lesson itself opens it with hex targets).
+    const hexMode = hexTaught() || !!ctx.fromLesson;
+    const width = hexMode ? 8 : 4;
+    // The clock is opt-in: off by default, switched on with the button. With it on, a round scores only under 15 s.
+    let timed = false;
     let n = 0;
     const next = () => {
       if (n >= ctx.rounds) return f.done();
       f.round = n;
-      const target = int(ctx.r, 1, 255);
-      const asHex = n % 2 === 1;
+      const target = int(ctx.r, 1, (1 << width) - 1);
+      const asHex = hexMode && n % 2 === 1;
       let v = 0;
       const t0 = performance.now();
-      const bits = Array.from({ length: 8 }, (_, i) => 7 - i);
+      const bits = Array.from({ length: width }, (_, i) => width - 1 - i);
       const cells = bits.map((b) => h('button', { class: 'bit', onclick: () => { v ^= 1 << b; render(); } }));
       const readout = h('div', { class: 'mg-readout' });
       const render = () => {
         cells.forEach((c, i) => { const on = (v >> bits[i]) & 1; c.textContent = String(on); c.classList.toggle('on', !!on); });
-        readout.textContent = `= ${v}  ·  0x${v.toString(16).toUpperCase().padStart(2, '0')}`;
+        readout.textContent = hexMode ? `= ${v}  ·  0x${v.toString(16).toUpperCase().padStart(2, '0')}` : `= ${v}`;
         if (v === target) {
           const secs = (performance.now() - t0) / 1000;
-          const fast = secs < 15;
+          const fast = !timed || secs < 15;
           if (fast) f.point();
-          f.note(fast ? `Match in ${secs.toFixed(1)} s!` : `Match, but ${secs.toFixed(1)} s. Under 15 s scores.`, fast ? 'ok' : '');
+          f.note(!timed ? 'Match!' : fast ? `Match in ${secs.toFixed(1)} s!` : `Match, but ${secs.toFixed(1)} s. Under 15 s scores.`, fast ? 'ok' : '');
           cells.forEach((c) => ((c as HTMLButtonElement).disabled = true));
           n++;
           setTimeout(next, 900);
@@ -131,8 +139,9 @@ const bitflip: MiniGame = {
         h('div', { class: 'bits' }, ...bits.map((b, i) => h('div', { class: 'bitcol' }, h('small', null, String(1 << b)), cells[i]))),
         readout,
       );
-      f.note(asHex ? 'Hex: each digit is a nibble (4 bits).' : 'Decimal: add up the weights of the 1s.');
-      f.buttons();
+      f.note(asHex ? 'Hex: each digit is a group of four lamps.' : 'Add up the worth of the lamps that are on.');
+      const clock = btn(timed ? 'Clock: on' : 'Clock: off', () => { timed = !timed; clock.textContent = timed ? 'Clock: on' : 'Clock: off'; });
+      f.buttons(clock);
       render();
     };
     next();

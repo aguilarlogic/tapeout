@@ -65,7 +65,7 @@ const S = (id: string, area: string, name: string, roles: RoleId[] | 'all', lear
 
 export const SKILLS: Skill[] = [
   // ------------------------------------------------ core engineering knowledge
-  S('numbers', 'Digital foundations', 'Binary, hex, bit manipulation, signed numbers', 'all', ['bits', 'hex', 'twos'], ['practice-bits', 'practice-twos'], ['boss-numbers', 'inc-numbers']),
+  S('numbers', 'Digital foundations', 'Binary, hex, bit manipulation, signed numbers', 'all', ['bits', 'bitadd', 'hex', 'twos'], ['practice-bits', 'practice-twos'], ['boss-numbers', 'inc-numbers', 'inc-lamp-board']),
   S('calc', 'Math', 'Multivariable calculus and optimization', ['analog', 'circuit', 'rf', 'process', 'quantum', 'eda', 'arch'], ['calc'], ['practice-calc'], ['boss-calc']),
   S('linalg', 'Math', 'Linear algebra (LU, eigen, SVD)', ['analog', 'circuit', 'ai', 'quantum', 'eda', 'rf'], ['linalg'], ['practice-linalg'], ['boss-linalg']),
   S('ode', 'Math', 'ODEs and PDEs', ['analog', 'pmic', 'board', 'rf', 'circuit', 'process'], ['ode'], ['practice-ode', 'clab-debounce', 'clab-rlc'], ['boss-ode', 'clab-boss-ode']),
