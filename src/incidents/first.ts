@@ -22,7 +22,7 @@ export const demoBoardIncident: Incident = {
       id: 'backwards',
       name: 'The carry LED is fitted backwards',
       fix: 'Turn the carry LED round the right way',
-      story: 'An LED only lets current through one way round. The signal arrived, but it was pushing the wrong way, so the light could never come on. The diode test passed current only the other way, and the magnifier showed the flat side on the wrong pad.',
+      story: 'An LED only lets electricity through one way round. The signal arrived, but it was pushing the wrong way, so the light could never come on. The LED test let electricity through only the other way, and the magnifier showed the flat side on the wrong pad.',
     },
     {
       id: 'switch',
@@ -40,7 +40,7 @@ export const demoBoardIncident: Incident = {
       id: 'led',
       name: 'The carry LED has burnt out',
       fix: 'Replace the carry LED',
-      story: 'Too much current had damaged the LED for good. A burnt-out LED lets no current through in either direction, so the diode test showed open both ways. The signal reached its leg, but there was no path through the light.',
+      story: 'Too much electricity had damaged the LED for good. A burnt-out LED lets nothing through in either direction, so the LED test showed open both ways. The signal reached its leg, but there was no path through the light.',
     },
   ],
   bandaids: [
@@ -86,12 +86,12 @@ export const demoBoardIncident: Incident = {
     },
     {
       cmd: 'meter', args: ['led'], cost: 10,
-      what: 'a diode test across the carry LED: which way does it pass current?',
+      what: 'an LED test across the carry LED: which way does it let electricity through?',
       read: (w) => {
-        const r = w.cause === 'backwards' ? 'reverse: current passes only the other way round'
-          : w.cause === 'led' ? 'open: no current passes either way'
-            : 'forward: current passes the way the circuit drives it';
-        return `diode test across the carry LED\n${r}`;
+        const r = w.cause === 'backwards' ? 'reverse: electricity passes only the other way round'
+          : w.cause === 'led' ? 'open: nothing passes either way'
+            : 'forward: electricity passes the way the circuit drives it';
+        return `LED test across the carry LED\n${r}`;
       },
     },
     {

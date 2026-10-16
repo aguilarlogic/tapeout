@@ -1,5 +1,6 @@
-// The campaign: six core acts that take a player from electrons to architecture, then a seventh act of
-// specialist roles. Every lesson, lab and review lives here, in the order TAPEOUT recommends them.
+// The campaign: four chips on the main path, detour acts of theory and software that the path calls in when a
+// chapter needs them (one subject per chapter), then the specialist roles. Every lesson, lab and review lives here,
+// in the order TAPEOUT recommends them.
 import { SCENARIOS } from './games/coverage/scenarios';
 import { LOGIC_LEVELS } from './games/logic/levels';
 import { PCB_LEVELS } from './games/pcb/levels';
@@ -33,8 +34,11 @@ export interface Module {
   /** A challenge the recommended path steps over; it still counts when done. */
   optional?: boolean;
 }
-/** A chapter. A detour chapter names the main-path chapter (`need`) whose labs call it in. */
-export interface Chapter { name: string; need?: string; modules: Module[] }
+/**
+ * A chapter. A detour chapter names the main-path chapter (`need`) whose labs call it in; detours due at the same
+ * chapter are taken in `stage` order (the stages of the Curriculum Order Plan), then in the order they are listed.
+ */
+export interface Chapter { name: string; need?: string; stage?: number; modules: Module[] }
 /** An act: one chip of the main path, a set of detours, or the role track. */
 export interface Act { id: string; n: number; kind: 'chip' | 'detour' | 'roles'; name: string; tagline: string; region: string; chapters: Chapter[] }
 
@@ -140,6 +144,8 @@ export const ACTS: Act[] = [
         name: 'Your first chip', modules: [...logic(['first-wire']), lesson('bits'), lesson('bool'), ...logic(['first-not', 'first-and', 'logic-half']),
           incident('inc-demo-board'), ...mods(RTL_LEVELS, 'rtl', 'rtl', (x) => FIRST_RTL.includes(x.id))],
       },
+      // A side step, not part of the chip: what a volt and an amp are, before anything uses them (S2).
+      { name: 'Electricity', need: 'Numbers', stage: 2, modules: [lesson('electricity'), lesson('resistance')] },
       { name: 'Numbers', modules: [lesson('bitadd'), prac('practice-bits'), ...drill('twos'), incident('inc-lamp-board')] },
       { name: 'Logic', modules: [lesson('demorgan'), prac('practice-bool'), ...logic(['logic-not', 'logic-and', 'logic-or', 'logic-xor']), incident('inc-logic')] },
       { name: 'Building blocks', modules: [lesson('mux'), ...logic(['logic-enable', 'logic-mux']), lesson('decoder'), ...logic(['logic-dec']), lesson('adder'), ...logic(['logic-full']), lesson('compare'), ...logic(['logic-cmp']), prac('practice-comb'), incident('inc-adder')] },
@@ -188,20 +194,54 @@ export const ACTS: Act[] = [
       },
     ],
   },
+  // The theory under the chip, one subject per act and one subject per chapter. The acts group it by subject for the
+  // map; `stage` is the order a learner meets it in (S4 to S11 of the Curriculum Order Plan). Every chapter here is
+  // called in before ADA-3's transistor chapters, or later where its `need` says so.
   {
-    id: 'science', n: 5, kind: 'detour', name: 'Detours: math & physics', tagline: 'The math and physics under every chip, called in when a lab needs them', region: 'STD CELLS',
+    id: 'circuits', n: 5, kind: 'detour', name: 'Detours: circuit theory', tagline: 'DC circuits, then energy storage, then AC: the hand analysis every analog and board engineer does', region: 'POWER GRID',
     chapters: [
-      { name: 'Circuits', need: 'Transistors', modules: [...drill('ohm', 'rc'), ...clab('clab-divider', 'clab-led'), bossMod('boss-circuits1'), ...clab('clab-boss-ohm'), ...drill('kcl'), ...clab('clab-thevenin', 'clab-bridge'), bossMod('boss-kcl'), ...clab('clab-boss-kcl'), ...drill('ac'), ...clab('clab-lowpass'), bossMod('boss-ac'), ...clab('clab-boss-ac')] },
-      { name: 'Electronics', need: 'Transistors', modules: [...drill('electronics'), ...clab('clab-rectifier', 'clab-bjt'), bossMod('boss-electronics'), ...clab('clab-boss-bjt')] },
-      { name: 'Physics', need: 'Transistors', modules: [...drill('semi', 'mosphys', 'em'), bossMod('boss-em')] },
-      { name: 'Calculus & linear algebra', need: 'Circuit design', modules: [...drill('calc'), bossMod('boss-calc'), ...drill('linalg'), bossMod('boss-linalg')] },
-      { name: 'Differential equations', need: 'Circuit design', modules: [...drill('ode'), ...clab('clab-debounce', 'clab-rlc'), bossMod('boss-ode'), ...clab('clab-boss-ode')] },
-      { name: 'Signals & control', need: 'Board', modules: [...drill('signals', 'dsp'), ...sig('sig-alias', 'sig-fir', 'sig-fft', 'sig-adc'), bossMod('boss-signals'), ...sig('sig-boss'), ...drill('control'), ...sig('sig-pid'), bossMod('boss-control')] },
-      { name: 'Probability & numerics', need: 'Random & coverage', modules: [...drill('prob'), ...code('code-py-mc'), bossMod('boss-prob'), ...drill('numerics'), ...code('code-py-newton', 'code-py-simpson'), bossMod('boss-numerics'), ...code('code-boss-py-root')] },
+      { name: 'DC circuits', need: 'Transistors', stage: 4, modules: [...drill('ohm'), ...clab('clab-divider'), lesson('psc'), ...drill('kcl'), ...clab('clab-thevenin', 'clab-bridge'), bossMod('boss-kcl'), ...clab('clab-boss-kcl'), lesson('mesh'), ...clab('clab-mesh'), lesson('deltawye')] },
+      { name: 'Energy storage', need: 'Transistors', stage: 7, modules: [lesson('storage'), ...clab('clab-kickback'), ...drill('rc'), ...clab('clab-debounce'), bossMod('boss-circuits1')] },
+      { name: 'AC circuits', need: 'Transistors', stage: 8, modules: [...drill('ac'), ...clab('clab-lowpass'), bossMod('boss-ac'), ...clab('clab-boss-ac')] },
     ],
   },
   {
-    id: 'software', n: 6, kind: 'detour', name: 'Detours: software', tagline: 'The shell, git, Python, C, C++, algorithms and operating systems, called in when a lab needs them', region: 'FIRMWARE',
+    id: 'math', n: 6, kind: 'detour', name: 'Detours: math', tagline: 'Complex numbers, calculus, linear algebra and differential equations, each just before a circuit needs it', region: 'STD CELLS',
+    chapters: [
+      { name: 'Complex numbers', need: 'Transistors', stage: 5, modules: [lesson('complex'), lesson('phasor')] },
+      { name: 'Calculus', need: 'Transistors', stage: 6, modules: [lesson('deriv'), lesson('integral')] },
+      // Multivariable calculus and linear algebra use capacitors in their examples, so they come after Energy storage.
+      { name: 'Multivariable calculus', need: 'Transistors', stage: 7.2, modules: [...drill('calc'), bossMod('boss-calc')] },
+      { name: 'Linear algebra', need: 'Transistors', stage: 7.3, modules: [...drill('linalg'), bossMod('boss-linalg')] },
+      { name: 'Differential equations', need: 'Transistors', stage: 7.5, modules: [...drill('ode'), ...clab('clab-rlc'), bossMod('boss-ode'), ...clab('clab-boss-ode')] },
+      { name: 'Probability', need: 'Random & coverage', modules: [...drill('prob'), ...code('code-py-mc'), bossMod('boss-prob')] },
+      { name: 'Numerical methods', need: 'Random & coverage', modules: [...drill('numerics'), ...code('code-py-newton', 'code-py-simpson'), bossMod('boss-numerics'), ...code('code-boss-py-root')] },
+    ],
+  },
+  {
+    id: 'signals', n: 7, kind: 'detour', name: 'Detours: signals', tagline: 'Fourier series, then signals, DSP and feedback', region: 'PHY · ADC',
+    chapters: [
+      { name: 'Fourier series', need: 'Transistors', stage: 8.5, modules: [lesson('fourier')] },
+      { name: 'Signals & DSP', need: 'Board', modules: [...drill('signals', 'dsp'), ...sig('sig-alias', 'sig-fir', 'sig-fft', 'sig-adc'), bossMod('boss-signals'), ...sig('sig-boss')] },
+      { name: 'Feedback & control', need: 'Board', modules: [...drill('control'), ...sig('sig-pid'), bossMod('boss-control')] },
+    ],
+  },
+  {
+    id: 'physics', n: 8, kind: 'detour', name: 'Detours: physics', tagline: 'Fields first, then the semiconductor devices built on them', region: 'TRANSISTORS',
+    chapters: [
+      { name: 'Fields', need: 'Transistors', stage: 9, modules: [lesson('fields'), lesson('gauss'), ...drill('em'), bossMod('boss-em')] },
+      { name: 'Semiconductor devices', need: 'Transistors', stage: 10, modules: [...drill('semi'), ...clab('clab-led', 'clab-rectifier', 'clab-boss-ohm'), ...drill('mosphys')] },
+    ],
+  },
+  {
+    id: 'analog', n: 9, kind: 'detour', name: 'Detours: analog', tagline: 'Op-amps up to a DAC you build yourself, then the transistor amplifiers inside them', region: 'ANALOG',
+    chapters: [
+      { name: 'Op-amps', need: 'Transistors', stage: 11, modules: [lesson('opamp'), ...clab('clab-inverting', 'clab-dac')] },
+      { name: 'Transistor amplifiers', need: 'Transistors', stage: 11.5, modules: [...drill('electronics'), ...clab('clab-bjt'), bossMod('boss-electronics'), ...clab('clab-boss-bjt')] },
+    ],
+  },
+  {
+    id: 'software', n: 10, kind: 'detour', name: 'Detours: software', tagline: 'The shell, git, Python, C, C++, algorithms and operating systems, called in when a lab needs them', region: 'FIRMWARE',
     chapters: [
       { name: 'The shell', need: 'Microarchitecture', modules: [...drill('shell'), ...shell('sh-nav', 'sh-grep', 'sh-pipes', 'sh-find', 'sh-awk', 'sh-sed', 'sh-perm', 'sh-loop', 'sh-script'), bossMod('boss-shell'), ...shell('sh-boss-triage')] },
       { name: 'Git', need: 'Microarchitecture', modules: [...drill('git'), ...shell('git-first', 'git-branch', 'git-undo', 'git-conflict', 'git-stash', 'git-bisect'), bossMod('boss-git'), ...shell('git-boss-merge', 'git-boss-bisect')] },
@@ -214,9 +254,9 @@ export const ACTS: Act[] = [
     ],
   },
   {
-    id: 'roles', n: 7, kind: 'roles', name: 'Specializations', tagline: 'The roles beyond RTL and DV: analog, RF, physical design, memory, fab, AI, security, quantum', region: 'SPECIALTY IP',
+    id: 'roles', n: 11, kind: 'roles', name: 'Specializations', tagline: 'The roles beyond RTL and DV: analog, RF, physical design, memory, fab, AI, security, quantum', region: 'SPECIALTY IP',
     chapters: [
-      { name: 'Circuits & signals', modules: [...drill('analog'), ...clab('clab-inverting', 'clab-gbw', 'clab-csamp', 'clab-mirror'), bossMod('boss-analog'), ...clab('clab-boss-amp'), ...drill('rf'), ...clab('clab-lcfilter'), ...spec('rf-smith', 'rf-match'), bossMod('boss-rf'), incident('inc-radio'), ...drill('pmic'), ...clab('clab-duty', 'clab-buck'), bossMod('boss-pmic'), ...clab('clab-boss-buck'), incident('inc-rail'), lesson('sipi')] },
+      { name: 'Circuits & signals', modules: [...drill('analog'), ...clab('clab-gbw', 'clab-csamp', 'clab-mirror'), bossMod('boss-analog'), ...clab('clab-boss-amp'), ...drill('rf'), ...clab('clab-lcfilter'), ...spec('rf-smith', 'rf-match'), bossMod('boss-rf'), incident('inc-radio'), ...drill('pmic'), ...clab('clab-duty', 'clab-buck'), bossMod('boss-pmic'), ...clab('clab-boss-buck'), incident('inc-rail'), lesson('sipi')] },
       { name: 'Silicon & manufacturing', modules: [...drill('pnr'), bossMod('boss-pd'), ...drill('sram'), ...spec('mem-snm', 'mem-assist'), bossMod('boss-memory'), incident('inc-bitflip'), ...drill('fab'), ...spec('proc-yield'), bossMod('boss-process'), incident('inc-wafer'), ...drill('pkg'), ...spec('pkg-thermal'), bossMod('boss-pkg'), incident('inc-package')] },
       { name: 'Bring-up & production', modules: [...drill('postsi'), bossMod('boss-postsi'), incident('inc-hang'), ...drill('ate'), bossMod('boss-test'), incident('inc-finaltest'), ...drill('emu'), ...spec('fpga-map', 'fpga-fmax'), bossMod('boss-fpga')] },
       { name: 'Domain chips', modules: [...drill('npu'), ...spec('ai-tile'), bossMod('boss-ai'), ...spec('ai-boss'), ...drill('hwsec'), ...spec('sec-dpa', 'sec-defend'), bossMod('boss-hwsec'), incident('inc-key'), ...drill('fusa'), ...spec('fusa-fmeda', 'fusa-asil', 'fusa-campaign'), bossMod('boss-fusa'), incident('inc-limp'), ...drill('photonics'), ...spec('ph-budget', 'ph-wdm'), bossMod('boss-photonics'), incident('inc-optical')] },
@@ -253,15 +293,25 @@ export function actProgress(a: Act) {
 export function startAct(): number {
   const p = profile();
   if (!p || p.background !== 'pro') return 0;
-  return { design: 1, verif: 3, pd: 2, board: 2, arch: 3, special: 6, unsure: 0 }[p.goal];
+  const roles = ACTS.findIndex((a) => a.kind === 'roles');
+  return { design: 1, verif: 3, pd: 2, board: 2, arch: 3, special: roles, unsure: 0 }[p.goal];
 }
 
 /** NAND-only puzzles: good practice, but a beginner builds with the real gates first and meets these as challenges. */
 const OPTIONAL_CHALLENGES = new Set(['logic-not', 'logic-and', 'logic-or', 'logic-xor', 'logic-latch']);
 for (const a of ACTS) for (const c of a.chapters) for (const m of c.modules) if (OPTIONAL_CHALLENGES.has(m.id)) m.optional = true;
 
-const PATH_CHAPTERS: Chapter[] = ACTS.filter((a) => a.kind !== 'detour').flatMap((a) => a.chapters);
-export const DETOURS: Chapter[] = ACTS.filter((a) => a.kind === 'detour').flatMap((a) => a.chapters);
+/** The main path: every chapter of the chips and the roles, except side steps that name a `need`. */
+const PATH_CHAPTERS: Chapter[] = ACTS.filter((a) => a.kind !== 'detour').flatMap((a) => a.chapters.filter((c) => !c.need));
+/** Every chapter the path calls in: the detour acts, and side steps inside a chip act. Sorted by stage, then listing. */
+export const DETOURS: Chapter[] = ACTS.flatMap((a) => a.chapters.filter((c) => a.kind === 'detour' || c.need))
+  .map((c, i) => ({ c, i })).sort((x, y) => (x.c.stage ?? Infinity) - (y.c.stage ?? Infinity) || x.i - y.i).map((x) => x.c);
+
+/**
+ * The order a beginner meets every module: each main-path chapter, with the detours it calls in just before it.
+ * The prerequisite and term-order tests check the curriculum against this order.
+ */
+export const PLAY_ORDER: Module[] = PATH_CHAPTERS.flatMap((c) => [...DETOURS.filter((d) => d.need === c.name), c].flatMap((x) => x.modules));
 
 /**
  * The next unfinished module. It walks the main path (the four chips, then the roles) from the player's entry act,

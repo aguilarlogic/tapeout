@@ -3,7 +3,7 @@
 // solution, and the tests prove it passes every goal while the starter does not.
 import { pick, type Rng } from '../../lessons/types';
 import { at, atFreq, bandwidth, bode, fallsBelow, overshoot, peaking, settleTime, stats, tail } from './measure';
-import { fmtValue, lab as makeLab, type Lab, type Elem } from './spice';
+import { fmtValue, lab as makeLab, parseValue, type Lab, type Elem } from './spice';
 
 export interface GoalResult { ok: boolean; detail: string }
 export interface Goal { label: string; check: (lab: Lab, text: string) => GoalResult }
@@ -721,8 +721,157 @@ const bossPdn: CircuitLevel = {
   },
 };
 
+// ------------------------------------------------------------------ hand analysis and the theory chapters
+
+/** A prediction the player writes into the netlist as a comment line, such as `* I1 = 4.1m`. */
+const predicted = (text: string, name: string): number | null => {
+  const m = text.match(new RegExp(`^\\s*\\*\\s*${name}\\s*=\\s*(\\S+)`, 'im'));
+  return m ? parseValue(m[1]) : null;
+};
+
+const meshNet = `* Two meshes. Both mesh currents run clockwise.
+V1 a 0 12
+R1 a m 2k
+R2 m 0 1k
+R3 m b 2k
+V2 b 0 3
+* Your predictions, in amps (4.1m means 4.1 mA):
+* I1 = 0
+* I2 = 0
+
+.op
+`;
+
+const mesh: CircuitLevel = {
+  id: 'clab-mesh', title: 'Predict the Meshes', concept: 'mesh current analysis, checked by the simulator', xp: 225, tier: 'guided',
+  ticket: 'The lead wants your hand numbers before anyone trusts a simulator. Predict both mesh currents, then let SPICE check you.',
+  build: () => ({
+    brief: `
+      <p>Give each window of the circuit a current that runs clockwise: <b>I1</b> in the left mesh (up through V1, right
+      through R1, down through R2) and <b>I2</b> in the right mesh (right through R3, down through V2, back up through R2).
+      R2 is shared, so it carries <b>I1 - I2</b>.</p>
+      <p>Write KVL around each mesh. Going round the left mesh, V1 is a rise and every resistor is a drop:</p>
+      <pre>left:   V1 = R1·I1 + R2·(I1 - I2)
+right:  0  = R3·I2 + V2 + R2·(I2 - I1)</pre>
+      <p>Solve the two equations by hand, then write your answers on the comment lines <b>* I1 = ...</b> and
+      <b>* I2 = ...</b>. Press <b>Run</b> to see what the simulator says: I1 is the current through R1, and I2 the
+      current through R3.</p>
+      <h4>Goals</h4><ul><li>Your I1 matches the simulator within 2%.</li><li>Your I2 matches the simulator within 2%.</li>
+      <li>Leave the circuit as it is: only the comment lines change.</li></ul>`,
+    starter: meshNet,
+    goals: [
+      goal('Your I1 is within 2% of the simulator', (l, t) => { const sim = l.op().i.r1, p = predicted(t, 'I1'); return { ok: p !== null && within(p, sim, 2), detail: `you wrote ${p === null ? 'nothing' : f(p) + 'A'}; the simulator says ${f(sim)}A` }; }),
+      goal('Your I2 is within 2% of the simulator', (l, t) => { const sim = l.op().i.r3, p = predicted(t, 'I2'); return { ok: p !== null && within(p, sim, 2), detail: `you wrote ${p === null ? 'nothing' : f(p) + 'A'}; the simulator says ${f(sim)}A` }; }),
+      kept(['r1', 'r2', 'r3'], meshNet),
+    ],
+    hints: [
+      'Work in kΩ, volts and mA. Left: 12 = 2·I1 + 1·(I1 - I2), so 3·I1 - I2 = 12. Right: 0 = 2·I2 + 3 + 1·(I2 - I1), so -I1 + 3·I2 = -3.',
+      'From the left equation, I2 = 3·I1 - 12. Put that into the right one: -I1 + 9·I1 - 36 = -3, so 8·I1 = 33.',
+      'I1 = 33/8 = 4.125 mA and I2 = 3 × 4.125 - 12 = 0.375 mA. Write * I1 = 4.125m and * I2 = 0.375m.',
+    ],
+    solution: meshNet.replace('* I1 = 0', '* I1 = 4.125m').replace('* I2 = 0', '* I2 = 0.375m'),
+  }),
+};
+
+const kickNet = (diode: boolean) => `* A relay coil switched by a transistor. The switch opens at t = 1 ms.
+Vcc vcc 0 12
+Lcoil vcc a 50m
+Rcoil a sw 120
+S1 sw 0 ctl 0
+Vctl ctl 0 PWL(0 5 1m 5 1.001m 0 5m 0)
+* The transistor breaks down (avalanches) above about 60 V. Leave these two lines in.
+Vbd bd 0 60
+Dbd sw bd
+${diode ? 'D1 sw vcc\n' : ''}
+.tran 1u 5m
+`;
+
+const kickback: CircuitLevel = {
+  id: 'clab-kickback', title: 'Tame the Kickback', concept: 'inductor kickback and the flyback diode', xp: 225, tier: 'guided',
+  ticket: 'The relay driver keeps dying the moment the relay turns off. Find the spike and stop it.',
+  build: () => ({
+    brief: `
+      <p>An inductor fights any change in its current: <b>v = L di/dt</b>. While the switch is closed, about 100 mA flows
+      through the 50 mH relay coil. When the switch opens at 1 ms, that current has nowhere to go, di/dt is huge, and
+      the voltage at <b>sw</b> spikes until the switch transistor breaks down at about 60 V. Each time it does, it takes a
+      little damage.</p>
+      <p>Press <b>Run</b> and look at <b>v(sw)</b> after 1 ms. Then give the coil's current another path: a
+      <b>flyback diode</b> across the coil, pointing so it blocks the supply while the switch is on. A diode line reads
+      <b>D1 anode cathode</b>.</p>
+      <h4>Goals</h4><ul><li>v(sw) never goes above 15 V.</li><li>The relay still pulls in: at least 90 mA through the
+      coil while the switch is on.</li><li>The relay lets go: the coil current is below 10 mA by t = 4 ms.</li>
+      <li>Leave the coil (Lcoil and Rcoil) as it is.</li></ul>`,
+    starter: kickNet(false),
+    goals: [
+      goal('v(sw) stays below 15 V', (l) => { const t = l.tran({ step: 1e-6, stop: 5e-3 }); const s = stats(t.t, t.v.sw, 0, 5e-3); return { ok: s.max <= 15, detail: `peak v(sw) = ${f(s.max)} V` }; }),
+      goal('At least 90 mA through the coil while the switch is on', (l) => { const t = l.tran({ step: 1e-6, stop: 5e-3 }); const i = at(t.t, t.i.lcoil, 0.9e-3); return { ok: i >= 0.09, detail: `${f(i)}A at 0.9 ms` }; }),
+      goal('Coil current below 10 mA by t = 4 ms', (l) => { const t = l.tran({ step: 1e-6, stop: 5e-3 }); const i = Math.abs(at(t.t, t.i.lcoil, 4e-3)); return { ok: i < 0.01, detail: `${f(i)}A at 4 ms` }; }),
+      kept(['lcoil', 'rcoil'], kickNet(false)),
+      goal('The breakdown model (Vbd, Dbd) is still there', (l) => { const ok = ['vbd', 'dbd'].every((n) => l.circuit.elems.some((e) => e.name === n)); return { ok, detail: ok ? 'in place' : 'Vbd or Dbd was removed' }; }),
+    ],
+    hints: [
+      'The spike is L·di/dt: 50 mH × 0.1 A in about a microsecond is thousands of volts. The current needs a way round.',
+      'Put a diode across the coil, from sw back up to vcc. While the switch is on, sw is low and vcc is high, so the diode is off.',
+      'Add the line D1 sw vcc. When the switch opens, the coil current flows round through the diode and dies away in a few L/R time constants.',
+    ],
+    par: 4,
+    solution: kickNet(true),
+  }),
+};
+
+/** The DAC netlist with its four bit sources set to `code`. */
+const withCode = (text: string, code: number) => text.replace(/^(\s*V([0-3])\s+b[0-3]\s+0\s+)\S+/gim, (_m, head: string, bit: string) => `${head}${(code >> Number(bit)) & 1}`);
+const dacNet = (r: [string, string, string, string]) => `* 4-bit DAC: a summing amplifier. Each bit source is 1 V for a 1 and 0 V for a 0.
+* The code set here is 1010; the checker tries every code.
+V3 b3 0 1
+V2 b2 0 0
+V1 b1 0 1
+V0 b0 0 0
+R3 b3 n ${r[0]}
+R2 b2 n ${r[1]}
+R1 b1 n ${r[2]}
+R0 b0 n ${r[3]}
+Rf n out 10k
+U1 out 0 n
+
+.op
+`;
+
+const dac: CircuitLevel = {
+  id: 'clab-dac', title: 'Build a DAC', concept: 'a summing amplifier turns a 4-bit code into a voltage', xp: 275, tier: 'guided',
+  ticket: 'The test board needs a cheap 4-bit DAC for a ramp generator. You have one op-amp and a bag of resistors.',
+  build: () => ({
+    brief: `
+      <p>A <b>summing amplifier</b> adds currents into a virtual ground. With feedback resistor Rf, each input adds its
+      own share:</p>
+      <pre>v(out) = -Rf × (v3/R3 + v2/R2 + v1/R1 + v0/R0)</pre>
+      <p>Right now every input resistor is 10 kΩ, so every bit counts the same. A DAC needs <b>binary weights</b>: bit 3
+      counts twice as much as bit 2, which counts twice as much as bit 1, and so on. Set the four input resistors so
+      the output is <b>-code/8 volts</b>: code 1000 gives -1 V, code 0001 gives -0.125 V, code 1111 gives -1.875 V.</p>
+      <h4>Goals</h4><ul><li>Code 0001 gives -0.125 V.</li><li>Code 1000 gives -1 V.</li><li>Code 1111 gives -1.875 V.</li>
+      <li>Every code in between lands within 1% of its step.</li></ul>`,
+    starter: dacNet(['10k', '10k', '10k', '10k']),
+    goals: [
+      ...[1, 8, 15].map((code) => goal(`Code ${code.toString(2).padStart(4, '0')} gives ${f(-code / 8)} V`, (_l, t) => {
+        const v = makeLab(withCode(t, code)).op().v.out;
+        return { ok: Math.abs(v + code / 8) <= 0.01 * (code / 8) + 1e-3, detail: `v(out) = ${f(v)} V` };
+      })),
+      goal('Every code from 0000 to 1111 is within 1% of its step', (_l, t) => {
+        const bad = Array.from({ length: 16 }, (_, code) => code).filter((code) => Math.abs(makeLab(withCode(t, code)).op().v.out + code / 8) > 0.01 * (code / 8) + 1e-3);
+        return { ok: bad.length === 0, detail: bad.length ? `off at codes ${bad.map((c) => c.toString(2).padStart(4, '0')).join(', ')}` : 'all 16 codes on their steps' };
+      }),
+    ],
+    hints: [
+      'Bit 3 alone must give -1 V with 1 V in: Rf/R3 = 1, so R3 = 10k.',
+      'Each lower bit counts half as much, so its resistor is twice as big.',
+      'R3 = 10k, R2 = 20k, R1 = 40k, R0 = 80k.',
+    ],
+    solution: dacNet(['10k', '20k', '40k', '80k']),
+  }),
+};
+
 export const CIRCUIT_LEVELS: CircuitLevel[] = [
-  divider, led, thevenin, bridge, lowpass, debounce, rlc, rectifier, inverting, gbw, bjt, csamp, mirror, duty, buck, pdn, lcfilter,
+  divider, led, thevenin, bridge, lowpass, debounce, rlc, rectifier, inverting, gbw, bjt, csamp, mirror, duty, buck, pdn, lcfilter, mesh, kickback, dac,
   bossOhm, bossKcl, bossAc, bossOde, bossBjt, bossAmp, bossBuck, bossPdn,
 ];
 

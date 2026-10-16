@@ -194,6 +194,28 @@ export const GLOSSARY: Entry[] = [
   E('rabi|pi pulse|rabi oscillation', 'Driving a qubit makes it oscillate between |0⟩ and |1⟩; a π pulse (half a period) flips it.', 'qctrl'),
   E('dilution refrigerator|dilution fridge|cryostat|mixing chamber', 'The fridge that cools qubits to ~10 mK, with stages at 50 K, 4 K, ~1 K and ~100 mK.', 'qctrl'),
   E('cryo-cmos|cryogenic cmos|jpa|twpa|hemt', 'Control and readout electronics inside the fridge: cryo-CMOS controllers, quantum-limited amps (JPA/TWPA), HEMTs at 4 K.', 'qctrl'),
+  // The theory chapters (Curriculum Order Plan). Listed last so older, more specific entries win partial matches.
+  E('charge|electron', 'Tiny bits of electricity. Electrons carry negative charge; in a metal wire some are free to move.', 'electricity'),
+  E('current|amp|amps|ampere|milliamp|ma', 'Charge flowing, like water in a pipe. Counted in amps (A); 1 A = 1000 mA.', 'electricity'),
+  E('voltage|volt|volts', 'The push that makes charge flow, like the pressure from a pump. Counted in volts (V).', 'electricity'),
+  E('circuit|closed loop|loop', 'A complete path out of a source and back again. Current only flows round a closed loop.', 'electricity'),
+  E('resistance|resistor|ohm|ohms', 'How hard something fights the flow of charge, in ohms (Ω). current = voltage / resistance.', 'resistance'),
+  E('power|watt|watts', 'How fast energy is used, in watts (W): power = voltage × current. It ends up as heat or light.', 'resistance'),
+  E('passive sign convention|sign convention', 'Draw each current so it enters the + end of its part. Then p = v × i is the power the part absorbs; negative means it delivers.', 'psc'),
+  E('mesh analysis|mesh current|mesh currents', 'Give each window of a flat circuit a clockwise current and write KVL around each one. A shared resistor carries the difference.', 'mesh'),
+  E('delta-wye|delta wye|wye-delta|star-delta|y-delta', 'Swap three resistors in a triangle (Δ) for three in a star (Y): each Y resistor = product of the two Δ resistors at its corner / sum of all three.', 'deltawye'),
+  E('complex number|j|imaginary', 'A number a + bj with j × j = -1: a point or an arrow on a plane. Multiplying multiplies lengths and adds angles.', 'complex'),
+  E("euler's formula|euler formula|euler", 'e^(jθ) = cos θ + j sin θ: an arrow of length 1 at angle θ.', 'phasor'),
+  E('phasor', 'The arrow A∠φ that stands for the sine wave A cos(ωt + φ). Same-frequency waves add as arrows.', 'phasor'),
+  E('derivative|rate of change|slope|dv/dt', 'How fast something changes at one instant: the slope of its graph. d/dt tⁿ = n tⁿ⁻¹.', 'deriv'),
+  E('integral|area under the curve|fundamental theorem of calculus', 'The total of a rate over time: the area under its graph. ∫ from a to b of f dt = F(b) - F(a) where dF/dt = f.', 'integral'),
+  E('capacitor|capacitance|farad', 'Two plates with a gap: q = Cv and i = C dv/dt. Its voltage cannot jump; at DC it carries no current.', 'storage'),
+  E('inductor|inductance|henry', 'A coil: v = L di/dt. Its current cannot jump; at DC it is a wire. Stores ½LI².', 'storage'),
+  E('kickback|inductive kickback|flyback diode|flyback|freewheeling diode', 'Switching off an inductor fast makes a huge L di/dt spike. A diode across the coil gives its current a path and clamps the spike.', 'storage'),
+  E('fourier series|harmonic|harmonics|fourier coefficient', 'A periodic signal as a sum of sines and cosines at multiples of its frequency. bₙ = (2/T)∫ f(t) sin(nωt) dt.', 'fourier'),
+  E("coulomb's law|coulomb|electric field|potential", 'F = k q₁q₂/r². The field E = F/q (V/m); the potential V = -∫E dr, kq/r for a point charge.', 'fields'),
+  E("gauss's law|gauss law|gauss|flux|parallel plate", '∮E·dA = Q_inside/ε₀. With symmetry it gives the field fast, and proves C = ε₀εrA/d for parallel plates.', 'gauss'),
+  E('summing amplifier|virtual ground|binary weighted dac', 'An inverting op-amp with several inputs into a virtual ground: vout = -Rf Σ v/R. Binary-weighted inputs make a DAC.', 'opamp'),
 ];
 
 const norm = (s: string) => s.toLowerCase().replace(/[?.!]/g, '').replace(/^(what|who)('s| is| are)\s+/, '').replace(/^(a|an|the)\s+/, '').trim();

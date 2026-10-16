@@ -1,5 +1,6 @@
 // Act I - Foundations: numbers, logic, electricity, transistors.
 import { bin, expr, hexa, num, qty } from './answers';
+import { calc, walk } from './teach';
 import { app, art, ask, between, gen, Lesson, mc, pick, say } from './types';
 
 export const bits: Lesson = {
@@ -284,32 +285,48 @@ export const demorgan: Lesson = {
 
 export const ohm: Lesson = {
   id: 'ohm',
-  title: 'Voltage, Current, Resistance',
-  concept: "Ohm's law, dividers, power",
+  title: "Ohm's Law at Work",
+  concept: "Ohm's law, series and parallel, dividers, power",
   xp: 70,
   steps: [
-    say('Chips are digital on the inside, but they live in an analog world. Before we go further, you need three quantities in your bones.'),
+    say("In the electricity primer you met one rule: current = voltage / resistance. Engineers write it the other way round, **V = I × R**, and call it **Ohm's law**. It is the first tool of every hand analysis."),
     art(`
-   V  voltage     "pressure"    volts   (V)
-   I  current     "flow"        amps    (A)
-   R  resistance  "narrowness"  ohms    (Ω)
+   V  voltage      the push      volts  (V)
+   I  current      the flow      amps   (A)
+   R  resistance   the fight     ohms   (Ω)
 
-          V = I × R          P = V × I`, "Ohm's law and power"),
+   V = I × R      I = V / R      R = V / I`, "Ohm's law, three ways round"),
+    say('Watch one first. A 5 V supply across a 1 kΩ resistor: I = V / R = 5 / 1000 = 0.005 A. Multiply by 1000 to get milliamps: **5 mA**.'),
     gen((r) => {
       const R = pick(r, [100, 220, 330, 470, 1000]);
       const V = pick(r, [3.3, 5, 12]);
       const I = V / R;
-      return ask(`A ${R} Ω resistor sits across a ${V} V supply. How much current flows, in **mA**?`, qty(I * 1000, 'mA'), `I = V/R = ${V}/${R} = ${(I * 1000).toPrecision(3)} mA.`, 'I = V / R, then multiply amps by 1000 to get mA.');
+      return walk(
+        ask(`A ${R} Ω resistor sits across a ${V} V supply. How much current flows, in **mA**?`, qty(I * 1000, 'mA'), `I = V/R = ${V}/${R} = ${(I * 1000).toPrecision(3)} mA.`, 'I = V / R, then multiply amps by 1000 to get mA.'),
+        "Ohm's law", 'Divide the voltage by the resistance to get amps, then turn amps into milliamps.',
+        calc('Current in amps:', `${V} / ${R}`, I, 'A'),
+        calc('In milliamps:', `${I.toPrecision(3)} × 1000`, I * 1000, 'mA'),
+      );
     }),
-    say('Resistors in **series** add: R = R1 + R2. In **parallel** they combine as R1·R2/(R1+R2). Parallel is always smaller than the smallest one.'),
-    ask('What is 1 kΩ in parallel with 1 kΩ?', qty(500, 'Ω'), 'Two equal resistors in parallel give half: 1k·1k/(2k) = 500 Ω.', 'Two equal resistors in parallel = half of one.'),
-    say('Now the most useful circuit in electronics: the **voltage divider**. Two resistors in series split the voltage in proportion to their size.'),
+    say('Resistors in a row are in **series**. The current has to go through both, so their resistances **add**. Worked example: 1 kΩ then 2 kΩ is 3 kΩ.'),
+    ask('A 470 Ω resistor is in series with a 330 Ω resistor. What is the total, in Ω?', qty(800, 'Ω', 0.01), '470 + 330 = 800 Ω. In series, resistances add.', 'Add them.'),
+    say('Resistors side by side are in **parallel**. The current gets two paths, so the total is **less than either one**. For two resistors: R1 × R2 / (R1 + R2). Worked example: 1 kΩ with 1 kΩ is 1 × 1 / 2 = 0.5 kΩ.'),
+    ask('What is 1 kΩ in parallel with 1 kΩ, in Ω?', qty(500, 'Ω'), 'Two equal resistors in parallel give half: 1k·1k/(2k) = 500 Ω.', 'Two equal resistors in parallel = half of one.'),
+    gen((r) => {
+      const [a, b] = pick(r, [[2, 2], [3, 6], [4, 12], [6, 3]] as const);
+      const p = (a * b) / (a + b);
+      return ask(`What is ${a} kΩ in parallel with ${b} kΩ, in kΩ?`, qty(p, 'kΩ', 0.01), `${a} × ${b} / (${a} + ${b}) = ${a * b}/${a + b} = ${p} kΩ. Smaller than either one.`, 'Product over sum.');
+    }),
+    say('Now the most useful circuit in electronics: the **voltage divider**. Two resistors in series share the voltage in proportion to their size.'),
     art(`
    Vin ──┬──
          R1
          ├─── Vout = Vin × R2 / (R1 + R2)
          R2
-   GND ──┴──`),
+   GND ──┴──
+
+   Vin = 10 V, R1 = 1 kΩ, R2 = 4 kΩ:
+   Vout = 10 × 4 / (1 + 4) = 8 V`, 'the divider, with a worked example'),
     gen((r) => {
       const [R1, R2] = pick(r, [[10000, 10000], [10000, 20000], [2000, 3000], [4700, 10000], [1000, 2200]] as const);
       const Vin = pick(r, [5, 12, 3.3]);
@@ -317,11 +334,12 @@ export const ohm: Lesson = {
       return ask(`Vin = ${Vin} V, R1 = ${R1 / 1000} kΩ, R2 = ${R2 / 1000} kΩ. What is Vout?`, qty(Vout, 'V', 0.02), `Vout = ${Vin} × ${R2 / 1000}/(${R1 / 1000}+${R2 / 1000}) = ${Vout.toPrecision(3)} V.`, 'Vout = Vin × R2 / (R1 + R2).');
     }),
     app('divider', 'Your turn to design one. Pick standard resistor values to hit each target voltage. Real parts only come in certain values (the E12 series), so you will have to get creative.', 3),
-    say('Last: power. Every milliwatt in a chip turns into heat. P = V × I, or with Ohm\'s law, P = V²/R = I²R.'),
+    say("Last: power. You know P = V × I. Put Ohm's law into it and you get two more forms: **P = V² / R** and **P = I² × R**. Worked example: 10 V across 100 Ω is 100 / 100 = 1 W."),
     ask('A chip draws 2 A from a 0.9 V core supply. How many watts is that?', qty(1.8, 'W'), 'P = V × I = 0.9 × 2 = 1.8 W. Modern GPUs draw hundreds of amps at under 1 V, which is why their power delivery is so hard.', 'P = V × I'),
-    say('Good. You will use V = IR for the rest of your career, {name}. Even STA engineers do, for IR drop.', 'happy'),
+    ask('20 mA flows through a 1 kΩ resistor. How much power does it turn into heat, in mW?', qty(400, 'mW', 0.01), 'P = I² × R = 0.02² × 1000 = 0.4 W = 400 mW.', 'P = I² × R, with I in amps.'),
+    say('Good. You will use V = IR for the rest of your career, {name}. Even timing engineers do, for IR drop.', 'happy'),
   ],
-  recap: ['V = I × R; P = V × I.', 'Series resistors add; parallel ones combine to less than the smallest.', 'Divider: Vout = Vin × R2/(R1+R2).', 'Real resistors come in standard series (E12, E24, E96).'],
+  recap: ['V = I × R; P = V × I = V²/R = I²R.', 'Series resistors add; parallel ones combine to less than the smallest.', 'Divider: Vout = Vin × R2/(R1+R2).', 'Real resistors come in standard series (E12, E24, E96).'],
 };
 
 export const rc: Lesson = {

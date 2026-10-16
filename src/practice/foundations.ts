@@ -405,7 +405,7 @@ export const ohmPractice = practice('practice-ohm', 'Circuit Arithmetic', "Ohm's
     const i = pick(r, tier(d, [0.01, 0.02], [0.005, 0.015], [0.002, 0.008]));
     const R = (vs - vf) / i;
     return walk(ask(`An LED drops ${vf} V at ${i * 1000} mA. It is driven from a ${vs} V pin. What series resistor do you need, in Ω?`, qty(R, 'Ω', 0.02), `R = (${vs} - ${vf}) / ${i} = ${R.toFixed(0)} Ω. It dissipates ${eng((vs - vf) * i, 'W')}.`, 'The resistor takes whatever voltage the LED does not.'),
-      "Kirchhoff's voltage law plus Ohm's law", 'In a series loop, the voltages add up to the supply (KVL). An LED holds roughly a fixed voltage across itself, so the resistor gets the rest. The resistor also sets the current, so R = (its voltage) / (the current you want).',
+      "Ohm's law around the loop", 'In a series loop, the voltages add up to the supply. An LED holds roughly a fixed voltage across itself, so the resistor gets the rest. The resistor also sets the current, so R = (its voltage) / (the current you want).',
       calc('Voltage left for the resistor:', `${vs} - ${vf}`, vs - vf, 'V'),
       calc('Convert the current to amps:', `${i * 1000} mA`, i, 'A', String(i)),
       calc('R = V / I:', `${sig(vs - vf)} V / ${i} A`, R, 'Ω', undefined, 0.02));

@@ -5,9 +5,11 @@ import type { Question, Rng } from './lessons/types';
 
 const rng = (seed: number): Rng => () => { seed = (seed * 1664525 + 1013904223) % 4294967296; return seed / 4294967296; };
 
-/** The hint ladder starts with the question's own nudge, so every typed answer in the first three chapters needs one. */
-describe('hint ladder coverage, chapters 1 to 3', () => {
-  const ids = ACTS[0].chapters.slice(0, 3).flatMap((c) => c.modules).filter((m) => m.kind === 'lesson').map((m) => m.id);
+/** The hint ladder starts with the question's own nudge, so every typed answer in the first three chapters, the electricity
+ * primer and the new theory lessons needs one. */
+describe('hint ladder coverage, chapters 1 to 3 and the theory lessons', () => {
+  const theory = ['electricity', 'resistance', 'ohm', 'psc', 'mesh', 'deltawye', 'complex', 'phasor', 'deriv', 'integral', 'storage', 'fourier', 'fields', 'gauss', 'opamp'];
+  const ids = [...ACTS[0].chapters.filter((c) => !c.need).slice(0, 3).flatMap((c) => c.modules).filter((m) => m.kind === 'lesson').map((m) => m.id), ...theory];
 
   it('covers some lessons', () => expect(ids.length).toBeGreaterThan(4));
 

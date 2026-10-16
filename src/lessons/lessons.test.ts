@@ -86,15 +86,17 @@ describe('answer parsing', () => {
 });
 
 describe('curriculum', () => {
-  it('has six core acts plus specializations, and unique module ids', () => {
-    expect(ACTS.map((a) => a.n)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+  it('numbers the acts in order, ends with the specializations, and has unique module ids', () => {
+    expect(ACTS.map((a) => a.n)).toEqual(ACTS.map((_, i) => i + 1));
+    expect(ACTS[ACTS.length - 1].kind).toBe('roles');
     expect(new Set(ALL_MODULES.map((m) => m.id)).size).toBe(ALL_MODULES.length);
   });
-  it('starts specialists at Act 7 and keeps the final review to the core acts', () => {
-    expect(ACTS[6].chapters.flatMap((c) => c.modules).every((m) => ['lesson', 'practice', 'boss', 'incident', 'clab', 'spec', 'code'].includes(m.kind))).toBe(true);
+  it('keeps the final review to the core acts', () => {
+    const roles = ACTS.find((a) => a.kind === 'roles')!;
+    expect(roles.chapters.flatMap((c) => c.modules).every((m) => ['lesson', 'practice', 'boss', 'incident', 'clab', 'spec', 'code'].includes(m.kind))).toBe(true);
     for (let seed = 1; seed < 20; seed++) {
       const titles = finalExam(rng(seed)).steps.filter((s) => s.t === 'say').map((s) => (s as { text: string }).text);
-      for (const m of ACTS[6].chapters.flatMap((c) => c.modules)) expect(titles).not.toContain(`**${m.title}**`);
+      for (const m of roles.chapters.flatMap((c) => c.modules)) expect(titles).not.toContain(`**${m.title}**`);
     }
   });
   it('covers every lesson exactly once', () => {

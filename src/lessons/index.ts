@@ -11,13 +11,14 @@ import { PHYSICS_LESSONS } from './physics';
 import { QUANTUM_LESSONS } from './quantum';
 import { ROLE_LESSONS } from './roles';
 import { SYSTEMS_LESSONS } from './systems';
+import { THEORY_LESSONS } from './theory';
 import { Lesson, Question, Rng, Step } from './types';
 import { VERIF_LESSONS } from './verification';
 import { VLSI_LESSONS } from './vlsi';
 
 /** Acts 1-6: the path every chip engineer walks. The final review draws from these. */
 export const CORE_LESSONS: Lesson[] = [
-  ...FOUNDATION_LESSONS, ...MATH_LESSONS, ...STATS_LESSONS, ...CIRCUIT_LESSONS, ...SIGNAL_LESSONS, ...PHYSICS_LESSONS,
+  ...FOUNDATION_LESSONS, ...THEORY_LESSONS, ...MATH_LESSONS, ...STATS_LESSONS, ...CIRCUIT_LESSONS, ...SIGNAL_LESSONS, ...PHYSICS_LESSONS,
   ...TOOLING_LESSONS, ...SYSTEMS_LESSONS, ...DIGITAL_LESSONS, ...VLSI_LESSONS, ...VERIF_LESSONS, ...ARCH_LESSONS,
 ];
 

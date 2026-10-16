@@ -33,27 +33,40 @@ export interface Progress {
   prefs: Prefs;
   best: Record<string, number>; // minigame high scores
   daily: DailyState; // the daily goal and its streak (see streak.ts)
+  version?: number; // SAVE_VERSION when last written; saves from before versioning have none
 }
 
 const KEY = 'tapeout.progress.v1';
+/** 2: the curriculum-order rework moved chapters between acts. Progress is keyed by module id and no id changed, so an
+ * older save needs no rewriting: it is stamped with the new version and every level, star, card and rank stays. */
+export const SAVE_VERSION = 2;
 let cache: Progress | null = null;
 
 function blank(): Progress {
-  return { levels: {}, cards: {}, prefs: { speed: 'normal', muted: false }, best: {}, daily: emptyDaily() };
+  return { levels: {}, cards: {}, prefs: { speed: 'normal', muted: false }, best: {}, daily: emptyDaily(), version: SAVE_VERSION };
 }
 
 export function load(): Progress {
   if (cache) return cache;
   try {
     const raw = localStorage.getItem(KEY);
-    cache = raw ? { ...blank(), ...JSON.parse(raw) } : blank();
+    const saved = raw ? JSON.parse(raw) : undefined;
+    cache = saved ? { ...blank(), ...saved, version: saved.version } : blank(); // an unversioned save stays unversioned until migrate()
     cache!.prefs = { ...blank().prefs, ...cache!.prefs };
     cache!.daily = { ...emptyDaily(), ...cache!.daily };
   } catch {
     cache = blank();
   }
   foldOldMix();
+  migrate();
   return cache!;
+}
+
+/** Bring an older save up to SAVE_VERSION. Nothing is ever dropped: see SAVE_VERSION for what each step needs. */
+function migrate() {
+  if ((cache!.version ?? 1) >= SAVE_VERSION) return;
+  cache!.version = SAVE_VERSION;
+  save();
 }
 
 /** Old one-record-per-day Daily Mix history becomes one legacy record (see foldLegacyMix). A bad record must not
