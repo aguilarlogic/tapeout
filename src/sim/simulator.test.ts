@@ -234,3 +234,47 @@ describe('signedness', () => {
     expect(d.get('y')).toBe(0n);
   });
 });
+
+describe('SystemVerilog FSM style (U11)', () => {
+  const fsm = (caseKw: string) => `
+    module det(input clk, input rst_n, input din, output logic found);
+      typedef enum logic [1:0] { IDLE, GOT1, GOT10 = 2, DONE } state_t;
+      state_t state, next;
+      always_ff @(posedge clk or negedge rst_n)
+        if (!rst_n) state <= IDLE; else state <= next;
+      always_comb begin
+        next = state;
+        found = 1'b0;
+        ${caseKw} (state)
+          IDLE:  if (din) next = GOT1;
+          GOT1:  next = din ? GOT1 : GOT10;
+          GOT10: begin if (din) begin next = DONE; end else next = IDLE; end
+          DONE:  begin found = 1'b1; next = IDLE; end
+          default: next = IDLE;
+        endcase
+      end
+    endmodule`;
+  for (const kw of ['case', 'unique case', 'priority case']) {
+    it(`${kw} with a typedef enum walks 1,0,1`, () => {
+      const d = new Design(fsm(kw));
+      expect(d.lints).toEqual([]);
+      d.apply({ rst_n: 0, din: 0, clk: 0 });
+      d.apply({ rst_n: 1 });
+      for (const bit of [1, 0, 1]) clockIt(d, { din: bit });
+      expect(d.get('state')).toBe(3n); // DONE follows the explicit GOT10 = 2
+      expect(d.get('found')).toBe(1n);
+      clockIt(d, { din: 0 });
+      expect(d.get('state')).toBe(0n);
+    });
+  }
+
+  it('numbers enum constants from 0 and continues after an explicit value', () => {
+    const d = new Design(`
+      module m(input a, output logic [2:0] y);
+        enum logic [2:0] { X, Y = 5, Z } e;
+        assign y = a ? Z : Y;
+      endmodule`);
+    d.apply({ a: 1 });
+    expect(d.get('y')).toBe(6n);
+  });
+});

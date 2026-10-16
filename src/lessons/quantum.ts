@@ -3,6 +3,7 @@ import { num, qty } from './answers';
 import { art, ask, gen, Lesson, mc, pick, say } from './types';
 
 const r1 = (x: number) => Math.round(x * 10) / 10;
+const sig = (x: number, n = 3) => String(+x.toPrecision(n));
 
 export const qubit: Lesson = {
   id: 'qubit',
@@ -21,7 +22,7 @@ export const qubit: Lesson = {
    q0 ──[H]──●──     a Bell pair: H then CNOT.
              │       measuring q0 and q1 always gives the same answer,
    q1 ───────⊕──     00 or 11 (50/50), never 01 or 10: entanglement`),
-    say('The enemy is **decoherence**: the environment slowly disturbs the qubit. **T1** is how long an excited |1⟩ takes to decay to |0⟩ (energy relaxation). **T2** is how long the phase between |0⟩ and |1⟩ survives (dephasing). Physics limits T2 ≤ 2·T1. Every gate is a race against these clocks.'),
+    say('The enemy is **decoherence**: the environment slowly disturbs the qubit. **T1** is how long an excited |1⟩ takes to decay to |0⟩ (energy relaxation). **T2** is how long the phase between |0⟩ and |1⟩ survives (dephasing). A Ramsey measurement gives **T2\***, which includes slow noise; an **echo** sequence refocuses that slow noise and gives the longer **T2 echo**. Physics limits the whole chain: T2* ≤ T2 ≤ 2·T1. Every gate is a race against these clocks.'),
     gen((r) => {
       const [f, n] = pick(r, [[0.99, 100], [0.999, 1000], [0.999, 100], [0.9999, 1000], [0.99, 50]] as const);
       const p = f ** n * 100;
@@ -34,13 +35,32 @@ export const qubit: Lesson = {
       return ask(`A ${f} GHz qubit must be much colder than the temperature T = h·f / k at which thermal energy matches one photon. What is that temperature, in mK?`, qty(t, 'mK', 0.03, Math.round(t).toString()), `T = (6.63e-34 × ${f}e9) / 1.38e-23 = ${Math.round(t)} mK. To keep thermal excitations rare, the chip sits in a dilution refrigerator at about 10 to 20 mK, colder than deep space.`, 'T = h·f / k. h = 6.63e-34, k = 1.38e-23.');
     }),
     mc('Which pairing of qubit platform and trade-off is right?', ['Ions: fast gates and short coherence; superconducting: slow gates', 'Ions: long coherence, slower gates; superconducting: the reverse', 'Spin qubits: no cooling needed, made in CMOS fabs', 'Photonic qubits: must run at 10 mK like transmons'], 1, 'Trapped ions have very long coherence and high fidelity but slower gates; superconducting qubits have fast gates (tens of ns) and are made in chip fabs, but have shorter coherence and need dilution fridges. Trapped ions and neutral atoms are controlled with lasers. Superconducting and silicon spin qubits are made in fabs (spin qubits in near-CMOS processes, a big draw for semiconductor companies). Photonic qubits run near room temperature but need extremely good single-photon sources and detectors.'),
-    say('The way out is **quantum error correction**: spread one **logical** qubit across many **physical** ones and measure parity checks continuously, without measuring the data itself. The leading scheme is the **surface code**. A distance-d surface code uses d² data qubits plus d² - 1 measurement qubits, and corrects up to ⌊(d-1)/2⌋ errors.'),
+    say('The way out is **quantum error correction**: spread one **logical** qubit across many **physical** ones and measure parity checks continuously, without measuring the data itself. The leading scheme is the **surface code**. A distance-d surface code uses d² data qubits plus d² - 1 measurement qubits, and corrects up to ⌊(d-1)/2⌋ errors, provided the physical error rates are below the code threshold (about 1% for the surface code).'),
     gen((r) => {
       const d = pick(r, [3, 5, 7, 11, 17, 25]);
       return ask(`How many physical qubits does one distance-${d} surface-code logical qubit need (2d² - 1)?`, num(2 * d * d - 1), `2 × ${d}² - 1 = ${2 * d * d - 1}. Algorithms like factoring need thousands of logical qubits, so millions of physical ones. That scale is an engineering problem more than a physics one: wiring, power, control electronics and fast decoding.`, '2 × d² - 1.');
     }),
+    mc('Which is longer for the same qubit, **T2\*** (Ramsey) or **T2 echo**, and why?', ['T2 echo, because the echo pulse refocuses slow noise that Ramsey cannot', 'T2*, because an echo pulse adds its own noise and shortens the time', 'They are always equal, since both measure the same dephasing time', 'T2*, because Ramsey is the only one limited by energy relaxation'], 0, 'Slow drifts dephase a Ramsey experiment, and a refocusing pulse cancels them, so the echo time is longer: T2* ≤ T2 echo ≤ 2·T1. Neither can exceed 2·T1, because energy relaxation also destroys the phase.'),
+    say('Below the threshold, error correction pays off: **each step up in code distance, d to d + 2, divides the logical error rate by a factor Λ.** A 2024 superconducting experiment measured Λ ≈ 2.1 and reached about 0.14% logical error per cycle at distance 7. Above the threshold, more qubits make things worse, not better.'),
+    gen((r) => {
+      const lam = pick(r, [2, 3, 4]), e = pick(r, [0.4, 0.6, 1.2, 2.4]), steps = pick(r, [1, 2, 3]);
+      const out = e / lam ** steps;
+      const d0 = 3, d1 = d0 + 2 * steps;
+      return ask(`A surface code has Λ = ${lam}. At distance ${d0} its logical error is ${e}% per cycle. What is it at distance ${d1}, in %?`, qty(out, '%', 0.03, sig(out)), `Going from d = ${d0} to ${d1} is ${steps} step${steps > 1 ? 's' : ''} of +2, so divide by Λ ${steps} time${steps > 1 ? 's' : ''}: ${e} / ${lam}${steps > 1 ? `^${steps}` : ''} = ${sig(out)}%. (With Λ = 2, two steps give ε/4.) The price is d² growth in qubits.`, 'Divide by Λ once per +2 in distance.');
+    }),
+    gen((r) => {
+      const p = pick(r, [0.99, 0.995, 0.998, 0.999]);
+      const rr = ((1 - p) * (2 - 1)) / 2;
+      return ask(`A single-qubit randomized-benchmarking sequence decays with parameter p = ${p}. What is the average error per gate, in %? (r = (1 - p)(d - 1)/d, with d = 2 for one qubit)`, qty(rr * 100, '%', 0.03, sig(rr * 100)), `r = (1 - ${p}) × (2 - 1) / 2 = ${sig(rr)}, which is ${sig(rr * 100)}%. Randomized benchmarking applies long random gate sequences and fits how fast the fidelity decays, so the result is an average over gates that is insensitive to state-preparation and measurement errors.`, 'Half of (1 - p) for one qubit.');
+    }),
+    gen((r) => {
+      const n = pick(r, [5, 6, 7, 8]);
+      return ask(`A machine's largest passing n-qubit, depth-n random circuit has n = ${n}. What is its quantum volume?`, num(2 ** n), `QV = 2^n = ${2 ** n}. Quantum volume folds qubit count, fidelity and connectivity into one number, but it is a single square circuit size; layer fidelity instead reports the error of a whole layer of two-qubit gates, which scales better to large devices.`, '2 to the n.');
+    }),
+    say('How do you know a platform is a candidate at all? **DiVincenzo\'s five criteria** are the checklist: (1) a scalable physical system with well-characterised qubits; (2) the ability to initialise the qubits to a simple known state; (3) coherence times much longer than the gate time; (4) a universal set of quantum gates; (5) a qubit-specific measurement capability.'),
+    mc('A lab shows a qubit with a long T1, perfect readout and a full gate set, but it cannot be reset to a known state between runs. Which criterion is missing?', ['Initialisation to a simple known state', 'A universal set of quantum gates', 'Coherence time longer than the gate time', 'A scalable system of well-characterised qubits'], 0, 'Every run has to start from a known state, and error correction needs fresh ancilla qubits every cycle. The other three criteria are met by what the lab showed.'),
   ],
-  recap: ['Qubit = α|0⟩ + β|1⟩; measurement is probabilistic and collapses it.', 'n qubits need 2^n amplitudes classically.', 'T1 = relaxation, T2 = dephasing, T2 ≤ 2T1.', 'Circuit success ≈ fidelity^gates.', 'Transmons: Josephson junction nonlinearity, 4-8 GHz, ~10 mK.', 'Surface code: 2d² - 1 physical qubits per logical qubit.'],
+  recap: ['Qubit = α|0⟩ + β|1⟩; measurement is probabilistic and collapses it.', 'n qubits need 2^n amplitudes classically.', 'T1 = relaxation, T2* (Ramsey) ≤ T2 echo ≤ 2·T1.', 'Below the threshold (about 1%), each d to d + 2 divides logical error by Λ; a 2024 experiment measured Λ ≈ 2.1.', 'Randomized benchmarking: r = (1 - p)(d - 1)/d; quantum volume = 2^n.', 'DiVincenzo: scalable qubits, initialise, long coherence, universal gates, measure.', 'Circuit success ≈ fidelity^gates.', 'Transmons: Josephson junction nonlinearity, 4-8 GHz, ~10 mK.', 'Surface code: 2d² - 1 physical qubits per logical qubit.'],
 };
 
 export const qctrl: Lesson = {

@@ -128,30 +128,88 @@ const secDefend: ArchLevel = {
   },
 };
 
+// ============================================================ FuSa 0: hazard analysis to ASIL
+/** ASIL from severity S0-3, exposure E0-4 and controllability C0-3: any class 0 is QM, otherwise the sum S + E + C sets it (10 D, 9 C, 8 B, 7 A, 6 or less QM). */
+export const asilFromSEC = (s: number, e: number, c: number) => (s === 0 || e === 0 || c === 0 ? 'QM' : (['QM', 'A', 'B', 'C', 'D'] as const)[Math.max(0, Math.min(4, s + e + c - 6))]);
+
+// [event, S, E, C]: class 0 rows are the ones that need no safety goal at all.
+const HAZARDS: [string, number, number, number][] = [
+  ['Steering assist is lost on a motorway bend', 3, 4, 3],
+  ['The brakes fade to nothing on a wet mountain descent (rare)', 3, 3, 3],
+  ['Cruise control will not disengage when the driver brakes', 3, 4, 2],
+  ['The lane-keeping system steers towards oncoming traffic', 3, 3, 2],
+  ['The headlights fail on an unlit rural road at night', 3, 2, 2],
+  ['The wipers stop in heavy rain', 2, 3, 2],
+  ['The doors unlock while the car is moving fast', 2, 4, 1],
+  ['The brake lights stay off when braking', 2, 4, 2],
+  ['An electric car loses half its torque at low speed', 2, 2, 3],
+  ['The rear camera freezes while reversing', 2, 2, 2],
+  ['The instrument cluster goes blank at night', 1, 4, 3],
+  ['The seat heater stays on after the car is parked', 1, 3, 1],
+  ['The radio volume jumps up', 1, 4, 0],
+  ['A parking sensor gives a false alarm in a car park', 0, 4, 1],
+  ['The airbag controller resets on a closed test track', 3, 0, 3],
+  ['Throttle stuck open on a downhill motorway ramp', 3, 4, 3],
+  ['The infotainment screen reboots while driving', 0, 4, 3],
+  ['The windscreen washer stops working in the dry', 1, 3, 2],
+];
+const CLASS_NOTE = 'S: severity of harm (S0 none … S3 life-threatening). E: how often the situation occurs (E0 incredible … E4 high probability). C: how well a typical driver can control it (C0 controllable in general … C3 difficult or uncontrollable).';
+
+const fusaHara: ArchLevel = {
+  id: 'fusa-hara', title: 'Hazard analysis: rate each event', concept: 'severity, exposure and controllability; the ASIL lookup; QM', xp: 150, lab: 'Safety', tier: 'guided',
+  ticket: 'The hazard analysis is half done: the team rated five hazardous events but nobody has looked up the ASILs. Fill them in before the safety goals are written.',
+  build: (r) => {
+    let ev: [string, number, number, number][] = [], kinds = 0;
+    for (let tries = 0; tries < 50 && kinds < 3; tries++) {
+      const pool = [...HAZARDS];
+      ev = Array.from({ length: 5 }, () => pool.splice(between(r, 0, pool.length - 1), 1)[0]);
+      kinds = new Set(ev.map(([, s, e, c]) => asilFromSEC(s, e, c))).size;
+    }
+    const want = ev.map(([, s, e, c]) => asilFromSEC(s, e, c));
+    const text = ev.map(([n, s, e, c], i) => `${i + 1}. ${n}\n     S${s}  E${e}  C${c}`).join('\n');
+    return {
+      brief: `<p>A <b>hazardous event</b> is rated on three scales. ${CLASS_NOTE}</p>
+<p>With all three at class 1 or above, the ASIL follows the <b>sum S + E + C</b>: 10 is D, 9 is C, 8 is B, 7 is A and 6 or less is QM (no safety requirement beyond normal quality). If <i>any</i> class is 0, the event is QM whatever the others are.</p>
+<p>Choose the ASIL of each of the five events below.</p>`,
+      hints: ['Add the three class numbers, but first check whether any of them is 0.', 'S3 + E4 + C3 = 10 is the only way to reach D. Nine is C, eight is B.', 'QM is a real answer: it means the hazard is rated but needs no safety goal.'],
+      listing: { label: 'Hazardous events', text },
+      controls: ev.map((_, i) => ({ id: `e${i + 1}`, kind: 'select' as const, label: `Event ${i + 1}`, options: [{ value: '', label: 'choose' }, ...['QM', 'A', 'B', 'C', 'D'].map((a) => ({ value: a, label: a === 'QM' ? 'QM' : `ASIL ${a}` }))], value: '' })),
+      run: (v) => {
+        const goals: Goal[] = ev.map(([, s, e, c], i) => ({ label: `event ${i + 1}: S${s} E${e} C${c}`, ok: String(v[`e${i + 1}`]) === want[i], note: String(v[`e${i + 1}`]) === want[i] ? undefined : s === 0 || e === 0 || c === 0 ? 'look for a class 0' : 'add S + E + C' }));
+        return { goals, metrics: [['events rated', `${goals.filter((g) => g.ok).length} / 5`]] };
+      },
+      solution: { values: Object.fromEntries(want.map((a, i) => [`e${i + 1}`, a])) },
+    };
+  },
+};
+
 // ============================================================ FuSa 1: FMEDA
-interface FBlock { name: string; fit: number; safe: number; dc: number; lc: number }
+export interface FBlock { name: string; fit: number; safe: number; dc: number; lc: number }
 const BLOCKS = ['CPU core', 'SRAM', 'bus fabric', 'ADC', 'clock tree', 'PMIC interface'];
-const spfmLfm = (bs: FBlock[]) => {
-  const rel = bs.reduce((s, b) => s + b.fit * (1 - b.safe), 0);
+// ISO 26262-5 shape: safe faults stay in both denominators (Σλ is every failure of the hardware, not only the safety-related ones).
+export const spfmLfm = (bs: FBlock[]) => {
+  const total = bs.reduce((s, b) => s + b.fit, 0);
   const resid = bs.reduce((s, b) => s + b.fit * (1 - b.safe) * (1 - b.dc), 0);
   const latent = bs.reduce((s, b) => s + b.fit * (1 - b.safe) * b.dc * (1 - b.lc), 0);
-  return { spfm: 100 * (1 - resid / rel), lfm: 100 * (1 - latent / (rel - resid)), rel };
+  return { spfm: 100 * (1 - resid / total), lfm: 100 * (1 - latent / (total - resid)), total };
 };
-const asilOf = (spfm: number, lfm: number) => (spfm >= 99 && lfm >= 90 ? 'D' : spfm >= 97 && lfm >= 80 ? 'C' : spfm >= 90 && lfm >= 60 ? 'B' : 'none');
+export const asilOf = (spfm: number, lfm: number) => (spfm >= 99 && lfm >= 90 ? 'D' : spfm >= 97 && lfm >= 80 ? 'C' : spfm >= 90 && lfm >= 60 ? 'B' : 'none');
 
 const fusaFmeda: ArchLevel = {
-  id: 'fusa-fmeda', title: 'FMEDA: SPFM, LFM and ASIL', concept: 'failure rates (FIT), residual and latent faults, single-point and latent fault metrics', xp: 170, lab: 'Safety', tier: 'guided',
+  id: 'fusa-fmeda', title: 'FMEDA: SPFM, LFM and ASIL', concept: 'failure rates (FIT), residual and latent faults, single-point and latent fault metrics', xp: 170, lab: 'Safety', tier: 'guided', model: 'Simplified FMEDA: each block has a single failure-mode split.',
   ticket: 'The assessor wants the hardware metrics for the brake controller. Fill the FMEDA table’s totals and say which ASIL it supports.',
   build: (r) => {
     const bs: FBlock[] = [];
-    for (const name of BLOCKS.slice(0, between(r, 4, 6))) bs.push({ name, fit: between(r, 2, 40) * 5, safe: pick(r, [0.2, 0.3, 0.5, 0.6]), dc: pick(r, [0.6, 0.9, 0.97, 0.99]), lc: pick(r, [0.6, 0.8, 0.9, 0.95]) });
+    // One coverage tier per design (with safe faults in the denominators a single global mix almost never reaches D), so every outcome turns up.
+    const dcs = pick(r, [[0.6, 0.9, 0.97], [0.9, 0.97, 0.99], [0.97, 0.99, 0.99], [0.99, 0.99, 0.99]]), lcs = pick(r, [[0.6, 0.8], [0.8, 0.9], [0.9, 0.95]]);
+    for (const name of BLOCKS.slice(0, between(r, 4, 6))) bs.push({ name, fit: between(r, 2, 40) * 5, safe: pick(r, [0.2, 0.3, 0.5, 0.6]), dc: pick(r, dcs), lc: pick(r, lcs) });
     const m = spfmLfm(bs), asil = asilOf(m.spfm, m.lfm);
     const text = ['block            FIT   safe-frac   DC     latent-cov', ...bs.map((b) => `${b.name.padEnd(16)} ${String(b.fit).padStart(4)}   ${b.safe.toFixed(2).padStart(6)}   ${b.dc.toFixed(2).padStart(6)}   ${b.lc.toFixed(2).padStart(6)}`)].join('\n');
     return {
       brief: `<p>An FMEDA lists each block's failure rate (<b>FIT</b> = failures per 10⁹ hours), the fraction of failures that cannot violate the safety goal (<b>safe fraction</b>), the <b>diagnostic coverage</b> DC of its safety mechanism and the coverage of <b>latent</b> faults in that mechanism.</p>
-<ul><li>Safety-related failure rate λ = FIT × (1 − safe).</li><li><b>Residual</b> (single-point) faults: λ × (1 − DC). <b>SPFM</b> = 1 − Σ residual / Σ λ.</li><li><b>Latent</b> faults: λ × DC × (1 − latent coverage). <b>LFM</b> = 1 − Σ latent / (Σ λ − Σ residual).</li><li>ASIL targets (SPFM, LFM): B 90%, 60% · C 97%, 80% · D 99%, 90%.</li></ul>
+<ul><li>λ = each block's FIT. Some of its failures are <b>safe</b> (they cannot violate the safety goal).</li><li><b>Residual</b> faults: λ × (1 − safe) × (1 − DC). <b>SPFM</b> = 1 − Σ residual / Σ λ.</li><li><b>Latent</b> faults: λ × (1 − safe) × DC × (1 − latent coverage). <b>LFM</b> = 1 − Σ latent / (Σ λ − Σ residual).</li><li>Safe faults count in both denominators: a block that rarely matters is still part of the hardware being measured.</li><li>ASIL targets (SPFM, LFM): B 90%, 60% · C 97%, 80% · D 99%, 90%.</li></ul>
 <p>Compute SPFM and LFM (percent, one decimal) for the table below and enter the highest ASIL it meets (B, C, D, or "none").</p>`,
-      hints: ['Compute the three sums once: Σ λ, Σ residual, Σ latent. Then both metrics follow.', 'The residual term uses (1 − DC); the latent term uses DC × (1 − latent coverage).', 'Compare both metrics against the table: you need to meet SPFM <i>and</i> LFM for an ASIL.'],
+      hints: ['Compute the three sums once: Σ λ, Σ residual, Σ latent. Then both metrics follow.', 'Residual = λ × (1 − safe) × (1 − DC); latent = λ × (1 − safe) × DC × (1 − latent coverage). Σ λ is the plain sum of the FITs.', 'Compare both metrics against the table: you need to meet SPFM <i>and</i> LFM for an ASIL.'],
       listing: { label: 'FMEDA table', text },
       controls: [{ id: 'spfm', kind: 'text', label: 'SPFM (%)', value: '', rows: 1 }, { id: 'lfm', kind: 'text', label: 'LFM (%)', value: '', rows: 1 }, { id: 'asil', kind: 'text', label: 'Highest ASIL (B, C, D or none)', value: '', rows: 1 }],
       run: (v) => {
@@ -160,7 +218,7 @@ const fusaFmeda: ArchLevel = {
           { label: 'LFM', ok: near(v.lfm, m.lfm, 0.06), note: near(v.lfm, m.lfm, 0.06) ? undefined : '1 − Σlatent / (Σλ − Σresidual)' },
           { label: 'ASIL', ok: String(v.asil).trim().toLowerCase() === asil.toLowerCase(), note: 'both metrics must meet the target' },
         ];
-        return { goals, metrics: [['safety-related FIT', String(r1(m.rel))]] };
+        return { goals, metrics: [['total FIT (Σλ)', String(r1(m.total))]] };
       },
       solution: { values: { spfm: m.spfm.toFixed(1), lfm: m.lfm.toFixed(1), asil } },
     };
@@ -179,7 +237,7 @@ const MECHS: Record<string, Mech[]> = {
 const FUSA_ORDER: [string, string][] = [['cpu', 'CPU core'], ['sram', 'SRAM'], ['bus', 'Bus fabric'], ['adc', 'ADC'], ['clk', 'Clock tree']];
 
 const fusaAsil: ArchLevel = {
-  id: 'fusa-asil', title: 'Choose safety mechanisms for an ASIL', concept: 'diagnostic coverage per block, cost of mechanisms, SPFM and LFM targets', xp: 200, lab: 'Safety', tier: 'guided',
+  id: 'fusa-asil', title: 'Choose safety mechanisms for an ASIL', concept: 'diagnostic coverage per block, cost of mechanisms, SPFM and LFM targets', xp: 200, lab: 'Safety', tier: 'guided', model: 'Simplified FMEDA: each block has a single failure-mode split.',
   ticket: 'The chip must reach an ASIL target. Every block can take a different mechanism, and silicon is not free: find the cheapest set that meets both metrics.',
   build: (r) => {
     let blocks: { key: string; label: string; fit: number; safe: number }[] = [], T = { spfm: 97, lfm: 80, name: 'C' }, best: { pick: string[]; cost: number } | undefined;
@@ -204,8 +262,8 @@ const fusaAsil: ArchLevel = {
     return {
       brief: `<p>Same arithmetic as the FMEDA mission, but now you choose the mechanism for each block. Each option has a diagnostic coverage DC, a latent-fault coverage and an area/cost figure (shown in the menus). A block with no mechanism has DC = 0: every dangerous failure is a single-point fault.</p>
 <p>The target is <b>ASIL ${T.name}</b>: SPFM ≥ ${T.spfm}% and LFM ≥ ${T.lfm}%. Meet both with a total mechanism cost of at most <b>${b.cost}</b>.</p>`,
-      hints: ['Σ residual is dominated by the blocks with the largest FIT × (1 − safe): put coverage there first.', 'A 99% mechanism on a small block rarely pays: price per FIT removed is what matters.', 'LFM is usually easier than SPFM: if SPFM passes with solid mechanisms, check LFM afterwards.'],
-      listing: { label: 'Safety-related failure rates', text: table },
+      hints: ['Residual = λ × (1 − safe) × (1 − DC) and Σ λ counts every FIT, safe or not. The blocks with the largest FIT × (1 − safe) dominate Σ residual: put coverage there first.', 'A 99% mechanism on a small block rarely pays: price per FIT removed is what matters.', 'LFM is usually easier than SPFM: if SPFM passes with solid mechanisms, check LFM afterwards.'],
+      listing: { label: 'Block failure rates', text: table },
       controls: blocks.map((bk) => ({ id: bk.key, kind: 'select' as const, label: bk.label, options: MECHS[bk.key].map((m) => ({ value: m.id, label: `${m.label} (DC ${Math.round(m.dc * 100)}%, cost ${m.cost})` })), value: 'none' })),
       run: (v) => {
         const picks = blocks.map((bk) => String(v[bk.key]));
@@ -241,7 +299,7 @@ const fusaCampaign: ArchLevel = {
       brief: `<p>A fault-injection campaign injected <b>n = ${n}</b> faults into the block and the safety mechanism detected <b>k = ${k}</b>. The point estimate of the diagnostic coverage is k/n, but with a finite sample the true coverage could be lower. A one-sided 95% confidence bound (Wilson interval, z = ${Z}) is:</p>
 <p style="font-family:monospace">lower = ( p + z²/2n − z·√( p(1−p)/n + z²/4n² ) ) / ( 1 + z²/n ),  p = k/n</p>
 <ol><li>Compute the 95% lower bound on DC, in percent with one decimal.</li><li>Can you claim <b>DC ≥ ${T}%</b> on that evidence? (yes or no)</li><li>If the mechanism is perfect, how many faults must be injected without a single escape to claim <b>DC ≥ ${target2}%</b> with the same confidence? With k = n the bound is n / (n + z²).</li></ol>`,
-      hints: ['p̂ = k/n, then plug it into the Wilson formula. The lower bound is always below k/n.', 'The claim holds only if the lower bound (not the estimate) is at or above the target.', 'For k = n the bound is n/(n + z²) ≥ T gives n ≥ z²·T/(1 − T). Round up.'],
+      hints: ['p̂ = k/n, then plug it into the Wilson formula. The lower bound is always below k/n.', 'The claim holds only if the lower bound (not the estimate) is at or above the target.', 'For k = n the bound is n/(n + z²) ≥ T gives n ≥ z²·T/(1 − T). Round up. (Wilson is slightly optimistic with no escapes: the exact zero-failure bound for 99% at 95% confidence is ln(0.05)/ln(0.99), about 299 injections, against 268 from Wilson.)'],
       controls: [{ id: 'lb', kind: 'text', label: '95% lower bound (%)', value: '', rows: 1 }, { id: 'claim', kind: 'select', label: `Claim DC ≥ ${T}%?`, options: [{ value: '', label: 'choose' }, { value: 'yes', label: 'yes' }, { value: 'no', label: 'no' }], value: '' }, { id: 'nmin', kind: 'text', label: `Injections for DC ≥ ${target2}% with zero escapes`, value: '', rows: 1 }],
       run: (v) => {
         const goals: Goal[] = [
@@ -256,4 +314,4 @@ const fusaCampaign: ArchLevel = {
   },
 };
 
-export const SECSAFE_LEVELS: ArchLevel[] = [secDpa, secDefend, fusaFmeda, fusaAsil, fusaCampaign];
+export const SECSAFE_LEVELS: ArchLevel[] = [secDpa, secDefend, fusaHara, fusaFmeda, fusaAsil, fusaCampaign];

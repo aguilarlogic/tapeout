@@ -146,6 +146,54 @@ git bisect run ./check.sh</pre><p>git prints <code>&lt;hash&gt; is the first bad
   }),
 };
 
+// ---- 7. fetch, then fast-forward (G2.3)
+const remote: ShellLevel = {
+  id: 'git-remote', title: 'Fetch before you pull', concept: 'remotes, fetch vs pull, origin/main, fast-forward', xp: 110, tier: 'guided',
+  ticket: 'A teammate pushed to the shared repository while you were in a meeting. Look before you merge.',
+  build: (r: Rng) => {
+    const n = between(r, 2, 4);
+    const teammate = Array.from({ length: n }, (_, i) => `echo "stage ${i + 2}: ${pick(r, ['route', 'cts', 'drc', 'lvs', 'sta'])}" >> flow.txt`);
+    return {
+      brief: `<p><code>~/rtl</code> is a clone of the shared repository (<code>origin</code>). Meanwhile a teammate has pushed new commits to <code>main</code>, and your copy does not have them yet.</p>
+<ul><li><b>Fetch</b> first. It downloads the new commits and moves <code>origin/main</code> but leaves your own <code>main</code> and your files alone, so you can look before you change anything.</li><li>Count the commits you are missing with <code>git log --oneline main..origin/main</code> and write the count to <code>behind.txt</code> (pipe through <code>wc -l</code>).</li><li>Then bring <code>main</code> up to date. You have no local commits, so this is a <b>fast-forward</b>: no merge commit.</li></ul>
+<p><code>git pull</code> is just a fetch followed by a merge, which is why careful engineers fetch first.</p>`,
+      hints: ['<code>git fetch</code> prints a line like <code>main -&gt; origin/main</code>. <code>git status</code> now says you are behind.', '<code>git log --oneline main..origin/main | wc -l &gt; behind.txt</code>', '<code>git merge origin/main</code> (or <code>git pull</code>) fast-forwards.'],
+      files: {}, cwd: 'rtl',
+      setup: ['mkdir ~/upstream', 'cd ~/upstream', 'git init', IDENT, 'echo "stage 1: synth" > flow.txt', 'git add flow.txt', 'git commit -m "flow: start"', 'cd ~', 'git clone upstream rtl', 'cd ~/upstream', ...teammate.flatMap((c, i) => [c, `git commit -am "flow: stage ${i + 2}"`]), 'cd ~/rtl', IDENT],
+      solution: ['git fetch', 'git status', 'git log --oneline main..origin/main | wc -l > behind.txt', 'git merge origin/main'],
+      goals: [
+        { label: 'you fetched', ok: (_s, h) => ran(h, /git fetch/) },
+        { label: `behind.txt says ${n}`, ok: (sh) => (read(sh, 'behind.txt') ?? '').trim() === String(n) },
+        { label: 'main is level with origin/main', ok: (sh) => { const rp = repo(sh)!; return rp.branches.get('main') === rp.tracking.get('origin/main'); } },
+        { label: 'the teammate\'s work is in your files', ok: (sh) => (read(sh, 'flow.txt') ?? '').split('\n').filter(Boolean).length === n + 1 },
+        { label: 'history stayed a straight line (no merge commit)', ok: (sh) => { const rp = repo(sh)!; return gitApi.logLines(rp, gitApi.headId(rp)!).every((c) => c.parents.length <= 1); } },
+      ],
+    };
+  },
+};
+
+// ---- 8. interactive rebase (G2.3)
+const rebaseI: ShellLevel = {
+  id: 'git-rebase-i', title: 'Squash the work-in-progress commits', concept: 'rebase -i, squash, tidy history before review', xp: 130, tier: 'guided',
+  ticket: 'Review starts tomorrow. Three "wip" commits make the history noisy; reviewers want one clean commit.',
+  build: () => ({
+    brief: `<p>The branch <code>fifo-depth</code> in <code>~/rtl</code> has three commits on top of <code>main</code>: <code>wip 1</code>, <code>wip 2</code> and <code>fix typo</code>. They are unpublished, so you may rewrite them.</p>
+<ul><li>Start <code>git rebase -i HEAD~3</code>. Git lists the three commits as <code>pick</code> lines. Change the second and third to <code>squash</code>: they are melded into the first.</li><li>Finish the rebase, then give the single commit a real message with <code>git commit --amend -m "..."</code>.</li></ul>
+<p><b>This lab has no text editor.</b> Either edit the todo file with <code>sed</code> and run <code>git rebase --continue</code>, or hand the edit to a command: <code>GIT_SEQUENCE_EDITOR="sed -i '2,3s/^pick/squash/'" git rebase -i HEAD~3</code>.</p>`,
+    hints: ['After <code>git rebase -i HEAD~3</code> the file is <code>.git/rebase-merge/git-rebase-todo</code>. Line 1 stays <code>pick</code>.', '<code>sed -i \'2,3s/^pick/squash/\' .git/rebase-merge/git-rebase-todo</code>, then <code>git rebase --continue</code>.', 'Check with <code>git log --oneline</code>: base commit, then one commit. Then <code>git commit --amend -m "Add FIFO depth parameter"</code>.'],
+    files: { 'rtl/fifo.v': 'module fifo; endmodule\n' }, cwd: 'rtl',
+    setup: ['git init', IDENT, 'git add fifo.v', 'git commit -m "fifo skeleton"', 'git checkout -b fifo-depth', 'echo "parameter DEPTH = 8;" > depth.vh', 'git add depth.vh', 'git commit -m "wip 1"', 'echo "// uses DEPTH" >> fifo.v', 'git commit -am "wip 2"', 'echo "// DEPTH must be a power of two" >> depth.vh', 'git commit -am "fix typo"'],
+    solution: ['GIT_SEQUENCE_EDITOR="sed -i \'2,3s/^pick/squash/\'" git rebase -i HEAD~3', 'git commit --amend -m "Add FIFO depth parameter"'],
+    goals: [
+      { label: 'the rebase is finished', ok: (sh) => !repo(sh)!.rebase },
+      { label: 'the branch has the skeleton plus exactly one new commit', ok: (sh) => { const rp = repo(sh)!; return gitApi.logLines(rp, gitApi.headId(rp)!).length === 2; } },
+      { label: 'that commit carries all three changes', ok: (sh) => { const rp = repo(sh)!; const t = gitApi.headTree(rp); return /power of two/.test(t['depth.vh'] ?? '') && /uses DEPTH/.test(t['fifo.v'] ?? ''); } },
+      { label: 'its message is a real one, not "wip"', ok: (sh) => { const rp = repo(sh)!; const m = rp.commits.get(gitApi.headId(rp)!)!.msg; return m.trim().length > 3 && !/^(wip|fix typo)/i.test(m); } },
+      { label: 'you are still on fifo-depth, with a clean tree', ok: (sh) => (repo(sh)!.head as { branch?: string }).branch === 'fifo-depth' && read(sh, 'depth.vh') !== null },
+    ],
+  }),
+};
+
 // ===================================================================== bosses
 const names = ['alu', 'fifo', 'uart', 'dma', 'irq'];
 const bossMerge: ShellLevel = {
@@ -218,4 +266,4 @@ const bossBisect: ShellLevel = {
   },
 };
 
-export const GIT_LEVELS: ShellLevel[] = [first, branch, undo, conflict, stash, bisect, bossMerge, bossBisect];
+export const GIT_LEVELS: ShellLevel[] = [first, branch, undo, conflict, stash, bisect, remote, rebaseI, bossMerge, bossBisect];

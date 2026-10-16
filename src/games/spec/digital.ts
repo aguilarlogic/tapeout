@@ -5,35 +5,37 @@ import { near, r1, r2 } from './common';
 
 // ============================================================ FPGA 1: resource mapping
 const BRAM_CFG: [number, number][] = [[16384, 1], [8192, 2], [4096, 4], [2048, 9], [1024, 18], [512, 36]];
+// A modern FPGA DSP block multiplies 27 x 18: tile the product both ways round and keep the smaller count.
+export const dspBlocks = (a: number, b: number) => Math.min(Math.ceil(a / 27) * Math.ceil(b / 18), Math.ceil(b / 27) * Math.ceil(a / 18));
 const bramCount = (depth: number, width: number) => Math.min(...BRAM_CFG.map(([d, w]) => Math.ceil(depth / d) * Math.ceil(width / w)));
 
 const fpgaMap: ArchLevel = {
   id: 'fpga-map', title: 'Map a design onto FPGA resources', concept: 'DSP blocks, block RAM aspect ratios, carry-chain LUTs, registers', xp: 150, lab: 'FPGA', tier: 'guided',
   ticket: 'The prototype board has a fixed number of DSPs, block RAMs and LUTs. Before the synthesis run starts, estimate what the design will take.',
   build: (r) => {
-    const muls = [[pick(r, [16, 18, 24]), pick(r, [16, 18]), between(r, 2, 6)], [pick(r, [32, 36]), pick(r, [32, 18]), between(r, 1, 3)]];
+    const muls = [[pick(r, [24, 27, 32, 36]), pick(r, [16, 18, 24]), between(r, 2, 6)], [pick(r, [32, 40, 54]), pick(r, [32, 36, 18]), between(r, 1, 3)]];
     const adds = [[pick(r, [32, 48]), between(r, 3, 8)]];
     const mux = [pick(r, [16, 32]), between(r, 4, 12)];
     const depth = pick(r, [1000, 3000, 6000, 10000]), width = pick(r, [8, 12, 20, 27, 40]);
     const regs = [pick(r, [32, 64]), between(r, 10, 30)];
-    const dsp = muls.reduce((s, [a, b, n]) => s + Math.ceil(a / 18) * Math.ceil(b / 18) * n, 0);
+    const dsp = muls.reduce((s, [a, b, n]) => s + dspBlocks(a, b) * n, 0);
     const lut = adds.reduce((s, [w, n]) => s + w * n, 0) + mux[0] * mux[1];
     const bram = bramCount(depth, width);
     const ff = regs[0] * regs[1];
     const listing = [...muls.map(([a, b, n]) => `mul ${a}x${b}   x${n}`), ...adds.map(([w, n]) => `add ${w}      x${n}`), `mux2 ${mux[0]}    x${mux[1]}`, `reg ${regs[0]}     x${regs[1]}`, `mem ${depth} words x ${width} bits`].join('\n');
     return {
       brief: `<p>An FPGA is a sea of LUTs and flip-flops with hard blocks. Estimate the resources the design below uses on this fabric:</p>
-<ul><li><b>DSP block:</b> one 18×18 multiplier; a wider multiplier is built from ⌈a/18⌉ × ⌈b/18⌉ of them.</li>
+<ul><li><b>DSP block:</b> a modern FPGA DSP block multiplies 27 × 18 bits (some families 27 × 27 or 18 × 19). An a × b multiplier takes ⌈a/27⌉ × ⌈b/18⌉ blocks; try both operand orders and keep the smaller count.</li>
 <li><b>LUT:</b> an N-bit adder uses N LUTs (with the dedicated carry chain); a 2:1 mux uses 1 LUT per bit.</li>
 <li><b>FF:</b> one per register bit.</li>
 <li><b>Block RAM:</b> an 18 Kb block is configurable as 16K×1, 8K×2, 4K×4, 2K×9, 1K×18 or 512×36. A memory takes ⌈depth/d⌉ × ⌈width/w⌉ blocks in the best aspect ratio you can find.</li></ul>
 <p>How many DSPs, LUTs, FFs and block RAMs?</p>`,
-      hints: ['Count each line separately and add them: the multipliers only cost DSPs here.', 'Try all six block-RAM shapes for the memory: the best one is not always the widest.', 'The mux and the adders both cost LUTs; the registers cost FFs.'],
+      hints: ['Count each line separately and add them: the multipliers only cost DSPs here. Swap the operands of each multiplier and keep the cheaper tiling.', 'Try all six block-RAM shapes for the memory: the best one is not always the widest.', 'The mux and the adders both cost LUTs; the registers cost FFs.'],
       controls: [{ id: 'dsp', kind: 'text', label: 'DSP blocks', value: '', rows: 1 }, { id: 'lut', kind: 'text', label: 'LUTs', value: '', rows: 1 }, { id: 'ff', kind: 'text', label: 'FFs', value: '', rows: 1 }, { id: 'bram', kind: 'text', label: 'Block RAMs', value: '', rows: 1 }],
       listing: { label: 'Design inventory', text: listing },
       run: (v) => {
         const g = (label: string, key: string, want: number, note: string): Goal => ({ label, ok: near(v[key], want, 0.01), note: near(v[key], want, 0.01) ? undefined : note });
-        return { goals: [g('DSP blocks', 'dsp', dsp, 'widths over 18 bits need several blocks'), g('LUTs', 'lut', lut, 'adder bits plus mux bits'), g('FFs', 'ff', ff, 'register bits'), g('Block RAMs', 'bram', bram, 'try every aspect ratio')], metrics: [] };
+        return { goals: [g('DSP blocks', 'dsp', dsp, 'widths past 27 × 18 need several blocks; try both operand orders'), g('LUTs', 'lut', lut, 'adder bits plus mux bits'), g('FFs', 'ff', ff, 'register bits'), g('Block RAMs', 'bram', bram, 'try every aspect ratio')], metrics: [] };
       },
       solution: { values: { dsp: String(dsp), lut: String(lut), ff: String(ff), bram: String(bram) } },
     };
@@ -132,7 +134,9 @@ const aiTile: ArchLevel = {
 };
 
 // ============================================================ AI 2 (boss): roofline sizing
-const PREC: Record<string, { bytes: number; area: number; fine: boolean }> = { int8: { bytes: 1, area: 1, fine: true }, fp16: { bytes: 2, area: 2.5, fine: true }, fp32: { bytes: 4, area: 6, fine: true } };
+// rank: how much accuracy the format keeps (int8 < fp8 < the 16-bit floats < fp32); a model needs a minimum rank.
+const PREC: Record<string, { bytes: number; area: number; rank: number }> = { int8: { bytes: 1, area: 1, rank: 0 }, fp8: { bytes: 1, area: 1.5, rank: 1 }, bf16: { bytes: 2, area: 2, rank: 2 }, fp16: { bytes: 2, area: 2.5, rank: 2 }, fp32: { bytes: 4, area: 6, rank: 3 } };
+const MIN_RANK: Record<string, number> = { int8: 0, fp8: 1, fp16: 2 };
 interface Acc { p: number; prec: string; batch: number }
 const accEval = (inn: number, out: number, bw: number, acc: Acc) => {
   const bytes = PREC[acc.prec].bytes;
@@ -150,19 +154,19 @@ const aiBoss: ArchLevel = {
     let inn = 4096, out = 4096, bw = 25, tput = 1000, latCap = 5, minPrec = 'int8', best: { acc: Acc; area: number } | undefined;
     for (let tries = 0; tries < 80 && !best; tries++) {
       inn = pick(r, [2048, 4096, 8192]); out = pick(r, [1024, 4096]); bw = pick(r, [12, 25, 50]);
-      tput = pick(r, [2000, 4000, 8000, 16000]); latCap = pick(r, [2, 4, 8]); minPrec = pick(r, ['int8', 'fp16']);
+      tput = pick(r, [2000, 4000, 8000, 16000]); latCap = pick(r, [2, 4, 8]); minPrec = pick(r, ['int8', 'fp8', 'fp16']);
       for (const p of [8, 16, 32, 64, 128]) for (const prec of Object.keys(PREC)) for (const batch of [1, 2, 4, 8, 16, 32, 64]) {
         const acc = { p, prec, batch };
         const e = accEval(inn, out, bw, acc);
-        const okPrec = minPrec === 'int8' || prec !== 'int8';
+        const okPrec = PREC[prec].rank >= MIN_RANK[minPrec];
         if (okPrec && e.throughput >= tput && e.latencyMs <= latCap && (!best || e.area < best.area)) best = { acc, area: e.area };
       }
     }
     const b = best!;
     return {
       brief: `<p>The layer is a ${inn}×${out} matrix applied to a batch of B input vectors: <b>ops = 2·B·in·out</b>; bytes moved from DRAM = (in·out + B·(in + out)) × bytes per element (the weights are read once per batch, so batching reuses them).</p>
-<p>The accelerator is a P×P MAC array at 1 GHz (peak = 2·P² GOPS) with <b>${bw} GB/s</b> of DRAM bandwidth. Execution time = max(ops / peak, bytes / bandwidth): the <b>roofline</b>. Area ∝ P² × (int8 1, fp16 2.5, fp32 6).</p>
-<ul><li>Throughput (samples/s) = B / time must be at least <b>${tput}</b>.</li><li>The batch's latency must be at most <b>${latCap} ms</b>.</li><li>The model needs at least <b>${minPrec === 'int8' ? 'int8' : 'fp16'}</b> precision${minPrec === 'int8' ? '' : ' (int8 loses too much accuracy)'}.</li><li>Area at most <b>${b.area}</b> units (the smallest design that does it).</li><li>Batch: use the <b>smallest batch</b> that meets the throughput. A bigger batch only adds latency.</li></ul>`,
+<p>The accelerator is a P×P MAC array at 1 GHz (peak = 2·P² GOPS) with <b>${bw} GB/s</b> of DRAM bandwidth. Execution time = max(ops / peak, bytes / bandwidth): the <b>roofline</b>. Area ∝ P² × (int8 1, fp8 1.5, bf16 2, fp16 2.5, fp32 6). fp8 halves fp16's bytes; bf16 keeps fp32's range with fp16's size.</p>
+<ul><li>Throughput (samples/s) = B / time must be at least <b>${tput}</b>.</li><li>The batch's latency must be at most <b>${latCap} ms</b>.</li><li>The model needs ${minPrec === 'int8' ? 'at least <b>int8</b> precision' : minPrec === 'fp8' ? 'a <b>floating-point</b> format, fp8 or wider (int8 loses too much accuracy)' : 'a <b>16-bit float</b> format or wider (int8 and fp8 lose too much accuracy)'}.</li><li>Area at most <b>${b.area}</b> units (the smallest design that does it).</li><li>Batch: use the <b>smallest batch</b> that meets the throughput. A bigger batch only adds latency.</li></ul>`,
       hints: [],
       controls: [
         { id: 'p', kind: 'select', label: 'Array size P', options: [8, 16, 32, 64, 128].map((p) => ({ value: String(p), label: `${p}×${p}` })), value: '8' },
@@ -172,7 +176,7 @@ const aiBoss: ArchLevel = {
       run: (v) => {
         const acc = { p: Number(v.p), prec: String(v.prec), batch: Number(v.batch) };
         const e = accEval(inn, out, bw, acc);
-        const okPrec = minPrec === 'int8' || acc.prec !== 'int8';
+        const okPrec = PREC[acc.prec].rank >= MIN_RANK[minPrec];
         const goals: Goal[] = [
           { label: `throughput ≥ ${tput}/s`, ok: e.throughput >= tput, note: `${Math.round(e.throughput)}/s (${e.bound}-bound)` },
           { label: `latency ≤ ${latCap} ms`, ok: e.latencyMs <= latCap, note: `${r2(e.latencyMs)} ms` },

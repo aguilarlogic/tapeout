@@ -75,3 +75,13 @@ describe('one subject at a time', () => {
     expect(at.get('electricity')!).toBeLessThan(at.get('bitadd')!);
   });
 });
+
+describe('missing prerequisites at runtime', () => {
+  it('lists the needs not yet done, and none once they are', async () => {
+    const { missingNeeds, PREREQS } = await import('./prereqs');
+    const id = Object.keys(PREREQS).find((k) => PREREQS[k].needs.length >= 1)!;
+    expect(missingNeeds(id, () => false)).toEqual(PREREQS[id].needs);
+    expect(missingNeeds(id, () => true)).toEqual([]);
+    expect(missingNeeds('no-such-lesson', () => false)).toEqual([]);
+  });
+});

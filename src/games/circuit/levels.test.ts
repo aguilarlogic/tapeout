@@ -43,3 +43,26 @@ describe('circuit lab missions', () => {
     void lab;
   });
 });
+
+describe('E12 buck converter: the formulas assume continuous conduction', () => {
+  const inst = CIRCUIT_LEVELS.find((l) => l.id === 'clab-buck')!.build(rng(1));
+  // dI = (Vin - Vout) * D * T / L, from the netlist's pulse width and inductor
+  const dI = (net: string) => { const L = /L1 sw out (\d+)u/.exec(net)![1], w = /PULSE\(0 5 0 10n 10n ([\d.]+)u 10u\)/.exec(net)![1]; return (12 - 5) * (Number(w) / 10) * 10e-6 / (Number(L) * 1e-6); };
+  it('says so in the brief', () => expect(inst.brief).toContain('continuous conduction'));
+  it('the 10 uH starter breaks it (about 3.1 A ripple on a 1 A load) and the solution keeps it', () => {
+    expect(dI(inst.starter)).toBeCloseTo(3.08, 1);
+    expect(dI(inst.starter) / 2).toBeGreaterThan(1);
+    expect(dI(inst.solution) / 2).toBeLessThan(1);
+  });
+});
+
+describe('G2.5 clab-dcm: light-load conduction mode', () => {
+  const inst = CIRCUIT_LEVELS.find((l) => l.id === 'clab-dcm')!.build(rng(1));
+  // The boundary current I = dI / 2, with dI = (Vin - Vout) * D * T / L, from the netlist's pulse width and inductor.
+  const boundary = (net: string) => { const L = /L1 sw out (\d+)u/.exec(net)![1], w = /PULSE\(0 5 0 10n 10n ([\d.]+)u 10u\)/.exec(net)![1]; return (12 - 5) * (Number(w) / 10) * 10e-6 / (Number(L) * 1e-6) / 2; };
+  it('the starter boundary is above the 100 mA load (DCM) and the solution boundary is below it (CCM)', () => {
+    expect(boundary(inst.starter)).toBeGreaterThan(0.1);
+    expect(boundary(inst.solution)).toBeLessThan(0.1);
+  });
+  it('names both modes in the brief', () => { expect(inst.brief).toContain('discontinuous conduction'); expect(inst.brief).toContain('continuous conduction'); });
+});

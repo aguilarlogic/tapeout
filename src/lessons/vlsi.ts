@@ -1,5 +1,5 @@
 // Act IV - VLSI & implementation: static timing, circuit design, low power, boards.
-import { qty } from './answers';
+import { num, qty } from './answers';
 import { art, ask, between, gen, Lesson, mc, pick, say } from './types';
 
 const r2 = (x: number) => Math.round(x * 100) / 100;
@@ -17,7 +17,7 @@ export const sta: Lesson = {
      clk (+ launch latency)   clk (+ capture latency)
 
    SETUP:  t_launch + t_cq + t_logic,max + t_setup  ≤  T + t_capture - uncertainty
-   HOLD:   t_launch + t_cq + t_logic,min            ≥  t_capture + t_hold
+   HOLD:   t_launch + t_cq + t_logic,min            ≥  t_capture + t_hold + uncertainty_hold + uncertainty_hold
 
    slack = required - arrival   (negative = violation)`),
     gen((r) => {
@@ -43,6 +43,29 @@ export const sta: Lesson = {
       return ask(`The worst path needs ${t} ns including clk→Q and setup. What is fmax in **MHz**?`, qty(1000 / t, 'MHz', 0.01), `fmax = 1/${t} ns = ${(1000 / t).toFixed(0)} MHz.`, 'f = 1/T; 1 ns ↔ 1000 MHz.');
     }),
     say('Timing is checked across **corners**: process (slow/typical/fast silicon), voltage and temperature (PVT). Setup is usually worst at the slow corner, hold at the fast one. On top, **OCV** derates model variation between two paths on the same die.'),
+    say('The wires have corners too. Extraction gives the interconnect at its **Cworst / Cbest** extremes (capacitance at its highest or lowest) and its **RCworst / RCbest** extremes (the resistance-capacitance product at its highest or lowest). Setup is checked at the worst ones: **Cworst** for short, gate-dominated paths, where capacitance sets the delay, and **RCworst** for long paths, where resistive wire dominates. Hold is checked at the best ones: **Cbest** for short paths and **RCbest** for long-wire paths, always paired with the fast device corner.'),
+    mc('Which interconnect corner is usually the most pessimistic for **hold** on a short, gate-dominated path?', ['Cworst, with the slow device corner', 'Cbest, with the fast device corner', 'RCworst, with the typical device corner', 'Typical RC, since a short path has hardly any wire'], 1, 'Hold fails when data is too fast, so you want the least capacitance and the fastest gates: Cbest with the fast device corner. At advanced nodes that fast corner is checked at both temperature extremes (the hot one can be the worst).'),
+    say('Every combination of **mode** (functional, test, sleep, each with its own clocks and constraints) and **corner** (a PVT point plus an interconnect corner) is a **scenario**. This is **multi-mode multi-corner (MMMC)** analysis, and a real signoff runs dozens of scenarios, setup and hold alike.'),
+    gen((r) => {
+      const m = pick(r, [2, 3, 4]), p = pick(r, [3, 4, 5]), c = pick(r, [3, 4, 5]);
+      return ask(`A block has ${m} modes, ${p} PVT corners and ${c} interconnect (RC) corners. How many scenarios does full signoff need?`, num(m * p * c), `${m} × ${p} × ${c} = ${m * p * c}. Each scenario is one mode in one corner, so the count multiplies; real flows prune scenarios that can never be the worst.`, 'Modes × PVT corners × RC corners.');
+    }),
+    say('A single flat derate on every path is crude, so the variation models got sharper in three steps. **OCV** applies one flat derate (say 8%) to every cell. **AOCV** reads a table of derates that shrink with logic depth (random variation averages out along a long path) and with distance. **POCV** (also called SOCV) is statistical: the library stores for every cell arc a mean delay and a standard deviation σ (the Liberty variation format, **LVF**). Independent arc σs add as a **root-sum-square**, so a path of N similar arcs has σ_path = √N·σ_arc, and slack is checked at a chosen sigma (often 3σ): arrival = mean + 3·σ_path.'),
+    art(`
+   flat OCV    every arc x 1.08                       margin grows with N   (N x 8%)
+   AOCV        derate looked up by depth and distance margin shrinks with depth
+   POCV / LVF  arc = (mean, sigma)                    sigma_path = sqrt(s1^2 + s2^2 + ...)
+               slack checked at mean + 3 x sigma_path`),
+    gen((r) => {
+      const n = pick(r, [4, 9, 16, 25]), s = pick(r, [2, 3, 4, 5]);
+      return ask(`A path has ${n} cell arcs in series, each with a delay σ of ${s} ps (independent). What is the **path σ**, in ps?`, qty(Math.sqrt(n) * s, 'ps', 0.02, String(Math.sqrt(n) * s)), `σ_path = √(${n} × ${s}²) = √${n} × ${s} = ${Math.sqrt(n) * s} ps. Independent variations partly cancel, so σ grows as √N while the mean grows as N.`, 'Root-sum-square of the arc sigmas: √N times one arc\'s σ.');
+    }),
+    gen((r) => {
+      const n = pick(r, [9, 16, 25]), s = pick(r, [2, 3]), mean = pick(r, [30, 40, 50]);
+      const tot = n * mean, arr = tot + 3 * Math.sqrt(n) * s;
+      return ask(`${n} arcs in series, each with a mean of ${mean} ps and σ = ${s} ps. What is the arrival at **3σ**, in ps?`, qty(arr, 'ps', 0.01, String(arr)), `Mean = ${n} × ${mean} = ${tot} ps; σ_path = √${n} × ${s} = ${Math.sqrt(n) * s} ps; arrival = ${tot} + 3 × ${Math.sqrt(n) * s} = ${arr} ps.`, 'Mean plus three times the path σ.');
+    }),
+    mc('The same 16-arc path (mean 800 ps, σ = 16 ps) is checked once with a flat 8% derate and once at 3σ. Which is more pessimistic?', ['The 3σ check, which adds 48 ps of margin', 'The flat 8% derate, which adds 64 ps of margin', 'They are identical for a path of this length', 'Neither, because both checks add nothing to the mean'], 1, 'Flat OCV charges every arc its worst case as if all were slow at once (8% of 800 = 64 ps). Statistically, 16 independent arcs rarely all go the same way: 3σ is only 3 × 16 = 48 ps (6%). That recovered margin is why signoff moved to POCV.'),
     say('Not every path is real. You tell the tool with **timing exceptions** in the SDC constraints file:'),
     art(`
   create_clock -name clk -period 1.0 [get_ports clk]
@@ -58,7 +81,7 @@ export const sta: Lesson = {
     }),
     mc('WNS is -50 ps and TNS is -900 ns. What does that tell you?', ['One path misses by 50 ps; fix that one path', 'Many paths are failing: a systemic problem', 'The design is close to passing; it is a small fix', 'The worst path misses by 900 ns'], 1, 'The worst path misses by 50 ps, but thousands of paths are failing, which points to something systemic like a bad constraint or a missing pipeline stage. WNS is the single worst slack; TNS sums every negative slack. Small WNS with huge TNS means many paths are all slightly failing.'),
   ],
-  recap: ['Setup: cq + logic_max + setup ≤ T + skew - uncertainty.', 'Hold: cq + logic_min ≥ skew + hold (no clock period!).', 'Positive skew helps setup, hurts hold.', 'Corners (PVT) and OCV; setup at slow, hold at fast.', 'SDC: clocks, IO delays, false paths, multicycle paths (with the -hold fix).'],
+  recap: ['Setup: cq + logic_max + setup ≤ T + skew - uncertainty.', 'Hold: cq + logic_min ≥ skew + hold + hold uncertainty (no clock period!).', 'Positive skew helps setup, hurts hold.', 'Corners (PVT) and OCV; setup at slow, hold at fast. RC corners: setup at Cworst (short) / RCworst (long), hold at Cbest (short) / RCbest (long).', 'MMMC: scenarios = modes × corners, dozens at signoff.', 'Variation: flat OCV, then AOCV tables, then POCV/LVF (mean and σ per arc; path σ is the root-sum-square, checked at 3σ).', 'SDC: clocks, IO delays, false paths, multicycle paths (with the -hold fix).'],
 };
 
 export const vlsi: Lesson = {
@@ -105,7 +128,7 @@ export const vlsi: Lesson = {
    inverter  1
    NAND2     4/3
    NOR2      5/3        (series PMOS is the slow part)
-   best stage effort ≈ 4  (why "FO4" is the unit of gate delay)`),
+   best stage effort ≈ 3.6 in theory; designers use 4  (why "FO4" is the unit of gate delay)`),
     gen((r) => {
       const [name, g] = pick(r, [['inverter', 1], ['NAND2', 4 / 3], ['NOR2', 5 / 3]] as const);
       const hh = pick(r, [2, 3, 4, 6]);
@@ -130,7 +153,8 @@ export const power: Lesson = {
    P_total = P_dynamic + P_short-circuit + P_leakage
 
    P_dynamic = α · C · V² · f
-      α  activity factor (fraction of the capacitance switching per cycle)
+      α  activity factor: probability a node charges (0→1) in a cycle
+         (a clock has α = 1; a node toggling every cycle has α = ½)
       C  switched capacitance
       V  supply voltage          ◄── squared!
       f  clock frequency`),
@@ -151,6 +175,16 @@ export const power: Lesson = {
    DVFS             lower V and f together when idle-ish     cuts dynamic ~cubically`),
     mc('Clock gating uses an **integrated clock gating cell** (a latch plus an AND gate) instead of a plain AND of clock and enable. Why?', ['It is smaller than a separate AND gate', 'It keeps the gated clock free of glitches', 'A plain AND gate cannot drive the clock tree', 'It is needed only for scan testing'], 1, 'The latch holds the enable stable while the clock is high, so a changing enable cannot chop the clock into a glitch. A glitch on a clock is a disaster: flops capture at random times. The latch makes the enable change only while the clock is low.'),
     mc('A block is **power gated** off. What else do you need?', ['Nothing, since an off block draws no power', 'Isolation, retention and rush-current control', 'Level shifters and synchronizers on all its outputs', 'Extra decaps so its outputs hold their value'], 1, 'You need isolation cells to clamp its floating outputs, retention flops (or save/restore) for state, and careful control of rush current at power-up. An off block\'s outputs float to garbage that could cause crowbar current or wrong logic downstream, so they must be isolated. State is lost unless retained. The power intent is described in UPF.'),
+    say('The power intent lives in **UPF**, a Tcl-style file beside the RTL. Here is a small power-gated DSP block, one command per idea:'),
+    art(`
+   create_power_domain PD_DSP -elements {u_dsp}
+   set_isolation iso_dsp -domain PD_DSP -applies_to outputs \\
+       -clamp_value 0 -isolation_signal iso_en -isolation_sense high
+   set_retention ret_dsp -domain PD_DSP \\
+       -save_signal {save high} -restore_signal {restore high}
+   add_power_state -domain PD_DSP \\
+       -state {RUN -supply_expr {power == FULL_ON}} \\
+       -state {OFF -supply_expr {power == OFF}}`),
     mc('Signals crossing from a 0.6 V domain to a 0.9 V domain need what?', ['Nothing', 'Level shifters', 'Synchronizers', 'Decoupling capacitors'], 1, 'A 0.6 V "high" may not fully turn off the 0.9 V domain\'s PMOS, causing leakage or wrong values. Level shifters translate the swing. (Different clocks would need synchronizers; different voltages need level shifters. Often you need both.)'),
     say('**DVFS**: when the workload is light, lower the frequency. A lower frequency needs less voltage to meet timing, and since power goes as V²f, the savings compound.'),
     gen((r) => {
@@ -177,7 +211,7 @@ export const pcb: Lesson = {
    L2  GND plane           ████████████
    L3  power plane         ████████████
    L4  signal (bottom)     ▁▁▁▁▁`),
-    say('A trace over a solid plane has a **characteristic impedance** set by its width, the dielectric thickness and the material. Common targets are 50 Ω single-ended, 90 Ω differential for USB, and 85 or 100 Ω for PCIe and Ethernet. Impedance changes cause **reflections**.'),
+    say('A trace over a solid plane has a **characteristic impedance** set by its width, the dielectric thickness and the material. Common targets are 50 Ω single-ended, 90 Ω differential for USB, 85 Ω for PCIe and 100 Ω for Ethernet. Impedance changes cause **reflections**.'),
     gen((r) => {
       const cm = pick(r, [5, 10, 15, 30]);
       const v = 15; // cm/ns on FR-4, roughly half the speed of light
@@ -185,7 +219,7 @@ export const pcb: Lesson = {
     }),
     mc('A high-speed signal on L1 crosses a gap in the L2 ground plane. What goes wrong?', ['Nothing, because the return current takes the power plane', 'Its return current must detour around the gap', 'The trace impedance drops to zero over the gap', 'Its propagation delay halves over the gap'], 1, 'The return current flows in the plane right under the trace, so it must detour around the gap: a big loop, so more inductance, radiation (EMI) and crosstalk. At high frequencies, return current hugs the signal path to minimize the loop. Never route fast signals over plane splits. That is the lesson of the return-path board level.'),
     mc('Why use **differential pairs** for high-speed links?', ['Each line only has to carry half the data rate', 'Common-mode noise cancels at the receiver', 'They are easier to route than one trace', 'They need no ground reference at all'], 1, 'The receiver looks at the difference, so noise common to both lines cancels, and the fields of the two lines largely cancel too, so they radiate less. The two traces must be matched in length (skew turns differential into common-mode) and routed tightly coupled at the target differential impedance.'),
-    say('**Power integrity**: the chip needs a stable supply while its current swings by amps in nanoseconds. The target is a low **impedance** from DC to hundreds of MHz: the regulator covers low frequencies, bulk capacitors the middle, small ceramic decaps near the chip higher still, and on-package and on-die capacitance the rest.'),
+    say('**Power integrity**: the chip needs a stable supply while its current swings by amperes in nanoseconds. The target is a low **impedance** from DC to hundreds of MHz: the regulator covers low frequencies, bulk capacitors the middle, small ceramic decaps near the chip higher still, and on-package and on-die capacitance the rest.'),
     gen((r) => {
       const V = pick(r, [0.75, 0.8, 1.0]);
       const ripple = pick(r, [3, 5]);

@@ -15,9 +15,11 @@ export interface CdcSpec {
   inputs: Record<string, string>;
   /** signals whose crossing is vouched for elsewhere (for example a dual-port memory guarded by synchronized pointers) */
   exempt?: string[];
+  /** asynchronous reset input port → reset domain name; enables the reset-domain-crossing check (omit for pure clock-crossing missions) */
+  resets?: Record<string, string>;
 }
 
-export type CrossKind = 'sync' | 'bus' | 'qualified-bus' | 'unsync' | 'logic';
+export type CrossKind = 'sync' | 'bus' | 'qualified-bus' | 'unsync' | 'logic' | 'rdc';
 export interface Crossing {
   src: string;
   from: string[];
@@ -39,7 +41,7 @@ export interface CdcReport {
   error?: { message: string; line: number };
 }
 
-interface Rec { lhs: string[]; rhs: Expr; rhsReads: Set<string>; guards: Set<string>; line: number; domain: string | null }
+interface Rec { lhs: string[]; rhs: Expr; rhsReads: Set<string>; guards: Set<string>; line: number; domain: string | null; /** asynchronous reset domains of the flop's always block */ rst: string[] }
 
 const reads = (e: Expr, out: Set<string>): void => {
   switch (e.k) {
@@ -66,21 +68,21 @@ const lvNames = (e: Expr, out: string[]): void => {
 /** the signal a bare expression is (a, a[i], a[h:l]) or undefined when there is logic in it */
 const bareOf = (e: Expr): string | undefined => (e.k === 'id' || e.k === 'index' || e.k === 'range' || e.k === 'irange' ? e.name : undefined);
 
-function walk(s: Stmt, guards: Set<string>, domain: string | null, recs: Rec[]): void {
+function walk(s: Stmt, guards: Set<string>, domain: string | null, recs: Rec[], rst: string[] = []): void {
   switch (s.k) {
-    case 'block': s.body.forEach((x) => walk(x, guards, domain, recs)); return;
+    case 'block': s.body.forEach((x) => walk(x, guards, domain, recs, rst)); return;
     case 'if': {
       const g = new Set(guards);
       reads(s.cond, g);
-      walk(s.then, g, domain, recs);
-      if (s.else) walk(s.else, g, domain, recs);
+      walk(s.then, g, domain, recs, rst);
+      if (s.else) walk(s.else, g, domain, recs, rst);
       return;
     }
     case 'case': {
       const g = new Set(guards);
       reads(s.sel, g);
-      s.items.forEach((it) => { it.labels.forEach((l) => reads(l, g)); walk(it.body, g, domain, recs); });
-      if (s.dflt) walk(s.dflt, g, domain, recs);
+      s.items.forEach((it) => { it.labels.forEach((l) => reads(l, g)); walk(it.body, g, domain, recs, rst); });
+      if (s.dflt) walk(s.dflt, g, domain, recs, rst);
       return;
     }
     case 'assign': {
@@ -90,10 +92,10 @@ function walk(s: Stmt, guards: Set<string>, domain: string | null, recs: Rec[]):
       reads(s.rhs, r);
       // an indexed left side reads its index too
       if (s.lhs.k === 'index') reads(s.lhs.index, r);
-      recs.push({ lhs, rhs: s.rhs, rhsReads: r, guards, line: s.line, domain });
+      recs.push({ lhs, rhs: s.rhs, rhsReads: r, guards, line: s.line, domain, rst });
       return;
     }
-    case 'for': walk(s.init, guards, domain, recs); walk(s.body, guards, domain, recs); walk(s.step, guards, domain, recs); return;
+    case 'for': walk(s.init, guards, domain, recs, rst); walk(s.body, guards, domain, recs, rst); walk(s.step, guards, domain, recs, rst); return;
     case 'nop': return;
   }
 }
@@ -123,10 +125,11 @@ export function analyze(src: string | ModuleAst, spec: CdcSpec): CdcReport & { d
     lvNames(a.lhs, lhs);
     const r = new Set<string>();
     reads(a.rhs, r);
-    recs.push({ lhs, rhs: a.rhs, rhsReads: r, guards: new Set(), line: a.line, domain: null });
+    recs.push({ lhs, rhs: a.rhs, rhsReads: r, guards: new Set(), line: a.line, domain: null, rst: [] });
   }
   for (const al of ast.always) {
     let domain: string | null = null;
+    let rst: string[] = [];
     if (al.sens.k === 'edge') {
       const clk = al.sens.edges.find((e) => spec.clocks[e.sig]);
       if (!clk) {
@@ -134,8 +137,9 @@ export function analyze(src: string | ModuleAst, spec: CdcSpec): CdcReport & { d
         return rep;
       }
       domain = spec.clocks[clk.sig];
+      rst = al.sens.edges.filter((e) => !spec.clocks[e.sig] && spec.resets?.[e.sig]).map((e) => spec.resets![e.sig]);
     }
-    walk(al.body, new Set(), domain, recs);
+    walk(al.body, new Set(), domain, recs, rst);
   }
 
   // --- domains
@@ -242,6 +246,36 @@ export function analyze(src: string | ModuleAst, spec: CdcSpec): CdcReport & { d
       const bad = fanoutOk(dst, r.domain!);
       if (bad) emit({ ...base, kind: 'unsync', ok: false, note: bad });
       else emit({ ...base, kind: 'bus', ok: true, note: `${w}-bit bus '${src}' crosses with a plain synchronizer: safe only if it changes at most one bit per cycle (Gray code); simulation checks this` });
+    }
+  }
+  // --- reset-domain crossings: a flop reads a signal driven by flops of the same clock that an asynchronous reset clears,
+  // but that same reset does not reach the reading flop. The reset can assert at any instant, so the value changes inside the
+  // reader's setup window. Same reset, or a synchronous reset in the source (no asynchronous edge), makes it safe.
+  if (spec.resets) {
+    const wr = new Map<string, Set<string>>();
+    const mark = (n: string, ds: string[]) => { if (!wr.has(n)) wr.set(n, new Set()); ds.forEach((d) => wr.get(n)!.add(d)); };
+    for (const r of recs) if (r.domain && r.rst.length) r.lhs.forEach((n) => mark(n, r.rst));
+    for (let pass = 0; pass < 20; pass++) {
+      const before = [...wr.values()].reduce((a, x) => a + x.size, 0);
+      for (const r of recs) if (!r.domain) for (const n of r.rhsReads) if (wr.has(n)) r.lhs.forEach((l) => mark(l, [...wr.get(n)!]));
+      if ([...wr.values()].reduce((a, x) => a + x.size, 0) === before) break;
+    }
+    const seen = new Set<string>();
+    for (const r of flops) for (const n of new Set([...r.rhsReads, ...r.guards])) {
+      const rs = wr.get(n);
+      if (!rs || exempt.has(n) || r.lhs.includes(n)) continue;
+      const ds = dom.get(n);
+      if (ds && !ds.has(r.domain!)) continue; // a clock-domain crossing: judged above
+      for (const rg of rs) {
+        const key = `${n}>${r.lhs[0]}@${r.line}:${rg}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const ok = r.rst.includes(rg);
+        const base = { src: n, from: [`reset ${rg}`], domain: r.domain!, dst: r.lhs[0], line: r.line, width: width(n) };
+        emit(ok
+          ? { ...base, kind: 'rdc', ok, note: `'${n}' is cleared by reset ${rg}, and '${r.lhs[0]}' is cleared by it too: when it asserts, the reader is held in reset and captures nothing` }
+          : { ...base, kind: 'rdc', ok, note: `'${n}' is cleared by asynchronous reset ${rg}, which can assert at any moment, but '${r.lhs[0]}' is not reset by it: it can capture a changing value and go metastable` });
+      }
     }
   }
   rep.crossings.sort((a, b) => a.line - b.line);

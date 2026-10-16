@@ -87,6 +87,9 @@ export const PREREQS: Record<string, Prereq> = {
   python: P('software'),
   flows: P('software', 'shell'),
   sta: P('flow', 'seq', 'rc', 'vlsi'),
+  openflow: P('flow', 'verilog', 'sta'),
+  celllayout: P('flow', 'mos', 'vlsi'),
+  pnr: P('flow', 'sta', 'openflow'),
   power: P('flow', 'vlsi', 'ohm'),
   dft: P('flow', 'seq', 'fsm'),
   signals: P('signals', 'fourier', 'ac'),
@@ -116,7 +119,6 @@ export const PREREQS: Record<string, Prereq> = {
   rf: P('role', 'ac', 'em'),
   pmic: P('role', 'storage', 'control'),
   sipi: P('role', 'pcb', 'storage'),
-  pnr: P('role', 'sta'),
   sram: P('role', 'vlsi'),
   fab: P('role', 'semi'),
   pkg: P('role', 'pcb'),
@@ -140,3 +142,8 @@ export const PREREQS: Record<string, Prereq> = {
   neuro: P('role', 'analog'),
   emerging: P('role', 'mosphys'),
 };
+
+/** The needs of a lesson the player has not finished yet, in the order listed. Unknown ids have none. */
+export function missingNeeds(id: string, done: (id: string) => boolean): string[] {
+  return (PREREQS[id]?.needs ?? []).filter((n) => !done(n));
+}

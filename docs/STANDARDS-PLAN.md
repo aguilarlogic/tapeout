@@ -19,6 +19,46 @@ The plan has seven parts, done in this order:
 | **G** | New material for coverage gaps, in three tiers | G1 (must), G2 (should), G3 (nice) | large |
 | **V** | Final verification, then the maintenance schedule | V1–V4, M1–M3 | small |
 
+## Status
+
+All items are implemented on `claude/loving-allen-pvuv7h`. The content lint (`src/standards/`) keeps the wrong
+statements out; every item has at least one rule or regression test.
+
+| Part | Items | Status |
+|---|---|---|
+| 0 | S0.1–S0.4 | done (baseline doc, lint, model notes, standard names removed from player text) |
+| E | E1–E12 | done |
+| C | C1–C16 | done (C8 alternative fix, C10 option b, C16 uses a 5 FIT chip allocation) |
+| U | U1–U16 | done (U12 is covered by G1.8) |
+| W | W1–W7 | done |
+| G1 | G1.1–G1.13 | done |
+| G2 | G2.1–G2.9 | done |
+| G3 | G3.1–G3.8 | done |
+| V | V1–V4 | done: full suite, consistency greps (HBM width, DDR refresh, PCIe, manager/subordinate, UVM phases, `[->n]`, kT/C, thermal terms), browser smoke, this table |
+| M | M1–M3 | open: maintenance schedule, see `docs/STANDARDS-BASELINE.md` review triggers |
+
+Known deviations and open follow-ups:
+
+- `$isunknown` is now refused in both the SVA lab and the SV testbench lab (2-state simulators cannot see an X).
+- The Bluetooth incident antenna branch quotes S11 −1 dB now; the Wallace-tree "off by one at 32 rows" drill has an approximation note only.
+- `practice-fab` yield item at A·D₀ = 1, α = 2 (36.8% vs 44.4%) is a generator over several values, not a fixed item.
+- The `fusa-hara` event ratings and the soft-error FIT inputs are illustrative and not taken from the plan.
+- PM-to-overshoot: the lesson says 20–25% at 45° (20% from ζ ≈ PM/100, 23% from the exact mapping); the "about 20%"
+  practice band is 45–50° only, since 40° is nearer 30%.
+- The organic-substrate CTE is quoted as roughly 15 to 17 ppm/°C in the lesson, and the warpage generator uses 17.
+- The Allan plot and a few scenario inputs (Λ, metal pitch) are illustrative.
+- U11 covers the RTL lab and the digital lesson. Older drills, SVA and CDC sources and the RV32I core project still use
+  `always @(*)` / `reg` style in places; both styles compile, so this is a polish item only.
+- The PLL lab (E11) has the right 1/BW VCO term, but its scenarios all land the best reference near 100 MHz.
+- The Tcl lab interpreter is a teaching subset: no `regexp -indices`, `lsort -command` / `-indices`, octal literals
+  or the "invalid bareword" error. `puts stderr` is accepted and not shown.
+- Audit pass (Oct 2026): every item was re-checked against this plan. The fixes are the shell log drills
+  (no empty answers), the RISC-V vs Verilog shift rule (E2b), `find -exec … +`, the 3σ STA boss item, FTTI
+  margins, two answer keys left stale by a merge (C overflow, SR latch; now pinned by a test), the FP bias table,
+  the DDR5 ECC width, the kT/C ranges, and Tcl fidelity (`puts` channels, arrays through `global`/`upvar`,
+  `linsert end-N`, `string compare -nocase`, `-2**2`, recursion depth, `format %d`). Spelling was made British
+  throughout the player text.
+
 The report also gives each finding an ID (4.1, F1, S3.1, V3.2, A3.1, R3.4, X3.2 …). This plan quotes those IDs, so you
 can look up the source and the researcher's reasoning.
 
@@ -284,7 +324,7 @@ checks. Engines are learned by doing, so these fixes outrank text fixes.
 - `INT_MIN / -1` → fpe; `INT_MIN % -1` → fpe.
 
 **Teach the contrast:** add one beat to the C lesson's shift step (find "shift" in `lessons/systems.ts`): "RISC-V and
-Verilog mask the shift amount to the low 5 bits on 32-bit values; C does not. Shifting by 32 or more is undefined."
+mask the shift amount to the low 5 bits on 32-bit values (Verilog instead gives 0 for a shift of 32 or more); C does not. Shifting by 32 or more is undefined."
 Also add a practice item (`practice-c`): "On RV32, `sll x1, x2, x3` with x3 = 33 shifts by…?" (answer 1), with a
 contrast distractor "undefined, as in C".
 
@@ -1194,7 +1234,7 @@ Each item gives:
   - Bode magnitude and phase from poles and zeros: a pole gives −20 dB/decade and −90°, with 45° at the pole.
   - **Phase margin:** 180° + phase at |L| = 1.
   - **Gain margin:** −|L| in dB where the phase is −180°.
-  - Rules of thumb: phase margin 45–60° is usual; PM ≈ 100·ζ (in degrees, for ζ < 0.7); PM 45° gives roughly 23%
+  - Rules of thumb: phase margin 45–60° is usual; PM ≈ 100·ζ (in degrees, for ζ < 0.7); PM 45° gives roughly 20–25%
     overshoot and 60° roughly 9%.
   - **Nyquist criterion,** qualitatively: closed-loop stability depends on encirclements of −1.
 - **Items:**

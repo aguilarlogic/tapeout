@@ -3,7 +3,7 @@
 import { clearDraft, loadDraft, saveDraft } from '../../state';
 import { h } from '../../ui/dom';
 import { editor, highlight } from '../../ui/editor';
-import { finishLab, goalItems, hintBox, labFrame, report, useSeed, variantButton } from '../../ui/labkit';
+import { finishLab, goalItems, hintBox, labFrame, modelNote, report, useSeed, variantButton } from '../../ui/labkit';
 import { rng } from '../../sim/harness';
 import { evaluate, type Evaluation } from './check';
 import type { CovGroupReport } from './cover';
@@ -22,6 +22,8 @@ function coverageView(cov: CovGroupReport[]): HTMLElement | string {
       })))));
   return h('div', { class: 'cov-box' }, h('h4', null, 'Functional coverage (correct design, first run)'), ...blocks);
 }
+
+export const MODEL_NOTE = 'This simulator is 2-state: X and Z are not modelled, and registers power up at 0. Real simulators start registers at X, so a missing reset shows up as X there.';
 
 export function svPage(id: string): HTMLElement {
   const level = findTbLevel(id);
@@ -43,6 +45,7 @@ export function svPage(id: string): HTMLElement {
   const brief = h('aside', { class: 'brief panel' },
     h('div', { class: 'tag' }, `${inst.uvm ? 'UVM' : 'Testbench'} · ${level.concept}`),
     h('p', { class: 'dim small' }, level.ticket),
+    modelNote(MODEL_NOTE),
     h('div', { class: 'brief-body', html: inst.brief }),
     boss ? h('p', { class: 'dim small' }, 'Boss mission: no hints. Hidden bugs are checked on every run.') : '',
     hintEl,

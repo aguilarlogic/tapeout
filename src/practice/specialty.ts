@@ -4,6 +4,7 @@ import { qty } from '../lessons/answers';
 import { calc, choice, walk } from '../lessons/teach';
 import { ask, mc, pick, say } from '../lessons/types';
 import { boss, practice } from './types';
+import { ANALOG_CONVERTER, ANALOG_MARGINS, ANALOG_NOISE, RF_LINEARITY } from './g-analog';
 import { atLevel, concept, sci, sig } from './util';
 
 const kT = 1.38e-23 * 300;
@@ -132,6 +133,9 @@ export const analogPractice = practice('practice-analog', 'Analog Drills', 'op-a
     ...atLevel(1, [['What does a voltage follower (unity-gain buffer) do?', 'Copies its input with low output impedance', ['Amplifies the input by a factor of ten or more', 'Filters out high frequencies', 'Converts voltage into current'], 'voltage follower', 'A unity-gain buffer has its output tied to its inverting input, so the output equals the input. It draws almost no current from the source and drives a load with a low output impedance.', ['A voltage follower has a gain of:', 'One', ['Ten', 'Zero']]]]),
     ...atLevel(3, [['Why does a current mirror need matched devices?', 'Mismatch sets the error in the copied current', ['Matching makes the mirror faster than a single device', 'It lets the mirror run without any supply', 'Matched devices never need a bias voltage at all'], 'current mirror matching', 'A current mirror copies a reference current into another branch. Threshold and geometry mismatch between the two transistors show up directly as a current error, so layout matching (common centroid) matters.', ['A current mirror copies a current by:', 'Matching two transistors', ['Amplifying the reference', 'Sharing a bias node only']]]]),
   ], (why) => `${why}.`, d),
+  ...ANALOG_NOISE,
+  ...ANALOG_MARGINS,
+  ...ANALOG_CONVERTER,
 ]);
 
 export const analogBoss = boss({
@@ -147,7 +151,9 @@ export const analogBoss = boss({
     mc('So what limits the ADC?', ['Clock jitter on the sampling clock', 'Quantization noise of the 12-bit core', 'Noise on the reference voltage', 'Differential non-linearity in the comparators'], 0, 'Jitter caps SNR near 64 dB, far below the 74 dB that 12 bits could reach. Measured 62.5 dB sits just under that ceiling. No amount of work on the converter itself helps; the clock must get cleaner.'),
     { t: 'gen', make: () => { const fs = (10 ** (-72 / 20) / (2 * Math.PI * 200e6)) * 1e15; return ask('To allow 72 dB at 200 MHz, how much rms jitter can the clock have, in fs?', qty(fs, 'fs', 0.03, sig(fs)), `σ = 10^(-72/20) / (2π × 200e6) = ${sig(fs)} fs. That needs a low-noise PLL and a clean clock path all the way to the sampling switch.`); } },
     { t: 'gen', make: () => { const q = 1 / 4096 / Math.sqrt(12), c = (kT / q ** 2) * 1e12; return ask('The LSB is 1 V / 4096 and quantization noise is LSB/√12. How big must the sampling capacitor be so its kT/C noise is no larger than the quantization noise, in pF?', qty(c, 'pF', 0.04, sig(c)), `LSB/√12 = ${sig(q * 1e6)} µV. C = kT/v² = 4.14e-21 / (${sig(q)})² = ${sig(c)} pF. Every extra bit would need 4× this.`); } },
-    mc('The PLL that makes the sample clock can use a wide or a narrow loop bandwidth. What does widening it do?', ['Less VCO noise, but more reference noise', 'More VCO noise, but less reference noise', 'It removes jitter from every noise source', 'Only a faster lock time'], 0, 'A wider loop suppresses more of the VCO\'s own phase noise but passes more of the reference\'s noise. Inside the loop bandwidth the output follows the reference; outside it, the VCO. The best bandwidth is where their noise curves cross.'),
+    { t: 'gen', make: (r) => { const sfdr = pick(r, [60, 64, 68]), e = (sfdr - 1.76) / 6.02; return ask(`The spectrum also shows a spur ${sfdr} dBc below the 200 MHz tone, far above the noise floor. If that spur sets SINAD, what is the ENOB, in bits?`, qty(e, 'bits', 0.03, sig(e)), `ENOB = (${sfdr} − 1.76) / 6.02 = ${sig(e)} bits. A second, separate limit: even a perfect clock would not fix a spur.`, 'SINAD ≈ SFDR when a spur dominates.'); } },
+    { t: 'gen', make: (r) => { const w = pick(r, [0, 0.5, 1.5]); return ask(`A code-density test finds one code ${w} LSB wide. What is its DNL, in LSB?`, qty(w - 1, '', 0.02, String(w - 1)), `DNL = ${w} / 1 − 1 = ${w - 1} LSB.${w === 0 ? ' DNL = −1 is a missing code: the code never appears at the output.' : ''}`, 'DNL = width ÷ 1 LSB − 1.'); } },
+    mc('The PLL that makes the sample clock can use a wide or a narrow loop bandwidth. What does widening it do?', ['Cuts more of the VCO\'s own noise but passes more of the reference\'s', 'Removes all of the jitter on the sample clock, whichever way', 'Only changes the lock time of the loop, not the noise at all', 'Nothing measurable on the output, since the filter is identical'], 0, 'Inside the loop bandwidth the output follows the reference; outside it, the VCO. The best bandwidth is where their noise curves cross.'),
   ],
   recap: ['SNR and ENOB.', 'Aperture jitter sets a ceiling at high input frequencies.', 'kT/C sizing.', 'PLL bandwidth trade-off.'],
 });
@@ -274,6 +280,7 @@ export const rfPractice = practice('practice-rf', 'RF Drills', 'dBm, wavelength,
       ['How does a phased array steer its beam without moving?', 'Each element gets a different phase', ['A motor rotates the antenna panel', 'Each element switches to a different frequency', 'Elements on one side are turned off'], 'phased arrays', 'Many small antennas all send the same signal. If each is delayed slightly more than its neighbour, the waves line up and add (constructive interference) in one particular direction and cancel in others. Changing the delays electronically changes that direction.', ['The beam points where the waves from all elements:', 'Arrive in phase', ['Cancel each other', 'Arrive at different times']], 'The waves from all elements then add up in the chosen direction.'],
     ], (why) => `${why}.`);
   },
+  ...RF_LINEARITY,
 ]);
 
 export const rfBoss = boss({
@@ -289,7 +296,9 @@ export const rfBoss = boss({
     { t: 'gen', make: () => { const l = fspl(100, 2.4e9); return ask('Free-space path loss at 2.4 GHz over 100 m, in dB?', qty(l, 'dB', 0.01, sig(l)), `20·log10(4π × 100 × 2.4e9 / 3e8) = ${sig(l)} dB.`); } },
     { t: 'gen', make: () => { const nf = db10(lin(1.5) + (lin(10) - 1) / lin(15)), s = -114 + nf + 10, m = 0 - fspl(100, 2.4e9) - s; return ask('The tag transmits 0 dBm with 0 dBi antennas on both ends. Link margin at 100 m (received power minus sensitivity), in dB?', qty(m, 'dB', 0.03, sig(m)), `Received: -${sig(fspl(100, 2.4e9))} dBm. Margin = ${sig(-fspl(100, 2.4e9))} - (${sig(s)}) = ${sig(m)} dB. Warehouse shelving and fading can take 20 to 30 dB, so this link is fragile.`); } },
     { t: 'gen', make: () => { const g = 25 / 75; return ask('The antenna measures 25 Ω on the 50 Ω line. Reflection coefficient magnitude |Γ|?', qty(g, '', 0.02, sig(g)), `|25 - 50| / (25 + 50) = ${sig(g)}: ${sig(g * g * 100)}% of the power bounces back. A matching network fixes it.`); } },
-    mc('Near a Wi-Fi access point the link drops even at short range. Most likely cause?', ['A strong blocker overloads the front end', 'The noise floor rose near the access point', 'The antenna is too long for the band', 'The crystal is off frequency'], 0, 'Linearity (IP3 and compression), not noise, limits the link. Sensitivity is about weak signals; blocking is about strong unwanted ones. Real receivers are designed for both.'),
+    { t: 'gen', make: () => ask('A two-tone test at −20 dBm per tone shows IM3 products 40 dB below the tones. What is the LNA\'s input IP3, in dBm?', qty(0, 'dBm', 0.02, '0'), 'IIP3 = P_in + ΔP/2 = −20 + 40/2 = 0 dBm.') },
+    { t: 'gen', make: () => { const t = 1 / (1 / lin(-5) + lin(15) / lin(5)); return ask('The LNA (gain 15 dB, IIP3 = −5 dBm) feeds a mixer with IIP3 = +5 dBm. What is the cascaded input IP3, in dBm?', qty(db10(t), 'dBm', 0.04, sig(db10(t))), `1/IIP3 = 1/0.316 + 31.6/3.16 = 13.2 per mW, so IIP3 = ${sig(t, 2)} mW = ${sig(db10(t))} dBm. The mixer is the weak point: the LNA\'s gain hands it a 15 dB bigger signal.`, 'Linear power: 1/IIP3 = 1/IIP3₁ + G₁/IIP3₂.'); } },
+    mc('Near a Wi-Fi access point the link drops even at short range. Most likely cause?', ['A strong nearby blocker overloads the front end: linearity limits it', 'The noise floor rose, so the weak wanted signal is buried below it', 'The antenna is too long for the band, so it picks up too much', 'The crystal is off frequency, so the receiver tunes to the wrong channel now'], 0, 'IP3 and compression, not noise. Sensitivity is about weak signals; blocking is about strong unwanted ones. Real receivers are designed for both.'),
   ],
   recap: ['Noise floor and noise figure.', 'Sensitivity.', 'Path loss and link margin.', 'Matching and blockers.'],
 });
@@ -406,7 +415,34 @@ export const pmicPractice = practice('practice-pmic', 'Power Drills', 'LDOs, buc
     ...atLevel(1, [['What does a buck converter do?', 'Steps the voltage down with a switch', ['Doubles the voltage with a charge pump', 'Filters noise out of a clean supply', 'Limits current to a fixed value'], 'buck converter', 'A buck converter chops the input with a switch and smooths it with an inductor and capacitor. Its output is set by the duty cycle, and the losses stay low because the switch is either fully on or fully off.', ['A buck converter output is set mainly by:', 'Its duty cycle', ['Its load only', 'The clock only']]]]),
     ...atLevel(2, [['What does an LDO need to work?', 'An input above the output plus dropout', ['A switching inductor, a diode, and a clock source', 'A clock at the switching frequency', 'A negative supply rail'], 'LDO dropout', 'A low-dropout regulator is a linear pass device. It needs the input to stay above the output by its dropout voltage, and its efficiency is roughly output over input.', ['An LDO efficiency is about:', 'Output voltage over input voltage', ['Input over output', 'One at any voltage']]]]),
     ...atLevel(3, [['What does a PMIC integrate that a discrete design does not?', 'Several regulators and sequencing logic', ['Only the battery charger', 'Nothing, because a PMIC is just a voltage reference', 'A higher clock speed for the core'], 'PMIC', 'A power management IC puts several regulators, power switches, and the sequencing and monitoring logic on one die. That saves board area and makes the power-up order repeatable.', ['A PMIC sequences the rails to:', 'Power up in the required order', ['Run all at once, always']]]]),
+    ...atLevel(3, [
+    ['Where is an LDO\'s power-supply rejection best?', 'At low frequency, falling near the loop crossover', ['At high frequency, where the output capacitor is weakest', 'Equally at every frequency, set by the pass device', 'Only at DC, and nowhere above it'], 'PSRR versus frequency', 'An LDO rejects input ripple through its feedback loop, so rejection is as good as the loop gain: high at low frequency, falling as the gain falls, and poor around and above the loop\'s crossover. There the output capacitor, not the loop, has to filter the ripple.',
+      ['PSRR follows the loop:', 'Gain', ['Dropout', 'Duty cycle']]],
+    ['What is an LDO\'s dropout voltage?', 'The smallest Vin - Vout it can still regulate at', ['The output dip when the load steps up', 'The ripple on its output at the switching frequency', 'The input voltage at which it switches off'], 'dropout', 'When the input is only just above the output, the pass transistor is fully on and has no room left to regulate. The dropout is the smallest input-to-output difference that still works, roughly the load current times the pass device\'s on-resistance.',
+      ['Dropout is set by the pass device\'s:', 'On-resistance', ['Gate length', 'Package']]],
+    ['How does USB Power Delivery reach 240 W?', 'By raising the voltage to 48 V at the same 5 A', ['By raising the cable current to well above 5 A', 'By using two cables in parallel at 20 V', 'By switching the cable to AC at the connector'], 'USB Power Delivery levels', 'The cable current stays at 5 A, so more power needs a higher voltage: 100 W is 20 V at 5 A in the standard power range, and 240 W is 48 V at 5 A in the extended range. P = V × I.',
+      ['At a fixed 5 A, power grows with:', 'Voltage', ['Cable length', 'Plug size']]],
+    ]),
   ], (why) => `${why}.`, d),
+  (r, d) => {
+    // G2.5: the CCM/DCM boundary, I_load = dI / 2, with dI = (Vin - Vout) · D / (L · f).
+    const [vin, vout] = pick(r, [[12, 5], [12, 1.2], [5, 1.2], [3.3, 1.0]] as const), l = pick(r, [2.2, 4.7, 10, 22]), f = pick(r, [0.5, 1, 2]);
+    const dd = vout / vin, di = ((vin - vout) * dd) / (l * f), ib = di / 2;
+    const idea = 'A buck converter stays in continuous conduction (CCM) while the inductor current never reaches zero. The current ramps by the peak-to-peak ripple ΔI around the load current, so it just touches zero when the load current equals half the ripple: I_boundary = ΔI/2. Below that load the converter drops into discontinuous conduction (DCM). ΔI = (Vin - Vout) × D ÷ (L × f), with D = Vout ÷ Vin.';
+    if (d === 1) return walk(ask(`A buck converter has an inductor ripple current of ${sig(di)} A peak-to-peak. Below what load current does it enter discontinuous conduction, in A?`, qty(ib, 'A', 0.02, sig(ib)), `ΔI/2 = ${sig(di)} / 2 = ${sig(ib)} A.`, 'Half the ripple.'),
+      'the CCM boundary', idea,
+      calc('Boundary = ΔI ÷ 2, in A:', `${sig(di)} / 2`, ib, 'A', sig(ib), 0.02));
+    if (d === 2) return walk(ask(`A buck converter makes ${vout} V from ${vin} V with L = ${l} µH at ${f} MHz. Below what load current does it enter discontinuous conduction, in A?`, qty(ib, 'A', 0.03, sig(ib)), `D = ${sig(dd)}; ΔI = (${vin} - ${vout}) × ${sig(dd)} / (${l} × ${f}) = ${sig(di)} A; boundary ΔI/2 = ${sig(ib)} A.`, 'Ripple first, then half of it.'),
+      'the CCM boundary', idea,
+      calc('Duty cycle D = Vout ÷ Vin:', `${vout} / ${vin}`, dd, '', sig(dd, 4), 0.005),
+      calc('ΔI = (Vin - Vout) × D ÷ (L × f), in A (µH × MHz = 1):', `(${vin} - ${vout}) × ${sig(dd, 4)} / (${l} × ${f})`, di, 'A', sig(di), 0.02),
+      calc('Boundary = ΔI ÷ 2, in A:', `${sig(di)} / 2`, ib, 'A', sig(ib), 0.02));
+    const load = pick(r, [0.05, 0.1, 0.2]), lmin = ((vin - vout) * dd) / (2 * load * f);
+    return walk(ask(`A buck converter makes ${vout} V from ${vin} V at ${f} MHz. What is the smallest inductor, in µH, that keeps it in continuous conduction down to a ${load} A load?`, qty(lmin, 'uH', 0.03, sig(lmin)), `Need ΔI/2 ≤ ${load}, so L ≥ (${vin} - ${vout}) × ${sig(dd)} / (2 × ${load} × ${f}) = ${sig(lmin)} µH. Lighter loads need bigger inductors, or the converter must accept DCM.`, 'Solve ΔI/2 = load for L.'),
+      'sizing L for a light load', idea,
+      calc('D = Vout ÷ Vin:', `${vout} / ${vin}`, dd, '', sig(dd, 4), 0.005),
+      calc('L = (Vin - Vout) × D ÷ (2 × I_load × f), in µH (A × MHz):', `(${vin} - ${vout}) × ${sig(dd, 4)} / (2 × ${load} × ${f})`, lmin, 'uH', sig(lmin), 0.03));
+  },
 ]);
 
 export const pmicBoss = boss({

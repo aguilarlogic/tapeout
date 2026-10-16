@@ -531,7 +531,7 @@ export function logicPage(id: string): HTMLElement {
 
   const drawer = h('aside', { class: 'drawer', 'aria-label': 'Steps', hidden: true },
     h('div', { class: 'drawer-head' }, h('b', null, 'How to build it'), h('button', { class: 'btn small ghost', onclick: () => toggleDrawer(false), 'aria-label': 'Close steps' }, '✕ Close')),
-    h('div', { class: 'brief-body', html: level.brief }),
+    h('div', { class: 'brief-body', tabindex: '0', html: level.brief }),
     h('h4', null, 'Hints'), hintList, hintButton(),
     h('h4', null, 'Controls'),
     h('ul', { class: 'controls' },
@@ -681,7 +681,7 @@ export function logicPage(id: string): HTMLElement {
     h('button', { class: 'btn tool', onclick: () => zoomCenter(1 / 1.25), 'aria-label': 'Zoom out' }, '−'),
     h('button', { class: 'btn tool', onclick: () => zoomCenter(1.25), 'aria-label': 'Zoom in' }, '+'),
     h('button', { class: 'btn tool', onclick: fit, 'aria-label': 'Fit the whole board' }, 'Fit'));
-  const side = h('aside', { class: 'side' }, h('h4', null, level.spec.kind === 'table' ? 'Every switch setting' : 'Test steps'), kind ? '' : parBox, rowsEl);
+  const side = h('aside', { class: 'side', tabindex: '0', 'aria-label': level.spec.kind === 'table' ? 'Every switch setting' : 'Test steps' }, h('h4', null, level.spec.kind === 'table' ? 'Every switch setting' : 'Test steps'), kind ? '' : parBox, rowsEl);
   const root = h('div', { class: `lab2${kind ? ' kind' : ''}`, style: themeStyle(), 'data-lab': level.id },
     h('div', { class: 'lab2-grid' },
       head, goal,

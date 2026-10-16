@@ -91,7 +91,7 @@ endmodule
 `;
 const arbiter: SvaLevel = {
   id: 'sva-arbiter', title: 'Arbiter safety and liveness', concept: '$onehot0, safety vs liveness, priority', xp: 110, tier: 'guided',
-  ticket: 'Three masters share a bus through a fixed-priority arbiter. Two grants at once corrupt the bus; a lost request hangs a master.',
+  ticket: 'Three managers share a bus through a fixed-priority arbiter. Two grants at once corrupt the bus; a lost request hangs a manager.',
   build: () => ({
     mode: 'write', depth: 4, minAsserts: 4, bias: {}, env: ENV, design: ARB,
     brief: `<p><code>arb3</code> registers one grant bit per requester. Port 0 has the highest priority.</p>
@@ -259,6 +259,80 @@ const cover: SvaLevel = {
   }),
 };
 
+// ===================================================================== 8b. goto
+const BATCH = `module batch(input clk, input rst, input start, input gnt, output reg busy, output reg done);
+  reg [1:0] n;
+  always @(posedge clk) begin
+    if (rst) begin busy <= 1'b0; n <= 2'd0; done <= 1'b0; end
+    else begin
+      done <= 1'b0;
+      if (!busy && start) begin busy <= 1'b1; n <= 2'd0; end
+      else if (busy && gnt) begin
+        if (n == 2'd2) begin busy <= 1'b0; n <= 2'd0; done <= 1'b1; end
+        else n <= n + 2'd1;
+      end
+    end
+  end
+endmodule
+`;
+const gotoCount: SvaLevel = {
+  id: 'sva-goto', title: 'Count three grants', concept: 'goto repetition [->n], consecutive against non-consecutive, request/grant counting', xp: 110, tier: 'guided',
+  ticket: 'A batch engine finishes after the third grant it sees, however slowly the grants trickle in. The consecutive-repeat operator cannot say that. The goto operator can.',
+  build: () => ({
+    mode: 'write', depth: 7, minAsserts: 2, bias: { start: 0.3, gnt: 0.5 }, env: ENV, design: BATCH,
+    brief: `<p><code>batch</code> starts when <code>start</code> is high while it is not <code>busy</code>. While busy it counts the cycles where <code>gnt</code> is high (a grant in the start cycle itself is not counted). On the <b>third</b> grant it drops <code>busy</code> and raises <code>done</code> for <b>one cycle, the cycle after that third grant</b>. Grants arrive with gaps of any length.</p>
+<p>Spec: <b>(1)</b> an accepted start (<code>start &amp;&amp; !busy</code>) is followed, from the next cycle on, by the third grant and then <code>done</code> in the cycle after it; <b>(2)</b> <code>done</code> lasts one cycle only.</p>
+<p><code>gnt[*3]</code> means three grants <i>back to back</i>, which would fire a false alarm here. <code>gnt[-&gt;3]</code> (goto) waits for the <i>third occurrence</i> and the match <b>ends on that grant</b>, so <code>##1 done</code> after it lands on the cycle after the grant. <code>gnt[=3]</code> would also allow idle cycles after the third grant, which is not what this spec says.</p>`,
+    hints: ['Start counting from the cycle after the start: <code>start &amp;&amp; !busy |-&gt; ##1 gnt[-&gt;3] ##1 done</code>.', 'If you wrote <code>gnt[*3]</code> the correct design raises a false alarm: its grants have gaps.', 'Rule 2: <code>done |=&gt; !done</code>.'],
+    starter: '// rule 1 needs gnt[->3];  rule 2 is one line\n',
+    solution: `g1: assert property (${C} start && !busy |-> ##1 gnt[->3] ##1 done);\ng2: assert property (${C} done |=> !done);\n`,
+    mutants: [
+      mut('it finishes after two grants', BATCH, "n == 2'd2", "n == 2'd1"),
+      mut('it waits for four grants', BATCH, "n == 2'd2", "n == 2'd3"),
+      mut('a grant in the start cycle is counted', BATCH, "begin busy <= 1'b1; n <= 2'd0; end", "begin busy <= 1'b1; n <= gnt ? 2'd1 : 2'd0; end"),
+      mut('done stays high until the next start', BATCH, "done <= 1'b0;\n      if", "done <= done && !start;\n      if"),
+    ],
+  }),
+};
+
+// ===================================================================== 8c. within
+const TXW = `module txw(input clk, input rst, input go, output reg act, output reg beat);
+  reg [3:0] t;
+  always @(posedge clk) begin
+    if (rst) begin act <= 1'b0; beat <= 1'b0; t <= 4'd0; end
+    else begin
+      beat <= 1'b0;
+      if (!act && go) begin act <= 1'b1; t <= 4'd1; end
+      else if (act) begin
+        t <= t + 4'd1;
+        if (t >= 4'd2 && t <= 4'd4) beat <= 1'b1;
+        if (t == 4'd6) act <= 1'b0;
+      end
+    end
+  end
+endmodule
+`;
+const withinWindow: SvaLevel = {
+  id: 'sva-within', title: 'A burst inside its window', concept: 'within, sequence containment, window length', xp: 120, tier: 'guided',
+  ticket: 'The memory port may only be hit by a three-beat burst while its transaction window is open. A burst that spills past the close corrupts the next transaction.',
+  build: () => ({
+    mode: 'write', depth: 10, minAsserts: 2, bias: { go: 0.4 }, env: ENV, design: TXW,
+    brief: `<p><code>txw</code> opens a transaction window after an accepted <code>go</code> (<code>go &amp;&amp; !act</code>; a <code>go</code> during a window is ignored): <code>act</code> is high for <b>6 cycles</b> starting the cycle after <code>go</code>. Inside it the block sends one burst of <b>3 consecutive</b> <code>beat</code> cycles.</p>
+<p>Spec: <b>(1)</b> the burst lies <b>inside</b> the window; <b>(2)</b> the window is exactly 6 cycles long, then <code>act</code> drops.</p>
+<p><code>s1 within s2</code> holds when a match of <code>s1</code> starts no earlier, and ends no later, than a match of <code>s2</code> that starts at the same cycle as the check. With <code>go &amp;&amp; !act |=&gt; ...</code> both start the cycle after the accepted <code>go</code>. <code>beat[*3]</code> is the burst, <code>act[*6]</code> is the window.</p>`,
+    hints: ['<code>go &amp;&amp; !act |=&gt; beat[*3] within act[*6]</code>. With a bounded window like <code>act[*6]</code> a missing burst is a real failure.', 'Rule 2 needs its own assertion: <code>$rose(act) |-&gt; act[*6] ##1 !act</code>. The first one would still pass if the window ran on for a seventh cycle.', 'The hidden bugs include a burst that ends one cycle after the window, a burst with a gap in it, a two-beat burst, and a window one cycle too short or too long.'],
+    starter: '// w1: the burst is within the window;  w2: the window is exactly 6 cycles\n',
+    solution: `w1: assert property (${C} go && !act |=> beat[*3] within act[*6]);\nw2: assert property (${C} $rose(act) |-> act[*6] ##1 !act);\n`,
+    mutants: [
+      mut('the burst runs one cycle past the window', TXW, 't >= 4\'d2 && t <= 4\'d4', 't >= 4\'d4 && t <= 4\'d6'),
+      mut('the burst has a gap in it', TXW, 't >= 4\'d2 && t <= 4\'d4', 't == 4\'d2 || t == 4\'d3 || t == 4\'d5'),
+      mut('the burst is only two beats', TXW, 't >= 4\'d2 && t <= 4\'d4', 't >= 4\'d2 && t <= 4\'d3'),
+      mut('the window closes one cycle early', TXW, "t == 4'd6", "t == 4'd5"),
+      mut('the window stays open one cycle too long', TXW, "t == 4'd6", "t == 4'd7"),
+    ],
+  }),
+};
+
 // ===================================================================== assume mode
 const CNT_RAW = `module cnt4(input clk, input rst, input push, input pop, output full, output empty, output reg [2:0] count);
   assign full = (count == 3'd4);
@@ -282,6 +356,36 @@ const assume: SvaLevel = {
     given: `a_max: assert property (${C} count <= 3'd4);\nc_full: cover property (${C} full);\nc_pop_full: cover property (${C} full && pop);\nc_push_empty: cover property (${C} empty && push);\n`,
     starter: '// the contract, as assumptions\n',
     solution: `as1: assume property (${C} !(push && full));\nas2: assume property (${C} !(pop && empty));\n`,
+    mutants: [],
+  }),
+};
+
+// ===================================================================== assume mode: liveness and fairness
+const GATE = `module gate(input clk, input rst, input req, input stall, output reg gnt);
+  reg pend;
+  always @(posedge clk) begin
+    if (rst) begin pend <= 1'b0; gnt <= 1'b0; end
+    else begin
+      gnt <= 1'b0;
+      if (req) pend <= 1'b1;
+      if ((pend || req) && !stall) begin gnt <= 1'b1; pend <= 1'b0; end
+    end
+  end
+endmodule
+`;
+const liveness: SvaLevel = {
+  id: 'sva-liveness', title: 'Eventually needs fairness', concept: 'liveness against safety, s_eventually, fairness assumptions, bounded response', xp: 130, tier: 'guided',
+  ticket: 'Formal says the gate can starve a request. It can, if the other side holds stall for ever. That is not a design bug: it is a missing fairness assumption.',
+  build: () => ({
+    mode: 'assume', depth: 6, env: ENV, design: GATE, bias: { stall: 0.4, req: 0.3 }, simLen: 14, minAsserts: 0,
+    covers: ['c_stall2', 'c_late'],
+    brief: `<p><code>gate</code> grants a request one cycle after it can: if <code>stall</code> is low in the cycle of <code>req</code> (or of any later cycle while the request is waiting), <code>gnt</code> follows in the next cycle. While <code>stall</code> is high the request just waits.</p>
+<p>The spec is a <b>liveness</b> wish: <code>req |-&gt; s_eventually gnt</code>, every request is granted <i>sometime</i>. Run the checks and look at <code>l_live</code>: it never fails, it just stays <b>pending</b>. A finite trace cannot refute "eventually", because the grant might arrive one cycle after the trace ends. That is why you cannot fully prove liveness with a bounded check.</p>
+<p>What you <i>can</i> check is the bounded form, <code>l_bound</code>: <code>req |-&gt; ##[1:3] gnt</code>. It fails, because the checker is free to hold <code>stall</code> high for ever. A real environment is <b>fair</b>: it does not stall for ever. Write the <b>fairness assumption</b> that stall never stays high for more than <b>2 cycles in a row</b>, so that the bound holds. Do not go further than that: the covers <code>c_stall2</code> (two stalled cycles in a row) and <code>c_late</code> (a grant three cycles after the request) must stay reachable.</p>`,
+    hints: ['"Not more than 2 in a row" means: after two stalled cycles in a row, the next cycle is not stalled.', '<code>assume property (@(posedge clk) stall[*2] |=&gt; !stall);</code>', 'If <code>c_stall2</code> goes unreachable you ruled out a legal stall; if <code>l_bound</code> still fails, your assumption lets stall run longer than 2 cycles.'],
+    given: `l_live: assert property (${C} req |-> s_eventually gnt);\nl_bound: assert property (${C} req |-> ##[1:3] gnt);\nc_stall2: cover property (${C} stall ##1 stall);\nc_late: cover property (${C} req ##3 gnt);\n`,
+    starter: '// the fairness assumption, as an assumption\n',
+    solution: `fair: assume property (${C} stall[*2] |=> !stall);\n`,
     mutants: [],
   }),
 };
@@ -322,12 +426,12 @@ const ARB_BUG = `module arb3(input clk, input rst, input [2:0] req, output reg [
 endmodule
 `;
 const fixArb: SvaLevel = {
-  id: 'formal-fix', title: 'Fix the arbiter from a counterexample', concept: 'counterexample debug, fixing RTL until the proof closes', xp: 140, tier: 'guided',
+  id: 'formal-fix', title: 'Fix the arbiter from a counterexample', concept: 'counterexample debug, fixing RTL until no counterexample remains', xp: 140, tier: 'guided',
   ticket: 'Formal says the arbiter can grant two ports at once. Read the waveform, find why, fix the RTL.',
   build: () => ({
     mode: 'fix', depth: 5, env: ENV, design: ARB_BUG, golden: ARB, bias: {},
     brief: `<p>The arbiter below must grant exactly one requester, port 0 first, then 1, then 2, one cycle after the request. The given assertions are <code>$onehot0(gnt)</code> and <code>req != 0 |=&gt; $onehot(gnt)</code>.</p>
-<p>Press <b>Run formal</b>: the counterexample shows two grant bits high. Fix the design (keep the ports) so the proof closes and behaviour matches the reference priority.</p>`,
+<p>Press <b>Run formal</b>: the counterexample shows two grant bits high. Fix the design (keep the ports) so no counterexample exists up to the depth checked, and behaviour matches the reference priority.</p>`,
     hints: ['Look at what <code>gnt | 3\'b010</code> uses: the <i>old</i> grant value, not this cycle\'s requests.', 'A priority encoder is an if / else-if chain assigning one-hot constants.'],
     given: `m1: assert property (${C} $onehot0(gnt));\nm2: assert property (${C} req != 0 |=> $onehot(gnt));\n`,
     starter: ARB_BUG,
@@ -383,8 +487,8 @@ const bossBurst: SvaLevel = {
 };
 
 const bossWrap: SvaLevel = {
-  id: 'formal-boss-wrap', title: 'Boss: close the proof', concept: 'bounded proof depth, counterexample-driven fixing', xp: 260, tier: 'boss',
-  ticket: 'A modulo counter violates its range assertion only after a long run of enables, and the depth the checker needs changes with the modulus. Find it, fix it, close the proof. No hints.',
+  id: 'formal-boss-wrap', title: 'Boss: clear every counterexample', concept: 'bounded proof depth, counterexample-driven fixing', xp: 260, tier: 'boss',
+  ticket: 'A modulo counter violates its range assertion only after a long run of enables, and the depth the checker needs changes with the modulus. Find it, fix it, until no counterexample exists at the depth the checker needs. No hints.',
   build: (r: Rng) => {
     const m = between(r, 6, 12);
     return {
@@ -399,5 +503,5 @@ const bossWrap: SvaLevel = {
   },
 };
 
-export const SVA_LEVELS: SvaLevel[] = [latency, reg, arbiter, fifoCount, handshakeProto, fsm, pulse, cover, assume, formalDepth, fixArb, bossBurst, bossWrap];
+export const SVA_LEVELS: SvaLevel[] = [latency, reg, arbiter, fifoCount, handshakeProto, fsm, pulse, cover, gotoCount, withinWindow, assume, liveness, formalDepth, fixArb, bossBurst, bossWrap];
 export const findSvaLevel = (id: string) => SVA_LEVELS.find((l) => l.id === id);

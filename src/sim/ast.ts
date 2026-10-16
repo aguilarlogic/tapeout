@@ -58,4 +58,6 @@ export interface ModuleAst {
   assigns: { lhs: Expr; rhs: Expr; line: number; init?: boolean }[]; // init: `reg q = 0;` start value
   always: AlwaysBlock[];
   line: number;
+  /** Lines of x/z/? literals that are not casez/casex don't-care labels (2-state simulator: they read as 0). */
+  xlits?: number[];
 }

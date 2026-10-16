@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { boxOf, earlyLessons, GAPS_DAYS, pick, pool, record, resetRecall } from './recall';
+import { LESSONS } from './lessons';
+import { rng } from './sim/harness';
 
 const mem = new Map<string, string>();
 Object.defineProperty(globalThis, 'localStorage', {
@@ -41,5 +43,24 @@ describe('spaced recall', () => {
     record(k, false, now);
     expect(boxOf(k)).toBe(0);
     expect(pick([items[0]], now + 3600_000)).toHaveLength(1);
+  });
+
+  it('reaches every finished lesson, not only the first chapters, and includes typed and generated questions', () => {
+    const late = LESSONS.find((l) => !earlyLessons().includes(l.id) && l.steps.some((st) => st.t === 'gen'))!;
+    const items = pool((id) => id === late.id);
+    expect(items.length).toBeGreaterThan(0);
+    expect(items.some((i) => late.steps[Number(i.key.split('#')[1])].t === 'gen')).toBe(true);
+  });
+
+  it('every lesson in the game can come back in a warm-up', () => {
+    const inPool = new Set(pool(() => true).map((i) => i.lesson));
+    const asks = LESSONS.filter((l) => l.steps.some((st) => st.t === 'mc' || st.t === 'ask' || st.t === 'gen'));
+    expect(asks.filter((l) => !inPool.has(l.id)).map((l) => l.id)).toEqual([]);
+  });
+
+  it('a generated question comes back with fresh numbers', () => {
+    const items = pool(() => true);
+    const g = items.find((i) => { const a = i.q(rng(1)).q, b = i.q(rng(2)).q; return a !== b; });
+    expect(g).toBeDefined();
   });
 });

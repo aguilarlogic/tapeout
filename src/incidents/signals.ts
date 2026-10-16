@@ -136,12 +136,12 @@ export const radioIncident: Incident = {
   budget: 150,
   pager: 'PAGER · SEV-2 · Production earbuds lose their Bluetooth link at half the expected range. Receive sensitivity is about 10 dB worse than the reference design. You have 2.5 hours in the RF lab.',
   causes: [
-    { id: 'match', name: 'Wrong LNA matching component', fix: 'Place the right matching inductor (1.8 nH, not 18 nH) and fix the BOM', story: 'The LNA input S11 was -4 dB: a large mismatch reflects signal before it is amplified, adding straight to the noise figure.' },
+    { id: 'match', name: 'Wrong LNA matching component', fix: 'Place the right matching inductor (1.8 nH, not 18 nH) and fix the BOM', story: 'The LNA input S11 was -1 dB: about 80% of the power is reflected (roughly 7 dB of mismatch loss) before it is amplified, adding straight to the noise figure.' },
     { id: 'spur', name: 'A DC-DC converter harmonic lands in-band', fix: 'Move the DC-DC switching frequency so no harmonic falls in the 2.4 GHz band, and shield the inductor', story: 'A spur sat right at 2.442 GHz and moved when the switcher was changed. With an LDO instead, the sensitivity came back.' },
     { id: 'phasenoise', name: 'PLL phase noise too high (wrong loop filter part)', fix: 'Replace the PLL loop-filter capacitor with the specified value', story: 'The LO phase noise was 22 dB worse than design. Reciprocal mixing smeared strong nearby signals onto the wanted channel.' },
     { id: 'antenna', name: 'The enclosure detunes the antenna', fix: 'Re-tune the antenna match in the final plastic enclosure', story: 'Conducted sensitivity was fine, but over the air it was 10 dB worse: the antenna resonance had moved 130 MHz in the plastic housing.' },
     { id: 'blocker', name: 'The phone\'s cellular transmitter saturates the front end', fix: 'Add a band-pass filter (SAW) ahead of the LNA and coordinate transmit timing with the modem', story: 'Sensitivity recovered when the cellular modem was off: its transmitter pushed the LNA into compression.' },
-    { id: 'xtal', name: 'Crystal load capacitors wrong (frequency offset)', fix: 'Use the crystal\'s specified load capacitance so it runs on frequency', story: 'The carrier was 41 ppm off frequency, outside the ±20 ppm the protocol allows, so the demodulator lost bits.' },
+    { id: 'xtal', name: 'Crystal load capacitors wrong (frequency offset)', fix: 'Use the crystal\'s specified load capacitance so it runs on frequency', story: 'The carrier was 41 ppm off frequency, outside the ±20 ppm crystal budget the design assumed (the rest of the allowance was reserved for temperature and ageing), so the demodulator lost bits.' },
   ],
   bandaids: [
     { text: 'Raise the transmit power to maximum', why: 'That helps the other end hear you; it does nothing for your own receiver, and it drains the battery.' },
@@ -151,11 +151,11 @@ export const radioIncident: Incident = {
     { cmd: 'sens', args: ['conducted', 'ota'], cost: 15, what: 'measure sensitivity with a cable at the antenna port, or over the air', read: (w, a) => `${a === 'ota' ? 'over the air' : 'conducted'}: ${a === 'conducted' && w.cause === 'antenna' ? '-97' : '-87'} dBm (reference design -97 dBm)` },
     {
       cmd: 's11', args: ['lna', 'antenna'], cost: 20, what: 'return loss of the LNA input or of the antenna',
-      read: (w, a) => (a === 'lna' ? `LNA input S11 at 2.44 GHz: ${w.cause === 'match' ? '-4 dB' : '-14 dB'} (spec < -10 dB)` : `antenna resonance ${w.cause === 'antenna' ? '2.31 GHz, S11 -5 dB at 2.44 GHz' : '2.44 GHz, S11 -18 dB'}`),
+      read: (w, a) => (a === 'lna' ? `LNA input S11 at 2.44 GHz: ${w.cause === 'match' ? '-1 dB' : '-14 dB'} (spec < -10 dB)` : `antenna resonance ${w.cause === 'antenna' ? '2.31 GHz, S11 -5 dB at 2.44 GHz' : '2.44 GHz, S11 -18 dB'}`),
     },
     { cmd: 'spectrum', cost: 20, what: 'look at the in-band spectrum with the receiver idle', read: (w) => (w.cause === 'spur' ? 'a spur at 2.442 GHz, -92 dBm, on top of the noise floor' : 'clean noise floor across 2.40-2.48 GHz') },
     { cmd: 'pn', cost: 25, what: 'LO phase noise at 1 MHz offset', read: (w) => `phase noise @1 MHz: ${w.cause === 'phasenoise' ? '-88' : '-112'} dBc/Hz (design -110)` },
-    { cmd: 'freq', cost: 10, what: 'measure the carrier frequency error', read: (w) => `carrier error: ${w.cause === 'xtal' ? '+41' : '+3'} ppm (protocol allows ±20 ppm)` },
+    { cmd: 'freq', cost: 10, what: 'measure the carrier frequency error', read: (w) => `carrier error: ${w.cause === 'xtal' ? '+41' : '+3'} ppm (crystal budget ±20 ppm)` },
     { cmd: 'dcdc', args: ['ldo', 'dcdc'], cost: 30, what: 'power the radio from its DC-DC or from a clean LDO', read: (w, a) => `on ${a === 'ldo' ? 'a clean LDO' : 'the DC-DC'}: sensitivity ${a === 'ldo' && w.cause === 'spur' ? '-97' : '-87'} dBm` },
     { cmd: 'modem', args: ['off', 'on'], cost: 20, what: 'switch the phone\'s cellular modem off or on', read: (w, a) => `cellular modem ${a}: sensitivity ${a === 'off' && w.cause === 'blocker' ? '-97' : '-87'} dBm` },
     { cmd: 'adjacent', cost: 25, what: 'sensitivity with a strong signal on the next channel', read: (w) => `adjacent-channel signal at -50 dBm: sensitivity degrades by ${w.cause === 'phasenoise' ? 15 : 3} dB` },

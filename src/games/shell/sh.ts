@@ -368,6 +368,10 @@ export class Shell {
   depth = 0;
   params: string[] = [];
   scriptName = 'bash';
+  /** set -e / -u / -o pipefail */
+  opts = { e: false, u: false, pipefail: false };
+  /** >0 while a failure must not end the script: if/while conditions, and && / || operands other than the last */
+  private noExit = 0;
   /** Extra state that command packages (git, make) keep between commands. */
   state: Record<string, unknown> = {};
   /** Runs a compiled program (the `#!sim` files that `cc` writes). */
@@ -414,20 +418,28 @@ export class Shell {
     switch (c.k) {
       case 'list': { let st = this.status; for (const it of c.items) { st = this.exec(it, stdin, out, err); this.status = st; } return st; }
       case 'andor': {
-        let st = this.exec(c.first, stdin, out, err);
+        const n = c.rest.length;
+        let st = this.quiet(() => this.exec(c.first, stdin, out, err), n > 0);
         this.status = st;
-        for (const [op, cmd] of c.rest) {
-          if ((op === '&&' && st === 0) || (op === '||' && st !== 0)) { st = this.exec(cmd, stdin, out, err); this.status = st; }
-        }
+        c.rest.forEach(([op, cmd], k) => {
+          if ((op === '&&' && st === 0) || (op === '||' && st !== 0)) { st = this.quiet(() => this.exec(cmd, stdin, out, err), k < n - 1); this.status = st; }
+        });
         return st;
       }
       case 'pipe': {
         let input = stdin, st = 0;
-        c.cmds.forEach((cmd, i) => {
-          if (i === c.cmds.length - 1) st = this.exec(cmd, input, out, err);
-          else { let buf = ''; this.exec(cmd, input, (s) => { buf += s; }, err); input = new StdIn(buf); }
-        });
-        return c.neg ? (st === 0 ? 1 : 0) : st;
+        const codes: number[] = [];
+        // a failing stage is not an error by itself: set -e looks at the pipeline's status as a whole (the last stage, or with pipefail the last non-zero one)
+        this.quiet(() => {
+          c.cmds.forEach((cmd, i) => {
+            if (i === c.cmds.length - 1) st = this.exec(cmd, input, out, err);
+            else { let buf = ''; codes.push(this.exec(cmd, input, (x) => { buf += x; }, err)); input = new StdIn(buf); }
+          });
+        }, true);
+        if (this.opts.pipefail) st = [...codes, st].reverse().find((x) => x !== 0) ?? 0;
+        if (c.neg) return st === 0 ? 1 : 0;
+        if (st !== 0 && this.opts.e && this.noExit === 0) throw new ExitSignal(st);
+        return st;
       }
       case 'for': {
         const items = c.words ? c.words.flatMap((w) => this.expandWord(w)) : [...this.params];
@@ -442,24 +454,31 @@ export class Shell {
         let st = 0;
         for (;;) {
           this.tick();
-          const cs = this.exec(c.cond, stdin, out, err);
+          const cs = this.quiet(() => this.exec(c.cond, stdin, out, err), true);
           if ((cs === 0) === c.until) break;
           try { st = this.exec(c.body, stdin, out, err); } catch (e) { if (e instanceof BreakSignal) { if (e.cont) continue; break; } throw e; }
         }
         return st;
       }
       case 'if': {
-        for (const [cond, body] of c.conds) if (this.exec(cond, stdin, out, err) === 0) return this.exec(body, stdin, out, err);
+        for (const [cond, body] of c.conds) if (this.quiet(() => this.exec(cond, stdin, out, err), true) === 0) return this.exec(body, stdin, out, err);
         return c.orelse ? this.exec(c.orelse, stdin, out, err) : 0;
       }
       case 'func': this.funcs.set(c.name, c.body); return 0;
       case 'group': return this.withRedirs(c.redirs, stdin, out, err, (i, o, e) => {
         if (!c.sub) return this.exec(c.body, i, o, e);
-        const saved = { cwd: this.cwd, env: new Map(this.env) };
-        try { return this.exec(c.body, i, o, e); } catch (x) { if (x instanceof ExitSignal) return x.code; throw x; } finally { this.cwd = saved.cwd; this.env = saved.env; }
+        const saved = { cwd: this.cwd, env: new Map(this.env), opts: { ...this.opts } };
+        try { return this.exec(c.body, i, o, e); } catch (x) { if (x instanceof ExitSignal) return x.code; throw x; } finally { this.cwd = saved.cwd; this.env = saved.env; this.opts = saved.opts; }
       });
       case 'simple': return this.simple(c, stdin, out, err);
     }
+  }
+
+  /** Run `f`, optionally with set -e suspended (conditions and the non-final parts of && / || lists). */
+  private quiet<T>(f: () => T, on: boolean): T {
+    if (!on) return f();
+    this.noExit++;
+    try { return f(); } finally { this.noExit--; }
   }
 
   private withRedirs(redirs: Redir[], stdin: StdIn, out: (s: string) => void, err: (s: string) => void, body: (i: StdIn, o: (s: string) => void, e: (s: string) => void) => number): number {
@@ -516,7 +535,7 @@ export class Shell {
   private simple(c: Extract<Cmd, { k: 'simple' }>, stdin: StdIn, out: (s: string) => void, err: (s: string) => void): number {
     const assignVals: [string, string][] = c.assigns.map(([k, w]) => [k, this.expandWord(w, true).join(' ')]);
     const argv = c.words.flatMap((w) => this.expandWord(w));
-    return this.withRedirs(c.redirs, stdin, out, err, (input, o, e) => {
+    const st = this.withRedirs(c.redirs, stdin, out, err, (input, o, e) => {
       if (!argv.length) { for (const [k, v] of assignVals) this.env.set(k, v); return 0; }
       const saved = new Map<string, string | undefined>();
       for (const [k, v] of assignVals) { saved.set(k, this.env.get(k)); this.env.set(k, v); }
@@ -524,6 +543,8 @@ export class Shell {
         for (const [k, v] of saved) { if (v === undefined) this.env.delete(k); else this.env.set(k, v); }
       }
     });
+    if (st !== 0 && this.opts.e && this.noExit === 0) throw new ExitSignal(st);
+    return st;
   }
 
   /** Run one command by name: function, built-in utility, or a script path. */
@@ -554,7 +575,24 @@ export class Shell {
       }
       case 'export': for (const a of args) { const eq = a.indexOf('='); if (eq > 0) this.env.set(a.slice(0, eq), a.slice(eq + 1)); } return 0;
       case 'unset': for (const a of args) this.env.delete(a); return 0;
-      case 'set': case 'shopt': case 'umask': case 'trap': return 0;
+      case 'set': {
+        // set -e -u -o pipefail, in any mix (-euo pipefail); + turns an option off. Other flags are accepted and ignored.
+        for (let i = 0; i < args.length; i++) {
+          const a = args[i];
+          if (!/^[-+][A-Za-z]+$/.test(a)) continue;
+          const on = a[0] === '-';
+          for (const ch of a.slice(1)) {
+            if (ch === 'e') this.opts.e = on;
+            else if (ch === 'u') this.opts.u = on;
+            else if (ch === 'o') {
+              const name = args[++i];
+              if (name === 'pipefail') this.opts.pipefail = on; else if (name === 'errexit') this.opts.e = on; else if (name === 'nounset') this.opts.u = on;
+            }
+          }
+        }
+        return 0;
+      }
+      case 'shopt': case 'umask': case 'trap': return 0;
       case 'read': {
         const names = args.filter((a) => !a.startsWith('-'));
         const line = stdin.readLine();
@@ -606,7 +644,8 @@ export class Shell {
     const shebang = /^#!\s*(\S+)(?:\s+(\S+))?/.exec(src);
     const interp = shebang ? (shebang[1].endsWith('env') ? shebang[2] : shebang[1].split('/').pop()) : 'bash';
     if (interp && /^python/.test(interp)) return this.invoke('python3', [abs, ...args], stdin, out, err);
-    const savedParams = this.params, savedName = this.scriptName;
+    const savedParams = this.params, savedName = this.scriptName, savedOpts = this.opts, savedNoExit = this.noExit;
+    if (!inline) { this.opts = { e: false, u: false, pipefail: false }; this.noExit = 0; } // a script is a new process: it starts with default options
     const savedEnv = inline ? null : new Map(this.env), savedCwd = this.cwd;
     this.params = args;
     this.scriptName = path;
@@ -619,6 +658,7 @@ export class Shell {
     } finally {
       this.params = savedParams;
       this.scriptName = savedName;
+      if (!inline) { this.opts = savedOpts; this.noExit = savedNoExit; }
       if (savedEnv) { this.env = savedEnv; this.cwd = savedCwd; }
     }
   }
@@ -718,7 +758,7 @@ export class Shell {
         if (n === '$') { emit('4242'); i += 2; continue; }
         if (n !== undefined && /[0-9]/.test(n)) { emit(n === '0' ? this.scriptName : this.params[parseInt(n, 10) - 1] ?? ''); i += 2; continue; }
         const m = n !== undefined ? /^[A-Za-z_]\w*/.exec(s.slice(i + 1)) : null;
-        if (m) { emit(this.env.get(m[0]) ?? ''); i += 1 + m[0].length; continue; }
+        if (m) { if (this.opts.u && !this.env.has(m[0])) throw new ShellError(`${m[0]}: unbound variable`); emit(this.env.get(m[0]) ?? ''); i += 1 + m[0].length; continue; }
         lit += '$'; i++;
         continue;
       }
@@ -760,6 +800,7 @@ export class Shell {
         if (sm[2][0] === '#') return val.replace(new RegExp('^' + (sm[2] === '##' ? g : g.replace(/\.\*/g, '.*?'))), '');
         return val.replace(new RegExp((sm[2] === '%%' ? g : g.replace(/\.\*/g, '.*?')) + '$'), '');
       }
+      if (v === undefined && this.opts.u) throw new ShellError(`${m[1]}: unbound variable`);
       return v ?? '';
     }
     const empty = v === undefined || (op.startsWith(':') && v === '');

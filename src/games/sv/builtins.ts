@@ -108,7 +108,7 @@ export function callSys(sim: Sim, e: Extract<E, { k: 'sys' }>, sc: Scope, hint: 
     case '$countones': return I((toBig(sim.ev(a[0], sc)) & ((1n << BigInt(bitsOf(sim.ev(a[0], sc)))) - 1n)).toString(2).replace(/0/g, '').length);
     case '$onehot': { const v = sim.ev(a[0], sc) as Int; return sim.one(v.v.toString(2).replace(/0/g, '').length === 1); }
     case '$onehot0': { const v = sim.ev(a[0], sc) as Int; return sim.one(v.v.toString(2).replace(/0/g, '').length <= 1); }
-    case '$isunknown': return sim.one(false);
+    case '$isunknown': return sim.err('$isunknown is meaningless here: this simulator is 2-state, so X and Z are not modelled and the check would always pass', e.line);
     case '$size': case '$high': case '$low': case '$left': case '$right': {
       const v = sim.ev(a[0], sc);
       if (v instanceof Arr) return I(e.n === '$size' ? v.items.length : e.n === '$low' || e.n === '$right' ? v.lo : v.lo + v.items.length - 1);

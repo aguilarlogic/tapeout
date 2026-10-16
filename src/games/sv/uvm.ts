@@ -316,6 +316,12 @@ function void uvm_collect(uvm_component c, ref uvm_component all[$]);
   foreach (c.m_children[i]) uvm_collect(c.m_children[i], all);
 endfunction
 
+// children before parents: the order of the bottom-up function phases
+function void uvm_collect_up(uvm_component c, ref uvm_component all[$]);
+  foreach (c.m_children[i]) uvm_collect_up(c.m_children[i], all);
+  all.push_back(c);
+endfunction
+
 function void uvm_do_build(uvm_component c, uvm_phase ph);
   c.build_phase(ph);
   foreach (c.m_children[i]) uvm_do_build(c.m_children[i], ph);
@@ -327,7 +333,7 @@ function void uvm_do_connect(uvm_component c, uvm_phase ph);
 endfunction
 
 task run_test(string test_name = "");
-  uvm_component all[$];
+  uvm_component all[$], up[$];
   uvm_phase ph = new("run");
   uvm_component top;
   if (test_name == "") $uvm_report("FATAL", "NOTEST", "run_test() needs a test name", 0);
@@ -336,8 +342,9 @@ task run_test(string test_name = "");
   uvm_do_build(top, ph);
   uvm_do_connect(top, ph);
   uvm_collect(top, all);
-  foreach (all[i]) all[i].end_of_elaboration_phase(ph);
-  foreach (all[i]) all[i].start_of_simulation_phase(ph);
+  uvm_collect_up(top, up);
+  foreach (up[i]) up[i].end_of_elaboration_phase(ph);
+  foreach (up[i]) up[i].start_of_simulation_phase(ph);
   foreach (all[i]) begin
     automatic uvm_component c = all[i];
     fork c.run_phase(ph); join_none
@@ -345,10 +352,10 @@ task run_test(string test_name = "");
   #0;
   #0;
   wait (ph.m_objections == 0);
-  foreach (all[i]) all[i].extract_phase(ph);
-  foreach (all[i]) all[i].check_phase(ph);
-  foreach (all[i]) all[i].report_phase(ph);
-  foreach (all[i]) all[i].final_phase(ph);
+  foreach (up[i]) up[i].extract_phase(ph);
+  foreach (up[i]) up[i].check_phase(ph);
+  foreach (up[i]) up[i].report_phase(ph);
+  foreach (all[i]) all[i].final_phase(ph); // final is top-down
   $display("--- UVM Report Summary ---");
   $display("UVM_INFO    : %0d", $uvm_count("info"));
   $display("UVM_WARNING : %0d", $uvm_count("warning"));
