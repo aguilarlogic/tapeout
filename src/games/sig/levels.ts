@@ -88,7 +88,7 @@ const sigFir: ArchLevel = {
 <p>Spec (frequencies are in cycles/sample, Nyquist = 0.5):</p>
 <ul><li>passband edge <b>${spec.fp}</b>: gain no lower than −1 dB;</li><li>stopband from <b>${spec.fst}</b> to 0.5: gain at or below <b>−${spec.atten} dB</b>;</li><li>at most <b>${budget} taps</b> (multipliers).</li></ul>
 <p>Pick the number of taps (odd), the window, and the cutoff <i>fc</i> (halfway through the transition band is the usual start).</p>`,
-      hints: ['Rectangular windows have narrow transitions but only about −21 dB of stopband. Look at the sidelobes in the plot.', 'Hann ≈ −44 dB, Hamming ≈ −53 dB, Blackman ≈ −74 dB of first sidelobe; pick the cheapest window that clears the attenuation.', 'Transition width ≈ 3.3/N (Hamming) or 5.5/N (Blackman): estimate N from the transition band, then trim.'],
+      hints: ['Rectangular windows have narrow transitions but only about −21 dB of stopband. Look at the stopband ripple in the plot.', 'Windowed-sinc filters reach about −44 dB (Hann), −53 dB (Hamming) and −74 dB (Blackman) of stopband attenuation. The windows\' own spectra have first sidelobes at about −13 (rectangular), −31 (Hann), −41 (Hamming) and −57 dB (Blackman). Pick the cheapest window that clears the attenuation.', 'Transition width ≈ 3.3/N (Hamming) or 5.5/N (Blackman): estimate N from the transition band, then trim.'],
       controls: [
         { id: 'taps', kind: 'number', label: 'Taps (odd)', min: 5, max: 63, step: 2, value: 9 },
         { id: 'win', kind: 'select', label: 'Window', options: WINDOWS.map((w) => ({ value: w, label: w })), value: 'rect' },
@@ -251,7 +251,7 @@ const sigPid: ArchLevel = {
     const ts = Math.ceil(b.settle * 1.1 * 10) / 10;
     return {
       brief: `<p>The plant is a second-order, under-damped system (natural frequency ωn = ${plant.wn} rad/s, damping ζ = ${plant.zeta}, DC gain 1${plant.delay ? `, plus ${plant.delay * 1000} ms of dead time` : ''}). You close the loop with a PID controller on the error e = r − y:</p>
-<ul><li><b>P (Kp)</b> reacts to the error now: faster, but a pure P loop leaves a steady-state error of 1/(1+Kp).</li>
+<ul><li><b>P (Kp)</b> reacts to the error now: faster, but a pure P loop leaves a steady-state error of 1/(1+Kp) for a step with a plant that has no integrator.</li>
 <li><b>I (Ki)</b> accumulates the error: removes the steady-state error but adds lag and overshoot.</li>
 <li><b>D (Kd)</b> reacts to the error's slope: adds damping, but amplifies noise and delay turns it unstable.</li></ul>
 <p>Goal for a unit step: <b>overshoot ≤ ${osLimit}%</b>, <b>steady-state error ≤ 1%</b>, <b>2% settling time ≤ ${ts} s</b>, and stable.</p>`,
@@ -319,7 +319,7 @@ const sigBoss: ArchLevel = {
     const budget = b.cost * 1.08;
     const startFs = Math.ceil((2.2 * s.B) / 5) * 5;
     return {
-      brief: `<p>A MEMS vibration sensor feeds an ADC through a passive RC filter of <b>order n</b> (n identical poles at the corner <b>fc</b>: |H|² = (1 + (f/fc)²)<sup>−n</sup>). The channel must satisfy all of these at once:</p>
+      brief: `<p>A MEMS vibration sensor feeds an ADC through a passive RC filter of <b>order n</b> (n identical RC poles, each with its corner at <b>fc</b>: |H|² = (1 + (f/fc)²)<sup>−n</sup>; not a Butterworth, so the −3 dB point of the cascade sits below fc). The channel must satisfy all of these at once:</p>
 <ol><li><b>Signal band</b> 0 – ${s.B} kHz is intact: fs ≥ 2.2·B.</li>
 <li><b>No overload:</b> a strong interferer at <b>${s.fi} kHz</b> is ${s.D} dB above the signal. After the filter it may be at most 6 dB above full scale: attenuation ≥ ${s.D - 6} dB.</li>
 <li><b>No in-band fold:</b> if the interferer aliases inside the band (apparent frequency ≤ ${r1(1.1 * s.B)} kHz), the filter must remove it by ≥ ${s.D + 50} dB, which is practically impossible: choose fs so it folds out of the band.</li>

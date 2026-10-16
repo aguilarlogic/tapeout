@@ -1,10 +1,11 @@
 // Practice banks and bosses for the frontier roles, part one: EDA, library characterization, I/O and ESD, SoC
 // integration, and clocking. Every number is generated and every explanation shows the arithmetic.
-import { hexa, qty } from '../lessons/answers';
+import { hexa, num, qty } from '../lessons/answers';
 import { calc, choice, count, show, walk } from '../lessons/teach';
 import { ask, gen, mc, pick, say, between } from '../lessons/types';
 import { boss, practice, tier, type PracticeSet } from './types';
-import { sig } from './util';
+import { CLOCK_JITTER } from './g-analog';
+import { atLevel, concept, sig, type ConceptQ } from './util';
 
 const hard = (set: PracticeSet, i: number) => gen((r) => ({ ...set.gens[i](r, 3), teach: undefined }));
 const bossOf = (set: PracticeSet, id: string, title: string, concept: string, xp: number, intro: string, picks: number[], extra: ReturnType<typeof mc>[]) =>
@@ -59,6 +60,49 @@ export const edaPractice = practice('practice-eda', 'EDA Drills', 'wirelength, E
       calc(`Growth factor k^exponent = ${k}^${exp}:`, `${k}^${exp}`, k ** exp, '', sig(k ** exp), 0.02),
       calc('Runtime = base time × growth factor:', `${t0} × ${sig(k ** exp)}`, t, 'min', sig(t), 0.03));
   },
+  (r, d) => {
+    const idea = 'A multi-pin net needs a tree. A spanning tree uses pin-to-pin wires only (a minimum one picks the shortest set that connects everything). A rectilinear Steiner tree may add extra junction points so wires share segments, which is never longer and often shorter. For two or three pins the best Steiner tree has exactly the half-perimeter length (HPWL); for four or more pins it can be longer.';
+    if (d === 3) {
+      const sd = pick(r, [6, 8, 10, 12, 15, 20, 25, 40]);
+      return walk(ask(`Four pins sit at the corners of a ${sd} × ${sd} square. The HPWL says ${2 * sd}. The best rectilinear Steiner tree is ${3 * sd}. By how much does the HPWL underestimate it?`, qty(sd, '', 0.001, String(sd)), `${3 * sd} − ${2 * sd} = ${sd}. Joining four corners needs three sides' worth of wire; the bounding box's half-perimeter counts only two. HPWL is exact only for two- and three-pin nets.`, 'Steiner length minus HPWL.'),
+        'HPWL against a Steiner tree', idea,
+        count('The best Steiner tree minus the HPWL:', `${3 * sd} − ${2 * sd}`, sd));
+    }
+    const pts: [number, number][] = [];
+    while (pts.length < 3) { const q: [number, number] = [between(r, 0, 20), between(r, 0, 20)]; if (!pts.some((x) => x[0] === q[0] && x[1] === q[1])) pts.push(q); }
+    const dist = (a: [number, number], b: [number, number]) => Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]);
+    const ds = [dist(pts[0], pts[1]), dist(pts[0], pts[2]), dist(pts[1], pts[2])];
+    const mst = ds.reduce((a, x) => a + x, 0) - Math.max(...ds);
+    const xs = pts.map((x) => x[0]), ys = pts.map((x) => x[1]);
+    const hp = Math.max(...xs) - Math.min(...xs) + Math.max(...ys) - Math.min(...ys);
+    const list = pts.map((x) => `(${x[0]},${x[1]})`).join(' ');
+    if (d === 1) return walk(ask(`Three pins at ${list}. A minimum spanning tree joins them by the two shortest pin-to-pin Manhattan distances. Its total length?`, num(mst), `Pairwise distances ${ds.join(', ')}; drop the longest: ${mst}.`, 'Add all three pairwise distances, then drop the largest.'),
+      'minimum spanning tree of three pins', idea,
+      count('Sum of the three pairwise Manhattan distances:', ds.join(' + '), ds.reduce((a, x) => a + x, 0)),
+      count('Minus the longest, which the tree does not need:', `${ds.reduce((a, x) => a + x, 0)} − ${Math.max(...ds)}`, mst));
+    return walk(ask(`Three pins at ${list}. How much shorter is the best rectilinear Steiner tree than the minimum spanning tree? (For three pins the Steiner tree has exactly the HPWL length.)`, num(mst - hp), `Spanning tree ${mst}; Steiner tree = HPWL = ${hp}; saving ${mst - hp}.`, 'Spanning tree length minus HPWL.'),
+      'Steiner saving', idea,
+      count('Minimum spanning tree: sum of pairwise distances minus the longest:', `${ds.join(' + ')} − ${Math.max(...ds)}`, mst),
+      count('Steiner tree = HPWL = width + height of the bounding box:', `${Math.max(...xs) - Math.min(...xs)} + ${Math.max(...ys) - Math.min(...ys)}`, hp),
+      count('Saving = spanning − Steiner:', `${mst} − ${hp}`, mst - hp));
+  },
+  (r, d) => concept(r, [
+    ...atLevel(1, [
+      ['Why can a rectilinear Steiner tree beat a spanning tree?', 'Extra junctions let wires share segments', ['It cuts across using diagonal wires, which are shorter', 'It leaves some pins unconnected', 'It routes on more layers at once'], 'Steiner trees', 'A spanning tree may only join pins to pins. A Steiner tree may place extra points, such as the corner where a long trunk meets a short stub, so one wire serves several pins. It is never longer than the spanning tree.', ['A Steiner point is:', 'An extra junction that is not a pin', ['A pin with extra drive', 'A via between two layers']], 'It may add junction points that are not pins, so wires share segments'],
+      ['What does a placer mainly try to make short?', 'The total wirelength of all the nets', ['The number of cells in the design', 'The width of the power rails', 'The clock period, by changing the netlist'], 'what placement minimizes', 'A placer decides where each cell sits. Shorter wires mean less delay, less power and an easier route, so the main cost is the total (estimated) wirelength.', ['Shorter wires give:', 'Less delay and power', ['More congestion on every layer', 'More cells']], 'The total wirelength of all the nets, estimated with the HPWL'],
+      ['Why is the HPWL so popular as a placement cost?', 'It is cheap to evaluate and tracks routed length well', ['It is exact for every net, whatever its pin count', 'It accounts for congestion on every layer', 'It includes the delay of every wire'], 'why placers use HPWL', 'A placer evaluates its cost millions of times, so the cost has to be a min and a max per axis. The half-perimeter is a lower bound on the routed length, exact for two- and three-pin nets and close for most others.', ['A placer needs a cost that is:', 'Very cheap to recompute', ['Exactly the routed length', 'Independent of the pin positions']], 'It is cheap to evaluate and tracks routed length well, though only two- and three-pin nets are exact'],
+    ]),
+    ...atLevel(2, [
+      ['A maze router uses A* instead of Lee\'s wave. What does it add?', 'An estimate of the distance left', ['A second wave from a random pin', 'A relaxed rule on cutting corners', 'A fixed order of nets for repeats'], 'A* against Lee', 'Lee expands a wave in every direction and finds the shortest path by visiting a great many cells. A* picks the next cell by cost so far plus an estimate of the distance still to go. If the estimate never overshoots, the path is still the shortest, but far fewer cells are visited.', ['An estimate that never overshoots the true distance keeps the path:', 'The shortest possible', ['Slightly longer', 'Random']], 'A heuristic estimate of the remaining distance steers the search toward the target'],
+      ['Two pins sit at (2,3) and (9,7). What is the HPWL of the net?', '11', ['7', '4', '14'], 'HPWL of a two-pin net', 'The half-perimeter of the bounding box is its width plus its height: (9 - 2) + (7 - 3) = 7 + 4 = 11. For two pins it equals the Manhattan distance, the shortest routed length.', ['HPWL = width + height of the:', 'Bounding box', ['Die', 'Longest wire']], '(9 - 2) + (7 - 3) = 11'],
+      ['For which nets is the HPWL exactly the best routed length?', 'Nets of two or three pins', ['Nets of any number of pins', 'Nets of four or more pins', 'Clock nets only, routed first'], 'when HPWL is exact', 'The best tree for two or three pins has exactly the half-perimeter of the bounding box. For four or more pins a Steiner tree can need extra wire (four corners of a square need three sides, but the HPWL counts two), so the HPWL is only a lower bound.', ['Four pins at a square\'s corners need more wire than:', 'The half-perimeter of the square', ['The full perimeter', 'Nothing: they need none']], 'Two or three pins: more pins can need more wire than the bounding box suggests'],
+    ]),
+    ...atLevel(3, [
+      ['What does Lee\'s maze router guarantee that a greedy one does not?', 'The shortest path, if any path exists', ['The shortest total wirelength for every net at once', 'No congestion on any layer', 'A path that avoids every via'], 'Lee\'s guarantee', 'The wave expands one ring at a time, so the first ring to touch the target gives the shortest path around the blocked cells, and if no ring ever reaches it there is no path. It does this for one net at a time, not for the whole chip.', ['If the wave dies out before the target:', 'No path exists', ['The path is very long', 'The wave needs more layers']], 'The shortest path if any exists, for one net at a time'],
+      ['Why does a router rip up and reroute nets?', 'Early nets block later ones, so some must move', ['Each net is routed twice to check the result', 'Rerouting is what makes the HPWL exact', 'The first route always uses the wrong layer'], 'rip-up and reroute', 'Nets are routed one at a time, so the first ones take the easy tracks and later nets find none. The router removes some routes in congested areas and tries again in a new order, until the overflow is gone.', ['Routing one net at a time makes the result depend on:', 'The order of the nets', ['The clock period', 'The cell library']], 'Early nets take the easy tracks, so some are removed and routed again in a new order'],
+      ['A router has a good estimate of the distance to the target. Which search uses it?', 'A*', ['Lee\'s wave', 'Simulated annealing', 'Breadth-first search with no ordering'], 'which search uses a distance estimate', 'A* orders its frontier by cost so far plus the estimate of the remaining distance. Lee\'s wave has no estimate and treats every direction alike.', ['Lee\'s wave treats every direction:', 'Alike', ['By the estimate', 'By the layer']], 'A* orders its frontier by cost so far plus the estimate of the remaining distance'],
+    ]),
+  ], (why) => `${why}.`, d),
 ]);
 
 export const edaBoss = bossOf(edaPractice, 'boss-eda', 'The Placer Review', 'wirelength, Elmore delay, arrival times and scaling', 200,
@@ -111,7 +155,7 @@ export const libcharPractice = practice('practice-libchar', 'Characterization Dr
       calc('V² =', `${v}²`, v * v, '', sig(v * v), 0.005), calc('Energy = ½ × C × V², in fJ:', `0.5 × ${c} × ${sig(v * v)}`, e, 'fJ', sig(e), 0.03));
     const alpha = pick(r, [0.1, 0.2, 0.5]), f = pick(r, [0.5, 1, 2]);
     const p = alpha * c * v * v * f; // fF*V^2*GHz -> µW
-    return walk(ask(`A net of ${c} fF toggles with activity α = ${alpha} (transitions per cycle) at ${f} GHz on a ${v} V supply. What is its dynamic power, in µW? (P = α · C · V² · f)`, qty(p, 'µW', 0.03, sig(p)), `${alpha} × ${c} fF × ${v}² × ${f} GHz = ${sig(p)} µW.`, 'Activity × C × V² × f.'),
+    return walk(ask(`A net of ${c} fF toggles with activity α = ${alpha} (probability of a 0→1 charge per cycle) at ${f} GHz on a ${v} V supply. What is its dynamic power, in µW? (P = α · C · V² · f)`, qty(p, 'µW', 0.03, sig(p)), `${alpha} × ${c} fF × ${v}² × ${f} GHz = ${sig(p)} µW.`, 'Activity × C × V² × f.'),
       'dynamic power', 'Every time a node charges and discharges it burns about C·V² of energy, so the average power is that energy times how often it switches: P = α·C·V²·f. Femtofarads times volts squared times gigahertz gives microwatts.',
       calc('C × V² in fF·V²:', `${c} × ${v}²`, c * v * v, '', sig(c * v * v), 0.01),
       calc('Multiply by activity and frequency (GHz):', `${sig(c * v * v)} × ${alpha} × ${f}`, p, 'µW', sig(p), 0.03));
@@ -125,6 +169,23 @@ export const libcharPractice = practice('practice-libchar', 'Characterization Dr
       count('Times table points:', `${cells * arcs} × ${pts}`, cells * arcs * pts),
       calc('Times corners, in millions:', `${cells * arcs * pts} × ${corners} / 1e6`, n / 1e6, 'M', sig(n / 1e6), 0.02));
   },
+  (r, d) => concept(r, [
+    ...atLevel(1, [
+      ['Why does characterization use many table points per arc?', 'Delay depends non-linearly on slew and load', ['Each point is a separate supply voltage', 'The tables are checked against layout rules', 'Every point is a different cell'], 'why tables, not formulas', 'Delay is not a straight line in input slew or output load, so the library stores a grid of simulated points and lets the timing tool interpolate between them.', ['Between two table points the tool:', 'Interpolates', ['Rounds up', 'Re-simulates']], 'Delay depends non-linearly on slew and load, so a grid of points is stored'],
+      ['What does a Liberty (.lib) file describe?', 'The timing, power and pins of each cell', ['The layout shapes of each cell', 'The netlist of the whole chip', 'The test patterns for the finished chip'], 'what a library holds', 'Characterization simulates every cell and writes the results into a Liberty file: delay and slew tables, setup and hold, power and pin capacitance. Synthesis and timing tools read it instead of the transistors.', ['Timing tools read the cells from:', 'The Liberty file', ['The GDS layout', 'The SPICE deck']], 'The timing, power and pin data of each cell'],
+      ['What does a setup time of a flop measure?', 'How long before the clock the data must be stable', ['How long after the clock the data must stay stable', 'The clock-to-Q delay at the typical corner', 'The delay of the clock buffer'], 'setup against hold', 'Setup is the stable time needed before the capturing edge; hold is the stable time needed after it. Both are found by moving the data edge until clock-to-Q degrades.', ['Hold is measured:', 'After the clock edge', ['Before the clock edge', 'At the data pin only']], 'How long before the clock edge the data must be stable'],
+    ]),
+    ...atLevel(2, [
+      ['What do CCS and ECSM have in common?', 'Both model the output as a current source', ['Both store only the setup and hold constraints', 'Both replace the supply corners with one typical corner', 'Both are formats for the layout abstract'], 'current-source models', 'NLDM tables lose accuracy when long resistive wires shape the waveform. The current-source models (CCS and ECSM) describe the cell output as a current source, so the load\'s effect on the waveform can be computed. NLDM stays as the compact default.', ['A current-source model is more accurate when the load is:', 'A long resistive wire', ['A single small gate', 'An open pin with no wire at all']], 'Both model the output as a current waveform, which stays accurate with resistive loads'],
+      ['What are the two table indices of an NLDM delay table?', 'Input slew and output load', ['Supply voltage and temperature', 'Cell width and cell height', 'Clock period and duty cycle'], 'NLDM indices', 'An NLDM table gives delay (and output slew) for a grid of input slews and output load capacitances. Voltage and temperature are fixed per library corner.', ['Voltage and temperature are fixed:', 'For each library corner', ['For each table point', 'Never']], 'Input slew and output load; each corner has its own tables'],
+      ['A signoff flow adds a fast corner for hold. What must the library provide?', 'Timing data characterized at that corner', ['The same tables, scaled by a fixed factor', 'Only the typical-corner tables', 'A separate layout for each corner'], 'a library per corner', 'Each corner is simulated on its own, because delay does not scale by a single factor across voltage, temperature and process. The library ships a Liberty file per corner.', ['Corners are characterized:', 'Each by its own simulations', ['By scaling the typical one', 'By layout rules']], 'Timing data characterized at that corner, by its own simulations'],
+    ]),
+    ...atLevel(3, [
+      ['Which Liberty data lets statistical timing (POCV) use a sigma for each arc?', 'LVF, the variation format', ['NLDM, the delay tables', 'CCS, the current waveforms', 'The pin capacitance table'], 'what LVF adds', 'NLDM gives one nominal delay and slew per table point. LVF adds the standard deviation next to the mean, for each arc, so the timing tool can add independent arcs as a root-sum-square and check slack at a chosen sigma.', ['LVF stores, next to the mean delay:', 'A standard deviation', ['A current waveform', 'A leakage figure']], 'LVF stores a standard deviation next to the mean for each arc'],
+      ['Why do statistical sigmas add as a root-sum-square along a path?', 'Independent variations partly cancel', ['Every arc varies the same way at the same time', 'The sigmas are stored as squares in the file', 'The tool keeps only the largest sigma'], 'adding sigmas', 'If the arcs vary independently, some are fast while others are slow, so the variances add, not the sigmas. Path sigma = √(σ1² + σ2² + …), which grows only as √N for N equal arcs.', ['For 16 equal arcs, the path sigma is the arc sigma times:', '4', ['16', '8']], 'Independent variations partly cancel, so variances add and the path sigma grows as √N'],
+      ['Which model suits a cell driving a long resistive wire?', 'A current-source model', ['A lumped-capacitor NLDM table only', 'A single fixed delay for all loads', 'A pure leakage table'], 'choosing a model', 'NLDM treats the load as a capacitor. A long resistive wire shields the far capacitance and bends the waveform, which a current-source model (CCS or ECSM) captures.', ['NLDM treats the load as:', 'A single capacitor', ['A resistor chain', 'A transmission line']], 'A current-source model captures resistive-load effects that NLDM tables miss'],
+    ]),
+  ], (why) => `${why}.`, d),
 ]);
 
 export const libcharBoss = bossOf(libcharPractice, 'boss-libchar', 'Signing Off a Library', 'interpolation, push-out criteria, power and workload', 200,
@@ -133,7 +194,25 @@ export const libcharBoss = bossOf(libcharPractice, 'boss-libchar', 'Signing Off 
 
 // ------------------------------------------------------------------ I/O and ESD
 
-export const ioesdPractice = practice('practice-io-esd', 'I/O & ESD Drills', 'HBM currents, clamp sizing, supply bounce, termination', [
+// ESD models: HBM against CDM. Right answers are kept short so their length gives nothing away.
+const ESD_EASY: ConceptQ[] = [
+  ['Which ESD model is a person touching a pin?', 'The human-body model (HBM)', ['The charged-device model (CDM)', 'The latch-up injection test', 'The system-level contact gun'], 'telling the ESD models apart', 'HBM stands in for a finger: a 100 pF capacitor through 1.5 kΩ. CDM is the chip itself charging up and discharging to a grounded tool.', ['What charges up in the charged-device model?', 'The chip and its package', ['A person standing near the tool', 'The test board only', 'The supply rail']]],
+  ['Which model is the chip charging itself in handling and discharging into a grounded tool?', 'The charged-device model (CDM)', ['The human-body model (HBM)', 'The latch-up injection test', 'The system-level contact gun'], 'telling the ESD models apart', 'In CDM the charge sits on the chip, not on a person, and leaves through a single pin in about a nanosecond.', ['Where does the CDM charge come from?', 'The device itself', ['A finger', 'The supply', 'The clock']]],
+  ['A thin-oxide input fails only in the automated handler. Which model fits?', 'CDM', ['HBM', 'Latch-up injection', 'System-level gun'], 'matching a failure to a model', 'Handlers charge packages; the fast, high-current CDM pulse breaks gate oxides inside the chip, away from the pad diodes.', ['What does a CDM pulse stress most?', 'Gate oxides inside the chip', ['Only the pad diodes', 'The package leads only', 'The board']]],
+  ['Which test is a 100 pF capacitor through 1.5 kΩ?', 'HBM', ['CDM', 'Latch-up injection', 'System-level gun'], 'recognising the HBM circuit', 'The model is just an RC discharge. Its time constant is 150 ns and a 2 kV zap peaks at about 1.3 A.', ['What is the HBM time constant?', '150 ns', ['1 ns', '15 µs', '1.5 ms']]],
+  ['Which pair of targets is a typical design aim?', '1 kV HBM and 250 V CDM', ['4 kV HBM and 2 kV CDM', '250 V HBM and 1 kV CDM', '100 V HBM and 100 V CDM'], 'knowing the usual levels', 'CDM targets are lower in volts than HBM because the pulse is so much faster and more concentrated.', ['Is the CDM voltage target higher or lower than HBM?', 'Lower', ['Higher', 'The same', 'There is no CDM target']]],
+  ['Which of these is a destructive qualification test rather than a production screen?', 'CDM', ['A leakage measurement', 'An IDDQ measurement', 'A continuity test'], 'qualification against screening', 'Qualification zaps sample parts until they fail or pass. Production uses non-destructive screens such as leakage and IDDQ.', ['Can you zap every shipped part to qualify it?', 'No: it damages the part', ['Yes, it is harmless', 'Only at 25 °C', 'Only at CDM']]],
+];
+const ESD_HARD: ConceptQ[] = [
+  ['The HBM pulse lasts about 150 ns and the CDM pulse about 1 ns. Which is a worse threat to a gate oxide, and why?', 'CDM: faster, at several amperes', ['HBM: its pulse lasts far longer', 'Neither: oxides are never damaged', 'HBM: it uses the higher voltage'], 'comparing the pulses', 'The oxide breaks when the voltage across it climbs faster than the clamp responds. A sub-nanosecond pulse of several amperes beats the clamp\'s turn-on time.', ['How many times shorter is a 1 ns pulse than a 150 ns one?', '150 times', ['15 times', '1500 times', '1.5 times']]],
+  ['A 2 kV HBM zap peaks near 1.3 A in 150 ns. Which statement about CDM is right?', 'Peak is several amperes, in about 1 ns', ['Peak is about 1.3 A, in roughly 150 ns', 'Peak is milliamperes, in about 150 ns', 'Peak is about 1.3 A, in about 1 ns'], 'sizing the CDM pulse', 'CDM charge is small but dumps in a nanosecond, so the current is large and brief.', ['Which quantity differs most between the models?', 'Pulse duration', ['Nothing', 'The resistor in series', 'The temperature']]],
+  ['Why does CDM stress oxides inside the chip more than the pad diodes?', 'The charge crosses internal gates fast', ['The pad diodes cannot conduct', 'The pulse is much slower than HBM', 'CDM only occurs with the supply on'], 'where the CDM current goes', 'The charge stored across the whole die finds a path through whatever the pin connects to, and a thin gate oxide in an input stage sees it first.', ['What is at the end of a CDM discharge path?', 'An input gate oxide', ['The battery', 'The crystal', 'The heat sink']]],
+  ['Why can a very high-speed I/O accept a lower CDM level, about 125 V?', 'Protection capacitance would slow the link', ['Fast I/O pins need no ESD protection at all', 'CDM events no longer happen in modern fabs', 'The gate oxide is thicker on fast I/O'], 'balancing ESD against speed', 'Big clamps add pad capacitance, which closes the eye. With good factory ESD control, a lower level is handled safely.', ['What does more clamp width add at the pad?', 'Capacitance', ['Resistance', 'Inductance only', 'Nothing']]],
+  ['What does latch-up qualification do?', 'Injects about 100 mA per pin and checks no latch', ['Zaps every pin at 8 kV and checks for leakage', 'Heats the chip until it fails, then logs the time', 'Measures the supply ripple under full load'], 'what latch-up testing does', 'It injects roughly ±100 mA into each pin and overdrives the supplies to 1.5 times their maximum, hot. The chip must not latch.', ['At what supply level is it run?', '1.5 times the maximum', ['Half the nominal', 'Exactly nominal', 'Zero']]],
+  ['Factories with basic ESD control can handle parts down to about 500 V HBM. What follows?', 'Designs need not chase 2 kV for every pin', ['No ESD protection is needed', 'CDM is irrelevant', 'Pins need 8 kV'], 'target levels', 'Handling control sets the minimum robustness required, so the design target can be moderate (1 kV HBM) and high-speed pins can accept less.', ['Which sets the minimum robustness: handling control or the zap voltage?', 'Handling control', ['The zap voltage alone', 'Neither', 'The package colour']]],
+];
+
+export const ioesdPractice = practice('practice-io-esd', 'I/O & ESD Drills', 'HBM and CDM, clamp sizing, supply bounce, termination', [
   (r, d) => {
     const v = pick(r, [250, 500, 1000, 2000, 4000, 8000]);
     if (d === 1) {
@@ -149,8 +228,8 @@ export const ioesdPractice = practice('practice-io-esd', 'I/O & ESD Drills', 'HB
         calc(`τ = R × C, with ${R} Ω × 100 pF in ns:`, `${R} × 100e-12 × 1e9`, tau, 'ns', sig(tau), 0.02));
     }
     const e = 0.5 * 100e-12 * v * v * 1e6;
-    return walk(ask(`A ${v} V HBM zap starts with a 100 pF capacitor charged to ${v} V. How much energy does it hold, in µJ? (½CV²)`, qty(e, 'µJ', 0.03, sig(e)), `½ × 100e-12 × ${v}² = ${sig(e)} µJ. Small energy, but delivered in a hundred nanoseconds into a few microns of silicon.`, '½ C V².'),
-      'energy in the ESD model', 'The energy stored in the model capacitor is ½·C·V². It looks tiny in joules but it all goes into the protection device within about a microsecond, so the power density is enormous.',
+    return walk(ask(`A ${v} V HBM zap starts with a 100 pF capacitor charged to ${v} V. How much energy does it hold, in µJ? (½CV²)`, qty(e, 'µJ', 0.03, sig(e)), `½ × 100e-12 × ${v}² = ${sig(e)} µJ stored, but almost all of it is burned in the 1.5 kΩ body resistance. A clamp holding about 10 V while ${sig(v / 1500)} A flows for ~150 ns absorbs only about ${sig(10 * (v / 1500) * 150e-9 * 1e6)} µJ. That is small in joules but huge in a few cubic microns, which is why the clamp must be wide and well-contacted.`, '½ C V².'),
+      'energy in the ESD model', 'The energy stored in the model capacitor is ½·C·V². Most of it is burned in the 1.5 kΩ body resistance: the clamp holds the pin at about 10 V while the current flows, so it absorbs only V·I·t (about 10 V × the peak current × 150 ns). That is small in joules but huge in a few cubic microns, so the power density in the clamp is enormous.',
       calc('½ × C × V², with C in farads, result in µJ:', `0.5 × 100e-12 × ${v}² × 1e6`, e, 'µJ', sig(e), 0.03));
   },
   (r, d) => {
@@ -181,6 +260,7 @@ export const ioesdPractice = practice('practice-io-esd', 'I/O & ESD Drills', 'HB
       'source termination', 'A reflection from the far end is absorbed if the source impedance matches the line. The driver already has some output resistance, so the series resistor only makes up the difference to the line impedance.',
       calc('Rs = Z0 − Rout:', `${z0} − ${ro}`, rs, 'Ω', String(rs), 0.02));
   },
+  (r, d) => concept(r, d === 1 ? ESD_EASY : ESD_HARD, (right) => `${right}. HBM is a person touching a pin: slow (about 150 ns) and aimed at the pad diodes. CDM is the chip discharging itself: under a nanosecond, several amperes, aimed at gate oxides.`),
 ]);
 
 export const ioesdBoss = bossOf(ioesdPractice, 'boss-io-esd', 'The Pad Ring Review', 'ESD current, clamp size, supply bounce and termination', 200,
@@ -215,7 +295,7 @@ export const socintPractice = practice('practice-soc-int', 'SoC Integration Dril
       count('Bytes per cycle:', `${bw} / 8`, bw / 8), calc('MB/s = bytes × MHz × efficiency:', `${bw / 8} × ${f} × ${eff / 100}`, v, 'MB/s', sig(v), 0.02));
     const need = pick(r, [3000, 4000, 6000]), w2 = pick(r, [64, 128]);
     const f2 = need / ((w2 / 8) * (eff / 100));
-    return walk(ask(`The masters on a ${w2}-bit bus need ${need} MB/s in total and the bus delivers ${eff}% of peak. What minimum clock frequency, in MHz?`, qty(f2, 'MHz', 0.02, sig(f2)), `${need} ÷ (${w2 / 8} × ${eff / 100}) = ${sig(f2)} MHz.`, 'Invert the bandwidth formula.'),
+    return walk(ask(`The managers on a ${w2}-bit bus need ${need} MB/s in total and the bus delivers ${eff}% of peak. What minimum clock frequency, in MHz?`, qty(f2, 'MHz', 0.02, sig(f2)), `${need} ÷ (${w2 / 8} × ${eff / 100}) = ${sig(f2)} MHz.`, 'Invert the bandwidth formula.'),
       'sizing a bus clock', 'Bandwidth = bytes per cycle × frequency × efficiency. To meet a requirement, solve for the frequency: divide by the other two factors.',
       calc('Effective bytes per cycle:', `${w2 / 8} × ${eff / 100}`, (w2 / 8) * (eff / 100), 'B', sig((w2 / 8) * (eff / 100)), 0.01),
       calc('Frequency = required ÷ bytes per cycle, in MHz:', `${need} / ${sig((w2 / 8) * (eff / 100))}`, f2, 'MHz', sig(f2), 0.02));
@@ -239,11 +319,28 @@ export const socintPractice = practice('practice-soc-int', 'SoC Integration Dril
       count('Bytes = registers × 4:', `${n} × 4`, bytes),
       count('Smallest n with 2^n ≥ bytes:', `⌈log2(${bytes})⌉`, bits));
   },
+  (r, d) => concept(r, [
+    ...atLevel(1, [
+      ['A PCIe device must interrupt a core. How does it signal?', 'It writes an MSI or MSI-X message to an address', ['It drives a dedicated wire to the interrupt controller', 'It waits to be polled by the driver on a timer', 'It raises a clock-domain-crossing request on the link'], 'wired versus message-signalled interrupts', 'A wired interrupt needs a physical line from the source to the controller. A link between chips carries packets, not spare wires, so a PCIe device sends a message: a memory write that the interrupt controller turns into an interrupt. MSI-X gives each device many independent vectors.', ['A link has packets but no spare wires, so interrupts there are:', 'Message-signalled', ['Wired', 'Level-triggered wires']], 'It writes an MSI or MSI-X message, since a link carries packets and not spare wires'],
+      ['Why must an edge interrupt be latched by the controller?', 'A pulse lasts only one cycle, so an unlatched one is lost', ['The wire is too slow to carry a level to the controller', 'Latching lets many cores take the same interrupt together', 'The handler needs the pulse to stay high until it finishes'], 'latching edge interrupts', 'An edge interrupt is a short pulse. If the controller does not capture it in a flip-flop, the pulse can come and go while nobody is looking, and the event is lost. A level interrupt does not have this problem because it stays asserted.', ['An unlatched pulse that nobody sampled is:', 'Lost', ['Held for later', 'Repeated']], 'A pulse is gone after one cycle, so an unlatched edge interrupt can be lost'],
+      ['What does an interrupt let a peripheral do?', 'Get the core\'s attention without being polled', ['Run its own code on the core directly', 'Turn off the core to save power', 'Read any register in the core'], 'what an interrupt is', 'Without interrupts the software has to ask every device over and over whether it needs anything (polling). An interrupt lets the device signal the core when something happens, so the core can do other work in between.', ['Asking a device again and again whether it is ready is called:', 'Polling', ['Latching', 'Masking']], 'It gets the core\'s attention when something happens, so the core need not keep polling'],
+    ]),
+    ...atLevel(2, [
+      ['Several devices share one interrupt line and the handler may run late. Which signalling is safer?', 'Level: it stays asserted until software clears its cause', ['Edge: a single pulse is enough for the handler to notice', 'Edge: a pulse can be shared without ever being missed', 'Neither: shared lines cannot carry any interrupt at all'], 'level versus edge interrupts', 'A level interrupt stays asserted until the source is cleared, so a handler that runs late still sees it, and several sources can share the line. An edge interrupt is a pulse; if it arrives while the controller is not looking and is not latched, it is lost.', ['A pulse that nobody latched is:', 'Lost', ['Held until cleared', 'Repeated by the source']], 'Level: it stays asserted until the source is cleared, so a late handler still sees it'],
+      ['In the Arm GIC, a timer private to each core uses which class of interrupt?', 'Private peripheral (PPI)', ['Shared peripheral (SPI)', 'Software-generated (SGI)', 'Message-based (LPI)'], 'GIC interrupt classes', 'The GIC has shared peripheral interrupts (SPI, routable to any core), private peripheral interrupts (PPI, one per core, such as its timers), software-generated interrupts (SGI, cores signalling each other) and message-based interrupts (LPI).', ['An interrupt that one core raises to wake another is:', 'Software-generated', ['Private peripheral', 'Shared peripheral']], 'Private peripheral (PPI): one per core, such as each core\'s own timer'],
+      ['Two interrupts are pending at the same time. What does the controller use to choose?', 'Their priorities', ['Which wire is shorter on the die', 'The order the devices were reset in', 'The number of the core that will run the handler'], 'interrupt priority', 'Each source has a priority. When several are pending, the controller hands the core the highest one that is enabled and above the core\'s current threshold; the others wait.', ['A pending interrupt below the core\'s threshold:', 'Waits', ['Is lost', 'Runs anyway']], 'Their priorities: the highest enabled one above the threshold goes first'],
+    ]),
+    ...atLevel(3, [
+      ['What does the RISC-V advanced interrupt architecture add to the PLIC?', 'APLIC for wired sources and IMSIC for messages', ['A bigger priority table for the same wired sources', 'A second PLIC, one for each hart in the system', 'A wired-only controller with a deeper pending queue'], 'RISC-V interrupt controllers', 'The platform-level interrupt controller (PLIC) handles wired sources only. Its advanced replacement splits the job: the APLIC takes the wired sources and forwards them as messages, and the IMSIC gives each hart its own interrupt file for messages (MSI).', ['Message-signalled interrupts are handled by the:', 'IMSIC', ['APLIC', 'PLIC']], 'APLIC for wired sources and IMSIC for message-signalled ones'],
+      ['What does MSI-X give a device that plain MSI does not?', 'Many independent vectors, each with its own address', ['A dedicated wire for each of its interrupts', 'A higher priority than every other interrupt in the SoC', 'The ability to interrupt without going through the link'], 'MSI and MSI-X', 'MSI lets a device send a small number of interrupt messages. MSI-X gives it a table of many vectors, each with its own address and data, so a device with many queues can send each queue\'s interrupts to a different core.', ['A table of vectors lets each queue interrupt:', 'A different core', ['The same core only', 'No core']], 'Many independent vectors, each with its own address and data'],
+      ['A level interrupt handler returns without clearing the source. What happens?', 'The interrupt fires again at once, in a loop', ['Nothing: the controller remembers it was handled', 'The line drops by itself after one cycle', 'The next interrupt from another source is lost'], 'clearing a level interrupt', 'A level interrupt stays asserted until its cause is cleared at the source. If the handler returns first, the controller sees the line still high and interrupts the core again straight away, so the system can lock up in the handler.', ['A level interrupt stays asserted until:', 'Its cause is cleared', ['One cycle has passed', 'The handler starts']], 'It fires again at once, because the line is still asserted'],
+    ]),
+  ], (why) => `${why}.`, d),
 ]);
 
 export const socintBoss = bossOf(socintPractice, 'boss-soc-int', 'The Integration Review', 'address windows, bandwidth, interrupt latency and register maps', 220,
   'Boss fight, {name}. First silicon is back and the top-level checklist is open. Every number must be defensible. Exam rules.', [0, 1, 2, 3],
-  [mc('The chip hangs on a read from a peripheral. What do you check first?', ['The compiler\'s optimization flags', 'Its clock enable, reset and address window', 'The boot ROM size and its checksum', 'The interrupt priority set for that peripheral'], 1, 'Check that the peripheral\'s clock is enabled, its reset is released and its address window is not overlapped, and that the interconnect has a default slave or timeout so a mistake gives an error rather than a hang. Hangs are almost always an unanswered bus transaction.')]);
+  [mc('The chip hangs on a read from a peripheral. What do you check first?', ['The compiler\'s optimization flags', 'Its clock enable, reset and address window', 'The boot ROM size and its checksum', 'The interrupt priority set for that peripheral'], 1, 'Check that the peripheral\'s clock is enabled, its reset is released and its address window is not overlapped, and that the interconnect has a default subordinate or timeout so a mistake gives an error rather than a hang. Hangs are almost always an unanswered bus transaction.')]);
 
 // ------------------------------------------------------------------ clocking and PLLs
 
@@ -298,12 +395,14 @@ export const clockingPractice = practice('practice-clocking', 'Clocking Drills',
       calc('dB improvement:', `${l} − (${l2})`, l - l2, 'dB', String(l - l2), 0.005),
       calc('Factor = 10^(dB/20):', `10^(${l - l2}/20)`, ratio, '', sig(ratio), 0.03));
   },
+  ...CLOCK_JITTER,
 ]);
 const sci3 = (x: number) => x.toExponential(2).replace('e-', 'e-');
 
 export const clockingBoss = bossOf(clockingPractice, 'boss-clocking', 'The Clock Tree Review', 'PLL ratios, ring oscillators and jitter', 220,
-  'Boss fight, {name}. The SerDes team needs a clock. Divider, oscillator and jitter budget. Exam rules.', [0, 1, 2, 2],
-  [mc('Why must a PLL\'s supply be especially quiet?', ['It does not need to be quieter than logic', 'The VCO turns supply noise into phase noise', 'The divider fails if its supply droops', 'Supply noise shifts the reference frequency of the crystal'], 1, 'Any supply or control-line noise becomes frequency and so phase noise, so PLLs use dedicated regulators, heavy decoupling and isolation from digital switching. Supply noise modulates the oscillator directly.')]);
+  'Boss fight, {name}. The SerDes team needs a clock. Divider, oscillator and jitter budget. Exam rules.', [0, 1, 2, 2, 3],
+  [mc('The link budget quotes total jitter at a bit-error rate of 1e-12. Why not just quote the largest jitter you ever saw?', ['Random jitter is unbounded: how far it reaches depends on how many bits you look at', 'Because the largest jitter is always the deterministic part, whatever the BER', 'Because bit-error rates are measured in picoseconds on the scope', 'Jitter only exists at the receiver, so a peak would mean nothing at the source'], 0, 'Random jitter is Gaussian, so a longer test always finds a bigger excursion. TJ = DJ + 2·Q·RJ fixes the question by naming the probability: Q = 7.03 at 1e-12.'),
+   mc('Why must a PLL\'s supply be especially quiet?', ['It does not need to be quieter than logic', 'The VCO turns supply noise into phase noise', 'The divider fails if its supply droops', 'Supply noise shifts the reference frequency of the crystal'], 1, 'Any supply or control-line noise becomes frequency and so phase noise, so PLLs use dedicated regulators, heavy decoupling and isolation from digital switching. Supply noise modulates the oscillator directly.')]);
 
 export const FRONTIER_PRACTICE_A = [edaPractice, libcharPractice, ioesdPractice, socintPractice, clockingPractice];
 export const FRONTIER_BOSSES_A = [edaBoss, libcharBoss, ioesdBoss, socintBoss, clockingBoss];

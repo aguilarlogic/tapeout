@@ -79,7 +79,7 @@ const findMission: ShellLevel = {
   ticket: 'The project disk is full of editor and tool scratch files. Remove them without touching real sources.',
   build: () => ({
     brief: `<p>Delete every file ending in <code>.tmp</code> anywhere under <code>~/proj</code>. Keep everything else, including the directory <code>tmp.d</code> and the file <code>notes.tmp.md</code>.</p><p>Preview first (<code>find</code> prints), then delete.</p>`,
-    hints: ['<code>find proj -name "*.tmp"</code> lists the matches. Quote the pattern so the shell does not expand it.', 'Add <code>-type f</code> to files only, then <code>-delete</code> (or <code>-exec rm {} ;</code>).'],
+    hints: ['<code>find proj -name "*.tmp"</code> lists the matches. Quote the pattern so the shell does not expand it.', 'Add <code>-type f</code> to files only, then <code>-delete</code> (or <code>-exec rm {} \\;</code>; the backslash stops the shell eating the <code>;</code>, and <code>+</code> instead of <code>\\;</code> is the faster form that batches the files).'],
     files: { 'proj/a.tmp': 'x', 'proj/src/b.tmp': 'x', 'proj/src/deep/c.tmp': 'x', 'proj/src/main.c': 'int main(){}', 'proj/notes.tmp.md': 'keep', 'proj/tmp.d/keep.txt': 'keep' },
     solution: ['find proj -name "*.tmp"', 'find proj -type f -name "*.tmp" -delete'],
     goals: [
@@ -111,7 +111,7 @@ const sedMission: ShellLevel = {
   ticket: 'The clock port is being renamed from clk_i to clk across the RTL. A blind replace would also mangle clk_i_n.',
   build: () => ({
     brief: `<p>In every <code>rtl/*.v</code> file replace the whole word <code>clk_i</code> with <code>clk</code>, editing the files in place. Leave names that merely <i>contain</i> it (like <code>clk_i_n</code>) alone.</p>`,
-    hints: ['<code>sed -i \'s/old/new/g\' files...</code> edits in place.', 'Anchor the match on word boundaries: <code>\\bclk_i\\b</code>.'],
+    hints: ['<code>sed -i \'s/old/new/g\' files...</code> edits in place (GNU sed; macOS needs <code>sed -i \'\'</code>).', 'Anchor the match on word boundaries: <code>\\bclk_i\\b</code> (a GNU extension; macOS sed uses <code>[[:<:]]</code> and <code>[[:>:]]</code>).'],
     files: { 'rtl/core.v': 'module core(input clk_i, input clk_i_n);\n  always @(posedge clk_i) q <= d;\nendmodule\n', 'rtl/mem.v': 'module mem(input clk_i);\n  wire g = clk_i & en; // clk_i gates\nendmodule\n' },
     solution: ["sed -i 's/\\bclk_i\\b/clk/g' rtl/*.v"],
     goals: [
@@ -325,4 +325,31 @@ const bossMake: ShellLevel = {
   },
 };
 
-export const SH_LEVELS: ShellLevel[] = [nav, grepMission, pipes, findMission, awkMission, sedMission, perms, loops, scripts, makeFirst, makeHeader, py, bossTriage, bossMake];
+// ---- word splitting (G2.3)
+const quoting: ShellLevel = {
+  id: 'sh-quoting', title: 'The log with a space in its name', concept: 'quoting, word splitting, globs instead of $(ls)', xp: 90, tier: 'guided',
+  ticket: 'The nightly tally script silently skips some logs. Somebody saved two runs as "run 1.log" and "run 2.log".',
+  build: (r: Rng) => {
+    const names = ['run 1.log', 'run 2.log', 'run_3.log', 'smoke test.log'];
+    const counts = names.map(() => between(r, 0, 6));
+    const body = (n: number) => Array.from({ length: 8 }, (_, i) => (i < n ? `ERROR case ${i}` : `INFO case ${i}`)).join('\n') + '\n';
+    const files: Record<string, string | { data: string; mode?: number }> = { 'runs/tally.sh': { data: '#!/bin/bash\n# one line per log: name, then how many ERROR lines it has\n> tally.txt\nfor f in $(ls *.log); do\n  n=$(grep -c ERROR $f)\n  echo "$f $n" >> tally.txt\ndone\n', mode: 0o755 } };
+    names.forEach((nm, i) => { files[`runs/${nm}`] = body(counts[i]); });
+    const want = names.map((nm, i) => `${nm} ${counts[i]}`).sort().join('\n');
+    return {
+      brief: `<p><code>~/runs/tally.sh</code> should write one line per log into <code>tally.txt</code>: the file name, a space, then the number of <code>ERROR</code> lines. Run it and look: some logs are missing or wrong.</p>
+<p>The shell splits the result of <code>$(ls ...)</code> and of an unquoted <code>$f</code> into words at every space, so <code>run 1.log</code> becomes two names, <code>run</code> and <code>1.log</code>. Fix the script, then run it again.</p>
+<ul><li>Let the shell expand the glob itself: <code>for f in *.log</code> keeps each name whole.</li><li>Put double quotes around every use of the variable: <code>"$f"</code>.</li></ul>`,
+      hints: ['Run <code>./tally.sh; cat tally.txt</code> to see the damage, and <code>cat tally.sh</code> to read the loop.', 'Replace <code>$(ls *.log)</code> with <code>*.log</code> (a glob never splits a name) and write <code>grep -c ERROR "$f"</code>.', 'Rewrite the file with a here-document: <code>cat &gt; tally.sh &lt;&lt;\'EOF\'</code> ... <code>EOF</code>, then <code>./tally.sh</code>.'],
+      files, cwd: 'runs',
+      solution: ["cat > tally.sh <<'EOF'\n#!/bin/bash\n> tally.txt\nfor f in *.log; do\n  n=$(grep -c ERROR \"$f\")\n  echo \"$f $n\" >> tally.txt\ndone\nEOF", './tally.sh'],
+      goals: [
+        fileIs('tally.txt', want, 'tally.txt has every log with its right count, spaces and all'),
+        { label: 'the script no longer word-splits ls output', ok: (sh) => !/\$\(ls/.test(read(sh, 'tally.sh') ?? '$(ls') },
+        { label: 'the variable is quoted where it is used', ok: (sh) => /grep -c ERROR "\$f"/.test(read(sh, 'tally.sh') ?? '') },
+      ],
+    };
+  },
+};
+
+export const SH_LEVELS: ShellLevel[] = [nav, grepMission, pipes, findMission, awkMission, sedMission, perms, loops, scripts, quoting, makeFirst, makeHeader, py, bossTriage, bossMake];

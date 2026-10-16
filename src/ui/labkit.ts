@@ -14,6 +14,9 @@ export const HINT_NOTE = 'Solve it without hints for another star.';
 
 const freshSeed = () => Math.floor(Math.random() * 1e6) + 1;
 
+/** Where a lab simplifies reality, say so under the ticket: a professional would notice. */
+export const modelNote = (text?: string) => (text ? h('p', { class: 'dim small model-note' }, h('b', null, 'About this simulator: '), text) : '');
+
 /** The seed stored under `key`, created on first visit and kept until the player rolls a new variant. */
 export function useSeed(key: string): number {
   let seed = loadDraft<number>(key);

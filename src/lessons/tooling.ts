@@ -24,19 +24,39 @@ export const shell: Lesson = {
    grep UVM_ERROR *.log | sort | uniq -c | sort -rn  which errors are most common?
    find . -name "*.sv" | xargs grep -l "always_latch"  which files use latches?`),
     ask('Write one command that counts how many lines in `run.log` contain `UVM_ERROR`.', has('grep -c UVM_ERROR run.log', ['grep'], ['uvm_error'], ['run.log'], ['-c', 'wc -l', 'wc']), 'Either `grep -c UVM_ERROR run.log` or `grep UVM_ERROR run.log | wc -l`. The first is shorter; the second shows the pipe idea.', 'grep finds the lines; -c counts them (or pipe into wc -l).'),
-    mc('What does `>` do in `grep FAIL results.txt > fails.txt`, and how is `>>` different?', ['`>` appends to the file; `>>` overwrites it', '`>` overwrites the file; `>>` appends to it', '`>` writes to a file; `>>` writes errors to it', '`>` pipes into a command; `>>` into a file'], 1, '`>` sends the output into a file, replacing what was there; `>>` appends to the end. Redirection. `2>` redirects errors, `&>` both, and `< file` feeds a file in as input.'),
+    mc('What does `>` do in `grep FAIL results.txt > fails.txt`, and how is `>>` different?', ['`>` appends to the file; `>>` overwrites it', '`>` overwrites the file; `>>` appends to it', '`>` writes to a file; `>>` writes errors to it', '`>` pipes into a command; `>>` into a file'], 1, '`>` sends the output into a file, replacing what was there; `>>` appends to the end. Redirection. `2>` redirects errors, `&>` both (bash only; the portable form is `> file 2>&1`), and `< file` feeds a file in as input.'),
     say('grep patterns are **regular expressions**: a tiny language for describing text. Learn these and you can find anything in a million-line log.'),
     art(`
    .        any character          ^ / $    start / end of line
    [0-9]    one digit              [a-fA-F] one of these letters
    *        0 or more of previous  +        1 or more        ?  0 or 1
-   \\d \\w \\s  digit, word char, space  (a|b)    a or b          {2,4}  2 to 4 times`),
+   (a|b)    a or b                 {2,4}    2 to 4 times       (grep -E, or \\( \\| \\{ in plain grep)
+
+   Three dialects, so know which tool you are talking to:
+   portable (POSIX)         [0-9]   [[:digit:]]   [[:alnum:]_]   [[:space:]]
+   GNU grep/sed extras      \\w  \\s  \\b  \\<  \\>
+   Perl-style only          \\d   lookahead (?=...) (?!...)
+                            (Python re, JavaScript, grep -P; plain grep sees \\d as a literal d)`),
     ask('Write a regular expression that matches hex numbers written like `0x1F`, `0xdeadBEEF` or `0x0` (the 0x prefix plus at least one hex digit).', rx('0x[0-9a-fA-F]+', ['0x1F', '0xdeadBEEF', '0x0', 'addr=0x40'], ['0x', '1F', '0xZZ']), 'One answer: `0x[0-9a-fA-F]+`. The + requires at least one digit; the character class lists every legal hex digit. I test your pattern against real examples, so any correct regex passes.', 'Literal 0x, then a character class of hex digits, then +.'),
     ask('Write a regex that matches lines that **start** with `UVM_ERROR` or `UVM_FATAL`.', rx('^UVM_(ERROR|FATAL)', ['UVM_ERROR @ 100ns: mismatch', 'UVM_FATAL @ 5ns: timeout'], ['UVM_INFO @ 1ns', 'note: UVM_ERROR was expected', 'UVM_WARNING x']), 'One answer: `^UVM_(ERROR|FATAL)`. The ^ anchors it to the start of the line, and (a|b) is alternation.', 'Anchor with ^, then UVM_ and a group with |.'),
+    say('**Quoting** decides what the shell does to your text. Unquoted, a variable is split into words at every space, and `*` is expanded into file names. Double quotes keep one word but still expand `$x`; single quotes keep everything literally. The classic bug: a file called `run 1.log`.'),
+    art(`
+   f="run 1.log"
+   ls $f              ->  ls run 1.log      two arguments: run and 1.log
+   ls "$f"            ->  ls "run 1.log"    one argument
+   for f in $(ls)     splits names at spaces: do not
+   for f in *.log     the shell expands the glob, names stay whole
+
+   find . -name "*.log" -print0 | xargs -0 grep -l ERROR
+                      NUL-separated names survive any character, even a newline`),
+    mc('A script loops with `for f in $(ls *.log)` and a file is called `run 1.log`. What does the loop see?', ['One name, run 1.log, because ls prints it as a single line', 'Two names, run and 1.log, because the result is split at spaces', 'Nothing at all, since ls refuses names that contain a space', 'The name run 1.log twice, once per word that the name holds'], 1, 'The command substitution result is split into words on white space (the IFS characters). Use `for f in *.log` and quote every `"$f"`.'),
+    say('Scripts that run unattended should fail loudly. Start them with `set -euo pipefail`: **-e** stops at the first failing command, **-u** makes an unset variable an error (so a typo does not become `rm -rf "$DIR/"` with an empty `DIR`), and **pipefail** makes a pipeline fail if any stage fails, not just the last one.'),
+    mc('Under `set -e` alone, what is the exit status of `grep ERROR run.log | sort` when run.log does not exist?', ['Success, because only the status of the last stage (sort) counts', 'Failure, because the first stage failed and the pipeline reports it', 'Undefined, since a pipeline has no status of its own to report', 'Success only when sort prints nothing on its standard output'], 0, 'Without `pipefail` a pipeline returns the status of its last command, so the missing file is hidden. With `set -o pipefail` the pipeline fails and `-e` stops the script.'),
+    say('Chip-design machines add two habits of their own. **Environment modules** (`module load vcs/2024`, `module list`, `module purge`) set `PATH` and licence variables for a tool version, so two projects can use different versions on the same server. And many sites still have **csh/tcsh** users: there you write `setenv NAME value` where bash writes `export NAME=value`, and a copied bash line fails with a confusing error.'),
     mc('You run a job on the compute farm and log out. How do you keep long jobs alive and find their output later?', ['Run them with a trailing `&` in your shell', 'Submit them through the farm scheduler', 'Leave the SSH session open all night', 'Email the logs to yourself at the end'], 1, 'Use LSF `bsub` or Slurm `sbatch` (or `nohup`/`tmux` on a single machine), with output redirected to a log file. A plain `&` job usually dies when you log out. Big companies run thousands of simulations at once through job schedulers. `bjobs`/`squeue` show what is running.'),
     mc('What does `chmod +x run.sh` do?', ['Makes it read-only for others', 'Makes the file executable', 'Runs it once with extra privileges', 'Changes its owner to you'], 1, 'Now it can be run as `./run.sh`. Unix permissions: read, write and execute, for the owner, the group and others. `ls -l` shows them as rwxr-xr-x.'),
   ],
-  recap: ['Everything runs on Linux: navigate with pwd, ls, cd; read with cat, less, head, tail -f.', 'Pipes chain tools: grep | sort | uniq -c | sort -rn.', 'Redirect with > (overwrite), >> (append), 2> (errors).', 'Regex: . [ ] * + ? ^ $ ( | ) {n,m}.', 'Long jobs go through the farm scheduler.'],
+  recap: ['Everything runs on Linux: navigate with pwd, ls, cd; read with cat, less, head, tail -f.', 'Pipes chain tools: grep | sort | uniq -c | sort -rn.', 'Redirect with > (overwrite), >> (append), 2> (errors).', 'Regex: . [ ] * + ? ^ $ ( | ) {n,m}.', 'Long jobs go through the farm scheduler.', 'Quote "$var"; use globs, not $(ls); find -print0 | xargs -0.', 'set -euo pipefail for unattended scripts; module load picks tool versions; csh uses setenv.'],
 };
 
 export const git: Lesson = {
@@ -55,7 +75,10 @@ export const git: Lesson = {
    git switch -c fix-fifo  create and switch to a new branch
    git pull / git push     sync with the shared remote`),
     mc('What is the **staging area** (the index) for?', ['It keeps a backup copy of every saved file', 'It holds the changes chosen for the next commit', 'It holds commits waiting to be pushed to the remote', 'It stores files you deleted so you can restore them'], 1, 'It lets you choose exactly which changes go in, so one commit holds one logical change. `git add` stages; `git commit` records what is staged. Small, focused commits make history readable and bugs easy to find.'),
-    ask('What command creates a commit from the staged changes with the message "fix fifo overflow"?', words('git commit -m "fix fifo overflow"', "git commit -m 'fix fifo overflow'", 'git commit -m fix fifo overflow', 'git commit --message "fix fifo overflow"', 'git commit --message="fix fifo overflow"'), '`git commit -m "fix fifo overflow"`. Good messages say what and why, in the present tense.', 'git commit with the -m flag.'),
+    ask('What command creates a commit from the staged changes with the message "fix fifo overflow"?', words('git commit -m "fix fifo overflow"', "git commit -m 'fix fifo overflow'", 'git commit -m fix fifo overflow', 'git commit --message "fix fifo overflow"', 'git commit --message="fix fifo overflow"'), '`git commit -m "fix fifo overflow"`. Good messages say what and why, in the imperative mood ("fix", not "fixed").', 'git commit with the -m flag.'),
+    say('Most work is shared through a **remote**, normally called `origin`. `git fetch` downloads new commits and moves your remote-tracking branch (`origin/main`) but changes none of your files or branches, so you can look first with `git log main..origin/main`. `git pull` is a fetch followed by a merge (or a rebase, with `--rebase`) into your current branch. If you have no local commits the merge is a **fast-forward**: the branch pointer just moves, with no merge commit.'),
+    mc('You run `git fetch` and your working files do not change. Why?', ['The fetch failed silently, so you must run it again to get the new work', 'Fetch only updates origin/main; your branch and files stay as they were', 'Fetch merges into a hidden branch, which has to be checked out first', 'Fetch needs the force option before it may touch the working files'], 1, 'Fetch is the safe half of pull: it updates the remote-tracking refs only. Merge or rebase afterwards, or use `git pull`.'),
+    say('Two more things you will meet in big repositories. A **submodule** pins another repository at an exact commit inside yours (`git submodule update --init` fetches it; clone with `--recursive` to do it in one go). **Git LFS** keeps big binaries such as waveforms or GDS files out of normal history: the repository stores small pointer files and the content lives on a separate server, fetched on checkout.'),
     say('A **branch** is a movable pointer to a line of commits. You make a branch for your change, commit on it, and when it is reviewed, **merge** it back into `main`. If two people changed the same lines, git cannot decide, and you get a **merge conflict** to resolve by hand.'),
     art(`
    <<<<<<< HEAD
@@ -66,12 +89,13 @@ export const git: Lesson = {
 
    Keep the right version (or combine them), delete the markers, git add, git commit.`),
     mc('What is the difference between **merge** and **rebase**?', ['Rebase adds a merge commit; merge replays your commits on top', 'Merge adds a merge commit; rebase replays your commits on top', 'Merge keeps both branches; rebase deletes the other branch', 'Merge is for local branches; rebase is for remote ones'], 1, 'Merge joins two histories with a merge commit; rebase replays your commits on top of the other branch, giving a straight history. Both integrate work. Rebase rewrites history, so it is for your own unpublished branch: never rebase commits other people already have. Merge is always safe on shared branches.'),
+    say('Before you ask for review, tidy your own unpublished commits with **interactive rebase**: `git rebase -i HEAD~3` lists the last three commits as `pick` lines. Change a word to `squash` (meld into the commit above, keeping both messages), `fixup` (meld, drop its message), `reword` (new message) or `drop` (delete the commit), save, and git replays them. This rewrites history, so never do it to commits others already have.'),
     say('A superpower for verification engineers: **git bisect**. A test passed last week and fails today, with 300 commits in between. Bisect binary-searches the history: you mark one commit good and one bad, and git checks out the middle for you to test.'),
     ask('A regression broke somewhere in the last 300 commits. At most how many test runs does `git bisect` need to find the guilty commit?', num(9), 'Each test halves the range: 2^9 = 512 ≥ 300, so at most 9 runs. With `git bisect run ./test.sh` it happens automatically.', 'log2 of the number of commits, rounded up.'),
     mc('Before merging to main, most teams require a **pull request** (or merge request). Why?', ['Because git cannot push to main without one', 'So it is reviewed and CI-tested before merging', 'So the commits are squashed into a single one', 'So the server keeps a backup copy of the branch'], 1, 'Another engineer reviews the change, and CI runs lint, tests and regressions on it, so bugs are caught before they reach everyone. Code review and continuous integration. On chip teams, CI often runs smoke regressions, lint and synthesis checks on every request.'),
     mc('Your simulation writes 2 GB of waveform files into the repository folder. What stops you from committing them by accident?', ['A `git stash` before every single commit', 'A `.gitignore` entry like `*.fsdb`', 'git skips big files by default', 'A `.gitattributes` line marking them binary'], 1, 'A pattern such as `*.fsdb` or `sim_out/` in `.gitignore` keeps them out. Generated outputs (waveforms, logs, build products) never belong in git. `.gitignore` lists patterns to leave out.'),
   ],
-  recap: ['status, diff, add, commit, log, switch -c, pull, push.', 'Stage to make focused commits.', 'Branches + merges; resolve conflicts by editing the markers.', 'Rebase only your own unpublished work.', 'git bisect finds the breaking commit in log2(n) tests.', 'Pull requests: review + CI. .gitignore keeps outputs out.'],
+  recap: ['status, diff, add, commit, log, switch -c, pull, push.', 'Stage to make focused commits.', 'Branches + merges; resolve conflicts by editing the markers.', 'Rebase only your own unpublished work.', 'git bisect finds the breaking commit in log2(n) tests.', 'fetch updates origin/main only; pull = fetch + merge (or rebase); submodules pin repos, LFS holds big files.', 'git rebase -i: pick, reword, squash, fixup, drop; tidy your own unpublished commits.', 'Pull requests: review + CI. .gitignore keeps outputs out.'],
 };
 
 export const python: Lesson = {
@@ -135,7 +159,7 @@ export const flows: Lesson = {
   concept: 'Makefiles, dependencies, TCL scripting, EDA flow scripts',
   xp: 90,
   steps: [
-    say('Chip tools are not clicked, they are **scripted**. A synthesis run, a place-and-route flow or a regression is a pipeline of steps, each with inputs and outputs. **Make** decides which steps need to rerun, and **TCL** is the language almost every EDA tool (Synopsys, Cadence, Siemens, Xilinx Vivado) speaks.'),
+    say('Chip tools are not clicked, they are **scripted**. A synthesis run, a place-and-route flow or a regression is a pipeline of steps, each with inputs and outputs. **Make** decides which steps need to rerun, and **TCL** is the language almost every EDA tool (Synopsys, Cadence, Siemens, AMD Vivado) speaks.'),
     art(`
    # Makefile: target: dependencies, then the command (indented with a TAB)
    netlist.v: rtl/*.sv constraints.sdc
@@ -163,10 +187,44 @@ export const flows: Lesson = {
       const items = ['u_alu', 'u_fifo', 'u_ctrl', 'u_dma', 'u_uart'].slice(0, n);
       return ask(`What does this TCL print?\n\n\`set blocks {${items.join(' ')}}\`\n\`puts [llength $blocks]\``, num(n), `llength counts list elements: ${n}. TCL lists are space-separated words in braces.`, 'Count the words in the list.');
     }),
+    say('**Braces versus quotes** is the rule that trips everyone. `"..."` still substitutes `$x` and `[cmd]`. `{...}` substitutes **nothing**: it hands the text over untouched, which is how a script is passed to `if`, `foreach`, `proc` and `catch` to run later.'),
+    art(`
+   set n 3
+   puts "n is $n"        →  n is 3
+   puts {n is $n}        →  n is $n
+
+   proc area {w h} { return [expr {$w * $h}] }
+   puts [area 4 5]                      →  20
+
+   set l {a b c}
+   lappend l d                          # l is now {a b c d}
+   puts "[llength $l] [lindex $l 1]"    →  4 b
+
+   dict set d clk 2.0                   # a dict maps keys to values
+   puts [dict get $d clk]               →  2.0
+
+   regexp {u_(\\w+)/(\\d+)} "u_alu/7" all name idx
+   puts "$name $idx"                    →  alu 7
+
+   set rc [catch {error "bad"} msg]     # catch returns 1 and keeps the message
+   puts "$rc $msg"                      →  1 bad`),
+    mc('A script runs `set n 3` and then `puts {n is $n}`. What appears?', ['n is 3', 'n is $n', 'The command fails with an error', 'Nothing is printed'], 1, 'Curly braces stop all substitution, so the text goes to puts exactly as typed. Double quotes would have printed n is 3.'),
+    mc('Why wrap a risky command in `catch`?', ['It makes the command run faster, as it skips the usual checks', 'An error becomes return code 1 plus a message, and the script goes on', 'It hides the output of the command from the log file', 'It sends the command to run on the compute farm instead'], 1, 'Without catch, one error stops the whole flow. With catch you can test the code, log the message and decide what to do next.'),
+    say('The EDA commands return **collections** of design objects, and a loop over them uses `foreach_in_collection`. A filter picks objects by attribute, for example every flop whose library cell starts with DFF.'),
+    art(`
+   set flops [get_cells -hier -filter "ref_name =~ DFF*"]
+   foreach_in_collection c $flops {
+     puts [get_attribute $c full_name]
+   }
+   puts [sizeof_collection [get_pins -hier */D]]`),
+    gen((r) => {
+      const a = pick(r, [4, 6, 8]), b = pick(r, [2, 3, 5]);
+      return ask(`What does this TCL print?\n\n\`set x ${a}\`\n\`set y {$x}\`\n\`puts [expr $y + ${b}]\``, num(a + b), `The braces keep y as the text $x, but expr substitutes variables again when it evaluates its arguments: ${a} + ${b} = ${a + b}.`, 'expr evaluates the text of its arguments, including any $ in it.');
+    }),
     mc('In a synthesis script, what do `create_clock -period 1.0 [get_ports clk]` and `set_input_delay` define?', ['The RTL clock generator', 'Timing constraints (SDC)', 'Pin placement for the clock and inputs', 'Simulation stimulus for the testbench'], 1, 'They define the clock and when inputs arrive relative to it, which synthesis and STA optimize against. SDC is itself TCL. Constraints tell the tools what "fast enough" means; wrong constraints are a top cause of silicon timing failures.'),
     mc('A regression flow runs 5,000 tests every night. What turns this into something one engineer can manage?', ['Opening every log by hand each morning to check for errors', 'A scripted flow that farms out, parses and summarizes runs', 'A faster workstation running them in sequence', 'Running only the tests that passed yesterday'], 1, 'A test list, a scheduler that farms runs out in parallel, automatic pass/fail parsing, and a summary report with failure signatures. Regression infrastructure is itself engineering. The triage lab later in the game makes you do it.'),
   ],
-  recap: ['Make: targets, dependencies, recipes (TAB!); rebuild only what is stale.', 'TCL: `set x 5`, `$x`, `[cmd]` substitution, `expr {}`, lists, foreach.', 'EDA tools and SDC constraints are TCL.', 'Flows = scripted pipelines; regressions = test lists + scheduler + parsing + reports.'],
+  recap: ['Make: targets, dependencies, recipes (TAB!); rebuild only what is stale.', 'TCL: `set x 5`, `$x`, `[cmd]` substitution, `expr {}`, lists, foreach.', 'Quotes substitute, braces do not; proc, dict, regexp and catch (return code 1 plus message).', 'EDA idiom: get_cells / get_pins with -filter, then foreach_in_collection.', 'EDA tools and SDC constraints are TCL.', 'Flows = scripted pipelines; regressions = test lists + scheduler + parsing + reports.'],
 };
 
 export const TOOLING_LESSONS = [shell, git, python, flows];

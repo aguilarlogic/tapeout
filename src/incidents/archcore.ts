@@ -299,12 +299,12 @@ export const nocIncident: Incident = {
     {
       id: 'arb', name: 'The shared link uses fixed-priority arbitration',
       fix: 'Replace the fixed-priority arbiter with round-robin arbitration',
-      story: 'The arbiter on the shared link always granted the lowest-numbered master that was asking. Master 3 got almost no grants while the others kept asking, and its requests queued until its tests timed out.',
+      story: 'The arbiter on the shared link always granted the lowest-numbered requester that was asking. Requester 3 got almost no grants while the others kept asking, and its requests queued until its tests timed out.',
     },
     {
       id: 'id', name: 'Same-ID AXI reads return their beats out of order',
       fix: 'Return beats of one AXI ID in order, with one queue per ID',
-      story: 'AXI lets different IDs complete out of order, but beats with the same ID must come back in order. The bridge returned a burst\'s second beat before its first, with the same ID. The master places beats by arrival order, so the words came back in the wrong places.',
+      story: 'AXI lets different IDs complete out of order, but beats with the same ID must come back in order. The bridge returned a burst\'s second beat before its first, with the same ID. The manager places beats by arrival order, so the words came back in the wrong places.',
     },
     {
       id: 'width', name: 'The 64-to-32-bit converter sends the upper half with no byte strobes',
@@ -348,17 +348,17 @@ export const nocIncident: Incident = {
     },
     {
       cmd: 'arb', cost: 25,
-      what: 'grants per master on the shared link, over 10,000 cycles',
+      what: 'grants per requester on the shared link, over 10,000 cycles',
       read: (w) => (w.cause === 'arb'
-        ? 'grants per master, 10,000 cycles:\n  master 0   6,104\n  master 1   2,980\n  master 2     915\n  master 3       1'
-        : 'grants per master, 10,000 cycles:\n  master 0   2,507\n  master 1   2,496\n  master 2   2,512\n  master 3   2,485'),
+        ? 'grants per requester, 10,000 cycles:\n  requester 0   6,104\n  requester 1   2,980\n  requester 2     915\n  requester 3       1'
+        : 'grants per requester, 10,000 cycles:\n  requester 0   2,507\n  requester 1   2,496\n  requester 2   2,512\n  requester 3   2,485'),
     },
     {
       cmd: 'ids', cost: 20,
-      what: 'the R-channel log for the last six bursts of one master: AXI ID and beat order',
+      what: 'the R-channel log for the last six bursts of one manager: AXI ID and beat order',
       read: (w) => (w.cause === 'id'
-        ? 'last 6 bursts, master 1 (beats in order of arrival):\n  ARID 3   beats 1 2 3 4\n  ARID 5   beats 1 2 3 4\n  ARID 3   beats 2 1 3 4   <- same ID, out of order\n  ARID 5   beats 1 2 3 4\n  ARID 2   beats 1 2 3 4\n  ARID 3   beats 1 2 3 4'
-        : 'last 6 bursts, master 1 (beats in order of arrival):\n  ARID 3   beats 1 2 3 4\n  ARID 5   beats 1 2 3 4\n  ARID 3   beats 1 2 3 4\n  ARID 5   beats 1 2 3 4\n  ARID 2   beats 1 2 3 4\n  ARID 3   beats 1 2 3 4'),
+        ? 'last 6 bursts, manager 1 (beats in order of arrival):\n  ARID 3   beats 1 2 3 4\n  ARID 5   beats 1 2 3 4\n  ARID 3   beats 2 1 3 4   <- same ID, out of order\n  ARID 5   beats 1 2 3 4\n  ARID 2   beats 1 2 3 4\n  ARID 3   beats 1 2 3 4'
+        : 'last 6 bursts, manager 1 (beats in order of arrival):\n  ARID 3   beats 1 2 3 4\n  ARID 5   beats 1 2 3 4\n  ARID 3   beats 1 2 3 4\n  ARID 5   beats 1 2 3 4\n  ARID 2   beats 1 2 3 4\n  ARID 3   beats 1 2 3 4'),
     },
     {
       cmd: 'wcheck', cost: 15,

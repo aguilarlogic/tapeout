@@ -1,9 +1,10 @@
 // Practice banks and bosses for the domain chips of Act 7: AI accelerators, hardware security, functional
 // safety, silicon photonics, qubits and quantum control electronics.
-import { num, qty } from '../lessons/answers';
+import { num, qty, words } from '../lessons/answers';
 import { calc, choice, count, sim, step, walk } from '../lessons/teach';
 import { art, ask, mc, pick, say } from '../lessons/types';
 import { boss, practice, tier } from './types';
+import { AES_SBOX } from './aes';
 import { atLevel, concept, exact, hex, sci, sig } from './util';
 
 const popcount = (x: number) => { let n = 0; for (; x; x >>= 1) n += x & 1; return n; };
@@ -56,10 +57,18 @@ export const npuPractice = practice('practice-npu', 'AI Hardware Drills', 'MAC c
       'model weight memory', 'A model is a long list of numbers (parameters). Each one is stored in some number of bytes depending on its format: FP16 uses 2 bytes, INT8 uses 1, INT4 uses half a byte. Memory = number of parameters × bytes per parameter. With parameters in billions (B), the result comes out directly in gigabytes.',
       choice(`${fmt[0]} stores each parameter in how many bytes?`, String(fmt[1]), ['2', '1', '0.5', '4'].filter((x) => x !== String(fmt[1])).slice(0, 2)),
       calc('Memory in GB = billions of parameters × bytes per parameter:', `${b} × ${fmt[1]}`, gb, 'GB', sig(gb), 0.02));
-    const layers = pick(r, [32, 40, 80]), dm = pick(r, [4096, 5120, 8192]), tok = pick(r, [4096, 32768]), kv = (2 * layers * dm * tok * 2) / 1e9;
-    return walk(ask(`KV cache: ${layers} layers, model width ${dm}, ${tok} tokens of context, FP16. Size, in GB? (2 × layers × width × tokens × 2 bytes)`, qty(kv, 'GB', 0.02, sig(kv)), `2 (K and V) × ${layers} × ${dm} × ${tok} × 2 bytes = ${sig(kv)} GB per sequence. Long contexts can need more memory than the weights.`, 'Keys and values, per layer, per token.'),
-      'the KV cache', 'While generating text, a transformer keeps the "key" and "value" vectors of every earlier token in every layer, so it does not have to recompute them: the KV cache. Per token and per layer it stores 2 vectors (K and V) of the model width, each number in 2 bytes (FP16). So its size = 2 × layers × width × tokens × 2 bytes.',
-      calc('Values stored per token = 2 (K and V) × layers × width:', `2 × ${layers} × ${dm}`, 2 * layers * dm, '', String(2 * layers * dm), 0.001),
+    // KV width = KV heads x head dimension: equal to the model width only for multi-head attention.
+    const layers = pick(r, [32, 40, 80]), dm = pick(r, [1024, 4096, 5120, 8192]), tok = pick(r, [4096, 32768]), kv = (2 * layers * dm * tok * 2) / 1e9;
+    const gqaIdea = 'With multi-head attention the KV width equals the model width. Grouped-query attention shares each K/V head across several query heads, so the KV width is much smaller: a 70B-class model with 8 KV heads of 128 dims stores 1024 numbers per token per layer for K, and again for V.';
+    if (d === 3) {
+      const mha = pick(r, [4096, 8192]), g = pick(r, [512, 1024, 2048]), ratio = mha / g;
+      return walk(ask(`A model uses grouped-query attention with KV width ${g}. The same model without it (multi-head attention, KV width ${mha}) needs how many times more KV-cache memory?`, num(ratio), `The cache is proportional to the KV width: ${mha} / ${g} = ${ratio}.`, 'Cache size scales with KV width; everything else is the same.'),
+        'KV width and grouped-query attention', gqaIdea,
+        calc('Everything else is equal, so the ratio is the ratio of KV widths:', `${mha} / ${g}`, ratio, '', String(ratio), 0.001));
+    }
+    return walk(ask(`KV cache: ${layers} layers, KV width ${dm} (KV heads × head dimension), ${tok} tokens of context, FP16. Size, in GB? (2 × layers × KV width × tokens × 2 bytes)`, qty(kv, 'GB', 0.02, sig(kv)), `2 (K and V) × ${layers} × ${dm} × ${tok} × 2 bytes = ${sig(kv)} GB per sequence. Long contexts can need more memory than the weights.`, 'Keys and values, per layer, per token.'),
+      'the KV cache', `While generating text, a transformer keeps the "key" and "value" vectors of every earlier token in every layer, so it does not have to recompute them: the KV cache. Per token and per layer it stores 2 vectors (K and V) of the KV width, each number in 2 bytes (FP16). So its size = 2 × layers × KV width × tokens × 2 bytes. ${gqaIdea}`,
+      calc('Values stored per token = 2 (K and V) × layers × KV width:', `2 × ${layers} × ${dm}`, 2 * layers * dm, '', String(2 * layers * dm), 0.001),
       calc('Bytes = values per token × tokens × 2 bytes each:', `${2 * layers * dm} × ${tok} × 2`, 2 * layers * dm * tok * 2, '', sci(2 * layers * dm * tok * 2, 3), 0.01),
       calc('In GB (÷ 1e9):', `${sci(2 * layers * dm * tok * 2, 3)} / 1e9`, kv, 'GB', sig(kv), 0.02));
   },
@@ -96,15 +105,43 @@ export const npuPractice = practice('practice-npu', 'AI Hardware Drills', 'MAC c
       calc('What memory can feed = bandwidth × intensity, in TFLOP/s:', `${bw} × ${i}`, bw * i, 'TFLOP/s', sig(bw * i, 4), 0.005),
       calc(`The attainable rate is the smaller of that and the peak ${peak}:`, `min(${sig(bw * i, 4)}, ${peak})`, att, 'TFLOP/s', sig(att), 0.02));
   },
+  (r, d) => {
+    // Block-scaled (microscaling) formats: element bits plus the shared scale spread over the block.
+    const [el, blk, sc, name] = pick(r, [[4, 32, 8, 'MXFP4'], [4, 16, 8, 'an NVFP4-style format'], [8, 32, 8, 'an 8-bit block-scaled format'], [6, 32, 8, 'a 6-bit block-scaled format']] as const);
+    const bits = el + sc / blk;
+    const idea = 'Below 8 bits, one scale for a whole tensor is too coarse, so block-scaled (microscaling) formats give each small block of elements its own shared scale. The scale is stored once per block, so each element pays only its share: element bits + scale bits ÷ block size.';
+    if (d === 1) return walk(ask(`${el}-bit elements share one ${sc}-bit scale per block of ${blk}. Average bits per element?`, qty(bits, '', 0.005, String(bits)), `${el} + ${sc}/${blk} = ${bits} bits per element.`, 'Element bits plus scale bits divided by the block size.'),
+      'bits per element of a block-scaled format', idea,
+      calc('Each element pays its share of the scale: scale bits ÷ block size =', `${sc} / ${blk}`, sc / blk, '', String(sc / blk), 0.005),
+      calc('Add the element width:', `${el} + ${sc / blk}`, bits, '', String(bits), 0.005));
+    const b = pick(r, [7, 13, 70]), gb = (b * bits) / 8;
+    if (d === 2) return walk(ask(`Blocks of ${blk} ${el}-bit elements share an ${sc}-bit scale. How many bytes does one block occupy?`, qty((blk * el + sc) / 8, '', 0.005, String((blk * el + sc) / 8)), `${blk} × ${el} + ${sc} = ${blk * el + sc} bits = ${(blk * el + sc) / 8} bytes.`, 'Bits of all elements plus one scale, divided by 8.'),
+      'storage of one scaled block', idea,
+      count('Bits taken by the elements:', `${blk} × ${el}`, blk * el),
+      count('Add the shared scale:', `${blk * el} + ${sc}`, blk * el + sc),
+      calc('Bytes = bits ÷ 8:', `${blk * el + sc} / 8`, (blk * el + sc) / 8, '', String((blk * el + sc) / 8), 0.005));
+    return walk(ask(`A ${b}B-parameter model is stored in ${name} (${el}-bit elements, ${sc}-bit scale per ${blk}). Memory for the weights, in GB?`, qty(gb, 'GB', 0.02, sig(gb)), `${b}e9 × ${bits} bits ÷ 8 = ${sig(gb)} GB. Plain FP16 would need ${b * 2} GB, so block scaling saves about ${sig((1 - bits / 16) * 100, 2)}%.`, 'Parameters × bits per element ÷ 8.'),
+      'memory in a block-scaled format', idea,
+      calc('Bits per element:', `${el} + ${sc}/${blk}`, bits, '', String(bits), 0.005),
+      calc('Memory in GB = billions of parameters × bits ÷ 8:', `${b} × ${bits} / 8`, gb, 'GB', sig(gb), 0.02));
+  },
   (r, d) => concept(r, [...atLevel(2, [
     ['Why do systolic arrays beat CPUs on matrix math?', 'Each fetched operand feeds many MACs', ['They run at a higher clock', 'They have bigger caches', 'They predict branches better'], 'data reuse in a systolic array', 'Moving a number from memory costs far more energy than multiplying it. In a systolic array each value passes from one MAC to the next, so a single fetch is used in many multiplications.', ['Reuse makes the chip efficient because fetching data costs:', 'More energy than the arithmetic', ['Less energy than the arithmetic', 'Nothing']], 'Data reuse: each operand fetched from memory feeds many MACs as it flows through the array.'],
     ['What does "weight stationary" mean in a dataflow?', 'Weights stay in the PEs; activations stream past', ['Weights never change at all during training', 'Weights are stored in flash next to the array', 'Activations stay fixed while weights stream past'], 'dataflows', 'A dataflow decides which operand stays put in each processing element (PE). Weight stationary loads the weights once and keeps them there, streaming the activations through, so the weights need no further memory traffic. Which operand to keep depends on the shape of the layer.', ['Weight stationary keeps which operand in place?', 'The weights', ['The activations', 'The outputs']], 'The weights are loaded once, so they need no further memory traffic.'],
     ['Why train in BF16 rather than FP16?', 'It keeps FP32\'s exponent range', ['BF16 has more mantissa bits, so it is more precise', 'FP16 values cannot be multiplied in a tensor core', 'BF16 is the IEEE standard'], 'BF16 versus FP16', 'A floating-point number has an exponent (its range) and a mantissa (its precision). FP16 has only 5 exponent bits, so very large or small gradients overflow or vanish. BF16 has 8 exponent bits like FP32, so the range matches, and only precision is lost.', ['More exponent bits give a number format more:', 'Range', ['Precision', 'Zeros']], 'So gradients rarely overflow or underflow, at half the bits of FP32.'],
-    ['What does 2:4 structured sparsity give hardware?', 'A fixed zero pattern it can skip cheaply', ['Random zeros anywhere in the weight matrix', 'Smaller activations stored in half the memory', 'Fewer layers, so the network finishes sooner'], 'structured sparsity', 'Skipping multiplications by zero saves work, but finding random zeros is expensive. A fixed pattern (2 of every 4 are zero) is easy for hardware to index, so it can skip half the multiplications cheaply.', ['A fixed sparsity pattern is easier for hardware than random zeros because it is:', 'Easy to index', ['More random', 'Bigger in memory']], 'Two of every four weights are zero, so the hardware can skip half the multiplications and double effective throughput.'],
+    ['What does 2:4 structured sparsity give hardware?', 'A fixed zero pattern it can skip cheaply', ['Random zeros anywhere in the weight matrix', 'Smaller activations stored in half the memory', 'Fewer layers, so the network finishes sooner'], 'structured sparsity', 'Skipping multiplications by zero saves work, but finding random zeros is expensive. A fixed pattern (2 of every 4 are zero) is easy for hardware to index, so it can skip half the multiplications cheaply (up to 2×, since real speed-ups depend on the rest of the pipeline).', ['A fixed sparsity pattern is easier for hardware than random zeros because it is:', 'Easy to index', ['More random', 'Bigger in memory']], 'Two of every four weights are zero, so the hardware can skip half the multiplications for up to 2× throughput.'],
   ]),
     ...atLevel(1, [['What does a MAC unit compute?', 'A multiply, then an add into a sum', ['A comparison of two wide bit vectors bit by bit', 'A division and a remainder', 'A shift of a value by one bit'], 'MAC units', 'A multiply-accumulate unit multiplies two numbers and adds the product to a running sum. Neural network layers are mostly long chains of these operations.', ['A MAC unit adds its product to:', 'A running sum', ['A new register each time']]]]),
     ...atLevel(2, [['What does quantizing a network to INT8 trade?', 'Some accuracy for smaller, faster arithmetic', ['Speed for more memory', 'Power for more accuracy', 'Accuracy for a lot more memory and clock cycles'], 'INT8 quantization', 'Eight-bit integers need less memory and cheaper arithmetic than floating point. The rounding costs a little accuracy, which is usually small after calibration or retraining.', ['INT8 arithmetic is cheaper than FP32 mainly because:', 'The operands are smaller', ['The clock is faster', 'It skips the adder']]]]),
     ...atLevel(3, [['Why is on-chip data reuse important for an NPU?', 'Off-chip bandwidth is the usual bottleneck', ['On-chip memory is always slower than off-chip DRAM access', 'It removes the need for any clock', 'It makes every MAC run in one cycle'], 'data reuse', 'A MAC array can compute faster than off-chip memory can feed it. Keeping weights or activations in on-chip SRAM and reusing them many times is what keeps the array busy.', ['Reusing data on chip mainly saves:', 'Off-chip bandwidth', ['Clock cycles only']]]]),
+    ...atLevel(3, [
+      ['Which format has the largest range at 16 bits?', 'BF16: it keeps the 8 exponent bits of FP32', ['FP16: 10 fraction bits give it more range', 'INT16: it has no exponent to overflow', 'Q1.15 fixed point: its steps are the finest'],
+        'range versus precision', 'In a floating-point format the exponent bits set the range and the fraction bits set the precision. BF16 keeps the 8 exponent bits of FP32 and gives up fraction bits (7); FP16 has 5 exponent bits, so its largest value is only 65,504.',
+        ['More exponent bits give a format more:', 'Range', ['Precision', 'Sign bits']], 'BF16: it keeps the 8 exponent bits of FP32, so it has the range, at the cost of precision'],
+      ['FP8 E4M3 or E5M2 for the activations of a forward pass?', 'E4M3: the extra fraction bit buys precision', ['E5M2: the extra exponent bit is what activations need', 'Either, as the two formats are identical in range', 'Neither: activations need at least 16 bits'],
+        'choosing an FP8 format', 'E4M3 has 4 exponent and 3 fraction bits (largest value 448, no infinities); E5M2 has 5 and 2 (largest 57,344, keeps infinities). Activations sit in a narrow range, so precision matters more. Gradients span many orders of magnitude, so E5M2 is used for them.',
+        ['Gradients are usually kept in E5M2 because they need more:', 'Range', ['Precision', 'Sign bits']], 'E4M3: the extra fraction bit gives precision, and activations do not need E5M2\'s range'],
+    ]),
   ], (why) => `${why}.`, d),
 ]);
 
@@ -118,9 +155,11 @@ export const aiBoss = boss({
     { t: 'gen', make: () => ask('Weights in FP16, in GB?', qty(140, 'GB', 0.02, '140'), '70e9 × 2 = 140 GB: it does not fit in 80 GB.') },
     { t: 'gen', make: () => ask('Quantized to INT8, in GB?', qty(70, 'GB', 0.02, '70'), '70 GB fits, with 10 GB left for the KV cache.') },
     { t: 'gen', make: () => ask('Batch 1, INT8. Maximum tokens per second (every weight read once per token)?', qty(3350 / 70, '', 0.03, sig(3350 / 70)), `3350 / 70 = ${sig(3350 / 70)} tokens/s. It meets 30 tokens/s for one user.`) },
-    { t: 'gen', make: () => { const kv = (2 * 80 * 8192 * 4096 * 1) / 1e9; return ask('KV cache: 80 layers, width 8192, 4096 tokens, INT8 (1 byte). Size per user, in GB?', qty(kv, 'GB', 0.02, sig(kv)), `2 × 80 × 8192 × 4096 × 1 = ${sig(kv)} GB. Only ${Math.floor(10 / kv)} user${Math.floor(10 / kv) === 1 ? '' : 's'} fit in the remaining 10 GB.`); } },
+    { t: 'gen', make: () => ask('Weights in a block-scaled 4-bit format (MXFP4: 32 elements share an 8-bit scale), in GB?', qty((70 * 4.25) / 8, 'GB', 0.02, sig((70 * 4.25) / 8)), `4 + 8/32 = 4.25 bits per element; 70e9 × 4.25 / 8 = ${sig((70 * 4.25) / 8)} GB. Half of INT8's footprint, at some accuracy risk.`) },
+    mc('Which FP8 format is the usual choice for the gradients in training?', ['E4M3, for its extra fraction bit', 'E5M2, for its larger range', 'Neither: gradients must stay FP32', 'Both, since they have equal range'], 1, 'Gradients span many orders of magnitude, so range matters more than precision: E5M2 (largest value 57,344, keeps infinities). E4M3 (largest value 448) suits activations and weights.'),
+    { t: 'gen', make: () => { const kv = (2 * 80 * 1024 * 4096 * 1) / 1e9; return ask('KV cache: 80 layers, KV width 1024 (grouped-query attention), 4096 tokens, INT8 (1 byte). Size per user, in GB?', qty(kv, 'GB', 0.02, sig(kv)), `2 × 80 × 1024 × 4096 × 1 = ${sig(kv)} GB. Only ${Math.floor(10 / kv)} user${Math.floor(10 / kv) === 1 ? '' : 's'} fit in the remaining 10 GB.`); } },
     { t: 'gen', make: () => ask('Decode intensity at batch 1 is about 2 FLOP per byte of weights. Ridge point of this chip, in FLOP/byte?', qty(1000 / 3.35, '', 0.02, sig(1000 / 3.35)), `1000 / 3.35 = ${sig(1000 / 3.35)}. At 2 FLOP/byte, decode uses under 1% of peak compute.`) },
-    mc('To serve many users at 30 tokens/s each, what matters most?', ['More HBM bandwidth and capacity, and a smaller KV cache', 'More TFLOP/s of matrix compute per card', 'A higher clock on the tensor cores', 'Bigger on-chip SRAM caches while keeping the same HBM stack'], 0, 'Add HBM or split the model across cards, and shrink the KV cache with grouped-query attention or a quantized cache. LLM decode is memory-bound in both bandwidth and capacity. Compute is not the bottleneck.'),
+    mc('To serve many users at 30 tokens/s each, what matters most?', ['More HBM bandwidth and capacity, and a smaller KV cache', 'More TFLOP/s of matrix compute per card', 'A higher clock on the tensor cores', 'Bigger on-chip SRAM caches while keeping the same HBM stack'], 0, 'Add HBM or split the model across cards. Grouped-query attention is already applied here, so the next levers on the cache are KV quantization, paging and a shorter context. LLM decode is memory-bound in both bandwidth and capacity. Compute is not the bottleneck.'),
   ],
   recap: ['Weight and KV-cache footprints.', 'Decode is memory-bound.', 'Roofline ridge point.', 'Quantization.'],
 });
@@ -162,17 +201,19 @@ export const hwsecPractice = practice('practice-hwsec', 'Security Drills', 'brut
       step(`${hex(w)} in binary (8 digits):`, exact(b8(w))),
       step('XOR the two: a bit is 1 where they differ:', exact(b8(v ^ w))),
       count('Count the 1s (the bits that toggle):', 'number of ones', popcount(v ^ w)));
-    return walk(ask(`The first AES step computes data XOR key. The data byte is ${hex(v)} and you guess the key byte is ${hex(w)}. What Hamming weight does your model predict?`, num(popcount(v ^ w)), `${hex(v)} ⊕ ${hex(w)} = ${hex(v ^ w)} → weight ${popcount(v ^ w)}. DPA repeats this for all 256 guesses over thousands of traces; the guess whose predictions correlate with the power is the key.`, 'XOR the guess with the data.'),
-      'a power-analysis prediction', `${idea} In a DPA attack, you guess a key byte, predict the intermediate value (data XOR key) and its Hamming weight, and check whether the real power traces rise and fall with your predictions. Only the right key guess will correlate.`,
+    const sb = AES_SBOX[v ^ w];
+    return walk(ask(`A power-analysis attack predicts the Hamming weight of the first S-box output, Sbox(data ⊕ key). The data byte is ${hex(v)} and your key guess is ${hex(w)}. Sbox(${hex(v ^ w)}) = ${hex(sb)}. What Hamming weight does your model predict?`, num(popcount(sb)), `${hex(v)} ⊕ ${hex(w)} = ${hex(v ^ w)}; the S-box maps that to ${hex(sb)}, which has ${popcount(sb)} ones. Attacks target the S-box output, not the XOR. XOR is linear, so a key guess and its bitwise complement produce perfectly anti-correlated predictions and cannot be told apart. The S-box's non-linearity makes only the right guess correlate.`, 'XOR, look up the S-box value given, then count its ones.'),
+      'a power-analysis prediction', `${idea} In a DPA attack, you guess a key byte, predict the Hamming weight of the first S-box output, Sbox(data ⊕ key), and check whether the real power traces rise and fall with your predictions. Attacks target the S-box output, not the XOR. XOR is linear, so a key guess and its bitwise complement produce perfectly anti-correlated predictions and cannot be told apart. The S-box's non-linearity makes only the right guess correlate.`,
       step(`${hex(v)} in binary:`, exact(b8(v))),
       step(`Your guess ${hex(w)} in binary:`, exact(b8(w))),
       step('data XOR guess:', exact(b8(v ^ w))),
-      count('The predicted Hamming weight (number of 1s):', 'number of ones', popcount(v ^ w)));
+      step(`Look up the S-box (it gives ${hex(sb)}); in binary:`, exact(b8(sb))),
+      count('The predicted Hamming weight of the S-box output (number of 1s):', 'number of ones', popcount(sb)));
   },
   (r, d) => {
     const n = pick(r, [1000, 5000, 20000]), k = tier(d, 2, pick(r, [4, 10]), pick(r, [10, 30])), need = n * k * k;
-    return walk(ask(`A DPA attack needs ${n} traces. A countermeasure cuts the leaking signal by ${k}× (noise unchanged). About how many traces does the attack need now?`, qty(need, '', 0.02, String(need)), `Traces needed scale with 1/SNR²: ${n} × ${k}² = ${need.toLocaleString('en-US')}. Masking and noise raise the bar; they rarely make an attack impossible.`, 'Signal down k× → traces up k²×.'),
-      'how countermeasures scale DPA', 'Noise can be averaged away by using more traces: averaging N traces improves the signal-to-noise ratio by √N. If a countermeasure makes the signal k times weaker, the SNR drops k times, and to make it up you need k² times as many traces (since √(k²) = k).',
+    return walk(ask(`A DPA attack needs ${n} traces. A countermeasure cuts the leaking signal by ${k}× (noise unchanged). About how many traces does the attack need now?`, qty(need, '', 0.02, String(need)), `Traces needed scale as 1/ρ² (ρ is the correlation): a k× weaker signal needs k² times the traces. ${n} × ${k}² = ${need.toLocaleString('en-US')}. Hiding (noise, shuffling, balanced logic) slows an attack quadratically; it rarely makes one impossible.`, 'Signal down k× → traces up k²×.'),
+      'how countermeasures scale DPA', 'Noise can be averaged away by using more traces. What an attacker measures is the correlation ρ between the predicted weight and the power, and ρ scales with the size of the leaking signal. The traces needed grow as 1/ρ², so a countermeasure that makes the signal k times weaker needs k² times as many traces to make up for it.',
       count(`The signal is ${k}× weaker, so the traces needed grow by ${k} × ${k}:`, `${k}²`, k * k),
       count('Traces needed now:', `${n} × ${k * k}`, need));
   },
@@ -193,15 +234,77 @@ export const hwsecPractice = practice('practice-hwsec', 'Security Drills', 'brut
       calc(`All ${n} must fail: (1 - p)^${n}:`, `${sig(1 - p, 5)}^${n}`, (1 - p) ** n, '', sig((1 - p) ** n, 4), 0.01),
       calc('At least one success = 1 minus that, as a %:', `(1 - ${sig((1 - p) ** n, 4)}) × 100`, pr, '%', sig(pr), 0.02));
   },
+  (r, d) => {
+    // Grover: a quadratic speed-up halves the exponent of the key space. The steps run in series, so it stays impractical.
+    const idea = 'Grover\'s algorithm searches N possibilities in about √N steps instead of N. A key of k bits has 2^k possibilities, so the search needs about √(2^k) = 2^(k/2) steps: the exponent is halved. Those steps must run one after another, which keeps it impractical, but long-term guidance still asks for AES-256.';
+    if (d < 3) {
+      const k = d === 1 ? 128 : pick(r, [192, 256]);
+      return walk(ask(`Grover's search is quadratically faster. In theory, about how many steps recover an AES-${k} key, as a power of 2? (give the exponent)`, num(k / 2), `√(2^${k}) = 2^${k / 2}. The serial depth makes it impractical, but guidance prefers AES-256 anyway.`, 'Halve the exponent.'),
+        'Grover on a symmetric key', idea,
+        choice('A quadratic speed-up takes the square root of the search space. The exponent of 2 is then:', 'Halved', ['Doubled', 'Unchanged']),
+        count(`Exponent for a ${k}-bit key:`, `${k} / 2`, k / 2));
+    }
+    const x = pick(r, [32, 40, 48, 56, 64, 72, 80, 96, 112, 128]);
+    return walk(ask(`A key search by Grover's algorithm needs about 2^${x} serial steps. How many bits long is the key?`, num(2 * x), `2^${x} = √(2^${2 * x}), so the key has ${2 * x} bits.`, 'Double the exponent.'),
+      'working Grover backwards', idea,
+      count(`The steps are the square root of the key space, so the key space is the square of 2^${x}: exponent`, `${x} × 2`, 2 * x));
+  },
+  (r, d) => {
+    // Welch's t for a fixed-versus-random leakage test, with equal counts and variances in the first two levels.
+    const idea = 'To test a design for leakage, collect traces for one fixed input and for random inputs and compare them at each time point with Welch\'s t: t = (mean_fixed - mean_random) / √(var_fixed/n_fixed + var_random/n_random). If |t| is above 4.5 the point leaks, but the result is only believed when the same point exceeds 4.5 with the same sign in two independent trace sets.';
+    if (d === 3) {
+      const t1 = pick(r, [5.1, 6.4, 9.8, 12.3]), kind = pick(r, ['same', 'low', 'flip']);
+      const t2 = kind === 'same' ? pick(r, [5.6, 7.2, 10.4]) : kind === 'low' ? pick(r, [1.2, 2.8, 3.9]) : -pick(r, [5.3, 6.9, 8.8]);
+      const ok = kind === 'same';
+      return walk(ask(`At one time point, the first trace set gives t = +${t1} and a second, independent set gives t = ${t2 > 0 ? '+' : '−'}${Math.abs(t2)}. Is leakage confirmed there? (yes or no)`, words(ok ? 'yes' : 'no'), `${ok ? 'Both exceed 4.5 with the same sign: confirmed.' : kind === 'low' ? 'The second set stays below 4.5, so the first was probably noise.' : 'The signs differ, so it is not a repeatable leak.'} One set alone is not enough: with thousands of points, a few cross the line by chance.`, 'Both sets must exceed 4.5, with the same sign.'),
+        'confirming a leakage result', idea,
+        choice('How many independent trace sets must agree?', 'Two', ['One', 'Three']),
+        step('Does the second set exceed 4.5 in the same direction as the first? (yes or no)', words(ok ? 'yes' : 'no')));
+    }
+    const n = pick(r, [1000, 5000, 20000, 50000]), v = pick(r, [1, 4, 9]);
+    let dm = pick(r, [0.02, 0.05, 0.1, 0.2, 0.5]), t = dm / Math.sqrt((2 * v) / n);
+    // keep clear of the threshold so a rounded answer still decides the same way
+    while (Math.abs(t - 4.5) < 0.6) { dm *= 2; t = dm / Math.sqrt((2 * v) / n); }
+    const se = Math.sqrt((2 * v) / n);
+    if (d === 1) return walk(ask(`Fixed-versus-random test at one point: the means differ by ${dm}, both variances are ${v} and each set has ${n} traces. What is Welch's t?`, qty(t, '', 0.03, sig(t)), `t = ${dm} / √(${v}/${n} + ${v}/${n}) = ${dm} / ${sig(se)} = ${sig(t)}.`, 'Difference of the means over √(var/n + var/n).'),
+      "Welch's t-test", idea,
+      calc('The denominator, √(var/n + var/n):', `sqrt(${v} / ${n} + ${v} / ${n})`, se, '', sig(se, 4), 0.01),
+      calc('t = difference ÷ denominator:', `${dm} / ${sig(se, 4)}`, t, '', sig(t), 0.03));
+    return walk(ask(`Fixed-versus-random test at one point: the means differ by ${dm}, both variances are ${v} and each set has ${n} traces. Is |t| above 4.5? (yes or no)`, words(Math.abs(t) > 4.5 ? 'yes' : 'no'), `t = ${dm} / ${sig(se)} = ${sig(t)}, which is ${t > 4.5 ? 'above' : 'below'} 4.5. A real assessment repeats it on a second, independent set before believing the result.`, 'Compute t, then compare with 4.5.'),
+      "Welch's t-test and the threshold", idea,
+      calc('The denominator, √(var/n + var/n):', `sqrt(${v} / ${n} + ${v} / ${n})`, se, '', sig(se, 4), 0.01),
+      calc('t = difference ÷ denominator:', `${dm} / ${sig(se, 4)}`, t, '', sig(t), 0.03),
+      step('Is |t| above 4.5? (yes or no)', words(Math.abs(t) > 4.5 ? 'yes' : 'no')));
+  },
   (r, d) => concept(r, [...atLevel(2, [
-    ['What is a hardware root of trust?', 'An immutable block that verifies the first code', ['The first transistor powered up on the die', 'The OS kernel and its signed drivers', 'A password manager stored in on-chip flash'], 'the root of trust', 'Security starts from something that cannot be changed: a small block with code in ROM and keys in fuses. It checks the first piece of software before it runs, which then checks the next, forming a chain. The root is trusted because nothing can alter it.', ['The root of trust can be trusted because it:', 'Cannot be modified', ['Is the largest block', 'Runs the fastest']], 'It is small and isolated (boot ROM, fused keys, crypto), and the code it verifies then verifies the next stage.'],
+    ['What is a hardware root of trust?', 'An unchangeable first stage that checks the first code', ['The first transistor powered up on the die', 'The OS kernel and its signed drivers', 'A password manager stored in on-chip flash'], 'the root of trust', 'Security starts from something that cannot be changed: a small first stage with code in ROM and keys in fuses. It checks the first piece of software before it runs, which then checks the next, forming a chain. That first stage is immutable; later root-of-trust firmware is measured or verified by it and can be updated.', ['The root of trust can be trusted because its first stage:', 'Cannot be modified', ['Is the largest block', 'Runs the fastest']], 'It is small and isolated, its first stage (boot ROM, fused keys, crypto) is immutable, and the code it verifies then verifies the next stage.'],
     ['How did Spectre leak secrets?', 'Cancelled speculative work left timeable cache traces', ['It printed protected memory through a debug port', 'It broke AES by solving its key schedule directly from output', 'It glitched the supply voltage to skip a check'], 'speculative execution attacks', 'A CPU guesses ahead and runs instructions speculatively; if the guess was wrong, it undoes their architectural effects. But the cache still holds data those instructions touched, and an attacker can time memory accesses to learn what was touched.', ['A cancelled speculative instruction can still leave a trace in:', 'The cache', ['The registers', 'The program counter']]],
-    ['What is a PUF?', 'A circuit deriving a unique, never-stored key', ['A cheap cipher for low-power devices', 'A fuse bank programmed with a key', 'A random number generated in software at every boot'], 'physically unclonable functions', 'No two chips are exactly alike at the atomic scale. A PUF measures those tiny random differences (for example which of two identical circuits is faster) and turns them into a key that is unique to the chip. The key is re-derived each time, so there is nothing stored to steal.', ['A PUF key comes from:', 'Random manufacturing variation', ['A key programmed into fuses at test', 'Software']], 'It turns random manufacturing variation into a device-unique key, re-derived each time.'],
-    ['Why do secure chips run crypto in constant time?', 'So timing never depends on secret data', ['To save power during long crypto runs', 'To make the clock tree simpler to build', 'Because constant-time code is always faster'], 'constant-time code', 'If the time taken (or which memory gets touched) depends on a secret, anyone who measures it learns something about the secret. Constant-time code does the same work in the same time whatever the secret is.', ['If timing never depends on the secret, timing reveals:', 'Nothing about the secret', ['The whole secret', 'The secret, bit by bit']], 'This closes timing side channels.'],
+    ['What is a PUF?', 'A circuit deriving a unique key at power-up', ['A cheap cipher for low-power devices', 'A fuse bank programmed with a key', 'A random number generated in software at every boot'], 'physically unclonable functions', 'No two chips are exactly alike at the atomic scale. A PUF measures those tiny random differences (for example which of two identical circuits is faster) and turns them into a key that is unique to the chip. The key is re-derived at every power-up from the chip\'s physical randomness, using stored helper data that is not secret. No key is stored, so there is none to steal.', ['A PUF key comes from:', 'Random manufacturing variation', ['A key programmed into fuses at test', 'Software']], 'It turns random manufacturing variation into a device-unique key, re-derived each time.'],
+    ['Why do secure chips run crypto in constant time?', 'So timing never depends on secret data', ['To save power during long crypto runs', 'To make the clock tree simpler to build', 'Because constant-time code is always faster'], 'constant-time code', 'If the time taken (or which memory gets touched) depends on a secret, anyone who measures it learns something about the secret. Constant-time code does the same work in the same time whatever the secret is.', ['If timing never depends on the secret, timing reveals:', 'Nothing about the secret', ['The whole secret', 'The secret, one bit at a time']], 'This closes timing side channels.'],
     ['What does a secure boot chain check at each stage?', 'The next image\'s signature', ['The image\'s file size', 'The CPU die temperature', 'That the image is compressed'], 'secure boot', 'Before running the next piece of code, each stage verifies its digital signature, using a public key that traces back to the root of trust. A valid signature proves the code came from the key holder and has not been altered.', ['A digital signature proves the image:', 'Is authentic and unmodified', ['Is encrypted so nobody can read it', 'Is compressed']], 'A valid signature proves the image came from the key holder and was not modified, using a key anchored in the root of trust.'],
   ]),
     ...atLevel(1, [['What does a TPM or secure element do?', 'Stores keys and runs crypto in isolation', ['Speeds up the processor by caching code in a fast tier', 'Holds the operating system kernel', 'Stores the user\'s video files'], 'secure elements', 'A TPM or secure element holds keys and performs cryptographic operations inside its own boundary. Software outside can ask for a signature, but cannot read the key.', ['Keys in a secure element can be read by:', 'Nothing outside it', ['Any application', 'The user']]]]),
-    ...atLevel(3, [['What does a side-channel attack use?', 'Timing, power, or radiated emissions', ['A flaw in the encryption math alone', 'Stolen passwords from a phishing email', 'A bug in the operating system only'], 'side channels', 'A side-channel attack measures something the device leaks while it computes: how long an operation takes, how much power it draws, or what it radiates. The secret is recovered from the physical behaviour, not from a broken formula.', ['A timing attack measures:', 'How long an operation takes', ['The cipher name', 'The key size']]]]),
+    ...atLevel(3, [['What does a side-channel attack use?', 'Timing, power, or radiated emissions', ['A flaw in the encryption math alone', 'Stolen passwords from a phishing email', 'A bug in the operating system only'], 'side channels', 'A side-channel attack measures something the device leaks while it computes: how long an operation takes, how much power it draws, or what it radiates. The secret is recovered from the physical behaviour, not from a broken formula.', ['A timing attack measures:', 'How long an operation takes', ['The cipher name', 'The key size']]],
+    ...atLevel(3, [
+    ['Which post-quantum algorithm replaces ECDH key exchange?', 'ML-KEM', ['ML-DSA', 'SLH-DSA', 'AES-256'],
+      'post-quantum replacements', 'Shor\'s algorithm breaks RSA and elliptic-curve cryptography, so key exchange and signatures need new schemes. ML-KEM is the key-exchange one; ML-DSA and SLH-DSA are the signature ones. Symmetric ciphers survive with longer keys.',
+      ['A signature scheme proves who sent something. A key-exchange scheme:', 'Agrees a shared secret', ['Hashes a message', 'Encrypts bulk data']], 'ML-KEM is the key-encapsulation scheme that replaces elliptic-curve key exchange; ML-DSA and SLH-DSA replace signatures'],
+    ['Why must long-lived secrets move to post-quantum cryptography already?', 'Recorded data can be decrypted later', ['Quantum computers already break AES-256', 'Post-quantum schemes are always faster', 'Live connections are the only target'],
+      'harvest now, decrypt later', 'An attacker can record encrypted traffic today and wait. Once a large quantum computer exists, the recording gives up its secrets, so data that must stay secret for decades needs protection from the start.',
+      ['An attacker who records traffic today and decrypts it years later is:', 'Harvesting now and decrypting later', ['Using a side channel', 'Glitching the clock']], '"Harvest now, decrypt later": recorded traffic can be decrypted once a quantum computer exists, so long-lived data needs post-quantum protection today'],
+    ['A device derives its identity from the previous layer\'s secret plus a hash of the next layer\'s code. What happens when the firmware is modified?', 'The derived identity changes', ['The identity stays the same', 'The chip erases its fuses', 'The boot ROM rewrites the firmware'],
+      'layered device identity', 'Each layer\'s secret depends on the hash of the code that follows it. Different code gives a different hash, so a different secret: modified firmware can not pose as the original.',
+      ['Modified code has a different hash, so its derived secret is:', 'Different', ['The same', 'Zero']], 'The hash of the changed code goes into the derivation, so the identity is different and the original can not be impersonated'],
+    ['An attacker glitches the clock during the signature check. Best countermeasure?', 'Redundant checks, plus glitch detectors', ['Use a longer signature that takes longer to check', 'Hide the boot ROM contents from outside readers', 'Raise the clock so a glitch has no time to act'],
+      'fault-injection countermeasures', 'A single check is a single point of failure. Doing it twice and comparing in a redundant way, with sensors that notice glitches and reset the chip, forces the attacker to land several unlikely glitches at once.',
+      ['A glitch skips one instruction. Computing the check twice means the attacker must:', 'Skip both, in the same way', ['Skip only one', 'Skip neither']], 'Redundant checks plus glitch detectors, so one glitch is not enough'],
+    ]),
+      ['First-order masking splits each secret into two random shares. What does an attack now need?', 'A second-order attack on two points per trace', ['The same attack, with about twice the traces', 'Nothing extra: masking only hides the timing', 'A new key schedule, since shares replace the key'],
+        'masking', 'Masking does not weaken the leak, it changes what leaks: each share alone is random, so a single point of the trace is independent of the secret. Only the combination of both shares depends on it, so the attacker must combine two points per trace (a second-order attack).',
+        ['With one share alone, a single trace point is:', 'Independent of the secret', ['Equal to the secret itself', 'Always zero, in every trace']], 'A second-order attack combining two points per trace is needed, and it needs far more traces (growing roughly exponentially with the masking order in noisy devices)'],
+      ['Why do CPA attacks on AES model the S-box output, not data ⊕ key?', 'XOR is linear: the key\'s complement fits as well', ['The S-box output is computed first, so leaks most', 'The XOR step draws no current, so never shows up', 'The S-box output has fewer bits, so ranks faster'],
+        'power-analysis models', 'The model must separate the right key guess from the wrong ones. XOR with a key guess and with its complement give outputs that are bit-for-bit opposite, so their Hamming weights are perfectly anti-correlated and the two guesses look equally good. The S-box is non-linear, so only the right guess lines up with the real power.',
+        ['A key guess and its bitwise complement give XOR results that are:', 'Bitwise opposites', ['Identical in every bit', 'Unrelated to each other']], 'XOR is linear, so wrong guesses (such as the key\'s complement) correlate as strongly as the right one; the S-box\'s non-linearity breaks that tie']]),
   ], (why) => `${why}.`, d),
 ]);
 
@@ -224,10 +327,13 @@ pin_check:
     { t: 'gen', make: () => ask('The 8-character PIN check exits early and its timing is measurable. Worst-case guesses if each character has 256 values?', num(8 * 256), '8 × 256 = 2048, instead of 256⁸.') },
     { t: 'gen', make: () => ask('A glitch skips the verify branch with probability 0.002, at 5 tries per second. Expected time to success, in s?', qty(100, 's', 0.02, '100'), '1/0.002 = 500 tries, / 5 per second = 100 s.') },
     mc('Best hardening for the boot branch?', ['Redundant checks, random delays and glitch detectors', 'A longer key for the boot signature', 'Obfuscating the boot ROM code', 'Encrypting the boot ROM so attackers cannot read the branch'], 0, 'Use complementary encodings for the redundant checks, glitch detectors that reset the chip, and fail closed. One branch is one point of failure; make the attacker win several unlikely coin flips at once.'),
-    { t: 'gen', make: () => ask('A DPA attack on the key needs 2000 traces. Masking cuts the leak 20×. Traces needed now?', qty(800000, '', 0.02, '800000'), '2000 × 20² = 800,000.') },
+    { t: 'gen', make: () => ask('A DPA attack needs 2000 traces. Noise injection cuts the leaking signal to 1/20 of its amplitude (noise unchanged). Traces needed now?', qty(800000, '', 0.02, '800000'), 'The number of traces grows with 1/ρ², where ρ is the correlation, and ρ scales with signal amplitude: 2000 × 20² = 800,000. Hiding (noise, shuffling, balanced logic) slows an attack quadratically.') },
     { t: 'gen', make: () => { const h = 2 ** 64 / 1e12 / 3600; return ask('Brute force of the 64-bit key at 10¹² keys/s, worst case, in hours?', qty(h, 'h', 0.03, sig(h)), `2⁶⁴ / 1e12 = ${sig(2 ** 64 / 1e12)} s = ${sig(h)} h. Use 128-bit keys.`); } },
+    mc('Which post-quantum algorithm replaces the ECDH key exchange in the next generation of the lock?', ['ML-KEM', 'ML-DSA', 'SLH-DSA', 'AES-256'], 0, 'ML-KEM does key exchange. ML-DSA and SLH-DSA are signatures (they would protect the firmware image), and AES-256 is a symmetric cipher that stays.'),
+    { t: 'gen', make: () => ask('Grover\'s search is quadratically faster. In theory, about how many steps recover a 128-bit AES key, as a power of 2?', num(64), '√(2¹²⁸) = 2⁶⁴. The steps must run in series, so it is impractical, but guidance asks for AES-256 anyway.') },
+    { t: 'gen', make: () => { const t = 0.1 / Math.sqrt((2 * 4) / 20000); return ask('Leakage test of the crypto engine: fixed-versus-random means differ by 0.1, both variances are 4 and each set has 20000 traces. Welch\'s t?', qty(t, '', 0.03, sig(t)), `t = 0.1 / √(4/20000 + 4/20000) = 0.1 / ${sig(Math.sqrt(8 / 20000))} = ${sig(t)}. Above 4.5, so the point leaks, once a second independent set agrees.`); } },
   ],
-  recap: ['Timing leaks.', 'Fault-injection odds.', 'DPA scaling.', 'Key lengths.'],
+  recap: ['Timing leaks.', 'Fault-injection odds.', 'DPA scaling.', 'Key lengths.', 'Post-quantum schemes and Grover.', 'Leakage testing.'],
 });
 
 // ------------------------------------------------------------------ functional safety
@@ -235,7 +341,7 @@ pin_check:
 export const fusaPractice = practice('practice-fusa', 'Functional Safety Drills', 'FIT rates, MTTF, ECC bits, SPFM and PMHF', [
   (r, d) => {
     const fit = pick(r, [10, 50, 100]);
-    const idea = 'FIT is the unit of failure rate: one FIT is one failure per 10⁹ device-hours. So the expected number of failures = FIT × (total device-hours) ÷ 10⁹. The mean time to failure (MTTF) of a single device is the reverse: 10⁹ ÷ FIT hours.';
+    const idea = 'FIT is the unit of failure rate: one FIT is one failure per 10⁹ device-hours. So the expected number of failures = FIT × (total device-hours) ÷ 10⁹. The mean time to failure (MTTF) of a single device is the reverse: 10⁹ ÷ FIT hours (constant failure rate assumed).';
     if (d === 1) {
       const cars = pick(r, [100000, 1000000]), hrs = pick(r, [300, 500]), f = (fit * cars * hrs) / 1e9;
       return walk(ask(`A chip is rated ${fit} FIT (failures per 10⁹ hours). ${cars.toLocaleString('en-US')} cars each run it ${hrs} hours a year. Expected failures per year across the fleet?`, qty(f, '', 0.02, sig(f)), `${fit} × ${cars} × ${hrs} / 1e9 = ${sig(f)}.`, 'FIT × device-hours / 10⁹.'),
@@ -296,21 +402,82 @@ export const fusaPractice = practice('practice-fusa', 'Functional Safety Drills'
   (r, d) => {
     const parts = tier(d, [['CPU', 20], ['RAM', 30]], [['CPU', 40], ['RAM', 60], ['bus', 10]], [['CPU', 80], ['RAM', 120], ['bus', 20], ['clock', 5]]) as [string, number][];
     const dc = pick(r, [0.9, 0.95, 0.99, 0.6, 0.8, 0.5]), total = parts.reduce((a, [, f]) => a + f, 0), res = total * (1 - dc);
-    return walk(ask(`Raw dangerous FIT: ${parts.map(([n, f]) => `${n} ${f}`).join(', ')}. Every part has ${dc * 100}% diagnostic coverage. Residual FIT (PMHF contribution)?`, qty(res, '', 0.02, sig(res)), `(${parts.map(([, f]) => f).join(' + ')}) × ${sig(1 - dc)} = ${sig(res)} FIT. ASIL D requires under 10 FIT for the whole item${res >= 10 ? ', so this fails' : ''}.`, 'Sum × (1 - coverage).'),
-      'residual FIT (PMHF)', 'The probabilistic metric for random hardware failures (PMHF) adds up the failure rate (in FIT) of all the dangerous faults that are NOT caught by a safety mechanism. For each block the undetected part is FIT × (1 - coverage). When all blocks have the same coverage, add the raw FITs first and multiply once.',
+    return walk(ask(`Raw dangerous FIT: ${parts.map(([n, f]) => `${n} ${f}`).join(', ')}. Every part has ${dc * 100}% diagnostic coverage. Residual FIT (PMHF contribution)?`, qty(res, '', 0.02, sig(res)), `(${parts.map(([, f]) => f).join(' + ')}) × ${sig(1 - dc)} = ${sig(res)} FIT. ASIL D allows under 10 FIT for the whole item, shared by every block and chip in it, so one chip gets only a share${res >= 10 ? '; this total alone uses the whole item budget' : ''}.`, 'Sum × (1 - coverage).'),
+      'residual FIT (PMHF)', 'The probabilistic metric for random hardware failures (PMHF) is roughly the sum of the single-point and residual FIT plus a small latent dual-point contribution. Here we add up the failure rate (in FIT) of all the dangerous faults that are NOT caught by a safety mechanism. For each block the undetected part is FIT × (1 - coverage). When all blocks have the same coverage, add the raw FITs first and multiply once.',
       calc('Total raw dangerous FIT = the sum:', parts.map(([, f]) => f).join(' + '), total, '', String(total), 0.001),
       calc('The undetected fraction, 1 - coverage:', `1 - ${dc}`, 1 - dc, '', sig(1 - dc, 4), 0.002),
       calc('Residual FIT = total × undetected fraction:', `${total} × ${sig(1 - dc, 4)}`, res, '', sig(res), 0.02));
   },
+  (r, d) => {
+    const idea = 'Each hazardous event is rated on three scales: severity S (0 to 3), exposure E (0 to 4) and controllability C (0 to 3). If any of them is class 0 the event is QM and needs no safety goal. Otherwise add the three class numbers: 10 is ASIL D, 9 is C, 8 is B, 7 is A, and 6 or less is QM.';
+    let sec: number[];
+    if (d === 1) sec = pick(r, [[3, 4, 3], [1, 1, 1], [3, 4, 1], [1, 4, 3], [3, 1, 1], [2, 2, 2]]);
+    else if (d === 2) sec = [pick(r, [1, 2, 3]), pick(r, [1, 2, 3, 4]), pick(r, [1, 2, 3])];
+    else { sec = [pick(r, [1, 2, 3]), pick(r, [1, 2, 3, 4]), pick(r, [1, 2, 3])]; sec[pick(r, [0, 1, 2])] = 0; }
+    const [s, e, c] = sec, t = s + e + c, zero = sec.includes(0);
+    const a = zero ? 'QM' : t >= 10 ? 'D' : t === 9 ? 'C' : t === 8 ? 'B' : t === 7 ? 'A' : 'QM';
+    return walk(ask(`A hazardous event is rated severity S${s}, exposure E${e}, controllability C${c}. Which ASIL is it? (A, B, C, D or QM)`, words(a, `ASIL ${a}`), zero ? `A class 0 makes it QM, whatever the other two say (the sum would have been ${t}).` : `${s} + ${e} + ${c} = ${t}, so ${a === 'QM' ? 'QM' : `ASIL ${a}`}.`, 'Add the class numbers, unless one is 0.'),
+      'looking up an ASIL', idea,
+      ...(zero ? [choice('A class 0 anywhere means the event is:', 'QM', ['ASIL A', 'ASIL D'])] : [count('S + E + C:', `${s} + ${e} + ${c}`, t)]),
+      step('Which ASIL is that? (A, B, C, D or QM)', words(a, `ASIL ${a}`)));
+  },
+  (r, d) => {
+    const idea = 'A fault can cause harm if it lasts longer than the fault-tolerant time interval (FTTI) of the safety goal. The system has to detect the fault and then reach the safe state inside that interval, so detection time plus reaction time must fit. The margin is what is left over.';
+    // The FTTI always leaves some margin, so the d1 answer is never negative.
+    const rea = pick(r, [3, 5, 6, 10]), det = pick(r, [2, 4, 5, 8]), ftti = Math.max(pick(r, [15, 20, 30, 50]), det + rea + 2);
+    if (d === 1) return walk(ask(`The FTTI is ${ftti} ms. A fault is detected in ${det} ms and the reaction takes ${rea} ms. How many ms of margin are left?`, qty(ftti - det - rea, 'ms', 0.001, String(ftti - det - rea)), `${ftti} - ${det} - ${rea} = ${ftti - det - rea} ms.`, 'FTTI minus detection minus reaction.'),
+      'the FTTI budget', idea,
+      calc('Time used = detection + reaction, in ms:', `${det} + ${rea}`, det + rea, 'ms', String(det + rea), 0.001),
+      calc('Margin = FTTI - time used, in ms:', `${ftti} - ${det + rea}`, ftti - det - rea, 'ms', String(ftti - det - rea), 0.001));
+    const per = pick(r, [1, 2, 3]);
+    if (d === 2) return walk(ask(`The FTTI is ${ftti + 5} ms. The self-test runs every ${per} ms (a fault can wait that long for the next run), evaluating takes ${det} ms and the reaction takes ${rea} ms. Margin, in ms?`, qty(ftti + 5 - per - det - rea, 'ms', 0.001, String(ftti + 5 - per - det - rea)), `${ftti + 5} - ${per} - ${det} - ${rea} = ${ftti + 5 - per - det - rea} ms. The test interval counts as detection time.`, 'Wait for the test + evaluate + react.'),
+      'the FTTI budget with a test interval', `${idea} If detection is a periodic test, a fault may appear just after a run and wait a whole interval before the next one.`,
+      calc('Detection time = wait + evaluation, in ms:', `${per} + ${det}`, per + det, 'ms', String(per + det), 0.001),
+      calc('Margin = FTTI - detection - reaction, in ms:', `${ftti + 5} - ${per + det} - ${rea}`, ftti + 5 - per - det - rea, 'ms', String(ftti + 5 - per - det - rea), 0.001));
+    const f2 = pick(r, [20, 30, 40, 50]), det2 = pick(r, [2, 4, 6]), allowed = 0.8 * f2 - det2;
+    return walk(ask(`Design rule: detection plus reaction may use at most 80% of the ${f2} ms FTTI. Detection takes ${det2} ms. What is the longest reaction time allowed, in ms?`, qty(allowed, 'ms', 0.01, sig(allowed)), `0.8 × ${f2} = ${sig(0.8 * f2)} ms in all; minus ${det2} ms for detection leaves ${sig(allowed)} ms.`, 'Take 80% of the FTTI, then subtract the detection time.'),
+      'the reaction time that fits', idea,
+      calc('The time budget, 80% of the FTTI, in ms:', `0.8 × ${f2}`, 0.8 * f2, 'ms', sig(0.8 * f2, 4), 0.005),
+      calc('Reaction allowed = budget - detection, in ms:', `${sig(0.8 * f2, 4)} - ${det2}`, allowed, 'ms', sig(allowed), 0.01));
+  },
+  (r, d) => {
+    const T = { B: [90, 60, 100], C: [97, 80, 100], D: [99, 90, 10] } as const;
+    const idea = 'Hardware metrics have targets for each ASIL. Single-point fault metric (SPFM): 90% for B, 97% for C, 99% for D. Latent fault metric (LFM): 60%, 80%, 90%. Random-failure budget (PMHF): under 100, 100 and 10 FIT. A design reaches an ASIL only if it meets every target of that level. For ASIL B they are recommended; for C and D they are required.';
+    if (d === 1) {
+      const lv = pick(r, ['B', 'C', 'D'] as const), m = pick(r, [['SPFM', 0], ['LFM', 1]] as const);
+      return walk(ask(`What minimum ${m[0]} does ASIL ${lv} aim for, in %?`, qty(T[lv][m[1]], '%', 0.001, String(T[lv][m[1]])), `${m[0]} for ASIL ${lv}: ${T[lv][m[1]]}%.`, 'B, C, D: SPFM 90, 97, 99; LFM 60, 80, 90.'),
+        'the metric targets', idea,
+        choice(`${m[0]} targets rise with the level:`, 'Yes: D is the strictest', ['No: they are the same for B, C and D', 'No: D is the most relaxed']),
+        step(`The ${m[0]} target for ASIL ${lv}, in %:`, qty(T[lv][m[1]], '%', 0.001, String(T[lv][m[1]]))));
+    }
+    const spfm = pick(r, [88, 91, 96, 97.5, 98.5, 99.4]), lfm = pick(r, [55, 62, 78, 85, 92]), pm = d === 3 ? pick(r, [8, 40, 150]) : 0;
+    const meets = (lv: 'B' | 'C' | 'D') => spfm >= T[lv][0] && lfm >= T[lv][1] && (d < 3 || pm < T[lv][2]);
+    const best = meets('D') ? 'D' : meets('C') ? 'C' : meets('B') ? 'B' : 'none';
+    return walk(ask(`A design has SPFM ${spfm}%, LFM ${lfm}%${d === 3 ? ` and PMHF ${pm} FIT` : ''}. What is the highest ASIL whose targets it meets? (B, C, D or none)`, words(best, `ASIL ${best}`), `${best === 'none' ? 'Not even ASIL B: SPFM needs 90% and LFM 60%' + (d === 3 ? ', PMHF under 100 FIT' : '') + '.' : `It meets ASIL ${best}.`} Every target of the level has to be met, not just one.`, 'Check each level from D down; all targets must pass.'),
+      'matching metrics to an ASIL', idea,
+      choice('To reach a level, the design must meet:', 'Every target of that level', ['Any one target of that level', 'Only the SPFM target']),
+      step('Highest ASIL met (B, C, D or none):', words(best, `ASIL ${best}`)));
+  },
   (r, d) => concept(r, [...atLevel(2, [
-    ['ISO 26262 grades risk ASIL A to D. Which needs the most rigor?', 'ASIL D', ['ASIL A', 'QM', 'All equal'], 'ASIL levels', 'The automotive safety integrity level is set by three things: how severe the harm would be, how often the situation occurs, and how controllable it is for the driver. Losing the brakes is worst on all three, so it is ASIL D, with the strictest requirements.', ['Losing braking is graded:', 'ASIL D, the highest', ['ASIL A, the highest', 'QM, no ASIL needed']], 'For example braking and steering.'],
+    ['Automotive safety grades risk ASIL A to D. Which needs the most rigor?', 'ASIL D', ['ASIL A', 'QM', 'All equal'], 'ASIL levels', 'The automotive safety integrity level is set by three things: how severe the harm would be, how often the situation occurs, and how controllable it is for the driver. An ASIL belongs to a hazardous event (and the safety goal that covers it). A brake failure that is severe, common and out of the driver\'s control reaches ASIL D, the strictest grade; not every braking function is ASIL D.', ['A severe, common, uncontrollable hazard is graded:', 'ASIL D, the highest', ['ASIL A, the highest', 'QM, no ASIL needed']], 'It is for a hazard that is severe, common and hard for the driver to control.'],
     ['Which is a random hardware fault rather than a systematic one?', 'An alpha particle flips an SRAM bit', ['A bug in the RTL of the controller', 'A wrong requirement in the spec', 'A missing timing constraint on a path'], 'random versus systematic faults', 'Random faults come from physics and happen by chance in working hardware (a particle, wear); safety mechanisms handle them. Systematic faults come from mistakes in the design or the requirements, which are built into every unit and are prevented by a good process.', ['A bug in the RTL is:', 'A systematic fault', ['A random hardware fault', 'A transient soft error']]],
     ['Two identical cores run a couple of cycles apart and compare outputs every cycle. What is it?', 'Dual-core lockstep', ['Hyperthreading', 'Speculation', 'Cache coherence protocol'], 'lockstep cores', 'Two cores run the same program and a checker compares their outputs. If a random fault upsets only one, the outputs differ and the fault is caught. A small delay between them makes it unlikely that one event corrupts both the same way.', ['A mismatch between the two cores means:', 'A fault happened in one of them', ['Both cores failed in the same way', 'The program has a software bug']], 'It detects random faults in either core.'],
-    ['How do you show a safety mechanism reaches its claimed coverage?', 'Inject faults and count detections', ['Ask the designer to sign a statement', 'Run the normal regression one more time', 'Measure the power with the mechanism on'], 'measuring coverage', 'Coverage is a measured number, not a promise. You deliberately inject many faults (flip bits, stick signals) in simulation or emulation and count how many the safety mechanism catches.', ['Diagnostic coverage is measured by:', 'Injecting faults and counting detections', ['Counting the lines of safety code reviewed', 'Reading the safety spec']], 'Fault-injection campaigns force faults in simulation or emulation and count how many are detected.'],
+    ['How do you show a safety mechanism reaches its claimed coverage?', 'Inject faults and count detections', ['Ask the designer to sign a statement', 'Run the normal regression one more time', 'Measure the power with the mechanism on'], 'measuring coverage', 'Claimed coverage needs evidence. You deliberately inject many faults (flip bits, stick signals) in simulation or emulation and count how many the safety mechanism catches: fault injection is the main evidence for the coverage you claim. Early FMEDAs can start from typical values for each kind of safety mechanism.', ['Diagnostic coverage is measured by:', 'Injecting faults and counting detections', ['Counting the lines of safety code reviewed', 'Reading the safety spec']], 'Fault-injection campaigns force faults in simulation or emulation and count how many are detected.'],
     ['Why does a watchdog timer exist in a safety system?', 'To catch lock-ups and force a safe state', ['To count cars passing the sensor', 'To speed up the boot after a reset', 'To encrypt data on the CAN bus'], 'watchdog timers', 'A watchdog is an independent timer that counts down. Healthy software "kicks" it regularly to restart the count. If the software hangs, it stops kicking, the timer runs out, and the watchdog forces a reset into a safe state.', ['A hung program stops kicking the watchdog, so it:', 'Expires and forces a safe reset', ['Keeps counting with no action', 'Waits for the code to recover']], 'If it is not serviced in time, it forces a safe state.'],
   ]),
     ...atLevel(1, [['What does ECC memory do?', 'Detects and corrects bit errors in stored data', ['Makes the memory run faster', 'Stores a backup copy of the whole OS', 'Encrypts the stored data so it cannot be read'], 'ECC codes', 'Error-correcting code adds check bits to each word. A single flipped bit can be located and fixed, and a double flip is detected, which protects against soft errors from radiation.', ['ECC can correct how many flipped bits per word?', 'One', ['Zero', 'Any number']]]]),
     ...atLevel(3, [['What does a safe state mean for a safety system?', 'A state where a fault cannot lead to harm', ['A state where the chip is fully fast', 'A state with all clocks running', 'A state where the chip reboots itself every second'], 'safe state', 'A safe state is a defined state the system can enter on a fault, where the fault can no longer cause a hazard. Examples are shutting off an actuator or holding it in a known position.', ['A safe state is one where:', 'A fault cannot cause harm', ['The system runs at full speed']]]]),
+    ...atLevel(3, [
+    ['Which decomposition of an ASIL D requirement is valid?', 'B(D) + B(D)', ['A(D) + A(D)', 'A(D) + B(D)', 'B(D) + QM(D)'],
+      'ASIL decomposition', 'A requirement can be split between two independent elements, each built to a lower level. The valid splits of D are C(D) + A(D), B(D) + B(D) and D(D) + QM(D). The two elements must be truly independent, which dependent-failure analysis checks.',
+      ['Decomposition only works if the two elements are:', 'Independent', ['Identical', 'Faster']], 'The valid splits of D are C(D) + A(D), B(D) + B(D) and D(D) + QM(D), and only for independent elements'],
+    ['For which ASIL are the numeric hardware metric targets only recommended, not required?', 'ASIL B', ['ASIL C', 'ASIL D', 'ASIL C and D'],
+      'which targets are mandatory', 'The SPFM, LFM and PMHF targets are recommended for ASIL B and required for C and D. Decomposing a requirement does not relax them, and they apply per item and per safety goal.',
+      ['At ASIL D the metric targets are:', 'Required', ['Optional', 'Waived by decomposition']], 'Recommended for B, required for C and D'],
+    ['Two channels take their clock from the same oscillator. What does the shared clock threaten?', 'Independence: one common cause can fail both', ['Speed: the channels run too slowly together', 'Area: the oscillator takes room on the die', 'Nothing, as long as both channels agree'],
+      'dependent failures', 'Redundancy only helps if one fault can not take out both copies. A shared clock, supply or layout region is a common cause, and dependent-failure analysis looks for exactly these.',
+      ['A fault in a shared clock can hit:', 'Both channels at once', ['Only one channel', 'Neither channel']], 'A common-cause failure: one fault in the shared clock defeats the redundancy'],
+    ]),
   ], (why) => `${why}.`, d),
 ]);
 
@@ -320,15 +487,18 @@ export const fusaBoss = boss({
   concept: 'take a microcontroller to ASIL D',
   xp: 220,
   steps: [
-    say('Boss fight, {name}. A brake-by-wire controller must reach ASIL D. The assessor is coming next month. Exam rules.', 'concerned'),
-    { t: 'gen', make: () => ask('What minimum single-point fault metric (SPFM) does ASIL D require, in %?', qty(99, '%', 0.001, '99'), 'ASIL D: SPFM ≥ 99%, LFM ≥ 90%, PMHF < 10 FIT.') },
-    { t: 'gen', make: () => { const res = (200 + 300 + 50) * 0.02; return ask('Dangerous FIT: CPU 200, SRAM 300, interconnect 50. Every block has 98% diagnostic coverage. Residual FIT?', qty(res, '', 0.02, sig(res)), `550 × 0.02 = ${sig(res)} FIT: over the 10 FIT limit.`); } },
+    say('Boss fight, {name}. A brake-by-wire controller must reach ASIL D. The whole item has under 10 FIT to spend, and this chip is allocated 5 FIT of it. The assessor is coming next month. Exam rules.', 'concerned'),
+    { t: 'gen', make: () => ask('What minimum single-point fault metric (SPFM) does ASIL D require, in %?', qty(99, '%', 0.001, '99'), 'ASIL D: SPFM ≥ 99%, LFM ≥ 90%, PMHF < 10 FIT for the whole item, of which this chip is allocated 5 FIT.') },
+    { t: 'gen', make: () => { const res = (200 + 300 + 50) * 0.02; return ask('Dangerous FIT: CPU 200, SRAM 300, interconnect 50. Every block has 98% diagnostic coverage. Residual FIT?', qty(res, '', 0.02, sig(res)), `550 × 0.02 = ${sig(res)} FIT: over the chip\'s 5 FIT budget.`); } },
     mc('Which single change cuts residual FIT the most?', ['ECC on the SRAM and lockstep on the CPU', 'More software self-tests at boot', 'Bigger caches to cut DRAM traffic', 'A watchdog on the CPU and parity on the bus'], 0, 'SECDED ECC and lockstep raise the coverage of the two blocks that carry most of the raw FIT. Attack the biggest contributors first; ECC and lockstep give 99%+ coverage.'),
-    { t: 'gen', make: () => { const res = 200 * 0.01 + 300 * 0.001 + 50 * 0.02; return ask('Now CPU 99% (lockstep), SRAM 99.9% (ECC), interconnect still 98%. Residual FIT?', qty(res, '', 0.02, sig(res)), `200 × 0.01 + 300 × 0.001 + 50 × 0.02 = ${sig(res)} FIT: under 10.`); } },
+    { t: 'gen', make: () => { const res = 200 * 0.01 + 300 * 0.001 + 50 * 0.02; return ask('Now CPU 99% (lockstep), SRAM 99.9% (ECC), interconnect still 98%. Residual FIT?', qty(res, '', 0.02, sig(res)), `200 × 0.01 + 300 × 0.001 + 50 × 0.02 = ${sig(res)} FIT: under the chip\'s 5 FIT budget.`); } },
     { t: 'gen', make: () => ask('SECDED on 64-bit SRAM words: how many check bits?', num(8), 'SEC needs 7 (2⁷ = 128 ≥ 64 + 7 + 1), plus 1 for double detection: 8. The classic 72-bit ECC word.') },
     { t: 'gen', make: () => { const f = (3.3 * 5e6 * 500) / 1e9; return ask('At 3.3 FIT residual, a fleet of 5 million cars running 500 hours a year. Expected dangerous failures per year?', qty(f, '', 0.02, sig(f)), `3.3 × 5e6 × 500 / 1e9 = ${sig(f)}. That is why the target is so strict.`); } },
+    { t: 'gen', make: () => ask('The hazard analysis rates unintended full braking at speed S3, E3, C3. Which ASIL? (A, B, C, D or QM)', words('C', 'ASIL C'), '3 + 3 + 3 = 9, which is ASIL C. Only S3 + E4 + C3 = 10 reaches D.') },
+    mc('The team wants to split an ASIL D requirement across two independent channels. Which split is valid?', ['A(D) + A(D)', 'B(D) + B(D)', 'A(D) + B(D)', 'B(D) + QM(D)'], 1, 'The valid splits are C(D) + A(D), B(D) + B(D) and D(D) + QM(D). The channels must be independent, and the metric targets do not get easier.'),
+    { t: 'gen', make: () => ask('The FTTI is 20 ms. Detection takes 4 ms and the reaction 6 ms. Margin, in ms?', qty(10, 'ms', 0.001, '10'), '20 - 4 - 6 = 10 ms of margin.') },
   ],
-  recap: ['ASIL D targets.', 'Residual FIT.', 'ECC and lockstep.', 'Fleet-scale failures.'],
+  recap: ['ASIL D targets.', 'Residual FIT.', 'ECC and lockstep.', 'Fleet-scale failures.', 'S + E + C lookup.', 'Decomposition and FTTI.'],
 });
 
 // ------------------------------------------------------------------ silicon photonics
@@ -337,7 +507,7 @@ export const photonicsPractice = practice('practice-photonics', 'Photonics Drill
   (r, d) => {
     const m = pick(r, [['Silicon', 1.12], ['Germanium', 0.66], ['InP', 1.34], ['GaAs', 1.42], ['GaN', 3.4], ['InGaAs', 0.75]] as const);
     const idea = 'Light comes in particles called photons, and each photon of wavelength λ carries energy E = h·c ÷ λ. In convenient units: E (in eV) = 1.24 ÷ λ (in µm). A semiconductor can absorb a photon only if its energy is at least the material\'s band gap Eg. So the LONGEST wavelength a material absorbs is where the photon energy equals the band gap: λ = 1.24 ÷ Eg.';
-    if (d < 3) return walk(ask(`${m[0]} has a band gap of ${m[1]} eV. Longest wavelength it absorbs, in µm? (λ = 1.24/Eg)`, qty(1.24 / m[1], 'um', 0.02, sig(1.24 / m[1])), `1.24 / ${m[1]} = ${sig(1.24 / m[1])} µm. Silicon is transparent at 1.31 and 1.55 µm, which is why it makes good waveguides and needs germanium to detect light.`, 'Photon energy must exceed the band gap.'),
+    if (d < 3) return walk(ask(`${m[0]} has a band gap of ${m[1]} eV. Longest wavelength it absorbs, in µm? (λ = 1.24/Eg)`, qty(1.24 / m[1], 'um', 0.02, sig(1.24 / m[1])), `1.24 / ${m[1]} = ${sig(1.24 / m[1])} µm. Silicon is transparent at 1.31 and 1.55 µm, which is why it makes good waveguides and needs germanium to detect light.${m[0] === 'Germanium' ? ' Germanium\'s 0.66 eV is its indirect gap; useful absorption fades beyond about 1.55–1.6 µm, set by its 0.8 eV direct gap.' : ''}`, 'Photon energy must exceed the band gap.'),
       'the absorption edge', idea,
       choice('A photon can be absorbed only if its energy is:', 'At least the band gap', ['Below the band gap', 'Exactly zero']),
       calc('λ = 1.24 ÷ Eg, in µm:', `1.24 / ${m[1]}`, 1.24 / m[1], 'um', sig(1.24 / m[1]), 0.02));
@@ -397,7 +567,7 @@ export const photonicsPractice = practice('practice-photonics', 'Photonics Drill
   },
   (r, d) => concept(r, [...atLevel(2, [
     ['Why can\'t you easily make a laser out of silicon?', 'Its band gap is indirect', ['Silicon is too expensive', 'Silicon absorbs all light', 'Silicon melts when pumped'], 'direct versus indirect band gaps', 'In a direct band-gap material, an electron and a hole recombine by emitting a photon easily. Silicon has an indirect band gap: recombination also needs a lattice vibration (a phonon), which makes light emission rare and inefficient. So lasers are made of III-V materials such as InP and attached to the silicon.', ['Silicon emits light poorly because its band gap is:', 'Indirect', ['Direct', 'Too wide']], 'Electrons and holes rarely recombine by emitting light, so lasers use III-V materials bonded or attached.'],
-    ['What is the classic problem with ring modulators?', 'Resonance drifts with temperature', ['They only work in red light', 'They are too big for a chip', 'They need no power, so cannot be tuned'], 'ring resonators', 'A ring modulator works only for wavelengths that fit the ring exactly (its resonance). Silicon\'s refractive index changes with temperature, which shifts the resonant wavelength (about 0.1 nm per kelvin), so a heater and feedback loop must hold it in place.', ['If the ring heats up, its resonant wavelength:', 'Shifts', ['Stays the same', 'Disappears']], 'Each needs a heater and control loop.'],
+    ['What is the classic problem with ring modulators?', 'Resonance drifts with temperature', ['They only work in red light', 'They are too big for a chip', 'They need no power, so cannot be tuned'], 'ring resonators', 'A ring modulator works only for wavelengths that fit the ring exactly (its resonance). Silicon\'s refractive index changes with temperature, which shifts the resonant wavelength (about 0.08 nm per kelvin as measured; textbooks round to about 0.1), so a heater and feedback loop must hold it in place.', ['If the ring heats up, its resonant wavelength:', 'Shifts', ['Stays the same', 'Disappears']], 'Each needs a heater and control loop.'],
     ['Why move optics into the package (co-packaged optics)?', 'Short electrical paths cut pJ/bit', ['Fibres are cheaper than copper', 'It removes the need for lasers', 'It makes the switch die smaller and cheaper'], 'co-packaged optics', 'Driving 200 Gb/s over long copper traces on a board needs power-hungry equalizing circuits. If the optical engine sits right next to the switch chip, the electrical path is only a few millimetres, which needs much less power per bit.', ['A shorter electrical path needs:', 'Less power per bit', ['More power per bit', 'No power']], 'Electrical traces to the front panel burn too much power at high rates.'],
     ['What does a Mach-Zehnder modulator do?', 'Interference turns a phase shift into intensity', ['It generates light by stimulated emission', 'It detects light as a photocurrent', 'It amplifies light by pumping a doped fibre'], 'Mach-Zehnder modulators', 'The light is split into two paths. A voltage changes the phase of light in one arm. When the paths recombine, waves in phase add up (bright) and waves 180° apart cancel (dark), so the voltage controls the output intensity.', ['Two waves 180° out of phase, when combined:', 'Cancel', ['Add up', 'Double in frequency']], 'It splits light into two arms, shifts the phase of one, and recombines them.'],
   ]),
@@ -405,6 +575,39 @@ export const photonicsPractice = practice('practice-photonics', 'Photonics Drill
     ...atLevel(2, [['What does a photodiode do?', 'Turns incoming light into a current', ['Turns a current into light for the fibre link', 'Guides light between two chips', 'Splits one beam into two'], 'photodiodes', 'A photodiode absorbs photons and produces an electrical current proportional to the light power. It is the receiving end of an optical link.', ['A photodiode produces:', 'A current from light', ['Light from a current']]]]),
     ...atLevel(3, [['Why is a silicon photonic modulator sensitive to temperature?', 'Its refractive index shifts with heat', ['Silicon has no band gap at room heat', 'Heat makes light travel slower in air', 'Temperature changes the laser colour only'], 'thermal drift', 'Silicon\'s refractive index rises slightly with temperature, which shifts a ring resonator\'s wavelength. Designs add heaters or tuning circuits to keep the ring locked to the laser.', ['Heating a silicon ring makes its resonance:', 'Shift to a longer wavelength', ['Disappear', 'Stay exactly fixed']]]]),
   ], (why) => `${why}.`, d),
+  (r, d) => {
+    // G2.7: dense wavelength grid anchored at 193.1 THz; spacing to wavelength by Δλ = λ²Δf/c.
+    const sp = pick(r, [100, 50, 25, 12.5] as const);
+    const idea = 'The dense wavelength grid is anchored at 193.1 THz, and channel n sits at 193.1 THz + n × spacing, with spacings of 100, 50, 25 or 12.5 GHz. To turn a frequency spacing into a wavelength spacing, use Δλ = λ² × Δf ÷ c (about 0.8 nm for 100 GHz at 1550 nm).';
+    if (d === 1) { const n = pick(r, [1, 2, 5, 12]), f = 193.1 + (n * 100) / 1000;
+      return walk(ask(`On the dense grid with 100 GHz spacing, what is the frequency of channel n = ${n}, counted up from the 193.1 THz anchor, in THz?`, qty(f, 'THz', 0.00003, String(+f.toFixed(3))), `193.1 + ${n} × 0.1 = ${+f.toFixed(3)} THz.`, 'Anchor plus n × 0.1 THz.'),
+        'the dense grid', idea,
+        calc('Offset = n × 0.1 THz:', `${n} × 0.1`, n * 0.1, 'THz', String(+(n * 0.1).toFixed(2)), 0.005),
+        calc('Frequency = 193.1 + offset, in THz:', `193.1 + ${+(n * 0.1).toFixed(2)}`, f, 'THz', String(+f.toFixed(3)), 0.00003)); }
+    if (d === 2) { const n = pick(r, [3, 6, 10, 16]), f = 193.1 + (n * sp) / 1000;
+      return walk(ask(`On the dense grid with ${sp} GHz spacing, what is the frequency of channel n = ${n}, in THz?`, qty(f, 'THz', 0.00003, String(+f.toFixed(4))), `193.1 + ${n} × ${sp / 1000} = ${+f.toFixed(4)} THz.`, 'Anchor plus n × spacing.'),
+        'the dense grid', idea,
+        calc('Offset = n × spacing, in THz:', `${n} × ${sp / 1000}`, (n * sp) / 1000, 'THz', String((n * sp) / 1000), 0.005),
+        calc('Frequency = 193.1 + offset, in THz:', `193.1 + ${(n * sp) / 1000}`, f, 'THz', String(+f.toFixed(4)), 0.00003)); }
+    const lam = pick(r, [1550, 1310]), dl = (lam ** 2 / 3e8) * sp;
+    return walk(ask(`At ${lam} nm, what wavelength spacing does a ${sp} GHz channel spacing correspond to, in nm? (Δλ = λ²·Δf / c, c = 3×10⁸ m/s)`, qty(dl, 'nm', 0.03, sig(dl)), `(${lam} nm)² × ${sp} GHz / c = ${sig(dl)} nm.`, 'λ² times Δf over c.'),
+      'frequency spacing to wavelength', idea,
+      calc('λ² ÷ c, which comes to this many nm per GHz when λ is in nm and c = 3×10⁸:', `${lam}² / 300000000`, (lam ** 2) / 3e8, '', sig((lam ** 2) / 3e8, 4), 0.03),
+      calc('Δλ = that × Δf, in nm:', `${sig((lam ** 2) / 3e8, 4)} × ${sp}`, dl, 'nm', sig(dl), 0.03));
+  },
+  (r, d) => {
+    // G2.7: lanes × rate for a port, and PAM4's two bits per symbol.
+    const [n, rate] = pick(r, [[8, 100], [4, 200], [8, 200], [4, 100], [2, 200], [2, 100]] as const), t = n * rate;
+    if (d === 1) return walk(ask(`A port has ${n} lanes at ${rate} Gb/s each. What is its total rate, in Gb/s?`, qty(t, 'Gb/s', 0.01, String(t)), `${n} × ${rate} = ${t} Gb/s.`, 'Lanes times rate.'),
+      'lanes times rate', 'A port\'s rate is its number of lanes times the rate of each lane: 800G is 8 × 100G or 4 × 200G, and 1.6T is 8 × 200G.',
+      count('Total in Gb/s = lanes × rate:', `${n} × ${rate}`, t));
+    if (d === 2) return walk(ask(`A PAM4 lane carries ${rate} Gb/s. PAM4 sends two bits per symbol. What is the symbol rate, in GBd (ignoring coding overhead)?`, qty(rate / 2, 'GBd', 0.02, String(rate / 2)), `${rate} / 2 = ${rate / 2} GBd.`, 'Bits per second over bits per symbol.'),
+      'PAM4 symbol rate', 'PAM4 has four amplitude levels, so each symbol carries two bits. The symbol rate is half the bit rate (before any coding overhead).',
+      calc('Symbol rate = bit rate ÷ 2, in GBd:', `${rate} / 2`, rate / 2, 'GBd', String(rate / 2), 0.02));
+    return walk(ask(`A switch port must carry ${t} Gb/s using PAM4 lanes of ${rate} Gb/s. How many lanes does it need?`, num(n), `${t} / ${rate} = ${n} lanes (each running at ${rate / 2} GBd of PAM4 symbols).`, 'Port rate over lane rate.'),
+      'lanes for a port', 'Divide the port rate by the lane rate to count lanes. Each PAM4 lane runs at half its bit rate in symbols per second.',
+      count('Lanes = port rate ÷ lane rate:', `${t} / ${rate}`, n));
+  },
 ]);
 
 export const photonicsBoss = boss({
@@ -419,7 +622,7 @@ export const photonicsBoss = boss({
     { t: 'gen', make: () => ask('Each fibre carries 8 wavelengths at 200 Gb/s. How many fibres for 51.2 Tb/s?', num(32), '8 × 200 = 1.6 Tb/s per fibre; 51.2 / 1.6 = 32.') },
     { t: 'gen', make: () => ask('Laser 6 dBm, two couplers of 2 dB, modulator 5 dB, waveguide 1 dB. Received power, in dBm?', qty(-4, 'dBm', 0.02, '-4'), '6 - 4 - 5 - 1 = -4 dBm.') },
     { t: 'gen', make: () => ask('The receiver needs -9 dBm. Margin, in dB?', qty(5, 'dB', 0.02, '5'), '-4 - (-9) = 5 dB.') },
-    mc('In the field, one wavelength fails as the switch heats up. Likely cause?', ['A ring modulator drifted off resonance', 'The fibre connector loosened', 'The laser power is too high at that wavelength', 'The germanium detector stopped absorbing'], 0, 'Its heater control could not track the temperature. Rings move about 0.1 nm/K; thermal tuning must track it.'),
+    mc('In the field, one wavelength fails as the switch heats up. Likely cause?', ['A ring modulator drifted off resonance', 'The fibre connector loosened', 'The laser power is too high at that wavelength', 'The germanium detector stopped absorbing'], 0, 'Its heater control could not track the temperature. Rings move about 0.08 nm/K; thermal tuning must track it.'),
   ],
   recap: ['pJ/bit.', 'WDM.', 'Link budget.', 'Ring thermal tuning.'],
 });
@@ -451,7 +654,7 @@ export const qubitPractice = practice('practice-qubit', 'Qubit Drills', 'state s
       count('Round down to a whole number of qubits:', `floor(${sig(Math.log2((tb * 1e12) / 16), 4)})`, n));
   },
   (r, d) => {
-    const idea = 'Measuring a qubit gives 0 or 1 at random. If the qubit is in the state a|0⟩ + b|1⟩, the probability of reading 1 is b², the SQUARE of its amplitude (the Born rule); reading 0 has probability a², and the two add up to 1.';
+    const idea = 'Measuring a qubit gives 0 or 1 at random. If the qubit is in the state a|0⟩ + b|1⟩, the probability of reading 1 is |b|², the squared magnitude of its amplitude (the Born rule); reading 0 has probability |a|², and the two add up to 1. The amplitudes can be complex numbers, and |b|² = (real part)² + (imaginary part)².';
     if (d === 1) return walk(ask('A qubit in |0⟩ goes through a Hadamard gate and is measured. Probability of reading 1, in %?', qty(50, '%', 0.01, '50'), 'H makes (|0⟩ + |1⟩)/√2, and each outcome has probability (1/√2)² = 50%.', 'Square the amplitude.'),
       'the Born rule after a Hadamard', `${idea} The Hadamard gate turns |0⟩ into (|0⟩ + |1⟩) ÷ √2: both amplitudes are 1 ÷ √2.`,
       calc('Probability of 1 = (1 ÷ √2) squared, as a %:', '(1 / sqrt(2))^2 × 100', 50, '%', '50', 0.01));
@@ -459,8 +662,16 @@ export const qubitPractice = practice('practice-qubit', 'Qubit Drills', 'state s
       const [a, b] = pick(r, [[0.6, 0.8], [0.8, 0.6], [0.28, 0.96]] as const);
       return walk(ask(`A qubit is in ${a}|0⟩ + ${b}|1⟩. Probability of measuring 1, in %?`, qty(b * b * 100, '%', 0.01, sig(b * b * 100)), `|${b}|² = ${sig(b * b)} → ${sig(b * b * 100)}%. Probabilities are squared amplitudes, and they add to 1.`, 'Born rule.'),
         'the Born rule', idea,
-        choice('The amplitude of |1⟩ is ' + b + '. The probability of reading 1 is the amplitude:', 'Squared', ['Itself', 'Doubled']),
+        choice('The amplitude of |1⟩ is ' + b + '. The probability of reading 1 is the amplitude:', 'Squared in magnitude', ['Itself', 'Doubled']),
         calc('Probability = amplitude squared, as a % (× 100):', `${b}^2 × 100`, b * b * 100, '%', sig(b * b * 100), 0.01));
+    }
+    if (pick(r, [0, 1]) === 1) {
+      const [re, im] = pick(r, [[0.5, 0.5], [0.6, 0.8], [0, 1], [0.3, 0.4]] as const), pc = (re * re + im * im), amp = `(${re} + ${im}i)`;
+      return walk(ask(`A qubit's amplitude for |1⟩ is b = ${amp}. Probability of measuring 1 is |b|² (the squared magnitude, not b²). Give |b|², as a number?`, qty(pc, '', 0.01, sig(pc)), `|b|² = ${re}² + ${im}² = ${sig(pc)}. Squaring a complex amplitude directly (b²) would give a complex number, not a probability.`, '|b|² = real² + imaginary².'),
+        'the Born rule with complex amplitudes', idea,
+        calc('Real part squared:', `${re}^2`, re * re, '', sig(re * re), 0.001),
+        calc('Imaginary part squared:', `${im}^2`, im * im, '', sig(im * im), 0.001),
+        calc('|b|² = sum of the two:', `${sig(re * re)} + ${sig(im * im)}`, pc, '', sig(pc), 0.01));
     }
     const th = pick(r, [30, 60, 90, 120, 150, 180]), p = Math.sin(((th / 2) * Math.PI) / 180) ** 2 * 100;
     return walk(ask(`A qubit in |0⟩ is rotated by θ = ${th}° about the X axis, giving cos(θ/2)|0⟩ - i·sin(θ/2)|1⟩. Probability of measuring 1, in %?`, qty(p, '%', 0.02, sig(p)), `sin²(${th / 2}°) = ${sig(p)}%. A π rotation (180°) flips the qubit completely.`, 'sin²(θ/2).'),
@@ -521,7 +732,44 @@ export const qubitPractice = practice('practice-qubit', 'Qubit Drills', 'state s
     ...atLevel(1, [['What is a qubit?', 'A two-level quantum system in superposition', ['A classical bit stored in a leaky capacitor cell', 'A logic gate with two inputs', 'A laser pulse of fixed length'], 'qubits', 'A qubit is a quantum system with two basis states, |0⟩ and |1⟩, that can be in a superposition of both. Measurement gives 0 or 1 with probabilities set by the amplitudes.', ['A qubit can be in:', 'A superposition of 0 and 1', ['Only 0', 'Only 1']]]]),
     ...atLevel(2, [['What does a single-qubit gate do?', 'A unitary operation on the qubit state', ['A measurement that collapses the state', 'A copy of the state into another qubit', 'A reset to the ground state only'], 'quantum gates', 'Gates are reversible, unitary operations that rotate the state vector. Measurement is different: it is not unitary and gives a random outcome.', ['Quantum gates (other than measurement) are:', 'Reversible', ['Irreversible', 'Random']]]]),
     ...atLevel(3, [['Why is the no-cloning theorem a problem for error correction?', 'You cannot copy a qubit to check it', ['Copies would slow the gates down', 'Measuring always destroys the qubit forever', 'Qubits cannot hold more than one bit'], 'no-cloning', 'No-cloning forbids making an unknown quantum state copy. Classical error correction copies bits to compare them, so quantum codes must spread the information over several qubits and measure parities instead.', ['No-cloning means an unknown qubit state:', 'Cannot be copied', ['Can be copied freely']]]]),
+    ...atLevel(3, [
+    ['How do T2* and T2 echo compare for one qubit?', 'T2* is the shorter, as an echo refocuses slow noise', ['They are always equal, both being dephasing times', 'T2* is the longer, because an echo pulse adds noise to it', 'T2 echo can exceed 2·T1 with a well-designed pulse train'], 'T2* versus T2 echo', 'A Ramsey experiment gives T2*, which includes slow drifts. An echo pulse cancels the slow part and gives the longer T2 echo. Neither can pass 2·T1, since energy relaxation also destroys phase: T2* ≤ T2 ≤ 2·T1.',
+      ['An echo pulse refocuses:', 'Slow noise', ['Energy relaxation', 'The readout']]],
+    ['Which of these is one of DiVincenzo\'s five criteria?', 'Coherence times much longer than the gate time', ['A dilution refrigerator colder than ten millikelvin', 'At least a million physical qubits in total', 'A control clock running above one gigahertz'], 'DiVincenzo\'s criteria', 'The five are: scalable well-characterised qubits, initialisation to a simple state, long coherence compared with gate time, a universal gate set, and qubit-specific measurement.',
+      ['Gates must be fast compared with:', 'Coherence time', ['The supply voltage', 'The cable length']]],
+    ['What does quantum volume report?', '2^n for the largest n-qubit, depth-n circuit that passes', ['The number of physical qubits fitted on the chip', 'The cooling power of the refrigerator at its coldest stage', 'The clock speed of the control electronics in GHz'], 'quantum volume', 'Quantum volume folds qubit count, gate fidelity and connectivity into one number: a machine that can pass an n-qubit, depth-n random circuit has quantum volume 2^n. Layer fidelity instead reports the error of a whole layer of two-qubit gates.',
+      ['A passing 6-qubit, depth-6 circuit gives a volume of:', '64', ['6', '36']]],
+    ]),
   ], (why) => `${why}.`, d),
+  (r, d) => {
+    // G2.8: below threshold, each step d -> d + 2 divides the logical error by Λ.
+    const lam = pick(r, [2, 3, 4]), e = pick(r, [0.4, 0.6, 1.2, 2.4, 4.8]);
+    const idea = 'Below the surface-code threshold (near 1% physical error), each step up in code distance, d to d + 2, divides the logical error rate by a factor Λ. A 2024 experiment measured Λ about 2.1. After k steps the error is the starting error divided by Λ to the power k.';
+    if (d === 1) return walk(ask(`A surface code has Λ = ${lam}. One step up in distance (d to d + 2) takes a logical error of ${e}% per cycle to what, in %?`, qty(e / lam, '%', 0.02, sig(e / lam)), `${e} / ${lam} = ${sig(e / lam)}%.`, 'Divide by Λ once.'),
+      'the error suppression factor', idea,
+      calc('New error = old ÷ Λ, in %:', `${e} / ${lam}`, e / lam, '%', sig(e / lam), 0.02));
+    const k = d === 2 ? 2 : pick(r, [2, 3]), d0 = pick(r, [3, 5]), d1 = d0 + 2 * k;
+    const out = e / lam ** k;
+    return walk(ask(`A surface code has Λ = ${lam}. At distance ${d0} its logical error is ${e}% per cycle. What is it at distance ${d1}, in %?`, qty(out, '%', 0.03, sig(out)), `From ${d0} to ${d1} is ${k} steps of +2: ${e} / ${lam}^${k} = ${sig(out)}%.`, 'Count the +2 steps, divide by Λ each time.'),
+      'the error suppression factor', idea,
+      count('Steps of +2 from the first distance to the second:', `(${d1} - ${d0}) / 2`, k),
+      calc('Error = start ÷ Λ^steps, in %:', `${e} / ${lam}^${k}`, out, '%', sig(out), 0.03));
+  },
+  (r, d) => {
+    // G2.8: randomized benchmarking, r = (1 - p)(dim - 1)/dim, with dim = 2^n qubits.
+    const p = pick(r, [0.99, 0.992, 0.995, 0.998, 0.999, 0.9995]);
+    const idea = 'Randomized benchmarking runs random gate sequences of growing length and fits how the fidelity decays, giving a decay parameter p. The average error per gate is r = (1 - p) × (dim - 1) ÷ dim, where dim = 2 for one qubit and 4 for two.';
+    if (d === 1) return walk(ask(`A single-qubit benchmarking decay has p = ${p}. What is the average error per gate r = (1 - p)/2, in %?`, qty(((1 - p) / 2) * 100, '%', 0.03, sig(((1 - p) / 2) * 100)), `(1 - ${p}) / 2 = ${sig((1 - p) / 2)}, which is ${sig(((1 - p) / 2) * 100)}%.`, 'Half of (1 - p).'),
+      'randomized benchmarking', idea,
+      calc('1 - p:', `1 - ${p}`, 1 - p, '', String(+(1 - p).toFixed(4)), 0.005),
+      calc('r = (1 - p) ÷ 2, in %:', `${+(1 - p).toFixed(4)} / 2 × 100`, ((1 - p) / 2) * 100, '%', sig(((1 - p) / 2) * 100), 0.03));
+    if (d === 2) return walk(ask(`A single-qubit benchmarking run decays with p = ${p}. What is the average error per gate, in %? (r = (1 - p)(d - 1)/d, d = 2)`, qty(((1 - p) / 2) * 100, '%', 0.03, sig(((1 - p) / 2) * 100)), `(1 - ${p}) × 1 / 2 = ${sig((1 - p) / 2)} = ${sig(((1 - p) / 2) * 100)}%.`, 'The factor (d - 1)/d is 1/2.'),
+      'randomized benchmarking', idea,
+      calc('r = (1 - p) × (2 - 1) ÷ 2, in %:', `${+(1 - p).toFixed(4)} × 1 / 2 × 100`, ((1 - p) / 2) * 100, '%', sig(((1 - p) / 2) * 100), 0.03));
+    return walk(ask(`A two-qubit benchmarking run decays with p = ${p}. What is the average error per gate, in %? (r = (1 - p)(d - 1)/d, with d = 4 for two qubits)`, qty(((1 - p) * 3 / 4) * 100, '%', 0.03, sig(((1 - p) * 3 / 4) * 100)), `(1 - ${p}) × 3 / 4 = ${sig((1 - p) * 0.75)} = ${sig(((1 - p) * 3 / 4) * 100)}%.`, 'The factor (d - 1)/d is 3/4.'),
+      'randomized benchmarking', idea,
+      calc('r = (1 - p) × (4 - 1) ÷ 4, in %:', `${+(1 - p).toFixed(4)} × 3 / 4 × 100`, ((1 - p) * 3 / 4) * 100, '%', sig(((1 - p) * 3 / 4) * 100), 0.03));
+  },
 ]);
 
 export const qubitBoss = boss({
@@ -534,7 +782,7 @@ export const qubitBoss = boss({
     { t: 'gen', make: () => ask('To simulate 50 qubits classically (16 bytes per amplitude), how much memory, in PB?', qty((16 * 2 ** 50) / 1e15, 'PB', 0.02, sig((16 * 2 ** 50) / 1e15)), `16 × 2⁵⁰ = ${sig((16 * 2 ** 50) / 1e15)} PB.`) },
     { t: 'gen', make: () => ask('Two-qubit gates are 99.5% fidelity. Error-free probability of a 1000-gate circuit, in %?', qty(0.995 ** 1000 * 100, '%', 0.03, sig(0.995 ** 1000 * 100)), `0.995¹⁰⁰⁰ = ${sig(0.995 ** 1000 * 100)}%: almost always wrong.`) },
     { t: 'gen', make: () => ask('T1 = 100 µs and the circuit is 1000 gates deep at 50 ns per layer. Probability a qubit has not relaxed by the end, in %?', qty(Math.exp(-50 / 100) * 100, '%', 0.02, sig(Math.exp(-50 / 100) * 100)), `1000 × 50 ns = 50 µs; e^(-0.5) = ${sig(Math.exp(-0.5) * 100)}%.`) },
-    mc('What would make the claim credible?', ['Error correction with gates below threshold', 'More qubits of the same quality', 'A faster classical control computer', 'Running the circuit many more times and averaging'], 0, 'Encode logical qubits in many physical ones, with gates below the code threshold. Repetition cannot fix a signal that is almost all noise; only error correction scales.'),
+    mc('What would make the claim credible?', ['Error correction with gates below threshold', 'More qubits of the same quality', 'A faster classical control computer', 'Running the circuit many more times and averaging'], 0, 'Encode logical qubits in many physical ones, with gates below the code threshold (physical error rates below about 1% for the surface code, as Willow showed in 2024). Repetition cannot fix a signal that is almost all noise; only error correction scales.'),
     { t: 'gen', make: () => ask('With a distance-7 surface code (2d² - 1 each), how many physical qubits for 50 logical qubits?', num(50 * 97), '2 × 49 - 1 = 97 per logical qubit; × 50 = 4850.') },
     { t: 'gen', make: () => ask('The qubits are at 6 GHz. Temperature where kT equals one photon, in mK?', qty(((H * 6e9) / KB) * 1000, 'mK', 0.03, String(Math.round(((H * 6e9) / KB) * 1000))), `h·f/k = ${Math.round(((H * 6e9) / KB) * 1000)} mK. The fridge at 10 mK keeps them cold enough.`) },
   ],

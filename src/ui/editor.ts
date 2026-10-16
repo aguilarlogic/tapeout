@@ -41,6 +41,8 @@ function highlightWords(src: string, kw: Set<string>, comment: string, strs: str
 
 const STR = `"(?:\\\\.|[^"\\\\\\n])*"|'(?:\\\\.|[^'\\\\\\n])*'`;
 export const highlightPy = (src: string) => highlightWords(src, PY_KW, '#[^\\n]*', `"""[\\s\\S]*?"""|'''[\\s\\S]*?'''|${STR}`);
+const TCL_KW = new Set(['set', 'puts', 'proc', 'if', 'elseif', 'else', 'while', 'for', 'foreach', 'return', 'break', 'continue', 'expr', 'catch', 'error', 'switch', 'incr', 'lappend', 'global', 'upvar', 'dict', 'regexp', 'regsub', 'string', 'lindex', 'llength', 'lsort', 'foreach_in_collection', 'get_cells', 'get_pins', 'get_attribute']);
+export const highlightTcl = (src: string) => highlightWords(src, TCL_KW, '(?<=^|;)[ \\t]*#[^\\n]*', '"(?:\\\\[\\s\\S]|[^"\\\\])*"');
 export const highlightC = (src: string) => highlightWords(src, C_KW, '//[^\\n]*|/\\*[\\s\\S]*?\\*/|^[ \\t]*#[^\\n]*', STR);
 
 export function highlight(src: string): string {

@@ -122,7 +122,7 @@ const dftCoverage: ArchLevel = {
     const best = bestWithin(a, 99);
     const budget = best.vectors.length + 1;
     return {
-      brief: `<p><b>Fault coverage</b> = detected faults ÷ total faults. With ${nl.nets.length} nets there are ${nl.nets.length * 2} stuck-at faults (sa0 and sa1 on each). Exhaustive testing needs 2<sup>${nl.controls.length}</sup> = ${1 << nl.controls.length} vectors, but a handful usually detects everything: one vector detects many faults at once.</p>
+      brief: `<p><b>Fault coverage</b> = detected faults ÷ total faults. (The other figure, <b>test coverage</b> = detected ÷ (total − untestable), leaves out faults no vector can detect; both are shown below.) With ${nl.nets.length} nets there are ${nl.nets.length * 2} stuck-at faults (sa0 and sa1 on each). Exhaustive testing needs 2<sup>${nl.controls.length}</sup> = ${1 << nl.controls.length} vectors, but a handful usually detects everything: one vector detects many faults at once.</p>
 <p>Enter vectors (one per line, bits in the order <code>${order(nl)}</code>) so that <b>every fault is detected</b> using <b>at most ${budget} vectors</b>. The fault list shows which vector first caught each fault: aim your next vector at an uncaught one.</p>`,
       hints: ['Start with the all-ones and all-zeros vectors, then target the faults still marked with a dash.', 'A fault that is hard to activate or observe usually needs a specific combination of its neighbours: look at which inputs of the gates around it must be 1 or 0.'],
       controls: [{ id: 'vectors', kind: 'text', label: 'Test vectors (one per line)', value: '', rows: 6 }],
@@ -135,7 +135,7 @@ const dftCoverage: ArchLevel = {
           { label: `every testable fault is detected (${detectable} of ${fs.faults.length})`, ok: fs.detected >= detectable, note: `${fs.detected} detected` },
           { label: `at most ${budget} vectors`, ok: vecs.length > 0 && vecs.length <= budget, note: `${vecs.length} vectors` },
         ];
-        return { goals, metrics: [['fault coverage', pct(fs.coverage)], ['vectors', String(vecs.length)], ['faults', String(fs.faults.length)]], view: coverageView(fs, vecs) };
+        return { goals, metrics: [['fault coverage', pct(fs.coverage)], ['test coverage', pct(fs.detected / detectable)], ['vectors', String(vecs.length)], ['faults', String(fs.faults.length)]], view: coverageView(fs, vecs) };
       },
       solution: { values: { vectors: best.vectors.join('\n') } },
     };
@@ -151,7 +151,7 @@ const dftRedundant: ArchLevel = {
     const nl = parseNetlist(text), a = atpg(nl);
     const want = new Set(a.faults.filter((_, i) => !a.detectable[i]).map(faultName));
     return {
-      brief: `<p>Some faults can never be detected by any vector: the logic is <b>redundant</b>. If a fault changes no output for any input combination, no test can see it. Redundancy is often a left-over from logic minimisation (a consensus term, a reconvergent path that cancels), and it costs area for nothing; untestable faults also drag coverage down unless they are excluded from the figure.</p>
+      brief: `<p>Some faults can never be detected by any vector: the logic is <b>redundant</b>. If a fault changes no output for any input combination, no test can see it. Redundancy is often a left-over from logic minimisation (a consensus term, a reconvergent path that cancels), and it costs area for nothing; untestable faults also drag <b>fault coverage</b> (detected ÷ all faults) down. <b>Test coverage</b> (detected ÷ (all − untestable)) leaves them out, so it can reach 100% where fault coverage cannot.</p>
 <p>The circuit below is not minimal. List <b>every untestable stuck-at fault</b>, one per line as <code>net sa0</code> or <code>net sa1</code> (nets: ${nl.nets.join(', ')}). Think about which gate or term could be removed without changing the function. You can also try vectors in your head, or prove a fault undetectable by showing the output cannot change.</p>`,
       hints: ['Write down the function the circuit computes and simplify it. A term that is covered by the others (consensus: <code>ab + a\'c + bc = ab + a\'c</code>) can be deleted.', 'If a net can be forced to its stuck value without changing the output of any input, that stuck-at is undetectable.', 'A faulty net on a redundant term: stuck at the value that makes the term non-contributing is untestable.'],
       controls: [{ id: 'list', kind: 'text', label: 'Untestable faults (one per line)', value: '', rows: 5, placeholder: 'n3 sa0' }],
@@ -300,7 +300,7 @@ const dftBoss: ArchLevel = {
     const best = bestWithin(a, 99);
     const budget = best.vectors.length + 2;
     return {
-      brief: `<p>Produce a test set for this block: <b>at most ${budget} vectors</b> that detect every testable stuck-at fault, and report <b>how many of the ${a.faults.length} faults are untestable</b> (redundant). Inputs, in vector order: <code>${order(nl)}</code>. The fault list shows what each vector caught so far. Mix intuition and the fault table: aim each new vector at the nets that are still undetected.</p>`,
+      brief: `<p>Produce a test set for this block: <b>at most ${budget} vectors</b> that detect every testable stuck-at fault, and report <b>how many of the ${a.faults.length} faults are untestable</b> (redundant). The metrics show both fault coverage and test coverage: the second leaves the untestable faults out. Inputs, in vector order: <code>${order(nl)}</code>. The fault list shows what each vector caught so far. Mix intuition and the fault table: aim each new vector at the nets that are still undetected.</p>`,
       hints: [],
       controls: [{ id: 'vectors', kind: 'text', label: 'Test vectors (one per line)', value: '', rows: 8 }, { id: 'untestable', kind: 'number', label: 'Untestable faults', min: 0, max: 500, value: 0 }],
       listing: listing(text, 'The block'),
@@ -314,7 +314,7 @@ const dftBoss: ArchLevel = {
             { label: `at most ${budget} vectors`, ok: vecs.length > 0 && vecs.length <= budget, note: `${vecs.length} vectors` },
             { label: 'untestable fault count', ok: Number(v.untestable) === untestable, note: Number(v.untestable) === untestable ? undefined : 'not quite: faults no vector can detect' },
           ],
-          metrics: [['fault coverage', pct(fs.coverage)], ['vectors', String(vecs.length)], ['faults', String(fs.faults.length)]],
+          metrics: [['fault coverage', pct(fs.coverage)], ['test coverage', pct(fs.detected / (fs.faults.length - untestable))], ['vectors', String(vecs.length)], ['faults', String(fs.faults.length)]],
           view: coverageView(fs, vecs),
         };
       },

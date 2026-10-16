@@ -156,9 +156,9 @@ export const ACTS: Act[] = [
   {
     id: 'ada2', n: 2, kind: 'chip', name: 'ADA-2: a RISC-V core', tagline: 'A 32-bit RISC-V core: assembly, a single-cycle datapath, clocks, then a pipeline', region: 'CPU CORE',
     chapters: [
-      { name: 'Hardware/software interface', modules: [...drill('asm'), ...isa('isa-first', 'isa-branch', 'isa-loop', 'isa-array', 'isa-strlen', 'isa-popcount', 'isa-mul', 'isa-gcd', 'isa-copy', 'isa-reverse', 'isa-abi', 'isa-fix-signed', 'isa-fix-max', 'isa-fib', 'isa-sort'), bossMod('boss-asm'), ...isa('isa-boss-str', 'isa-boss-perf', 'isa-boss-rec'), incident('inc-isa')] },
+      { name: 'Hardware/software interface', modules: [...drill('asm'), ...isa('isa-first', 'isa-branch', 'isa-loop', 'isa-array', 'isa-strlen', 'isa-popcount', 'isa-mul', 'isa-gcd', 'isa-copy', 'isa-reverse', 'isa-abi', 'isa-fix-signed', 'isa-fix-max', 'isa-fib', 'isa-sort', 'isa-trap', 'isa-timer', 'isa-crt0'), bossMod('boss-asm'), ...isa('isa-boss-str', 'isa-boss-perf', 'isa-boss-rec'), incident('inc-isa')] },
       { name: 'Microarchitecture', modules: [...drill('alu'), ...rv('rv-alu', 'rv-branch', 'rv-mem', 'rv-mext'), bossMod('boss-uarch'), ...rv('rv-boss'), incident('inc-datapath')] },
-      { name: 'Clocks & resets', modules: [...drill('clk'), ...cdc('cdc-sync', 'cdc-pulse', 'cdc-gray', 'cdc-handshake'), bossMod('boss-cdc'), ...cdc('cdc-fifo'), incident('inc-crossing')] },
+      { name: 'Clocks & resets', modules: [...drill('clk'), ...cdc('cdc-sync', 'cdc-pulse', 'cdc-gray', 'cdc-handshake', 'cdc-rdc'), bossMod('boss-cdc'), ...cdc('cdc-fifo'), incident('inc-crossing')] },
       { name: 'Pipelines', modules: [...drill('pipe'), ...arch('pipe-fwd', 'pipe-branch', 'pipe-sched', 'pipe-unroll'), ...arch('pipe-boss'), incident('inc-pipeline')] },
     ],
   },
@@ -167,7 +167,7 @@ export const ACTS: Act[] = [
     chapters: [
       { name: 'Transistors', modules: [...drill('mos'), ...logic(['cmos-inv', 'cmos-nand', 'cmos-nor', 'cmos-and', 'cmos-aoi']), bossMod('boss-devices'), incident('inc-cell')] },
       { name: 'Circuit design', modules: [...drill('vlsi'), bossMod('boss-circuit'), incident('inc-bypass')] },
-      { name: 'Static timing', modules: [...drill('sta'), ...mods(TIMING_LEVELS, 'sta', 'sta'), ...sta2('sta-report', 'sta-ocv', 'sta-mcp'), bossMod('boss-sta'), ...sta2('sta-eco'), incident('inc-sta')] },
+      { name: 'Static timing', modules: [...drill('sta'), ...mods(TIMING_LEVELS, 'sta', 'sta'), ...sta2('sta-report', 'sta-ocv', 'sta-pocv', 'sta-mcp'), bossMod('boss-sta'), ...sta2('sta-eco'), incident('inc-sta')] },
       { name: 'Layout', modules: [...drill('openflow'), lesson('celllayout'), ...layout('layout-drc', 'layout-inv', 'layout-lvs', 'layout-nand'), ...layout('layout-boss'), incident('inc-drc')] },
       { name: 'Physical design', modules: [...drill('pnr'), prac('practice-pdfiles'), ...pd('pd-place', 'pd-congestion', 'pd-cts', 'pd-ir', 'pd-floorplan'), ...pd('pd-boss'), incident('inc-pdcore')] },
       { name: 'Low power', modules: [...drill('power'), bossMod('boss-lowpower'), bossMod('boss-upf'), incident('inc-wake')] },
@@ -181,11 +181,11 @@ export const ACTS: Act[] = [
       { name: 'Testbenches & debug', modules: [...drill('dv'), ...code('code-py-lfsr', 'code-py-uart'), ...mods(DEBUG_LEVELS, 'debug', 'rtl'), bossMod('boss-tb'), ...tb('tb-class', 'tb-copy', 'tb-virtual', 'tb-iface', 'tb-fork', 'tb-layered', 'tb-fifo', 'tb-regmodel'), bossMod('boss-debug'), ...tb('tb-boss-debug', 'tb-boss-env'), incident('inc-tb')] },
       { name: 'Random & coverage', modules: [...drill('crv'), ...tb('tb-rand', 'tb-rand-dist', 'tb-rand-arr'), bossMod('boss-crv'), ...tb('tb-cov', 'tb-cov-holes'), prac('practice-cov'), ...mods(SCENARIOS, 'cov', 'cov'), bossMod('boss-coverage'), incident('inc-cov')] },
       { name: 'UVM', modules: [...drill('uvm'), ...mods(UVM_PUZZLES, 'uvm', 'uvm'), bossMod('boss-uvm'), ...tb('tbu-seq', 'tbu-driver', 'tbu-monsb', 'tbu-config', 'tbu-factory', 'tbu-cov', 'tbu-phases', 'tbu-boss'), incident('inc-uvm')] },
-      { name: 'Assertions & formal', modules: [...drill('sva'), ...sva('sva-latency', 'sva-reg', 'sva-arbiter', 'sva-fifo', 'sva-valid-ready', 'sva-fsm', 'sva-repeat', 'sva-cover'), bossMod('boss-sva'), ...sva('sva-boss-burst'), ...drill('formal'), ...sva('formal-assume', 'formal-depth', 'formal-fix'), bossMod('boss-formal'), ...sva('formal-boss-wrap'), incident('inc-formal')] },
+      { name: 'Assertions & formal', modules: [...drill('sva'), ...sva('sva-latency', 'sva-reg', 'sva-arbiter', 'sva-fifo', 'sva-valid-ready', 'sva-fsm', 'sva-repeat', 'sva-cover', 'sva-goto', 'sva-within'), bossMod('boss-sva'), ...sva('sva-boss-burst'), ...drill('formal'), ...sva('formal-assume', 'sva-liveness', 'formal-depth', 'formal-fix'), bossMod('boss-formal'), ...sva('formal-boss-wrap'), incident('inc-formal')] },
       { name: 'Out-of-order', modules: [...drill('ooo'), ...arch('ooo-rename', 'ooo-window', 'ooo-diagnose'), bossMod('boss-cpu'), ...arch('ooo-boss'), incident('inc-ooo')] },
       { name: 'Memory hierarchy', modules: [...drill('cache'), ...arch('cache-predict', 'cache-block', 'cache-conflict', 'cache-policy', 'cache-tile', 'cache-write'), ...drill('coherence', 'dram'), bossMod('boss-mem'), ...arch('cache-boss'), incident('inc-memhier')] },
       { name: 'Interconnect', modules: [...drill('bus'), bossMod('boss-protocols'), ...drill('noc', 'serdes'), bossMod('boss-interconnect'), incident('inc-noc')] },
-      { name: 'Modeling', modules: [...drill('perf'), bossMod('boss-perf'), incident('inc-model')] },
+      { name: 'Modelling', modules: [...drill('perf'), bossMod('boss-perf'), incident('inc-model')] },
       {
         name: 'Tapeout', modules: [
           { id: 'drills', kind: 'drills', title: 'Interview Gauntlet', concept: 'spaced-repetition interview questions', xp: 150, route: '#/drills' },
@@ -243,12 +243,12 @@ export const ACTS: Act[] = [
   {
     id: 'software', n: 10, kind: 'detour', name: 'Detours: software', tagline: 'The shell, git, Python, C, C++, algorithms and operating systems, called in when a lab needs them', region: 'FIRMWARE',
     chapters: [
-      { name: 'The shell', need: 'Microarchitecture', modules: [...drill('shell'), ...shell('sh-nav', 'sh-grep', 'sh-pipes', 'sh-find', 'sh-awk', 'sh-sed', 'sh-perm', 'sh-loop', 'sh-script'), bossMod('boss-shell'), ...shell('sh-boss-triage')] },
-      { name: 'Git', need: 'Microarchitecture', modules: [...drill('git'), ...shell('git-first', 'git-branch', 'git-undo', 'git-conflict', 'git-stash', 'git-bisect'), bossMod('boss-git'), ...shell('git-boss-merge', 'git-boss-bisect')] },
-      { name: 'C', need: 'Hardware/software interface', modules: [...drill('c'), ...code('code-c-swap', 'code-c-strings', 'code-c-array', 'code-c-bits', 'code-c-layout', 'code-c-list', 'code-c-vec', 'code-c-bug-overflow', 'code-c-bug-uaf', 'code-c-bug-leak', 'code-c-bug-dangling', 'code-c-bug-uninit'), bossMod('boss-c'), ...code('code-boss-c-ring', 'code-boss-c-split', 'code-boss-c-crc')] },
+      { name: 'The shell', need: 'Microarchitecture', modules: [...drill('shell'), ...shell('sh-nav', 'sh-grep', 'sh-pipes', 'sh-find', 'sh-awk', 'sh-sed', 'sh-perm', 'sh-loop', 'sh-script', 'sh-quoting'), bossMod('boss-shell'), ...shell('sh-boss-triage')] },
+      { name: 'Git', need: 'Microarchitecture', modules: [...drill('git'), ...shell('git-first', 'git-branch', 'git-undo', 'git-conflict', 'git-stash', 'git-bisect', 'git-remote', 'git-rebase-i'), bossMod('boss-git'), ...shell('git-boss-merge', 'git-boss-bisect')] },
+      { name: 'C', need: 'Hardware/software interface', modules: [...drill('c'), ...code('code-c-swap', 'code-c-strings', 'code-c-array', 'code-c-bits', 'code-c-layout', 'code-c-list', 'code-c-vec', 'code-c-isr', 'code-c-bug-overflow', 'code-c-bug-uaf', 'code-c-bug-leak', 'code-c-bug-dangling', 'code-c-bug-uninit'), bossMod('boss-c'), ...code('code-boss-c-ring', 'code-boss-c-split', 'code-boss-c-crc')] },
       { name: 'Algorithms', need: 'Pipelines', modules: [...drill('dsa'), ...code('code-py-fibmemo', 'code-py-bsearch', 'code-py-bfs', 'code-py-topo', 'code-py-lru'), bossMod('boss-dsa'), ...code('code-boss-py-graph')] },
       { name: 'Python', need: 'Static timing', modules: [...drill('python'), ...code('code-py-parse', 'code-py-hist', 'code-py-regfield'), bossMod('boss-python'), ...code('code-boss-py-log')] },
-      { name: 'Flows & scripting', need: 'Static timing', modules: [...drill('flows'), ...code('code-py-triage'), ...shell('sh-make', 'sh-make-hdr', 'sh-python'), bossMod('boss-flows'), ...shell('sh-boss-make')] },
+      { name: 'Flows & scripting', need: 'Static timing', modules: [...drill('flows'), ...code('code-py-triage', 'code-tcl-subst', 'code-tcl-dict', 'code-tcl-regexp', 'code-tcl-netlist', 'code-tcl-catch'), ...shell('sh-make', 'sh-make-hdr', 'sh-python'), bossMod('boss-flows'), ...code('code-tcl-boss'), ...shell('sh-boss-make')] },
       { name: 'C++', need: 'Testbenches & debug', modules: [...drill('cpp'), bossMod('boss-cpp')] },
       { name: 'Operating systems', need: 'Memory hierarchy', modules: [...drill('os'), ...code('code-os-rr', 'code-os-paging', 'code-os-deadlock', 'code-os-alloc'), bossMod('boss-os'), ...code('code-os-boss-sched')] },
     ],
@@ -256,10 +256,10 @@ export const ACTS: Act[] = [
   {
     id: 'roles', n: 11, kind: 'roles', name: 'Specializations', tagline: 'The roles beyond RTL and DV: analog, RF, physical design, memory, fab, AI, security, quantum', region: 'SPECIALTY IP',
     chapters: [
-      { name: 'Circuits & signals', modules: [...drill('analog'), ...clab('clab-gbw', 'clab-csamp', 'clab-mirror'), bossMod('boss-analog'), ...clab('clab-boss-amp'), ...drill('rf'), ...clab('clab-lcfilter'), ...spec('rf-smith', 'rf-match'), bossMod('boss-rf'), incident('inc-radio'), ...drill('pmic'), ...clab('clab-duty', 'clab-buck'), bossMod('boss-pmic'), ...clab('clab-boss-buck'), incident('inc-rail'), lesson('sipi')] },
+      { name: 'Circuits & signals', modules: [...drill('analog'), ...clab('clab-gbw', 'clab-csamp', 'clab-mirror'), bossMod('boss-analog'), ...clab('clab-boss-amp'), ...drill('rf'), ...clab('clab-lcfilter'), ...spec('rf-smith', 'rf-match'), bossMod('boss-rf'), incident('inc-radio'), ...drill('pmic'), ...clab('clab-duty', 'clab-buck', 'clab-dcm'), bossMod('boss-pmic'), ...clab('clab-boss-buck'), incident('inc-rail'), lesson('sipi')] },
       { name: 'Silicon & manufacturing', modules: [bossMod('boss-pd'), ...drill('sram'), ...spec('mem-snm', 'mem-assist'), bossMod('boss-memory'), incident('inc-bitflip'), ...drill('fab'), ...spec('proc-yield'), bossMod('boss-process'), incident('inc-wafer'), ...drill('pkg'), ...spec('pkg-thermal'), bossMod('boss-pkg'), incident('inc-package')] },
       { name: 'Bring-up & production', modules: [...drill('postsi'), bossMod('boss-postsi'), incident('inc-hang'), ...drill('ate'), bossMod('boss-test'), incident('inc-finaltest'), ...drill('emu'), ...spec('fpga-map', 'fpga-fmax'), bossMod('boss-fpga')] },
-      { name: 'Domain chips', modules: [...drill('npu'), ...spec('ai-tile'), bossMod('boss-ai'), ...spec('ai-boss'), ...drill('hwsec'), ...spec('sec-dpa', 'sec-defend'), bossMod('boss-hwsec'), incident('inc-key'), ...drill('fusa'), ...spec('fusa-fmeda', 'fusa-asil', 'fusa-campaign'), bossMod('boss-fusa'), incident('inc-limp'), ...drill('photonics'), ...spec('ph-budget', 'ph-wdm'), bossMod('boss-photonics'), incident('inc-optical')] },
+      { name: 'Domain chips', modules: [...drill('npu'), ...spec('ai-tile'), bossMod('boss-ai'), ...spec('ai-boss'), ...drill('hwsec'), ...spec('sec-dpa', 'sec-defend'), bossMod('boss-hwsec'), incident('inc-key'), ...drill('fusa'), ...spec('fusa-hara', 'fusa-fmeda', 'fusa-asil', 'fusa-campaign'), bossMod('boss-fusa'), incident('inc-limp'), ...drill('photonics'), ...spec('ph-budget', 'ph-wdm'), bossMod('boss-photonics'), incident('inc-optical')] },
       { name: 'Quantum', modules: [...drill('qubit'), ...spec('q-gates', 'q-coherence'), bossMod('boss-qubit'), ...drill('qctrl'), ...spec('qc-pulse'), bossMod('boss-qctrl'), incident('inc-qubit')] },
       { name: 'Design tools & clocking', modules: [...drill('eda'), ...code('code-eda-maze', 'code-eda-sta', 'code-eda-dpll'), bossMod('boss-eda'), ...code('code-eda-boss'), ...drill('libchar'), ...spec('lib-table', 'lib-setup'), bossMod('boss-libchar'), ...drill('clocking'), ...spec('pll-loop'), bossMod('boss-clocking'), ...spec('pll-jitter')] },
       { name: 'Chip integration', modules: [...drill('io-esd'), bossMod('boss-io-esd'), incident('inc-esd'), ...drill('soc-int'), bossMod('boss-soc-int'), incident('inc-soc'), ...drill('ae-tpm'), bossMod('boss-ae-tpm'), incident('inc-customer')] },

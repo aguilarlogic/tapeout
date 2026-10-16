@@ -320,7 +320,7 @@ export const formalIncident: Incident = {
     {
       id: 'depth', name: 'The proof is bounded at 10 cycles, but the failure needs 14',
       fix: 'Set the proof bound to 20 cycles, past the 14-cycle failure',
-      story: 'The proof ran to a depth of 10 cycles, so it only covered 10 cycles of traffic. The arbiter\'s 4-bit credit counter wraps on the 12th request, and master 1 starves from cycle 14. A bounded proof says only what it checked.',
+      story: 'The proof ran to a depth of 10 cycles, so it only covered 10 cycles of traffic. The arbiter\'s 4-bit credit counter wraps on the 12th request, and requester 1 starves from cycle 14. A bounded proof says only what it checked.',
     },
     {
       id: 'reset', name: 'The grant property is not disabled during reset, so it fails there',
@@ -329,8 +329,8 @@ export const formalIncident: Incident = {
     },
     {
       id: 'fair', name: 'The starvation check has no fairness assumption, so a loop fails it',
-      fix: 'Add a fairness assumption that each master drops its request',
-      story: 'Nothing stopped master 0 from holding its request forever, and the liveness property had no fairness assumption. The tool found a loop where master 1 waits forever. The arbiter is not at fault; the environment was too free.',
+      fix: 'Add a fairness assumption that each requester drops its request',
+      story: 'Nothing stopped requester 0 from holding its request forever, and the liveness property had no fairness assumption. The tool found a loop where requester 1 waits forever. The arbiter is not at fault; the environment was too free.',
     },
   ],
   bandaids: [
@@ -350,7 +350,7 @@ export const formalIncident: Incident = {
         const head = w.cause === 'depth' ? 'formal, arbiter (bounded, depth 10)' : 'formal, arbiter (unbounded)';
         const grant = w.cause === 'reset' ? 'FAIL at cycle 1 (in reset)' : 'PASS';
         const starve = w.cause === 'depth' ? 'not checked (liveness needs an unbounded run)'
-          : w.cause === 'fair' ? 'FAIL (lasso: master 1 never granted)'
+          : w.cause === 'fair' ? 'FAIL (lasso: requester 1 never granted)'
             : 'PASS';
         return `${head}\nmutex        PASS\ngrant_lat    ${grant}\nb2b_grant    PASS\nstarve_free  ${starve}`;
       },
@@ -385,7 +385,7 @@ export const formalIncident: Incident = {
       cmd: 'trace', cost: 40, what: 'the counterexample for the failing property, cycle by cycle',
       read: (w) => {
         if (w.cause === 'reset') return 'grant_lat, rst_n held low on cycles 0 to 2\ncycle 1: rst_n = 0, req0 = 1, gnt0 = 0 · property fails with no grant';
-        if (w.cause === 'fair') return 'starve_free, lasso: loop from cycle 4 back to cycle 9\nreq0 = 1, gnt0 = 1 on every cycle of the loop\nreq1 = 1, gnt1 = 0 on every cycle: master 1 never granted';
+        if (w.cause === 'fair') return 'starve_free, lasso: loop from cycle 4 back to cycle 9\nreq0 = 1, gnt0 = 1 on every cycle of the loop\nreq1 = 1, gnt1 = 0 on every cycle: requester 1 never granted';
         if (w.cause === 'depth') return 'grant_lat, depth-20 run, counterexample at cycle 14\nmaster 1 waits from cycle 3 · credit counter wraps on the 12th request';
         return 'no counterexample: every explored trace satisfies the checked properties';
       },

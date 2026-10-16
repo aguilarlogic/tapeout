@@ -20,7 +20,7 @@ import { Interrupted, Redirect, rich, Terminal } from './terminal';
 import { award, promotionLine, type Promotion } from '../mastery/promotion';
 import { finishGoal, type GoalResult } from '../daily';
 import { dayKey, MILESTONE_XP, MIX_RECORD, streakLine } from '../streak';
-import { LESSON_PASS, masters, signsOff } from './stakes';
+import { LESSON_PASS, meetsBar, signsOff } from './stakes';
 import { topUp } from '../practice/topup';
 import { missingNeeds } from '../prereqs';
 import { pick as pickRecall, pool as poolRecall, record as recordRecall } from '../recall';
@@ -787,7 +787,7 @@ export class Shell {
       if (!st) { await t.say('Not quite enough to sign off yet: you need 60%. Every question you missed points at a lesson worth revisiting. Try again whenever you are ready.', 'concerned'); return; }
     } else {
       // A lesson signs off only at the mastery bar; below it, a "not yet" card and a retry with new numbers.
-      if (!masters(asked, firstTry, recovered)) return this.notYet(l, asked, firstTry, recovered, missed);
+      if (!meetsBar(asked, firstTry, recovered)) return this.notYet(l, asked, firstTry, recovered, missed);
       st = misses === 0 ? 3 : misses <= 2 ? 2 : 1;
     }
     const { gained, promotedTo } = award(l.id, l.xp, st);

@@ -8,6 +8,7 @@ describe('code lab missions', () => {
     expect(new Set(CODE_LEVELS.map((l) => l.id)).size).toBe(CODE_LEVELS.length);
     expect(CODE_LEVELS.filter((l) => l.lang === 'py').length).toBeGreaterThanOrEqual(14);
     expect(CODE_LEVELS.filter((l) => l.lang === 'c').length).toBeGreaterThanOrEqual(12);
+    expect(CODE_LEVELS.filter((l) => l.lang === 'tcl').length).toBeGreaterThanOrEqual(6);
     expect(CODE_LEVELS.filter((l) => l.tier === 'boss').length).toBeGreaterThanOrEqual(5);
   });
   for (const level of CODE_LEVELS) {

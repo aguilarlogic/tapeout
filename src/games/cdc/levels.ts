@@ -188,7 +188,7 @@ const cdcPulse: CdcLevel = {
       mode: 'write', spec: PULSE_SPEC, ports: ['clka', 'clkb', 'rst_n', 'pulse_a', 'pulse_b'], scenarios: sc,
       bench: (s) => new PulseBench(s.periods.A, s.periods.B, 20),
       checks: 'every pulse sent from A appears exactly once, one cycle wide, in B',
-      brief: `<p>A synchronizer only works on signals that stay put for at least about <b>one destination clock period</b>. A one-cycle pulse from a fast clock is narrower than a slow clock period, so the slow clock may never see it, whatever you do after the capture.</p>
+      brief: `<p>A synchronizer only works on signals that stay put for at least about <b>1.5 destination clock periods</b> (three destination edges). A one-cycle pulse from a fast clock is narrower than a slow clock period, so the slow clock may never see it, whatever you do after the capture.</p>
 <p>The standard fix is a <b>toggle synchronizer</b>: in the source domain, turn each pulse into a <b>level change</b> (a flop that flips on every pulse). A level change is long-lived, so the two-flop synchronizer in the destination domain catches it. A third flop plus an XOR then turns each level change back into a one-cycle pulse.</p>
 <p>The bench sends 20 pulses, each at least four slow cycles apart, with clock ratios that change per run. The starter synchronizes the pulse as if it were a level: see how many it loses. (A structural lint passes it, because a two-flop synchronizer really is there. Only simulation shows the loss.)</p>`,
       hints: ['Source domain: <code>if (pulse_a) tog &lt;= ~tog;</code>. Destination: <code>s1 &lt;= tog; s2 &lt;= s1; s3 &lt;= s2;</code>', 'The output pulse is <code>assign pulse_b = s2 ^ s3;</code>: high for one cycle after the toggle arrives.'],
@@ -383,6 +383,90 @@ const cdcHandshake: CdcLevel = {
   },
 };
 
+// ===================================================================== 4b. reset-domain crossing
+// One clock, two asynchronous resets. A request flop is cleared by the subsystem reset; the controller that reads it is
+// cleared only by the system reset. The bench asserts the subsystem reset at a random instant just before a clock edge, so
+// the request changes inside the controller's capture window and the controller's two flags resolve independently.
+class RdcBench implements Bench {
+  n = 0; hold = 0; asserts = 0; fails: string[] = [];
+  init(io: Io) { io.set('go', 0); io.set('rstA_n', 0); io.set('rstB_n', 0); }
+  sample(_dom: string, io: Io) {
+    this.n++;
+    if (this.n > 6 && !this.fails.length) {
+      const idle = bit(io, 'idle'), busy = bit(io, 'busy');
+      if (idle === busy) this.fails.push(`the controller flags were idle=${idle} busy=${busy} at t=${io.time}: it must be in exactly one state, whatever happens to the subsystem reset`);
+    }
+    if (this.n > 12 && this.hold === 0 && io.rnd() < 0.2) { io.asyncSet('rstA_n', 0); this.hold = 3; this.asserts++; }
+  }
+  drive(_dom: string, io: Io) {
+    if (this.n === 4) { io.set('rstB_n', 1); io.set('rstA_n', 1); }
+    if (this.n === 8) io.set('go', 1);
+    if (this.hold > 0 && --this.hold === 0) io.set('rstA_n', 1);
+  }
+  finish() { if (!this.fails.length && this.asserts < 5) this.fails.push('the subsystem reset was hardly exercised'); return this.fails; }
+}
+const RDC_SPEC: CdcSpec = { clocks: { clk: 'A' }, inputs: { rstA_n: '*', rstB_n: '*', go: 'A' }, resets: { rstA_n: 'SUB', rstB_n: 'SYS' } };
+const RDC_STARTER = `// One clock. The subsystem raises req after go; it is cleared by its own reset rstA_n, which can assert at any time.
+// The controller reads req and keeps two flags, of which exactly one must be high: idle or busy.
+module req_ctl(input clk, input rstA_n, input rstB_n, input go, output reg idle, output reg busy);
+  reg req;
+
+  // subsystem, in reset domain A
+  always @(posedge clk or negedge rstA_n) begin
+    if (!rstA_n) req <= 1'b0;
+    else if (go) req <= 1'b1;
+  end
+
+  // controller, in reset domain B only
+  always @(posedge clk or negedge rstB_n) begin
+    if (!rstB_n) begin
+      idle <= 1'b1;
+      busy <= 1'b0;
+    end else begin
+      idle <= ~req;
+      busy <= req;
+    end
+  end
+endmodule
+`;
+const RDC_SOL = `module req_ctl(input clk, input rstA_n, input rstB_n, input go, output reg idle, output reg busy);
+  reg req;
+
+  always @(posedge clk or negedge rstA_n) begin
+    if (!rstA_n) req <= 1'b0;
+    else if (go) req <= 1'b1;
+  end
+
+  // the controller is cleared by BOTH resets: while the subsystem reset is asserted it is held, so it never captures req
+  always @(posedge clk or negedge rstA_n or negedge rstB_n) begin
+    if (!rstA_n || !rstB_n) begin
+      idle <= 1'b1;
+      busy <= 1'b0;
+    end else begin
+      idle <= ~req;
+      busy <= req;
+    end
+  end
+endmodule
+`;
+const cdcRdc: CdcLevel = {
+  id: 'cdc-rdc', title: 'The reset that crosses', concept: 'reset-domain crossings: an asynchronous reset in one domain corrupts a flop in another', xp: 140, tier: 'guided',
+  ticket: 'Resetting the subsystem while the chip is running sometimes leaves the controller with both flags low or both high. It never happens when the whole chip resets, and every clock crossing is clean.',
+  build: () => {
+    const sc: Scenario[] = [[10, 11], [7, 29], [13, 47], [9, 83]].map(([p, seed]) => ({ periods: { A: p }, phases: { A: 0 }, seed, cycles: 150 }));
+    return {
+      mode: 'fix', spec: RDC_SPEC, ports: ['clk', 'rstA_n', 'rstB_n', 'go', 'idle', 'busy'], scenarios: sc,
+      bench: () => new RdcBench(),
+      checks: 'the controller is always in exactly one of idle or busy, even when the subsystem reset asserts at a random instant',
+      brief: `<p>There is only <b>one clock</b> here, and still a crossing. The flop <code>req</code> is cleared by the subsystem reset <code>rstA_n</code>. The controller that reads it is cleared by a different reset, <code>rstB_n</code>. That is a <b>reset-domain crossing</b>: an asynchronous reset can assert <i>at any moment</i>, so <code>req</code> snaps to 0 in the middle of the controller's cycle, inside its setup window. The controller's flops go metastable, and <code>idle</code> and <code>busy</code> can settle to <i>different</i> answers: both low, or both high, a state the spec says cannot exist.</p>
+<p>The simulation asserts <code>rstA_n</code> at random instants just before a clock edge, and gives a flop that sees a changing input a random mix of old and new, as the clock-crossing missions do. The crossing list shows how the analysis judges your design.</p>
+<p>There are two standard cures. Make the controller <b>part of the same reset domain</b> as the thing it reads, so that while that reset is asserted the controller is held and captures nothing. Or make the source's reset <b>synchronous</b>, so that <code>req</code> can only change on a clock edge. Gating the data with the reset signal does not help: the gated value still changes at the wrong time.</p>`,
+      hints: ['Add <code>or negedge rstA_n</code> to the controller\'s sensitivity list and test <code>if (!rstA_n || !rstB_n)</code> for the reset branch.', 'The other cure: drop <code>or negedge rstA_n</code> from the source\'s sensitivity list, so <code>req</code> clears only on a clock edge.'],
+      starter: RDC_STARTER, solution: RDC_SOL,
+    };
+  },
+};
+
 // ===================================================================== 5. boss: async FIFO
 class FifoBench implements Bench {
   acc: number[] = []; got: number[] = []; fails: string[] = []; full = 0; empty = 0; stopAt: number;
@@ -498,6 +582,6 @@ const cdcFifo: CdcLevel = {
   },
 };
 
-export const CDC_LEVELS: CdcLevel[] = [cdcSync, cdcPulse, cdcGray, cdcHandshake, cdcFifo];
+export const CDC_LEVELS: CdcLevel[] = [cdcSync, cdcPulse, cdcGray, cdcHandshake, cdcRdc, cdcFifo];
 export const findCdcLevel = (id: string) => CDC_LEVELS.find((l) => l.id === id);
 export type { CdcInstance };

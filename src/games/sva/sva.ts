@@ -1,5 +1,5 @@
-// SystemVerilog assertions over a recorded trace: sequences (##n, ##[m:n], [*n], [->n], throughout), properties
-// (|->, |=>, not, and, or, until), disable iff, named property/sequence declarations, assert / assume / cover.
+// SystemVerilog assertions over a recorded trace: sequences (##n, ##[m:n], [*n], [->n], throughout, within, intersect, first_match), properties
+// (|->, |=>, not, and, or, until, s_eventually), disable iff, named property/sequence declarations, assert / assume / cover.
 export class SvaError extends Error { constructor(msg: string, public line: number) { super(msg); } }
 
 export interface Trace { n: number; vals: Map<string, bigint[]>; widths: Map<string, number> }
@@ -37,13 +37,16 @@ export type Seq =
   | { k: 'b'; e: BoolE; src: string }
   | { k: 'cat'; a: Seq; b: Seq; lo: number; hi: number }
   | { k: 'rep'; s: Seq; lo: number; hi: number; mode: '*' | '->' | '=' }
-  | { k: 'thr'; e: BoolE; s: Seq };
+  | { k: 'thr'; e: BoolE; s: Seq }
+  | { k: 'within' | 'isect'; a: Seq; b: Seq }
+  | { k: 'fm'; s: Seq };
 export type Prop =
   | { k: 'seq'; s: Seq }
   | { k: 'imp'; a: Seq; b: Prop; overlap: boolean }
   | { k: 'not'; p: Prop }
   | { k: 'and' | 'or'; a: Prop; b: Prop }
-  | { k: 'until'; a: Seq; b: Seq; strong: boolean; inclusive: boolean };
+  | { k: 'until'; a: Seq; b: Seq; strong: boolean; inclusive: boolean }
+  | { k: 'ev'; p: Prop };
 
 export interface Directive { kind: 'assert' | 'assume' | 'cover'; name: string; line: number; prop: Prop; disable?: BoolE; text: string }
 
@@ -154,7 +157,8 @@ class P {
       case '$onehot': return (tr, t) => { const x = arg(tr, t).v; return { v: BigInt(x !== 0n && (x & (x - 1n)) === 0n), w: 1 }; };
       case '$onehot0': return (tr, t) => { const x = arg(tr, t).v; return { v: BigInt((x & (x - 1n)) === 0n), w: 1 }; };
       case '$countones': return (tr, t) => { let x = arg(tr, t).v, c = 0; while (x) { c += Number(x & 1n); x >>= 1n; } return { v: BigInt(c), w: 32 }; };
-      case '$isunknown': return () => ({ v: 0n, w: 1 });
+      // it would always return 0, so `assert (!$isunknown(x))` would pass vacuously: refuse it instead
+      case '$isunknown': return this.fail('$isunknown is meaningless in a 2-state engine: X and Z are not modelled.');
       default: return this.fail(`system function ${name} is not supported`);
     }
   }
@@ -167,9 +171,15 @@ class P {
     return [lo, lo];
   }
   seqPrimary(): Seq {
+    if (this.is('first_match') && this.toks[this.p + 1].v === '(') {
+      this.p += 2;
+      const s: Seq = { k: 'fm', s: this.seqExpr() };
+      this.eat(')');
+      return this.repetition(s);
+    }
     if (this.is('(') && this.groupIsSeq()) {
       this.p++;
-      const s = this.seqThrough();
+      const s = this.seqExpr();
       this.eat(')');
       return this.repetition(s);
     }
@@ -186,7 +196,7 @@ class P {
       const t = this.toks[i];
       if (t.v === '(') d++;
       else if (t.v === ')') { d--; if (d === 0) return false; }
-      else if (d === 1 && ['##', '|->', '|=>', '[*', '[->', '[=', 'throughout', 'until', 'not'].includes(t.v)) return true;
+      else if (d === 1 && ['##', '|->', '|=>', '[*', '[->', '[=', 'throughout', 'within', 'intersect', 'until', 'not'].includes(t.v)) return true;
       else if (t.t === 'eof') return false;
     }
     return false;
@@ -223,6 +233,9 @@ class P {
     }
     return this.seqCat();
   }
+  // precedence, tightest first: ##, throughout, within, intersect (so `a within b intersect c` is `(a within b) intersect c`)
+  seqWithin(): Seq { let s = this.seqThrough(); while (this.is('within')) { this.p++; s = { k: 'within', a: s, b: this.seqThrough() }; } return s; }
+  seqExpr(): Seq { let s = this.seqWithin(); while (this.is('intersect')) { this.p++; s = { k: 'isect', a: s, b: this.seqWithin() }; } return s; }
 
   // ---- properties
   prop(): Prop { return this.propOr(); }
@@ -238,10 +251,12 @@ class P {
     }
     // a named property
     if (this.c.t === 'id' && this.decl.get(this.c.v)?.prop && this.toks[this.p + 1].v !== '|->' && this.toks[this.p + 1].v !== '|=>') { const d = this.decl.get(this.c.v)!; this.p++; return d.prop!; }
-    const s = this.seqThrough();
+    // strong eventually: some later cycle must satisfy the operand; a finite trace can only ever confirm it
+    if (this.is('s_eventually')) { this.p++; return { k: 'ev', p: this.propImp() }; }
+    const s = this.seqExpr();
     if (this.is('|->') || this.is('|=>')) { const overlap = this.c.v === '|->'; this.p++; return { k: 'imp', a: s, b: this.propImp(), overlap }; }
     for (const [w, strong, incl] of [['until', false, false], ['s_until', true, false], ['until_with', false, true], ['s_until_with', true, true]] as const) {
-      if (this.is(w)) { this.p++; return { k: 'until', a: s, b: this.seqThrough(), strong, inclusive: incl }; }
+      if (this.is(w)) { this.p++; return { k: 'until', a: s, b: this.seqExpr(), strong, inclusive: incl }; }
     }
     return { k: 'seq', s };
   }
@@ -251,7 +266,7 @@ class P {
       const t = this.toks[i];
       if (t.v === '(') d++;
       else if (t.v === ')') { d--; if (d === 0) return false; }
-      else if (d === 1 && ['|->', '|=>', 'not', 'and', 'or', 'until'].includes(t.v)) return true;
+      else if (d === 1 && ['|->', '|=>', 'not', 'and', 'or', 'until', 's_eventually'].includes(t.v)) return true;
       else if (t.t === 'eof') return false;
     }
     return false;
@@ -278,7 +293,7 @@ class P {
         const { disable } = this.clockAndDisable();
         void disable;
         if (isProp) { const p = this.prop(); this.maybe(';'); this.eat('endproperty'); this.decl.set(name, { prop: p }); }
-        else { const s = this.seqThrough(); this.maybe(';'); this.eat('endsequence'); this.decl.set(name, { seq: s }); }
+        else { const s = this.seqExpr(); this.maybe(';'); this.eat('endsequence'); this.decl.set(name, { seq: s }); }
         continue;
       }
       let label = '';
@@ -389,13 +404,37 @@ function ends(s: Seq, ctx: Ctx, t: number): Set<number> {
         if (s.hi === INF) ctx.trunc = true;
       } else {
         // goto [->n]: the n-th occurrence (match ends there); nonconsecutive [=n]: may be followed by idle cycles
-        let count = 0;
+        let count = 0, closed = false;
+        const hi = s.hi === INF ? Infinity : s.hi;
         for (let u = t; u < ctx.tr.n; u++) {
-          if (ends(s.s, ctx, u).size) { count++; if (count >= s.lo && count <= (s.hi === INF ? count : s.hi)) { out.add(u); } if (s.hi !== INF && count >= s.hi) break; }
-          if (s.mode === '=' && count >= s.lo && count <= (s.hi === INF ? count : s.hi)) out.add(u);
+          if (ends(s.s, ctx, u).size) {
+            if (count === hi) { closed = true; break; } // one occurrence too many: no match extends past here
+            count++;
+            if (count >= s.lo) out.add(u); // [->n] and [=n] both end on the n-th occurrence…
+            if (s.mode === '->' && count === hi) { closed = true; break; } // …and [->n] has no later end point
+          } else if (s.mode === '=' && count >= s.lo) out.add(u); // …[=n] may also end on idle cycles after it
         }
-        ctx.trunc = true;
+        // only undecided if the trace ran out while a (longer) match could still form
+        if (!closed && (count < hi || s.mode === '=')) ctx.trunc = true;
       }
+      break;
+    }
+    case 'within': {
+      // a match of b from t, with a match of a that starts at or after t and ends at or before b's end
+      for (const e of ends(s.b, ctx, t)) {
+        for (let u = t; u <= e; u++) if ([...ends(s.a, ctx, u)].some((e1) => e1 <= e)) { out.add(e); break; }
+      }
+      break;
+    }
+    case 'isect': {
+      // same start, same end
+      const eb = ends(s.b, ctx, t);
+      for (const e of ends(s.a, ctx, t)) if (eb.has(e)) out.add(e);
+      break;
+    }
+    case 'fm': {
+      const e = ends(s.s, ctx, t);
+      if (e.size) out.add(Math.min(...e));
       break;
     }
     case 'thr': {
@@ -440,6 +479,11 @@ function evalProp(p: Prop, ctx: Ctx, t: number): { res: Res; vacuous: boolean } 
         if (r.res === 'pending') pending = true;
       }
       return done(pending ? 'pending' : 'pass');
+    }
+    case 'ev': {
+      // never 'fail' here: on a finite trace the good thing may simply not have happened yet
+      for (let u = t; u < ctx.tr.n; u++) if (evalProp(p.p, ctx, u).res === 'pass') return done('pass');
+      return done('pending');
     }
     case 'until': {
       for (let u = t; u < ctx.tr.n; u++) {

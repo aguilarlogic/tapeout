@@ -6,9 +6,11 @@ import { editor } from '../../ui/editor';
 import { levelHeader } from '../../ui/layout';
 import { waveform } from '../../ui/waveform';
 import { ALL_RTL, RtlLevel } from './levels';
-import { finish, HINT_NOTE } from '../../ui/labkit';
+import { finish, HINT_NOTE, modelNote } from '../../ui/labkit';
 import { download, zip } from '../../lib/zip';
 import { draftedRtl, rtlProject, type Drafted } from './export';
+
+export const MODEL_NOTE = 'This simulator is 2-state: X and Z are not modelled, and registers power up at 0. Real simulators start registers at X, so a missing reset shows up as X there.';
 
 export function rtlPage(id: string): HTMLElement {
   const level = ALL_RTL.find((l) => l.id === id);
@@ -38,6 +40,7 @@ export function rtlPage(id: string): HTMLElement {
 
   const brief = h('aside', { class: 'brief panel' },
     h('div', { class: 'tag' }, level.concept),
+    modelNote(MODEL_NOTE),
     h('div', { class: 'brief-body', html: level.brief }),
     h('div', { class: 'hint-box' }, hintBtn, hintList),
   );
@@ -68,6 +71,7 @@ export function rtlPage(id: string): HTMLElement {
       if (res.error.line) errLines.push(res.error.line);
     }
     for (const l of res.lints) messages.append(h('li', { class: 'msg warn' }, h('b', null, 'Lint'), ` line ${l.line}: ${l.message}`));
+    for (const w of res.warnings) messages.append(h('li', { class: 'msg warn' }, h('b', null, 'Warning'), ` line ${w.line}: ${w.message}`));
     ed.markLines(errLines, res.lints.map((l) => l.line));
 
     if (res.error) {

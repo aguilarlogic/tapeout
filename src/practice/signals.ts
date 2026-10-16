@@ -3,6 +3,7 @@ import { num, qty } from '../lessons/answers';
 import { calc, choice, count, walk } from '../lessons/teach';
 import { art, ask, between, mc, pick, say } from '../lessons/types';
 import { boss, practice, tier } from './types';
+import { CONTROL_MARGINS } from './g-analog';
 import { atLevel, concept, eng, mcs, sig } from './util';
 
 const deg = (rad: number) => (rad * 180) / Math.PI;
@@ -209,7 +210,7 @@ export const controlPractice = practice('practice-control', 'Loop Drills', 'loop
     const K = pick(r, tier(d, [1, 2, 4, 9, 19, 99], [9, 19, 24, 49, 99, 999], [2, 5, 14, 24, 49, 199, 999]));
     const e = 1 / (1 + K);
     return walk(ask(`A proportional loop with DC loop gain K = ${K} and a step input. Steady-state error, in %?`, qty(e * 100, '%', 0.02, sig(e * 100)), `e_ss = 1/(1 + K) = ${sig(e * 100)}%. An integrator (infinite DC gain) would drive it to zero.`, 'e = 1/(1 + K).'),
-      'steady-state error', 'A proportional controller only pushes when there is an error, so some error must remain to keep it pushing. With loop gain K, the output settles where the error is 1/(1 + K) of the step. More gain, less error; an integrator (infinite DC gain) removes it entirely.',
+      'steady-state error', 'A proportional controller only pushes when there is an error, so some error must remain to keep it pushing. With loop gain K, the output settles where, for a plant with no integrator in the loop, the error is 1/(1 + K) of the step. More gain, less error; an integrator (infinite DC gain) removes it entirely.',
       count('1 + K:', `1 + ${K}`, 1 + K),
       calc('Error = 1/(1 + K), as a %:', `100 / ${1 + K}`, e * 100, '%', sig(e * 100), 0.02));
   },
@@ -229,8 +230,8 @@ export const controlPractice = practice('practice-control', 'Loop Drills', 'loop
   },
   (r, d) => {
     const gbw = pick(r, [1e6, 10e6, 100e6]), G = pick(r, tier(d, [1, 10], [10, 100], [5, 20, 50]));
-    const idea = 'An op-amp\'s gain-bandwidth product (GBW) is fixed: set a closed-loop gain G and the bandwidth becomes GBW/G. The closed loop then behaves like a single pole with τ = 1/(2π·BW), and settling to a fraction ε of the step takes τ·ln(1/ε).';
-    if (d < 3) return walk(ask(`An op-amp with GBW = ${eng(gbw, 'Hz')} is set to a closed-loop gain of ${G}. Bandwidth, in Hz?`, qty(gbw / G, 'Hz', 0.01), `${eng(gbw, 'Hz')}/${G} = ${eng(gbw / G, 'Hz')}.`, 'BW = GBW / G.'),
+    const idea = 'An op-amp\'s gain-bandwidth product (GBW) is fixed: the closed-loop bandwidth becomes GBW / noise gain, which for a non-inverting stage of gain G is GBW/G. The closed loop then behaves like a single pole with τ = 1/(2π·BW), and settling to a fraction ε of the step takes τ·ln(1/ε).';
+    if (d < 3) return walk(ask(`An op-amp with GBW = ${eng(gbw, 'Hz')} is set up as a non-inverting amplifier with a closed-loop gain of ${G}. Bandwidth, in Hz?`, qty(gbw / G, 'Hz', 0.01), `${eng(gbw, 'Hz')}/${G} = ${eng(gbw / G, 'Hz')}.`, 'BW = GBW / noise gain; non-inverting, so that is G.'),
       'gain-bandwidth product', idea,
       calc('BW = GBW / G:', `${gbw} / ${G}`, gbw / G, 'Hz', sig(gbw / G), 0.01));
     const tau = 1 / (2 * Math.PI * (gbw / G));
@@ -299,6 +300,7 @@ export const controlPractice = practice('practice-control', 'Loop Drills', 'loop
       'divide ratio', idea,
       calc('N = f_out / f_ref:', `${fo} / ${ref}`, Nf, '', sig(Nf, 5), 0.001));
   },
+  ...CONTROL_MARGINS,
 ]);
 
 function solveCrossover(A0: number, p1: number, p2: number) {
@@ -445,6 +447,8 @@ export const controlBoss = boss({
     { t: 'gen', make: (r) => { const pm = pick(r, [35, 40]); const z = pm / 100; return ask(`With ${pm}° of margin, ζ ≈ ${z}. Predicted overshoot, in %?`, qty(Math.exp((-Math.PI * z) / Math.sqrt(1 - z * z)) * 100, '%', 0.05, sig(Math.exp((-Math.PI * z) / Math.sqrt(1 - z * z)) * 100)), `e^(-π·${z}/√(1 - ${z}²)) = ${sig(Math.exp((-Math.PI * z) / Math.sqrt(1 - z * z)) * 100)}%, which matches the scope within the approximation.`); } },
     { t: 'gen', make: (r) => { const p2 = pick(r, [3e6, 4e6, 5e6]); const target = p2 / 2; const p1new = target / 1000; return ask(`Compensation plan: move p1 down so the loop crosses unity at p2/2 = ${eng(target, 'Hz')} (≈ 63° margin). New p1, in kHz? (A0 × p1 = crossover)`, qty(p1new / 1e3, 'kHz', 0.01), `p1 = ${eng(target, 'Hz')}/1000 = ${eng(p1new, 'Hz')}. The cost: a slower loop, so worse transient response. That is the classic LDO trade.`); } },
     { t: 'gen', make: (r) => { const K = pick(r, [1000, 500]); return ask(`What DC line/load regulation error does a loop gain of ${K} leave, in %?`, qty(100 / (1 + K), '%', 0.02, sig(100 / (1 + K))), `1/(1 + ${K}) = ${sig(100 / (1 + K))}%. High DC gain for accuracy; a well-placed pole for stability.`); } },
+    { t: 'gen', make: (r) => { const g = pick(r, [6, 8, 10, 12]); return ask(`A third pole (the pass transistor's gate) appears. On the Bode plot the loop gain is −${g} dB where the phase crosses −180°. What is the gain margin, in dB?`, qty(g, 'dB', 0.02, String(g)), `GM = −(−${g} dB) = ${g} dB: the loop gain could rise ${sig(10 ** (g / 20))}× before it oscillates. Phase margin and gain margin are two readings of how close the Nyquist plot comes to −1.`, 'GM = −|L| in dB at the −180° frequency.'); } },
+    mc('After compensation the loop has 60° of phase margin. About what step overshoot should the scope now show?', ['9%', '40%', '23%', '0%'], 0, 'PM ≈ 100·ζ gives ζ ≈ 0.6, and a second-order response with ζ = 0.6 overshoots by about 9%. 45° would give about 23%, and the 40% on the scope matches a margin nearer 30°.'),
     mc('The customer insists on a tiny ceramic output cap with almost no ESR. Which compensation style suits that?', ['Internal dominant-pole or Miller', 'Rely on the cap\'s ESR zero', 'Raise the error-amp gain A0 to 10⁶', 'Make the output pole dominant'], 0, 'Internal (dominant-pole or Miller) compensation keeps the loop stable regardless of the output cap. Older LDOs needed the output cap\'s ESR zero for phase margin. Modern "cap-less" LDOs compensate internally.'),
   ],
   recap: ['Crossover ≈ A0·p1 for a dominant-pole loop.', 'PM from pole phase lags at crossover; ζ ≈ PM/100.', 'Dominant-pole compensation trades speed for stability.'],

@@ -1,7 +1,7 @@
 // Act I - more math: probability & statistics, and numerical methods. Both sit under yield, Monte Carlo,
 // random verification, reliability and every simulator a chip engineer uses.
 import { num, qty } from './answers';
-import { art, ask, gen, Lesson, mc, pick, say } from './types';
+import { art, ask, between, gen, Lesson, mc, pick, say } from './types';
 
 const pct = (x: number) => +(x * 100).toFixed(2);
 
@@ -39,7 +39,7 @@ export const prob: Lesson = {
       const inside = [68.27, 95.45, 99.73][k - 1];
       return ask(`Threshold voltage is normal with μ = ${mu} mV and σ = ${s} mV. What percentage of transistors fall between ${mu - k * s} and ${mu + k * s} mV?`, qty(inside, '%', 0.01), `That range is ±${k}σ, which holds ${inside}% of a normal distribution.`, 'Count how many σ the range spans, then use 68 / 95 / 99.7.');
     }),
-    mc('A 32 MB cache has about 268 million bitcells. Why do SRAM designers verify their cell to about **6σ**, not 3σ?', ['Because Monte Carlo at 6σ is cheap to run', 'At 3σ, hundreds of thousands of cells would fail', 'Because each bitcell has six transistors', 'Because foundries only certify SPICE models at 6σ corners'], 1, 'At 3σ, about 0.27% of cells fail: hundreds of thousands per cache. At 6σ it is about 2 per billion, which redundancy can fix. When you have billions of copies, rare tails become certainties. This is the most important statistical idea in memory and circuit design.'),
+    mc('A 32 MB cache has about 268 million bitcells. Why do SRAM designers verify their cell to about **6σ**, not 3σ?', ['Because Monte Carlo at 6σ is cheap to run', 'At 3σ, hundreds of thousands of cells would fail', 'Because each bitcell has six transistors', 'Because foundries only certify SPICE models at 6σ corners'], 1, 'Counting only the failing side of the distribution (one-sided), at 3σ about 0.135% of cells fail: hundreds of thousands per cache. At 6σ it is about 1 per billion, which redundancy can fix. When you have billions of copies, rare tails become certainties. This is the most important statistical idea in memory and circuit design.'),
     say('When independent random effects add together, their **variances** add (σ²), not their σ values. So combined random jitter or mismatch is σ_total = √(σ₁² + σ₂² + ...).'),
     gen((r) => {
       const a = pick(r, [3, 6, 9]);
@@ -78,7 +78,24 @@ export const numerics: Lesson = {
   xp: 100,
   steps: [
     say('Every simulator you will ever use (SPICE, timing engines, performance models, your own Python scripts) computes with approximate numbers and approximate methods. **Numerical methods** is the art of knowing when those approximations are fine, and when they quietly lie to you.'),
-    say('Computers store real numbers in **floating point**: a sign, an exponent and a fraction, like scientific notation in binary. A 32-bit float has 1 sign bit, 8 exponent bits and 23 fraction bits (24 bits of precision with the hidden leading 1).'),
+    say('Computers store real numbers in **floating point**: a sign, an exponent and a fraction, like scientific notation in binary. A 32-bit float (binary32) has 1 sign bit, 8 exponent bits and 23 fraction bits (24 bits of precision with the hidden leading 1), and the exponent is stored with a **bias** of 127.'),
+    art(`
+  binary32:   s | eeeeeeee | fffffffffffffffffffffff
+              1       8               23
+
+  e = 1..254   normal:    (-1)^s × 1.f × 2^(e - 127)     the leading 1 is implied
+  e = 0        f = 0: zero (+0 and -0).   f ≠ 0: SUBNORMAL, 0.f × 2^-126 (no implied 1)
+  e = 255      f = 0: infinity.           f ≠ 0: NaN (not a number)`, 'the special exponent fields are what make 0, ∞ and NaN possible'),
+    gen((r) => {
+      const s = r() < 0.3 ? 1 : 0, e = between(r, 124, 131), m = between(r, 1, 7);
+      const v = (s ? -1 : 1) * (1 + m / 8) * 2 ** (e - 127);
+      const h = (((s << 31) | (e << 23) | (m << 20)) >>> 0).toString(16).toUpperCase().padStart(8, '0');
+      return ask(`Decode the binary32 pattern \`0x${h}\`. What number is it? (decimal)`, qty(v, '', 0.001, String(v)), `Sign ${s}, exponent field ${e} (${e} - 127 = ${e - 127}), fraction ${m}/8: ${s ? '-' : ''}(1 + ${m}/8) × 2^${e - 127} = ${v}.`, 'Split it into 1, 8 and 23 bits. Subtract the bias from the exponent field and put the implied 1 in front of the fraction.');
+    }),
+    ask('What is the stored 8-bit exponent field of **1.0** in binary32? (decimal)', num(127), '1.0 = 1.0 × 2^0, so the field is 0 + the bias 127 (0x3F800000 as a whole word).', 'Add the bias to the real exponent.'),
+    say('The limits follow from the layout. Smallest normal number: 2⁻¹²⁶ ≈ 1.18 × 10⁻³⁸. Largest: about 3.4 × 10³⁸. Machine epsilon (the gap above 1.0): 2⁻²³ ≈ 1.19 × 10⁻⁷. **Subnormals** fill the gap between zero and the smallest normal number, so tiny results fade out gradually instead of snapping to zero. Results are rounded to the nearest representable number, and an exact tie goes to the one with an **even** last bit.'),
+    mc('A float `x` holds NaN. What does the comparison `x == x` give?', ['True: every value equals itself, NaN included', 'False: NaN compares unequal to everything, itself too', 'A trap: comparing a NaN raises a hardware exception', 'It depends on the bit pattern of the NaN payload'], 1, 'NaN is unordered, so even NaN == NaN is false. That is also the standard way to test for it (`x != x`). Likewise +0 == -0 is true, although their bit patterns differ in the sign bit.'),
+    mc('The exponent field is all ones and the fraction is zero. What is the value?', ['NaN, because all ones is the invalid pattern', 'A subnormal number just above zero', 'Infinity, with the sign given by the sign bit', 'The largest finite number of the format'], 2, 'All-ones exponent with a zero fraction is ±∞ (overflow, or 1/0). With a non-zero fraction it is NaN. All-zeros exponent is zero or a subnormal. The largest finite number uses exponent field 254.'),
     mc('In Python, `0.1 + 0.2 == 0.3` is `False`. Why?', ['Python floats keep only 6 digits', 'The values are rounded in binary', '== on floats compares object identity', 'The + operator is approximate on purpose'], 1, '0.1, 0.2 and 0.3 cannot be represented exactly in binary, so each is rounded, and the rounding errors do not cancel. 0.1 in binary is a repeating fraction, like 1/3 in decimal. Never compare floats with ==; compare with a tolerance: abs(a - b) < 1e-9.'),
     gen((r) => {
       const bits = pick(r, [24, 53]);
@@ -86,7 +103,7 @@ export const numerics: Lesson = {
       return ask(`A float format has ${bits} bits of precision (${bits === 24 ? 'single' : 'double'}). What is machine epsilon, the gap between 1.0 and the next number, as a power of two? Answer as a decimal (e.g. 1.2e-7).`, qty(eps, '', 0.02, eps.toExponential(3)), `ε = 2^-(${bits} - 1) = ${eps.toExponential(3)}. Any result is only accurate to about that relative error.`, 'ε = 2^-(precision - 1).');
     }),
     mc('You compute the tiny difference between two nearly equal 32-bit floats, like 1.0000123 - 1.0000120. What is the danger?', ['Overflow past the float range', 'Catastrophic cancellation', 'Underflow to exactly zero', 'Rounding error in the subtraction itself'], 1, 'The leading digits cancel and only the rounding noise is left, so the result has very few correct digits. Rearrange formulas to avoid subtracting nearly equal numbers, or use more precision. It is the classic numerical bug.'),
-    say('Hardware usually avoids floating point and uses **fixed point**: an integer with an implied binary point. Q1.15 means 1 integer (sign) bit and 15 fraction bits in 16 bits total.'),
+    say('Hardware usually avoids floating point and uses **fixed point**: an integer with an implied binary point. Q1.15 means 1 integer (sign) bit and 15 fraction bits in 16 bits total. (This is the Arm-style Qm.n, where m counts the sign bit. Many DSP texts call the same 16-bit format Q15 or Q0.15, where the sign bit is not counted; this game always counts it.)'),
     gen((r) => {
       const f = pick(r, [7, 15, 31]);
       return ask(`In Q1.${f} fixed point, what is the value of one LSB (the resolution)? Answer as a decimal.`, qty(2 ** -f, '', 0.01, (2 ** -f).toExponential(3)), `One LSB = 2^-${f} = ${(2 ** -f).toExponential(3)}. DSP datapaths are sized by exactly this kind of calculation: enough fraction bits for accuracy, no more.`, '2 to the minus number of fraction bits.');
@@ -116,7 +133,7 @@ export const numerics: Lesson = {
       return ask(`A method has error proportional to h^${order}${order === 1 ? ' (like Euler)' : ' (like trapezoidal)'}. If you make the step ${k}× smaller, how many times smaller does the error get?`, num(k ** order), `Error ∝ h^${order}, so ${k}× smaller h gives ${k}^${order} = ${k ** order}× smaller error. Higher-order methods buy accuracy much more cheaply.`, 'Raise the step ratio to the method\'s order.');
     }),
   ],
-  recap: ['Floats round: never compare with ==, beware cancellation.', 'Fixed point Qm.n: LSB = 2^-n.', 'Bisection is safe, Newton is fast (SPICE uses Newton).', 'Forward Euler is stable only for h < 2τ; stiff circuits need implicit methods.', 'Error ∝ h^order.'],
+  recap: ['binary32 = 1 sign, 8 exponent (bias 127), 23 fraction bits; the implied 1 is not stored for normals.', 'Exponent field 0 is zero or a subnormal; all ones is infinity or NaN.', 'Floats round: never compare with ==, beware cancellation.', 'Fixed point Qm.n: LSB = 2^-n.', 'Bisection is safe, Newton is fast (SPICE uses Newton).', 'Forward Euler is stable only for h < 2τ; stiff circuits need implicit methods.', 'Error ∝ h^order.'],
 };
 
 export const STATS_LESSONS = [prob, numerics];

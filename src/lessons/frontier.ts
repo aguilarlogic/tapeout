@@ -13,13 +13,13 @@ export const eda: Lesson = {
   concept: 'algorithms behind the tools: placement, routing, SAT, BDDs, graph timing',
   xp: 120,
   steps: [
-    say('**The role.** Every tool in this game (synthesis, placement, routing, STA, simulators, formal checkers) was written by an EDA engineer: Synopsys, Cadence, Siemens EDA, Ansys, and every chip company\'s internal CAD team. The work is software engineering with a large dose of algorithms: C++ and Python, graph theory, optimization, parallelism. The inputs are enormous: a chip is billions of shapes and hundreds of millions of cells.'),
+    say('**The role.** Every tool in this game (synthesis, placement, routing, STA, simulators, formal checkers) was written by an EDA engineer: Synopsys, Cadence, Siemens EDA, and every chip company\'s internal CAD team. The work is software engineering with a large dose of algorithms: C++ and Python, graph theory, optimization, parallelism. The inputs are enormous: a chip is billions of shapes and hundreds of millions of cells.'),
     say('Almost everything reduces to a few families of algorithms. **Graph traversal** (timing propagation, netlist queries), **optimization** (simulated annealing and analytical solvers for placement), **shortest path** (routing), and **Boolean reasoning** (SAT solvers and BDDs for equivalence checking and formal verification).'),
     gen((r) => {
       const n = pick(r, [4, 5, 6]);
       const xs = Array.from({ length: n }, () => Math.floor(r() * 40)), ys = Array.from({ length: n }, () => Math.floor(r() * 40));
       const hpwl = Math.max(...xs) - Math.min(...xs) + Math.max(...ys) - Math.min(...ys);
-      return ask(`A net connects ${n} pins at ${xs.map((x, i) => `(${x}, ${ys[i]})`).join(', ')}. What is its half-perimeter wirelength (HPWL), the placer's standard cost?`, num(hpwl), `The bounding box is ${Math.max(...xs) - Math.min(...xs)} wide and ${Math.max(...ys) - Math.min(...ys)} tall: HPWL = ${hpwl}. It is a fast lower bound on the routed length, cheap enough to evaluate millions of times per second inside an annealer.`, 'Width plus height of the smallest box around every pin.');
+      return ask(`A net connects ${n} pins at ${xs.map((x, i) => `(${x}, ${ys[i]})`).join(', ')}. What is its half-perimeter wirelength (HPWL), the placer's standard cost?`, num(hpwl), `The bounding box is ${Math.max(...xs) - Math.min(...xs)} wide and ${Math.max(...ys) - Math.min(...ys)} tall: HPWL = ${hpwl}. It is a fast lower bound on the routed length (exact for two- and three-pin nets, optimistic for more pins), cheap enough to evaluate millions of times per second inside an annealer.`, 'Width plus height of the smallest box around every pin.');
     }),
     art(`
    Lee's maze router: a wave expands from the source, one step per ring.
@@ -27,6 +27,10 @@ export const eda: Lesson = {
      S 1 2 3 4 5 6      the first ring to touch the target gives the
      1 2 # # # 6 7      shortest path, avoiding blocked cells (#).
      2 3 4 5 . 7 T      backtrace from T to S to draw the wire.`),
+    say('Lee floods the grid in every direction, which guarantees the shortest path but visits a huge number of cells. **A\*** adds a sense of direction: it always expands the cell with the smallest (cost so far + an optimistic estimate of the distance left to the target). With an estimate that never overshoots (the straight-line Manhattan distance does that), A* still finds the shortest path, but touches far fewer cells.'),
+    mc('Compared with Lee\'s maze router, what does **A\*** add?', ['A heuristic estimate of the distance left, which steers the search', 'Permission to cut corners, which gives a shorter but illegal path', 'A second wave from a random pin, which makes it non-repeatable', 'Nothing: the two search the same cells in the same order'], 0, 'The heuristic orders the search toward the target. If it never overestimates the remaining distance, the path is still the shortest; the saving is in cells visited, which on a chip-sized grid is the difference between seconds and minutes.'),
+    say('A net with many pins needs a whole **tree**, not one path. A spanning tree joins the pins by pin-to-pin wires only. A rectilinear **Steiner tree** may add extra junction points, so wires share segments; it is never longer than the spanning tree and is often shorter. The HPWL equals the best Steiner tree only for nets of two or three pins; from four pins up the true tree can be longer than the half-perimeter.'),
+    ask('Three pins sit at (0, 0), (10, 0) and (5, 10). A minimum spanning tree joins them with 25 units of wire. Add one Steiner point at (5, 0). How long is the Steiner tree?', num(20), 'A trunk from (0,0) to (10,0) is 10; a stub from the Steiner point (5,0) up to (5,10) is 10; total 20. That equals the HPWL (10 + 10), which is exact for three pins, and saves 5 units over the spanning tree.', 'Trunk along the bottom plus a stub up to the top pin.'),
     gen((r) => {
       const n = pick(r, [1, 2, 4, 8]) * 1000000;
       const quad = (n * n) / 2, lin = n * Math.log2(n);
@@ -37,7 +41,7 @@ export const eda: Lesson = {
     mc('A **BDD** (binary decision diagram) represents a Boolean function as a graph. Why does the **variable order** matter so much?', ['The order sets which inputs are evaluated first in silicon', 'Size can swing from linear to exponential with the order', 'Only the first variable\'s position matters for size', 'A bad order gives wrong answers, not just bigger graphs'], 1, 'The same function can need a handful of nodes in one order and exponentially many in another (a multiplier is hard in every order, an adder is tiny in a good one); finding a good order is a major part of using BDDs. For f = a1·b1 + a2·b2 + …, interleaving a1 b1 a2 b2 … gives a linear-size BDD; putting all a\'s first gives an exponential one. Tools reorder variables dynamically.'),
     mc('Which skill set describes an EDA engineer best?', ['Deep circuit design experience, with scripting as a bonus', 'Strong C++/Python and algorithms, plus enough chip knowledge', 'Pure mathematics: proofs matter more than code', 'Project management across the customer\'s design teams'], 1, 'Algorithms and data structures, and enough chip knowledge (timing, layout, logic) to know what the customer actually needs. The best EDA engineers can talk to both sides: the customer\'s design flow and the algorithm that serves it. That is also why this game covers both.'),
   ],
-  recap: ['EDA = algorithms at enormous scale: graphs, optimization, shortest path, Boolean reasoning.', 'HPWL: half the perimeter of the pins\' bounding box.', 'Maze routing = breadth-first wave expansion.', 'Complexity decides what is possible: n² vs n·log n.', 'SAT is NP-complete in theory and routine in practice; BDD size depends on variable order.'],
+  recap: ['EDA = algorithms at enormous scale: graphs, optimization, shortest path, Boolean reasoning.', 'HPWL: half the perimeter of the pins\' bounding box.', 'Maze routing = breadth-first wave expansion (Lee); A* steers it with a never-overestimating distance heuristic.', 'Multi-pin nets need trees: a rectilinear Steiner tree beats a spanning tree; HPWL is exact only for 2- and 3-pin nets.', 'Complexity decides what is possible: n² vs n·log n.', 'SAT is NP-complete in theory and routine in practice; BDD size depends on variable order.'],
 };
 
 export const libchar: Lesson = {
@@ -53,7 +57,7 @@ export const libchar: Lesson = {
       const d0 = pick(r, [30, 40, 50]), d1 = d0 + pick(r, [20, 30, 40]);
       const frac = pick(r, [0.25, 0.5, 0.75]);
       const load = l0 + frac * (l1 - l0), d = d0 + frac * (d1 - d0);
-      return ask(`At one input slew the table says: load ${l0} fF → ${d0} ps and load ${l1} fF → ${d1} ps. What delay does STA use for a load of ${sig(load)} fF (linear interpolation, in ps)?`, qty(d, 'ps', 0.02, sig(d)), `Fraction along = (${sig(load)} − ${l0}) / (${l1} − ${l0}) = ${frac}. Delay = ${d0} + ${frac} × (${d1} − ${d0}) = ${sig(d)} ps. Real tables are 7×7, and STA interpolates in both directions (bilinear).`, 'Linear interpolation between the two entries.');
+      return ask(`At one input slew the table says: load ${l0} fF → ${d0} ps and load ${l1} fF → ${d1} ps. What delay does STA use for a load of ${sig(load)} fF (linear interpolation, in ps)?`, qty(d, 'ps', 0.02, sig(d)), `Fraction along = (${sig(load)} − ${l0}) / (${l1} − ${l0}) = ${frac}. Delay = ${d0} + ${frac} × (${d1} − ${d0}) = ${sig(d)} ps. Real tables are typically 7×7, and STA interpolates in both directions (bilinear).`, 'Linear interpolation between the two entries.');
     }),
     say('Sequential cells have **constraints**. The **setup time** is how long before the clock edge the data must be stable. It is found by moving the data edge toward the clock until the clock-to-Q delay **degrades** by a set amount (commonly 10%): earlier than that is safe, later is metastable or wrong. **Hold time** is the same search on the other side of the edge.'),
     gen((r) => {
@@ -67,8 +71,10 @@ export const libchar: Lesson = {
     }),
     mc('Why are sign-off **setup** checks done at the slow corner and **hold** checks at the fast corner?', ['It is only a convention; both corners catch the same failures', 'Setup fails when data is late, hold when data is early', 'Hold needs low voltage, and the fast corner runs at the lowest', 'Setup only matters at low temperature, where wires are slowest'], 1, 'Setup fails when data is too slow, so the slowest silicon (high temperature at low voltage, slow process) is the worst case; hold fails when data is too fast, so the fastest silicon is the worst case. Each check has a direction in which it fails. Modern nodes add temperature inversion (the slow corner at cold) and on-chip variation, so there are many more corners to cover.'),
     mc('What does a **CCS** (composite current source) model add over NLDM?', ['Larger tables with more slew and load points per arc', 'A current waveform per arc, not just delay and slew', 'Statistical sigma values for each arc, for on-chip variation', 'Wire RC parasitics taken from the extracted layout'], 1, 'With the waveform, analysis can model the load\'s resistance and the waveform shape accurately at advanced nodes. At small geometries long resistive wires shape the waveform; delay-and-slew tables lose accuracy, and current-source models keep it.'),
+    say('Tables describe the **typical** cell. Variation needs more: the **Liberty variation format (LVF)** adds, for every arc and table point, a standard deviation of the delay (and slew and constraint) next to the mean. Statistical timing (POCV) reads those sigmas, adds the independent arcs as a root-sum-square, and checks slack at a chosen sigma instead of using one flat derate for every cell.'),
+    mc('A library ships NLDM tables only, with no variation data. What can the timing tool **not** do properly with it?', ['Look up delays at the corners, since that needs no variation data', 'Check each path at a chosen sigma with per-arc statistics', 'Interpolate between slew and load entries in a table', 'Report the setup and hold slack of a path at one corner'], 1, 'Per-arc sigma lives in LVF. Without it the tool falls back to flat or table-based derates (OCV, AOCV), which are more pessimistic for long paths.'),
   ],
-  recap: ['Liberty holds delay, slew, power, leakage and constraints per cell, per corner.', 'NLDM: tables of delay vs (slew, load), linearly interpolated.', 'Setup/hold: bisect until clock-to-Q degrades 10%.', 'Corners = V × T × P (and more); setup at slow, hold at fast.', 'CCS adds waveform accuracy.'],
+  recap: ['Liberty holds delay, slew, power, leakage and constraints per cell, per corner.', 'NLDM: tables of delay vs (slew, load), linearly interpolated.', 'Setup/hold: bisect until clock-to-Q degrades 10%.', 'Corners = V × T × P (and more); setup at slow, hold at fast.', 'CCS (and ECSM) add waveform accuracy; LVF adds a σ per arc for statistical timing.'],
 };
 
 export const ioesd: Lesson = {
@@ -78,7 +84,21 @@ export const ioesd: Lesson = {
   xp: 110,
   steps: [
     say('**The role.** Every signal that leaves a chip passes through an **I/O cell**: a driver, a receiver, level shifting, termination and, above all, **ESD protection**. I/O engineers work at foundries and IP companies (Synopsys, Cadence, Alphawave) and on every product that touches a pin. They sit between the analog, digital and package teams.'),
-    say('**Electrostatic discharge** is a few kilovolts from a human finger or a charged machine. The **human-body model (HBM)** is a 100 pF capacitor discharged through a 1.5 kΩ resistor. A 2 kV zap peaks at a little over an amp, for about 150 ns: more than enough to blow through a thin gate oxide.'),
+    say('**Electrostatic discharge** is a few kilovolts from a human finger (the **human-body model, HBM**) or from the chip itself charging up in handling and discharging into a grounded tool (the **charged-device model, CDM**). The HBM is a 100 pF capacitor discharged through a 1.5 kΩ resistor. A 2 kV zap peaks at a little over an amp, for about 150 ns: more than enough to blow through a thin gate oxide. CDM pulses are far faster (under a nanosecond) and peak at several amperes, so they stress gate oxides inside the chip rather than the pad diodes.'),
+    say('Designs usually aim for 1 kV HBM and 250 V CDM. Very high-speed I/O may accept less (about 125 V CDM), because factories with basic ESD control can safely handle parts down to about 500 V HBM. Both are destructive qualification tests on sample parts, not something every chip goes through in production.'),
+    gen((r) => {
+      // Option order is fixed and the scenario picks the answer, so the right label is never the longest by design.
+      const opts = ['Human-body model (HBM)', 'Charged-device model (CDM)', 'Latch-up current injection', 'System-level contact gun'];
+      const [q, a, why] = pick(r, [
+        ['Which model catches a thin-oxide input that fails only in automated test handling?', 1, 'The chip charged itself in the handler and discharged through one input: that is CDM, and it hits oxides, not pad diodes.'],
+        ['A person touching a pin in assembly is best modelled by which test?', 0, 'A finger is the human-body model: 100 pF through 1.5 kΩ, a slow pulse of about 150 ns.'],
+        ['Which pulse lasts under a nanosecond and peaks at several amperes?', 1, 'CDM: the whole package discharges at once, so it is far faster than HBM (about 150 ns) and punishes thin oxides.'],
+        ['Which pulse is a 100 pF capacitor discharged through 1.5 kΩ?', 0, 'That is the HBM circuit. Its time constant is 150 ns.'],
+        ['Which test checks that a parasitic thyristor in the chip does not turn on and hold the supply high?', 2, 'Latch-up qualification: inject current into each pin and overdrive the supplies, and the chip must not latch.'],
+        ['Which test is run on the finished product, through its connector, and not on the bare chip?', 3, 'The system-level gun strikes the product as the user would. Chip-level HBM and CDM do not replace it.'],
+      ] as const);
+      return mc(q, opts, a, why);
+    }),
     gen((r) => {
       const v = pick(r, [1000, 2000, 4000]);
       const i = v / 1500;
@@ -95,6 +115,7 @@ export const ioesd: Lesson = {
       const w = (i * 1000) / j;
       return ask(`A clamp device carries ${j} mA per µm of width during an HBM pulse. To pass ${i} A, how wide must it be, in µm?`, qty(w, 'µm', 0.03, sig(w)), `${i * 1000} mA ÷ ${j} mA/µm = ${sig(w)} µm. This is why ESD devices are huge: often hundreds of microns, folded into fingers around the pad ring.`, 'Current divided by current per micron.');
     }),
+    say('**Latch-up** is the other way a pin kills a chip: a zap or an undershoot fires the parasitic thyristor between the wells and the supply sticks high until power is cycled. Latch-up qualification injects about ±100 mA into each pin and overdrives the supplies to 1.5× their maximum at the highest operating temperature; the chip must not latch.'),
     say('Fast drivers cause **simultaneous switching noise (SSN)**. When many outputs switch at once, the current in the package\'s supply inductance changes quickly, and the supply bounces by **V = L · di/dt**. Slew-rate control and more power/ground pins are the cures.'),
     gen((r) => {
       const n = pick(r, [8, 16, 32]), l = pick(r, [1, 2, 4]), di = pick(r, [10, 20]), tr = pick(r, [1, 2]);
@@ -104,7 +125,7 @@ export const ioesd: Lesson = {
     mc('Why does a **level shifter** sit in the I/O cell?', ['To slow the pin\'s edges and reduce switching noise', 'The core and the pins run at different supply voltages', 'To clamp ESD zaps before they reach the core', 'To convert single-ended core signals to differential pins'], 1, 'The core runs at a low voltage (0.8 V) while the pins run at 1.8-3.3 V: a level shifter translates signals between domains without leaving the thick-oxide I/O devices overdriven or the core unable to switch them. A core signal cannot drive a 3.3 V gate, and a 3.3 V signal would destroy a core transistor. Shifters have the right oxide thickness on each side.'),
     mc('What is the main danger of a **floating** or bad power sequence through the I/O ring?', ['The PLL loses lock and the clock stops', 'Current through ESD diodes backpowers an unpowered domain', 'The pads\' ESD clamps stay disabled until power is up', 'The ESD rail clamp fires on the supply ramp and shorts VDD to VSS for good'], 1, 'ESD structures conduct when a pin is driven above its rail, which risks latch-up or backpowering. A pin driven while its supply is off forward-biases its protection diode. Real chips specify power-up order and often include power-on-control cells.'),
   ],
-  recap: ['HBM: 100 pF through 1.5 kΩ; 2 kV peaks near 1.3 A.', 'Protection = diodes + a rail clamp; width from current per µm.', 'SSN: V = L · di/dt; slow the edges, add supply pins.', 'Level shifters join voltage domains.', 'Never drive a pin above its rail while the chip is off.'],
+  recap: ['HBM: 100 pF through 1.5 kΩ; 2 kV peaks near 1.3 A in about 150 ns. CDM is under a nanosecond and several amperes, and stresses oxides.', 'Usual targets: 1 kV HBM, 250 V CDM. Latch-up: ±100 mA per pin, supplies at 1.5× max, hot.', 'Protection = diodes + a rail clamp; width from current per µm.', 'SSN: V = L · di/dt; slow the edges, add supply pins.', 'Level shifters join voltage domains.', 'Never drive a pin above its rail while the chip is off.'],
 };
 
 export const socint: Lesson = {
@@ -114,12 +135,12 @@ export const socint: Lesson = {
   xp: 120,
   steps: [
     say('**The role.** A modern chip is mostly bought-in or reused blocks: CPU clusters, memory controllers, PCIe, USB, security, hundreds of peripherals. The **SoC integration** engineer assembles them: the address map, the interconnect, the interrupt tree, the clock and reset network, the power domains, the pad ring, the register models. Most "the chip does not boot" bugs are integration bugs, not block bugs.'),
-    say('Every peripheral occupies a window of the **address map**: a base address and a size, with the size a power of two and the base aligned to it. The interconnect\'s decoder looks at the high address bits to choose the target.'),
+    say('Every peripheral occupies a window of the **address map**: a base address and a size. By convention the size is usually a power of two, the base is aligned to it, and windows are at least 4 KB (a convention that keeps decoding cheap, not a rule). The interconnect\'s decoder looks at the high address bits to choose the target.'),
     gen((r) => {
-      const slaves = [['UART', 0x1000, 0x1000], ['SPI', 0x2000, 0x1000], ['GPIO', 0x3000, 0x1000], ['SRAM', 0x10000, 0x10000]] as const;
-      const [name, base, size] = pick(r, slaves);
+      const subordinates = [['UART', 0x1000, 0x1000], ['SPI', 0x2000, 0x1000], ['GPIO', 0x3000, 0x1000], ['SRAM', 0x10000, 0x10000]] as const;
+      const [name, base, size] = pick(r, subordinates);
       const addr = base + Math.floor(r() * (size / 4)) * 4;
-      return ask(`Map: UART 0x1000-0x1FFF, SPI 0x2000-0x2FFF, GPIO 0x3000-0x3FFF, SRAM 0x10000-0x1FFFF. Which peripheral does address 0x${addr.toString(16).toUpperCase()} select? (UART, SPI, GPIO or SRAM)`, { canonical: name, check: (s) => s.trim().toLowerCase() === name.toLowerCase() }, `0x${addr.toString(16).toUpperCase()} falls inside ${name}'s window. An access that hits no window gets a bus error (or hangs, if the integrator forgot the default slave).`, 'Which window contains it?');
+      return ask(`Map: UART 0x1000-0x1FFF, SPI 0x2000-0x2FFF, GPIO 0x3000-0x3FFF, SRAM 0x10000-0x1FFFF. Which peripheral does address 0x${addr.toString(16).toUpperCase()} select? (UART, SPI, GPIO or SRAM)`, { canonical: name, check: (s) => s.trim().toLowerCase() === name.toLowerCase() }, `0x${addr.toString(16).toUpperCase()} falls inside ${name}'s window. An access that hits no window gets a bus error (or hangs, if the integrator forgot the default subordinate).`, 'Which window contains it?');
     }),
     gen((r) => {
       const kb = pick(r, [4, 16, 64, 256]);
@@ -127,15 +148,18 @@ export const socint: Lesson = {
       return ask(`A block has ${kb} KiB of register space. How many low address bits does the block itself decode?`, num(bits), `${kb} KiB = 2^${bits} bytes, so the block decodes address bits [${bits - 1}:0]; the interconnect uses the bits above for selection.`, 'log2 of the size in bytes.');
     }),
     say('**Interrupts** from peripherals are collected by an interrupt controller and routed to cores. **Resets** must release in order: the clock must be running and stable before a block leaves reset, and a block that talks to memory must not leave reset before the memory controller is ready. **Power domains** add isolation and retention cells at every boundary.'),
+    say('Interrupts differ in how they are signalled. A **level** interrupt stays asserted until the source is cleared, so a late handler cannot miss it and lines can be shared. An **edge** interrupt is a pulse that must be latched or it is lost. Either kind can be **wired** (one wire per source into the controller) or **message-signalled** (the device writes a small message to a special address: **MSI** and **MSI-X**). A device on a PCIe link has no spare wires, so it uses messages.'),
+    mc('A peripheral on the far side of a PCIe link must interrupt a core. Wired or message-signalled?', ['Wired: one dedicated wire runs to the controller for each device', 'Message-signalled: the device writes an MSI or MSI-X message', 'Neither: a PCIe device can only be polled by the software', 'Edge-triggered only, because a level cannot cross the link'], 1, 'A link carries packets, not spare wires. An MSI/MSI-X interrupt is a memory write that the interrupt controller turns into an interrupt, and MSI-X allows many independent vectors per device.'),
+    say('Controllers group interrupts by class. The Arm GIC has shared peripheral interrupts (SPI, routed to any core), private peripheral interrupts (PPI, one core\'s own timers), software-generated interrupts (SGI, cores signalling each other) and message-based ones (LPI). RISC-V has a platform-level interrupt controller (PLIC) for wires, and an advanced replacement that splits into the APLIC for wired sources and the IMSIC for messages, one per hart.'),
     gen((r) => {
       const bw = pick(r, [32, 64, 128]), f = pick(r, [200, 400, 800]), eff = pick(r, [60, 80, 100]);
       const v = (bw / 8) * f * (eff / 100);
-      return ask(`A ${bw}-bit bus runs at ${f} MHz and delivers ${eff}% of its peak efficiency. What bandwidth, in MB/s?`, qty(v, 'MB/s', 0.02, sig(v)), `${bw / 8} bytes × ${f} MHz × ${eff / 100} = ${sig(v)} MB/s. Integrators size the bus width and frequency against the sum of what the masters need.`, 'bytes per cycle × clock × efficiency.');
+      return ask(`A ${bw}-bit bus runs at ${f} MHz and delivers ${eff}% of its peak efficiency. What bandwidth, in MB/s?`, qty(v, 'MB/s', 0.02, sig(v)), `${bw / 8} bytes × ${f} MHz × ${eff / 100} = ${sig(v)} MB/s. Integrators size the bus width and frequency against the sum of what the managers (formerly meetsBar) need.`, 'bytes per cycle × clock × efficiency.');
     }),
-    mc('The firmware reads a peripheral register and the chip hangs. Which integration mistake is most likely?', ['A CPU pipeline bug that only shows up on loads', 'Its clock or reset is never released, so no response comes', 'The package bond-out swaps two of the peripheral\'s pins', 'A higher-priority interrupt preempts the read and never returns'], 1, 'The peripheral\'s clock gate or reset is not released (or its address window overlaps another), so the bus never gets a response and there is no timeout or default slave to rescue it. A transaction that no slave answers waits forever. Good integration adds a default slave and bus timeouts so mistakes turn into error responses instead of hangs.'),
-    mc('How do integration teams avoid copying hundreds of registers by hand into RTL, software headers and documentation?', ['They copy them by hand and review every copy', 'They generate all of them from one machine-readable description', 'Software reads the register layout from the RTL at boot', 'The verification team diffs the RTL, headers and documentation by hand'], 1, 'A single source (IP-XACT or a CSR description language) generates the RTL, the C headers, the UVM register model and the documentation, so they cannot disagree. Single source of truth: one description, many generated views. Most register bugs are a mismatch between two hand-written copies.'),
+    mc('The firmware reads a peripheral register and the chip hangs. Which integration mistake is most likely?', ['A CPU pipeline bug that only shows up on loads', 'Its clock or reset is never released, so no response comes', 'The package bond-out swaps two of the peripheral\'s pins', 'A higher-priority interrupt preempts the read and never returns'], 1, 'The peripheral\'s clock gate or reset is not released (or its address window overlaps another), so the bus never gets a response and there is no timeout or default subordinate to rescue it. A transaction that no subordinate answers waits forever. Good integration adds a default subordinate and bus timeouts so mistakes turn into error responses instead of hangs.'),
+    mc('How do integration teams avoid copying hundreds of registers by hand into RTL, software headers and documentation?', ['They copy them by hand and review every copy', 'They generate all of them from one machine-readable description', 'Software reads the register layout from the RTL at boot', 'The verification team diffs the RTL, headers and documentation by hand'], 1, 'A single source generates the RTL, the C headers, the UVM register model and the documentation, so they cannot disagree. IP-XACT describes IP blocks and their registers; SystemRDL is a compact language for registers. Single source of truth: one description, many generated views. Most register bugs are a mismatch between two hand-written copies.'),
   ],
-  recap: ['Address map: base + power-of-two size; decode the high bits.', 'Bus bandwidth = bytes × clock × efficiency.', 'Resets release in order; clocks must be stable first.', 'Isolation and retention cells at power-domain boundaries.', 'Default slaves and timeouts; generate registers from one source.'],
+  recap: ['Address map: base + power-of-two size; decode the high bits.', 'Interrupts: level or edge, wired or message-signalled (MSI/MSI-X over PCIe); Arm GIC classes SPI/PPI/SGI/LPI; RISC-V PLIC, then APLIC + IMSIC.', 'Bus bandwidth = bytes × clock × efficiency.', 'Resets release in order; clocks must be stable first.', 'Isolation and retention cells at power-domain boundaries.', 'Default subordinates and timeouts; generate registers from one source.'],
 };
 
 export const clocking: Lesson = {
@@ -167,10 +191,17 @@ export const clocking: Lesson = {
       const s = Math.sqrt(2 * 10 ** (l / 10) * b) / (2 * Math.PI * f0) * 1e15;
       return ask(`Flat phase noise of ${l} dBc/Hz over ${b / 1e6} MHz on a ${f0 / 1e9} GHz clock. What is the RMS jitter, in fs?`, qty(s, 'fs', 0.03, sig(s)), `σ_t = √(2 × 10^(${l / 10}) × ${b / 1e6}e6) / (2π × ${f0 / 1e9}e9) = ${sig(s)} fs. Better by 20 dB means ten times less jitter.`, 'Integrate, take the square root, divide by 2πf.');
     }),
-    mc('A **DLL** (delay-locked loop) differs from a PLL in that it:', ['Is a PLL built with a digital loop filter', 'Delays the reference instead of making a new frequency', 'Generates higher frequencies with less jitter', 'Multiplies the reference like a PLL, but with an LC oscillator'], 1, 'It delays the reference by a controlled amount, so it cannot multiply or accumulate jitter; it is used for phase alignment (memory interfaces, clock deskew). A DLL has no oscillator, so the delay line cannot drift with accumulating phase error. It aligns edges but cannot synthesise new frequencies.'),
+    say('Jitter is quoted in more than one way. **Period jitter** is how far one period is from the ideal period. **Cycle-to-cycle jitter** is the difference between two adjacent periods. **Time-interval error (TIE)**, the phase jitter, is how far each edge lands from where an ideal clock would have put it, and unlike the other two it accumulates. Serial links care about TIE.'),
+    say('Split jitter by cause, too. **Random jitter (RJ)** is Gaussian and unbounded, quoted as an rms value. **Deterministic jitter (DJ)** is bounded, with a hard peak-to-peak limit: data-dependent, periodic or duty-cycle. Because RJ has no limit, a link quotes **total jitter** only at a bit-error rate: TJ = DJ + 2·Q·RJ, with Q = 7.03 at a BER of 10⁻¹².'),
+    gen((r) => {
+      const dj = pick(r, [10, 15, 20, 30]), rj = pick(r, [0.5, 1, 1.5, 2]);
+      const tj = dj + 2 * 7.03 * rj;
+      return ask(`A link has DJ = ${dj} ps peak-to-peak and RJ = ${rj} ps rms. What is its total jitter at a BER of 10⁻¹², in ps? (Q = 7.03)`, qty(tj, 'ps', 0.02, sig(tj)), `TJ = DJ + 2·Q·RJ = ${dj} + 2 × 7.03 × ${rj} = ${sig(tj)} ps. The random part is multiplied by 14: that is the price of asking for 1 error in 10¹² bits.`, 'TJ = DJ + 2 × 7.03 × RJ.');
+    }),
+    mc('A **DLL** (delay-locked loop) differs from a PLL in that it:', ['Is a PLL built with a digital loop filter', 'Delays the reference instead of making a new frequency', 'Generates higher frequencies with less jitter', 'Multiplies the reference like a PLL, but with an LC oscillator'], 1, 'It delays the reference by a controlled amount, so it does not accumulate jitter; it is used for phase alignment (memory interfaces, clock deskew). A DLL has no oscillator, so the delay line cannot drift with accumulating phase error. A basic DLL aligns edges but cannot multiply the frequency (edge-combining DLLs can).'),
     mc('Why does a PLL\'s supply noise matter so much?', ['The loop tracks out all supply noise, so only the crystal matters', 'The VCO turns supply noise into frequency, and so phase, error', 'Only the charge pump is sensitive to the supply', 'Supply noise mainly changes the divider ratio N'], 1, 'The VCO converts any noise on its supply or control line into frequency, hence phase: PLLs use dedicated clean regulators, heavy decoupling and isolation from digital switching. The control voltage sets the frequency; anything that changes it modulates the output. This is where analog, power and package engineers meet.'),
   ],
-  recap: ['PLL: PFD + charge pump + loop filter + VCO + ÷N; f_out = N · f_ref.', 'Loop bandwidth ≲ f_ref/10, balancing reference and VCO noise.', 'Ring oscillator: f = 1/(2 · stages · delay).', 'Jitter = integrated phase noise over 2π f₀.', 'A DLL aligns, a PLL synthesises.'],
+  recap: ['PLL: PFD + charge pump + loop filter + VCO + ÷N; f_out = N · f_ref.', 'Loop bandwidth ≲ f_ref/10, balancing reference and VCO noise.', 'Ring oscillator: f = 1/(2 · stages · delay).', 'Jitter = integrated phase noise over 2π f₀.', 'Period, cycle-to-cycle and TIE (phase) jitter; RJ is Gaussian and unbounded, DJ is bounded; TJ = DJ + 2·Q·RJ with Q = 7.03 at 1e-12.', 'A DLL aligns, a PLL synthesises.'],
 };
 
 export const sensors: Lesson = {
@@ -191,10 +222,24 @@ export const sensors: Lesson = {
       const n = pick(r, [100, 400, 2500, 10000, 40000]);
       return ask(`A pixel collects ${n} electrons. What is the shot-noise-limited SNR, in dB? (20 · log10(signal / noise))`, qty(20 * Math.log10(Math.sqrt(n)), 'dB', 0.03, r1(20 * Math.log10(Math.sqrt(n))).toString()), `Noise = √${n} = ${Math.sqrt(n)} e⁻, SNR = ${n} / ${Math.sqrt(n)} = ${Math.sqrt(n)}, which is ${r1(20 * Math.log10(Math.sqrt(n)))} dB. Bigger pixels hold more electrons, which is why large sensors win in low light.`, 'Signal divided by √signal, in dB.');
     }),
+    say('Two capacities are easy to confuse. The **full well** is how much charge the photodiode can hold; the **saturation capacity** is the signal at which the *output* clips, which can be lower if the readout chain runs out of range first. Dynamic range and the best SNR are both quoted at saturation: **DR = 20·log10(saturation / read noise)** and **SNR at saturation = √(saturation electrons)** (shot noise only). In the drills, the readout does not clip first, so the full well is the saturation capacity.'),
     gen((r) => {
       const fw = pick(r, [5000, 10000, 20000, 60000]), rn = pick(r, [2, 5, 10]);
       const dr = 20 * Math.log10(fw / rn);
-      return ask(`A pixel has a full well of ${fw} e⁻ and a read noise of ${rn} e⁻. What is its dynamic range, in dB?`, qty(dr, 'dB', 0.02, r1(dr).toString()), `DR = 20 · log10(${fw} / ${rn}) = ${r1(dr)} dB. HDR techniques (multiple exposures, dual conversion gain) extend it past what one well can hold.`, '20 log10(full well / read noise).');
+      return ask(`A pixel saturates at ${fw} e⁻ (its full well) and has a read noise of ${rn} e⁻. What is its dynamic range, in dB?`, qty(dr, 'dB', 0.02, r1(dr).toString()), `DR = 20 · log10(${fw} / ${rn}) = ${r1(dr)} dB. HDR techniques (multiple exposures, dual conversion gain) extend it past what one well can hold.`, '20 log10(saturation / read noise).');
+    }),
+    gen((r) => {
+      const sat = pick(r, [2500, 10000, 40000, 90000]);
+      const snr = 20 * Math.log10(Math.sqrt(sat));
+      return ask(`A pixel saturates at ${sat} e⁻. What is its SNR at saturation, in dB, if shot noise is the only noise?`, qty(snr, 'dB', 0.03, r1(snr).toString()), `SNR = √${sat} = ${Math.sqrt(sat)}, which is ${r1(snr)} dB. This is the best SNR the pixel will ever give: every darker scene has fewer electrons and a lower SNR.`, '√(saturation electrons), then 20·log10.');
+    }),
+    say('Resetting a pixel\'s floating diffusion freezes **reset (kT/C) noise** and an offset onto it. In a **4-transistor pinned-photodiode pixel** the reset level is sampled first, the charge is then transferred and the signal level sampled, and the difference is taken: **correlated double sampling (CDS)** removes the reset noise and the offset. A 3T pixel with a hard reset cannot do this, because the reset level it could subtract is not the one buried in the signal.'),
+    mc('Which of these does **correlated double sampling** remove in a 4T pinned-photodiode pixel?', ['Reset (kT/C) noise and the pixel offset, by subtracting the reset level', 'Photon shot noise, since it is common to both samples of the pixel', 'Differences in gain between pixels, which show up as a fixed pattern', 'Rolling-shutter skew, because both samples are taken at once for every row'], 0, 'Shot noise is random in every exposure and is not in the reset level, so CDS cannot touch it. Gain differences are a separate effect (PRNU). CDS needs the reset sample to be correlated with the reset noise in the signal, which is what the 4T pixel provides.'),
+    say('**Fixed-pattern noise (FPN)** is the same error in the same pixel every frame. The offset part, which is there in the dark, is **dark-signal non-uniformity (DSNU)** and can be subtracted with a dark frame. The gain part is **photo-response non-uniformity (PRNU)**, quoted in % of the signal, so it grows in proportion to the signal while shot noise grows only as its square root.'),
+    gen((r) => {
+      const prnu = pick(r, [0.25, 0.5, 1, 2]);
+      const s = (100 / prnu) ** 2;
+      return ask(`A sensor has a PRNU of ${prnu}%. At what signal does the fixed-pattern noise (PRNU × signal) equal the shot noise (√signal), in electrons?`, qty(s, '', 0.02, String(s)), `PRNU × S = √S gives S = (1 / PRNU)² = (1 / ${prnu / 100})² = ${s.toLocaleString('en-US')} e⁻. Above that signal the pixel-to-pixel gain error, not photon noise, limits the picture, so it is calibrated out with a flat-field correction.`, 'S = (1 / PRNU)², with PRNU as a fraction.');
     }),
     gen((r) => {
       const [w, hh, fps] = pick(r, [[1920, 1080, 60], [3840, 2160, 30], [4000, 3000, 30], [8000, 6000, 30]] as const);
@@ -203,7 +248,7 @@ export const sensors: Lesson = {
     }),
     mc('A **rolling shutter** exposes and reads rows one after another. What artifact does that cause for a fast-moving object?', ['Colour shifts, because the colour filters read out at different rates', 'Skew: vertical edges lean, since each row is sampled later', 'Motion blur across the frame from a too-long exposure', 'More noise in the middle rows, which are read last'], 1, 'Each row sees the scene at a slightly different time, so vertical edges lean, and pulsed light gives flicker bands. A global shutter exposes all pixels at once at the cost of an extra storage node per pixel. Rolling shutter is smaller and lower in noise per pixel. Global shutter is used in machine vision and automotive where timing matters.'),
   ],
-  recap: ['Photon → electron: QE; storage: full well.', 'Shot noise √N sets the best SNR.', 'Dynamic range = 20 log10(full well / read noise).', 'Readout rate = pixels × fps.', 'Rolling vs global shutter; BSI improves QE.'],
+  recap: ['Photon → electron: QE; storage: full well (the output clips at the saturation capacity).', 'Shot noise √N sets the best SNR; at saturation, SNR = √(saturation electrons).', 'Dynamic range = 20 log10(saturation / read noise).', 'CDS (in 4T pinned-photodiode pixels) removes reset noise and offset.', 'DSNU is offset non-uniformity; PRNU is gain non-uniformity, in %.', 'Readout rate = pixels × fps.', 'Rolling vs global shutter; BSI improves QE.'],
 };
 
 export const mems: Lesson = {
@@ -233,9 +278,37 @@ export const mems: Lesson = {
       const f = pick(r, [10, 20, 50]) * 1e3, q = pick(r, [5000, 20000, 100000]);
       return ask(`A MEMS gyroscope drive mode resonates at ${f / 1000} kHz with a quality factor Q = ${q}. What is its half-power bandwidth, in Hz? (BW = f / Q)`, qty(f / q, 'Hz', 0.03, sig(f / q)), `BW = ${f} / ${q} = ${sig(f / q)} Hz. High Q gives large motion for little drive power but a narrow bandwidth: gyros are packaged in vacuum for exactly this reason, and the ASIC must track the frequency as temperature drifts.`, 'Frequency divided by Q.');
     }),
+    say('A MEMS data sheet quotes noise as a **noise density**: µg/√Hz for an accelerometer, °/s/√Hz for a gyro. Multiply by √bandwidth to get the noise you see. For a gyro, white rate noise integrates into an **angle random walk (ARW)**, quoted in °/√h, and the conversion is ARW = density × 60 (because √3600 s = 60). The floor itself is physical: the proof mass is buffeted by gas and thermal motion, the **Brownian noise**, an acceleration noise density a_n = √(4·k·T·ω₀ / (m·Q)) in m/s²/√Hz. A heavier mass and a higher Q both lower it.'),
+    gen((r) => {
+      const dens = pick(r, [0.005, 0.01, 0.02, 0.05]);
+      const arw = dens * 60;
+      return ask(`A gyro has a rate noise density of ${dens} °/s/√Hz. What is its angle random walk, in °/√h? (ARW = density × 60)`, qty(arw, '', 0.02, sig(arw)), `${dens} × 60 = ${sig(arw)} °/√h. Integrating white rate noise gives an angle error that grows as the square root of time, which is why a gyro alone cannot hold a heading for long.`, 'Density times 60.');
+    }),
+    gen((r) => {
+      const m = pick(r, [1, 2, 5]), f = pick(r, [5, 10, 20]) * 1e3, q = pick(r, [1, 10, 100]);
+      const k = 1.380649e-23, t = 300;
+      const an = Math.sqrt((4 * k * t * 2 * Math.PI * f) / (m * 1e-9 * q));
+      const um = an * 1e6;
+      return ask(`A proof mass of ${m} µg resonates at ${f / 1000} kHz with Q = ${q}, at 300 K. What is its Brownian acceleration noise density a_n = √(4·k·T·ω₀ / (m·Q)), in µm/s²/√Hz? (k = 1.38×10⁻²³ J/K)`, qty(um, '', 0.04, sig(um)), `ω₀ = 2π × ${f} = ${sig(2 * Math.PI * f)} rad/s. a_n = √(4 × 1.38e-23 × 300 × ${sig(2 * Math.PI * f)} / (${m}e-9 kg × ${q})) = ${sig(an)} m/s²/√Hz, which is ${sig(um)} µm/s²/√Hz. Mass and Q are the levers: a heavier mass and a better vacuum (higher Q) both lower the floor.`, 'Work in SI (mass in kg), then scale to µm/s².');
+    }),
+    art(`
+   Allan deviation of a gyro, log-log (the same ideas apply to an accelerometer)
+
+   σ(τ)
+   (°/h)
+    100 ┤ ╲
+        │   ╲  slope −½: white noise
+     10 ┤     ╲   (angle random walk)         ╱  slope +½:
+        │       ╲                          ╱     rate random walk
+      1 ┤         ╲_____ ___ ___ ___ ___╱
+        │            flat bottom: bias instability
+    0.1 ┼────┬────┬────┬────┬────┬────┬────
+        0.1    1   10  100  1k  10k  100k   τ (s)`, 'τ is the averaging time; the dip is the sensor\'s best stability'),
+    mc('Reading the Allan plot above, the **bias instability** is:', ['The value at the flat bottom of the curve, about 1 °/h here', 'The value on the left where the slope is −½, about 100 °/h here', 'The slope of the curve on the right, where it climbs at +½', 'The value at the left end of the curve, at the shortest τ'], 0, 'The flat floor is the best the sensor can do: averaging longer no longer helps. A slope of −½ at short τ is white noise (angle random walk, read off at τ = 1 s), and a rising slope of +½ at long τ is rate random walk.'),
+    mc('Which Allan-deviation slope means plain **white noise**?', ['−½ on the log-log plot: it averages down as τ grows', '0, a flat line: it never changes with τ', '+½: it grows as the averaging time grows', '+1: it grows in direct proportion to τ'], 0, 'White noise averages away as 1/√τ, a slope of −½. The flat bottom is bias instability (flicker), and +½ is rate random walk, which grows with τ.'),
     mc('Why are many MEMS sensors packaged **in a vacuum** or low-pressure cavity?', ['To keep the proof mass cool and its noise low', 'Gas damping lowers Q, so a vacuum raises the signal per drive', 'Every MEMS part must be vacuum sealed to pass qualification', 'Air pressure changes with altitude and would shift the resonance'], 1, 'Gas damping lowers Q and adds noise: a vacuum raises Q (more signal per drive power); accelerometers instead trap gas deliberately for damping to prevent ringing. Different sensors want different damping. Gyros want high Q; accelerometers want near-critical damping so they do not ring after a shock.'),
   ],
-  recap: ['Spring-mass: f = (1/2π)√(k/m); deflection a/ω².', 'Capacitive sensing: ΔC = C₀ Δx / gap, femtofarad-scale.', 'Q sets bandwidth f/Q and gain.', 'The readout ASIC (charge amp, chopping, trimming) is half the product.', 'Vacuum for gyros, controlled damping for accelerometers.'],
+  recap: ['Spring-mass: f = (1/2π)√(k/m); deflection a/ω².', 'Capacitive sensing: ΔC = C₀ Δx / gap, femtofarad-scale.', 'Q sets bandwidth f/Q and gain.', 'Noise density × √bandwidth; ARW (°/√h) = density (°/s/√Hz) × 60; Brownian a_n = √(4kTω₀/(mQ)).', 'Allan deviation: slope −½ white noise, flat bottom bias instability, slope +½ rate random walk.', 'The readout ASIC (charge amp, chopping, trimming) is half the product.', 'Vacuum for gyros, controlled damping for accelerometers.'],
 };
 
 export const neuro: Lesson = {
@@ -282,7 +355,7 @@ export const emerging: Lesson = {
   concept: 'subthreshold swing, nanosheets and CFETs, 2D materials, spintronics',
   xp: 100,
   steps: [
-    say('**The role.** Silicon scaling is slowing and the industry is lining up what comes next: gate-all-around nanosheets, stacked complementary FETs (CFETs), 2D semiconductors, new memories (MRAM, RRAM, ferroelectric), and backside power. Device engineers and researchers at imec, TSMC, Intel, Samsung, universities and national labs work on these; process-integration and TCAD roles are the entry points.'),
+    say('**The role.** Silicon scaling now leans on new device and wiring structures. Gate-all-around nanosheet transistors and backside power delivery are in volume production at the 2 nm class (one foundry pairs them in the same node, another adds backside power a node later). The industry roadmap expects gate-all-around to carry logic through the late 2020s, with stacked complementary FETs (CFETs) from about the early 2030s; 2D-material channels are still in research, as are new memories beyond MRAM, RRAM and ferroelectric. Node names such as "2 nm", "18A" or "A16" are marketing labels: no feature on the chip is 2 nm long. Device engineers and researchers at imec, TSMC, Intel, Samsung, universities and national labs work on these; process-integration and TCAD roles are the entry points.'),
     say('A transistor turns off as the gate voltage drops below threshold, and the current falls exponentially: the **subthreshold swing (SS)** is how many millivolts it takes to cut the current by 10×. Thermionic physics limits it to **60 mV per decade at room temperature**.'),
     gen((r) => {
       const vt = pick(r, [300, 400, 500]), ss = pick(r, [60, 70, 80]);
@@ -299,10 +372,17 @@ export const emerging: Lesson = {
       const rap = rp * (1 + tmr / 100);
       return ask(`An MRAM cell has a parallel resistance of ${rp} kΩ and a tunnel magnetoresistance (TMR) of ${tmr}%. What is its anti-parallel resistance, in kΩ? (TMR = (R_AP − R_P) / R_P)`, qty(rap, 'kΩ', 0.02, sig(rap)), `R_AP = R_P × (1 + TMR) = ${rp} × ${1 + tmr / 100} = ${sig(rap)} kΩ. The sense amplifier distinguishes ${rp} kΩ from ${sig(rap)} kΩ; a larger TMR means a wider margin.`, 'R_P times (1 + TMR).');
     }),
+    say('Since the names mean nothing, compare nodes by what is physically drawn: the **contacted gate pitch** (CPP), the **metal pitch**, the **cell height in tracks** (cell height = tracks × metal pitch) and the **SRAM bit-cell area**. Together they set the transistor density.'),
+    mc('Two foundries both sell a "2 nm" node. Which metric would you compare?', ['The node name, since the nanometre figure is the minimum feature size', 'Transistor density, or the gate and metal pitches behind it', 'The year each foundry announced it, as the newer node is smaller', 'The wafer diameter, since a bigger wafer means smaller features'], 1, 'The name is a label. Density, contacted gate pitch, metal pitch and SRAM bit-cell area are drawn dimensions, so they can be compared across foundries.'),
+    gen((r) => {
+      const tracks = pick(r, [5, 6, 7]), mp = pick(r, [24, 28, 30]);
+      const h = tracks * mp;
+      return ask(`A standard cell is ${tracks} tracks tall and the metal pitch is ${mp} nm. What is the cell height, in nm?`, qty(h, 'nm', 0.01, String(h)), `${tracks} × ${mp} nm = ${h} nm. Cutting a track (by buried rails or stacking devices) shrinks every cell in the library by 1/${tracks} of its height, without touching the pitches.`, 'Tracks times metal pitch.');
+    }),
     mc('Why are **2D semiconductors** (like MoS₂) interesting for the smallest transistors?', ['They are cheaper to grow than silicon wafers', 'Atom-thin channels keep strong gate control at short lengths', 'Their contacts are easy, so on-resistance is very low', 'Their high mobility lets them replace the copper wiring as well'], 1, 'They are only a few atoms thick, so the gate keeps excellent electrostatic control even at tiny channel lengths where a thick silicon channel would leak; the challenges are contacts, doping, defect density and wafer-scale growth. A thinner channel means better gate control and less short-channel effect. Making low-resistance contacts and large, uniform films is the main obstacle.'),
     mc('What is **backside power delivery**?', ['Powering the chip only through bumps on the package bottom', 'Power rails on the back of the wafer, freeing front-side metal', 'Stacking a power-management die under the logic die', 'A thin-film battery bonded to the back of the die to buffer supply droop'], 1, 'The rails connect through nano-vias, which frees the front-side metal for signals, lowers IR drop and permits smaller cells. Power and signals compete for the same top metal. Moving power behind the transistors reduces congestion; it complicates thermal paths and manufacturing.'),
   ],
-  recap: ['SS ≥ 60 mV/decade at room temperature; leakage = Vt / SS decades.', 'Nanosheets (GAA) now; CFETs stack N over P to shrink cells.', 'MRAM: TMR = (R_AP − R_P)/R_P.', '2D channels: great control, hard contacts and growth.', 'Backside power frees signal routing.'],
+  recap: ['SS ≥ 60 mV/decade at room temperature; leakage = Vt / SS decades.', 'Nanosheets (GAA) now and through the late 2020s; CFETs stack N over P to shrink cells, from about the early 2030s.', 'Node names are labels: compare CPP, metal pitch, cell height (tracks × pitch) and SRAM bit-cell area.', 'MRAM: TMR = (R_AP − R_P)/R_P.', '2D channels: great control, hard contacts and growth, still in research.', 'Backside power frees signal routing.'],
 };
 
 export const aetpm: Lesson = {
