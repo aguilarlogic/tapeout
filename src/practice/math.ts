@@ -106,7 +106,7 @@ export const calcPractice = practice('practice-calc', 'Sensitivity Drills', 'par
       count(`∂Fx/∂y = ∂(${a}y)/∂y =`, `d/dy of ${a}y`, a),
       count('Subtract:', `${b} - ${a}`, b - a));
     const L = between(r, 1, 3);
-    return walk(ask(`F = (${a}x, ${b}y, ${c}z). By the divergence theorem, what is the total outward flux of F through the surface of a cube of side ${L} (any position)?`, num((a + b + c) * L ** 3), `∯F·dA = ∭(∇·F) dV = ${a + b + c} × ${L}³ = ${(a + b + c) * L ** 3}. Gauss's law for charge works exactly this way.`, 'Flux out = integral of the divergence over the volume.'),
+    return walk(ask(`F = (${a}x, ${b}y, ${c}z). By the divergence theorem, what is the total outward flux of F through the surface of a cube of side ${L} (any position)?`, num((a + b + c) * L ** 3), `∯F·dA = ∭(∇·F) dV = ${a + b + c} × ${L}³ = ${(a + b + c) * L ** 3}.`, 'Flux out = integral of the divergence over the volume.'),
       'the divergence theorem', idea,
       count('∇·F:', `${a} + ${b} + ${c}`, a + b + c),
       count('It is constant, so integrating over the cube is divergence × volume:', `${a + b + c} × ${L}³`, (a + b + c) * L ** 3));

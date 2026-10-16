@@ -45,7 +45,7 @@ export const calc: Lesson = {
       const x = Math.sqrt(F);
       return ask(`Two inverter stages drive a load ${F}× larger than the first input. The delay is proportional to x + ${F}/x, where x is the size of the middle stage. What x minimizes it?`, num(x), `d/dx (x + ${F}/x) = 1 - ${F}/x² = 0, so x = √${F} = ${x}. Each stage then has the same "effort" of ${x}. This is the core of logical effort, which you will meet in the VLSI chapter.`, 'Differentiate and set to zero.');
     }),
-    mc('You want to minimize power subject to a delay constraint. Which tool is designed for "optimize f subject to g = 0"?', ['Taylor series', 'Lagrange multipliers', 'Fourier transform', 'Integration by parts'], 1, 'Lagrange: ∇f = λ∇g at the optimum. Gate sizing, voltage selection and even placement are constrained optimization problems.'),
+    mc('You want to minimize power subject to a delay constraint. Which tool is designed for "optimize f subject to g = 0"?', ['Taylor series', 'Lagrange multipliers', 'Linear regression', 'Integration by parts'], 1, 'Lagrange: ∇f = λ∇g at the optimum. Gate sizing, voltage selection and even placement are constrained optimization problems.'),
   ],
   recap: ['Partial derivatives = sensitivities; ∂P/∂V = 2CVf.', 'Gradients drive optimizers such as analytical placement.', 'Integrals total up densities (charge, current, heat).', 'Divergence = sources, curl = circulation; Stokes + Faraday: induced voltage ∝ loop area.', 'Optimum where the gradient is zero; Lagrange multipliers for constraints.'],
 };

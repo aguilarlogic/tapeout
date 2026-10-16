@@ -67,7 +67,7 @@ export function mapApp(): HTMLElement {
         h('span', { class: 'dim' }, `${p.done}/${p.total}`),
         h('div', { class: 'track small' }, h('div', { class: 'fill', style: `width:${Math.round(p.frac * 100)}%` }))),
       ...a.chapters.map((c) => h('div', { class: 'chapter' },
-        h('div', { class: 'ch-name' }, c.name),
+        h('div', { class: 'ch-name' }, c.name, c.need ? h('span', { class: 'dim ch-need' }, ` · before ${c.need}`) : null),
         h('div', { class: 'nodes' }, ...c.modules.map((m) => {
           const rec = levelRecord(m.id);
           return h('a', { class: `node k-${m.kind}${rec ? ' done' : ''}${next?.id === m.id ? ' next' : ''}`, href: m.route, title: `${KIND_LABEL[m.kind]}: ${m.concept}` },
@@ -84,7 +84,7 @@ export function mapApp(): HTMLElement {
       h('div', { class: 'map-summary' },
         h('p', { class: 'kicker' }, `Tapeout readiness ${readiness()}%`),
         h('h2', null, 'From electrons to architecture'),
-        h('p', { class: 'dim' }, 'Six core acts and a block of specialist roles, each a region of your chip. Lessons run in the terminal with TAPEOUT; labs open their own windows. Everything is open: skip ahead whenever you like.'),
+        h('p', { class: 'dim' }, 'Four chips on the main path. The detours teach one subject at a time, each called in just before the chip chapter that needs it. Then the specialist roles. Every act is a region of your chip. Lessons run in the terminal with TAPEOUT; labs open their own windows. Everything is open: skip ahead whenever you like.'),
         next ? h('a', { class: 'btn primary', href: next.route }, `▶ Next: ${next.title}`) : h('p', { class: 'promo' }, 'Everything signed off. Your chip is ready to tape out.'),
         h('div', { class: 'ranks' }, ...RANKS.map((rk, i) => h('span', { class: `rank${i === r.index ? ' on' : i < r.index ? ' past' : ''}`, title: `${rk.xp} XP` }, rk.title))))),
     ...acts,

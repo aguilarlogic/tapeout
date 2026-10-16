@@ -27,6 +27,17 @@ Watch the first four labs: First Wire, First NOT, Both Switches (AND) and Enable
 
 Ask: "What did the lamp tell you when it was wrong?" and "What did you just build?"
 
+## The electricity side step and the theory detours
+The Electricity chapter (volts, amps, ohms) is called in right after the first chip, before Numbers. For a second session with the same tester, run the theory in order with `next`: DC circuits, then complex numbers and phasors, calculus, energy storage and so on.
+- [ ] Electricity: can the tester say what a volt and an amp are, in their own words, after the first lesson?
+- [ ] Does the tester notice the detour (the map shows "before Numbers" or "before Transistors") and understand why it came up?
+- [ ] Mesh and delta-wye: does the worked example come before the first question, and does `teach me how` get them unstuck?
+- [ ] Proofs (Euler, Fourier coefficients, Gauss): does the tester follow each line, or skip past the box?
+- [ ] Kickback lab: does the tester find the flyback diode from the hints? How many runs?
+- [ ] DAC lab: does the tester pick the binary-weighted resistors (R, 2R, 4R, 8R) without the worked answer?
+
+Ask: "Did any lesson use a word it had not taught you yet?" Write the word down: the term-order test (`src/terms.test.ts`) should catch it.
+
 ## Ask after 20 minutes
 1. In your own words, what is a bit?
 2. What does an AND gate do?
