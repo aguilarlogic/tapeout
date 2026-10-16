@@ -140,3 +140,8 @@ export const PREREQS: Record<string, Prereq> = {
   neuro: P('role', 'analog'),
   emerging: P('role', 'mosphys'),
 };
+
+/** The needs of a lesson the player has not finished yet, in the order listed. Unknown ids have none. */
+export function missingNeeds(id: string, done: (id: string) => boolean): string[] {
+  return (PREREQS[id]?.needs ?? []).filter((n) => !done(n));
+}
