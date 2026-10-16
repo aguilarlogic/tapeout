@@ -8,6 +8,8 @@ import { editor } from '../../ui/editor';
 import { busyWhile, finishLab, hintBox, labFrame, useSeed, variantButton } from '../../ui/labkit';
 import { evaluateCoreAsync, type CoreReport, type ProgramResult } from './harness';
 import { findRvLevel } from './levels';
+import { rvProject } from './export';
+import { download, zip } from '../../lib/zip';
 
 const hx = (n: number) => '0x' + (n >>> 0).toString(16);
 
@@ -83,6 +85,15 @@ export function rvPage(id: string): HTMLElement {
   const toolbar = h('div', { class: 'toolbar' },
     checkBtn,
     submitBtn,
+    h('button', {
+      class: 'btn ghost',
+      title: 'Download your core with a testbench, the test programs, a Makefile and a README as a .zip',
+      onclick: () => {
+        const files = rvProject(level, inst, ed.value);
+        download(`tapeout-${level.id}.zip`, zip(files.map((f) => ({ path: f.path, data: f.text }))));
+        mentorSay('Exported your core with its testbench and test programs. Unzip it and run `make sim`.', 'happy');
+      },
+    }, 'Export project'),
     h('button', { class: 'btn ghost', onclick: () => { if (confirm('Reset to the starter?')) { ed.value = inst.starter; clearDraft(draftKey); } } }, 'Reset'),
     boss ? variantButton('Roll a new variant? This clears your current work.', seedKey, () => rvPage(level.id)) : '',
   );
