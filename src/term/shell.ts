@@ -194,7 +194,7 @@ export class Shell {
     const goal = await t.choose(GOAL_CHOICES.map(([label]) => label));
     prof.goal = GOAL_CHOICES[goal][1];
     setProfile(prof);
-    await t.say('Here is the plan. Six core acts take you from electrons all the way up to out-of-order cores, and a seventh covers the specialist roles, from analog and RF to quantum computers:');
+    await t.say('Here is the plan. You build four chips, from a single wire up to a multicore processor. Whenever a chip needs some theory, a short detour teaches it first, one subject at a time. The last act covers the specialist roles, from analog and RF to quantum computers:');
     this.printActs();
     const act = ACTS[startAct()];
     const first = recommended()!;

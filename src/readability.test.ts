@@ -8,7 +8,7 @@ function spoken(id: string): string[] {
   return (findLesson(id)?.steps ?? []).flatMap((s) => (s.t === 'say' ? [s.text] : s.t === 'ask' || s.t === 'mc' ? [s.q, s.why] : []));
 }
 
-const early = ACTS[0].chapters.slice(0, 3).flatMap((c) => c.modules).filter((m) => m.kind === 'lesson').map((m) => m.id);
+const early = ACTS[0].chapters.filter((c) => !c.need).slice(0, 3).flatMap((c) => c.modules).filter((m) => m.kind === 'lesson').map((m) => m.id);
 /** The target is about grade 5. Concept lessons are allowed a little more, each one is held under this ceiling. */
 export const TARGET_GRADE = 5;
 export const CEILING_GRADE = 6.5;
@@ -34,4 +34,27 @@ describe('reading level, chapters 1 to 3', () => {
     const all = reading(early.flatMap(spoken));
     expect(all.grade).toBeLessThanOrEqual(TARGET_GRADE);
   });
+});
+
+describe('reading level, the electricity primer and the theory lessons', () => {
+  /** The primer sits inside chip 1, so it is held to the early ceiling. */
+  const primer = ['electricity', 'resistance'];
+  /** Theory lessons come after the first chip and may use more maths words, but stay plain. */
+  const THEORY_CEILING = 10;
+  const theory = ['ohm', 'psc', 'mesh', 'deltawye', 'complex', 'phasor', 'deriv', 'integral', 'storage', 'fourier', 'fields', 'gauss', 'opamp'];
+  const show = (globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env.READABILITY;
+  if (show) console.table([...primer, ...theory].map((id) => { const r = reading(spoken(id)); return { id, words: r.words, grade: r.grade }; }));
+
+  for (const id of primer) {
+    it(`${id} stays under grade ${CEILING_GRADE}`, () => {
+      const r = reading(spoken(id));
+      expect(r.grade, `longest sentence: ${r.longest}`).toBeLessThanOrEqual(CEILING_GRADE);
+    });
+  }
+  for (const id of theory) {
+    it(`${id} stays under grade ${THEORY_CEILING}`, () => {
+      const r = reading(spoken(id));
+      expect(r.grade, `longest sentence: ${r.longest}`).toBeLessThanOrEqual(THEORY_CEILING);
+    });
+  }
 });

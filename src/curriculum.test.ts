@@ -19,8 +19,8 @@ const finish = (...names: string[]) => { for (const n of names) for (const m of 
 describe('the chip ladder', () => {
   beforeEach(() => state.resetAll());
 
-  it('is four chips, two sets of detours and the role track', () => {
-    expect(ACTS.map((a) => a.kind)).toEqual(['chip', 'chip', 'chip', 'chip', 'detour', 'detour', 'roles']);
+  it('is four chips, then the detour acts, then the role track', () => {
+    expect(ACTS.map((a) => a.kind)).toEqual(['chip', 'chip', 'chip', 'chip', 'detour', 'detour', 'detour', 'detour', 'detour', 'detour', 'roles']);
   });
 
   it('holds every module exactly once', () => {
@@ -35,7 +35,7 @@ describe('the chip ladder', () => {
 
   it('gives every chip chapter a boss incident, except the final tapeout', () => {
     const missing = ACTS.filter((a) => a.kind === 'chip').flatMap((a) => a.chapters)
-      .filter((c) => c.name !== 'Tapeout' && !c.modules.some((m) => m.kind === 'incident')).map((c) => c.name);
+      .filter((c) => !c.need && c.name !== 'Tapeout' && !c.modules.some((m) => m.kind === 'incident')).map((c) => c.name);
     expect(missing).toEqual([]);
   });
 

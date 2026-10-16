@@ -26,7 +26,7 @@ export function resetRecall() { cache = null; }
 
 /** Lesson ids in the first three chapters of the main path. */
 export function earlyLessons(): string[] {
-  const chapters = ACTS[0]?.chapters.slice(0, 3) ?? [];
+  const chapters = ACTS[0]?.chapters.filter((c) => !c.need).slice(0, 3) ?? [];
   return chapters.flatMap((c) => c.modules).filter((m) => m.kind === 'lesson').map((m) => m.id);
 }
 

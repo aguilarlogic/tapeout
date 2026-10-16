@@ -45,19 +45,31 @@ TAPEOUT types everything it says, so you can read along. Press any key or click 
 normal, fast or instant in **Settings.app** (or type `speed fast`); instant, and your system's reduced-motion setting,
 turn the animations off.
 
-## The path: four chips, three detours
+## The path: four chips, theory one subject at a time
+
+The four chips are the main path. Theory lives in detours, and each detour chapter is called in just before the chip
+chapter that needs it (`next` takes you there). Each chapter teaches one subject, and every lesson comes after
+everything it needs: `src/prereqs.ts` lists what each lesson needs, and a test fails if one comes too early.
 
 | Part | What you build | Chapters |
 | --- | --- | --- |
-| **ADA-1 · your first chip** | An 8-bit chip from a single wire: bits, gates, an adder, memory and Verilog | Your first chip, Numbers, Logic, Building blocks, Memory & state, Verilog |
+| **ADA-1 · your first chip** | An 8-bit chip from a single wire: bits, gates, an adder, memory and Verilog | Your first chip, Electricity (a short side step: volts, amps, ohms), Numbers, Logic, Building blocks, Memory & state, Verilog |
 | **ADA-2 · a RISC-V core** | A 32-bit RISC-V core: assembly, a single-cycle datapath, clocks, then a pipeline | Hardware/software interface, Microarchitecture, Clocks & resets, Pipelines |
 | **ADA-3 · to silicon** | Your core becomes silicon: transistors, timing, layout, placement, power, test and the board | Transistors, Circuit design, Static timing, Layout, Physical design, Low power, Design for test, Board |
 | **ADA-4 · multicore** | A multicore chip signed off with UVM and formal: out-of-order cores, caches, coherence, interconnect | Testbenches & debug, Random & coverage, UVM, Assertions & formal, Out-of-order, Memory hierarchy, Interconnect, Modeling, Tapeout |
-| **Detour · math & physics** | The math and physics under every chip, called in when a lab needs them | Circuits, Electronics, Physics, Calculus & linear algebra, Differential equations, Signals & control, Probability & numerics |
+| **Detour · circuit theory** | Hand analysis: Ohm, KCL/KVL, passive sign convention, Thevenin, mesh, delta-wye, capacitors, inductors, kickback, AC | DC circuits, Energy storage, AC circuits |
+| **Detour · math** | Each piece just before a circuit needs it, with the proofs and integrals worked by hand | Complex numbers & phasors, Calculus, Multivariable calculus, Linear algebra, Differential equations, Probability, Numerical methods |
+| **Detour · signals** | Fourier series by integration, then DSP and feedback | Fourier series, Signals & DSP, Feedback & control |
+| **Detour · physics** | Fields with Coulomb's and Gauss's laws, then the semiconductor devices built on them | Fields, Semiconductor devices |
+| **Detour · analog** | Op-amps up to a summing amplifier and a DAC you build, then transistor amplifiers | Op-amps, Transistor amplifiers |
 | **Detour · software** | The shell, git, Python, C, C++, algorithms and operating systems | The shell, Git, C, Algorithms, Python, Flows & scripting, C++, Operating systems |
 | **Specializations** | The roles beyond RTL and DV: analog, RF, physical design, memory, fab, AI, security, quantum | Circuits & signals, Silicon & manufacturing, Bring-up & production, Domain chips, Quantum, Design tools & clocking, Chip integration, Sensors & frontier, Hiring panels |
 
-In all: about 600 modules, including 88 lessons, 42 incidents, logic and transistor labs, Verilog labs on a built-in
+The theory before the transistor chapter runs in this order: DC circuits, complex numbers and phasors, calculus,
+energy storage, multivariable calculus and linear algebra, differential equations, AC circuits, Fourier series, fields,
+semiconductor devices, op-amps, transistor amplifiers. Only then does ADA-3 build CMOS gates.
+
+In all: about 620 modules, including 102 lessons, 42 incidents, logic and transistor labs, Verilog labs on a built-in
 simulator, timing closure, layout, PCB routing, verification labs (testbenches, coverage, UVM, assertions) and an
 interview gauntlet.
 
@@ -97,7 +109,7 @@ artifact named `tapeout-game`.
 ## What's inside
 
 - **The terminal mentor** (`src/term/`): an async terminal (`await term.say(...)`, `await term.ask(...)`), the shell,
-  onboarding, the lesson runner with its hint ladder, and the incident runner. A glossary of 180+ terms lets TAPEOUT
+  onboarding, the lesson runner with its hint ladder, and the incident runner. A glossary of 200+ terms lets TAPEOUT
   define words on request.
 - **TAPE-OS** (`src/os/`): a window manager (drag, resize, minimize, taskbar), the TAPEOUT avatar with moods, the chip
   floorplan map and a URL router (`#/learn/cache`, `#/rtl/fifo`, `#/play/mesi`...).
