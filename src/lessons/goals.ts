@@ -463,6 +463,18 @@ export const GOALS: Record<string, string[]> = {
     'predict reflections on an unterminated line and find a Nyquist frequency',
     'identify crosstalk',
   ],
+  openflow: [
+    'read a Yosys stat report and count the flip-flops it built',
+    'convert an OpenLane clock period into a frequency',
+    'rank the flow steps in order: place, clock tree, route',
+    'tell which check, DRC or LVS, finds a layout fault',
+  ],
+  celllayout: [
+    'identify an NMOS or PMOS transistor from its layers',
+    'compute the smallest width that meets a spacing or enclosure rule',
+    'compute a cell area from its sites and row height',
+    'tell an open from a short in an LVS report',
+  ],
   pnr: [
     'explain why clock tree synthesis comes between placement and routing',
     'compute utilization, wire delay growth and clock tree depth',
