@@ -26,6 +26,7 @@ import { missingNeeds } from '../prereqs';
 import { pick as pickRecall, pool as poolRecall, record as recordRecall } from '../recall';
 import { readableReport, recordQuit, recordStep } from '../steplog';
 import { GOAL_CHOICES, progressReport, runWrap, wrapDue } from './wrap';
+import { printGoals } from './goals-banner';
 
 const pickOne = <T>(xs: T[]) => xs[Math.floor(Math.random() * xs.length)];
 /** Another instance of a generated question, different from `not` when a few tries allow. */
@@ -717,6 +718,7 @@ export class Shell {
     void t.block(h('div', { class: `term-banner${bossDef ? ' boss' : ''}` },
       h('span', { class: 'dim' }, bossDef ? `${l.id.startsWith('cap-') ? 'HIRING PANEL' : 'CHECKPOINT'} · no hints · one attempt per question · ${Math.round(bossDef.pass * 100)}% to win` : f ? `ACT ${f.act.n} · ${f.chapter.name.toUpperCase()}` : 'LESSON'),
       h('b', null, l.title), h('span', { class: 'dim' }, l.concept)), 'type', 2.5);
+    if (!exam) printGoals(t, l.id);
     const rnd = Math.random;
     let asked = 0, firstTry = 0;
     const skippedQs: { n: number; q: Question }[] = [];
