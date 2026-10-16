@@ -426,6 +426,7 @@ const buck: CircuitLevel = {
       <pre>ΔI<sub>L</sub> = (V<sub>in</sub> - V<sub>out</sub>) × D × T / L        ΔV ≈ ΔI<sub>L</sub> / (8 × f × C)</pre>
       <p>A bigger L cuts the current ripple (and the inductor's heating), a bigger C cuts the voltage ripple. Neither is free:
       parts get larger and slower to respond. Keep the pulse width you found in the last mission.</p>
+      <p>These formulas assume continuous conduction: the inductor current never reaches zero, so ΔI<sub>L</sub>/2 is less than the load current. The 10 µH starter breaks that (about 3.1 A peak-to-peak on a 1 A load), which is part of why it misbehaves.</p>
       <h4>Goals</h4><ul><li>Average output 5 V ± 3%.</li><li>Output ripple at most 50 mV peak-to-peak.</li>
       <li>Inductor current ripple at most 0.5 A peak-to-peak (current through L1).</li></ul>`,
     starter: `* Buck converter, 12 V -> 5 V at 1 A\nVin in 0 12\nVg g 0 PULSE(0 5 0 10n 10n 4.4u 10u)\nS1 in sw g 0 vt=2.5 ron=0.02\nD1 0 sw schottky\nL1 sw out 10u\nC1 out 0 2.2u\nRload out 0 5\n\n.tran 200n 3m\n`,
@@ -469,7 +470,7 @@ const lcfilter: CircuitLevel = {
   build: () => ({
     brief: `
       <p>An inductor in series and a capacitor to ground make a second-order low-pass filter, falling at 40 dB per decade
-      (four times the attenuation of an RC at the same distance). Between a 50 Ω source and a 50 Ω load, the
+      (twice the slope of an RC in dB: a decade past the corner an RC gives 10× attenuation (20 dB), the LC 100× (40 dB)). Between a 50 Ω source and a 50 Ω load, the
       <b>Butterworth</b> choice has the flattest passband:</p>
       <pre>L = √2 × R / (2π f<sub>c</sub>)        C = √2 / (2π f<sub>c</sub> × R)</pre>
       <p>Because the load and source split the signal, the passband gain is -6 dB, not 0 dB. All gains below are measured

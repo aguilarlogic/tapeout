@@ -32,15 +32,15 @@ export const demoBoardIncident: Incident = {
     },
     {
       id: 'bridge',
-      name: 'A solder bridge ties one AND input to ground',
+      name: 'A solder bridge ties the AND gate\'s output to ground',
       fix: 'Remove the solder bridge with a solder wick, and check the joints nearby',
-      story: 'A tiny blob of solder touched one input of the AND gate and the ground wire. That input was stuck at 0, so the gate output stayed 0 even with both switches on. The sum gate was fine, because it takes its input from the switch wire, not the bridged pin.',
+      story: 'A tiny blob of solder joined the AND gate\'s output pin to the ground wire, so the output could never rise. Both inputs read 1, but the gate output read 0. The sum gate was fine: it has its own output. (A wire carries one value all along it, so a bridge on an input would have pulled the switch wire, and the sum gate, down too.)',
     },
     {
       id: 'led',
       name: 'The carry LED has burnt out',
       fix: 'Replace the carry LED',
-      story: 'Too much electricity had damaged the LED for good. A burnt-out LED lets nothing through in either direction, so the LED test showed open both ways. The signal reached its leg, but there was no path through the light.',
+      story: 'Too much electricity, with nothing in the way to hold it back, had burnt the LED out for good. A burnt-out LED lets nothing through in either direction, so the LED test showed open both ways. The signal reached its leg, but there was no path through the light.',
     },
   ],
   bandaids: [
@@ -97,7 +97,7 @@ export const demoBoardIncident: Incident = {
     {
       cmd: 'look', cost: 20,
       what: 'a magnified look at the board: solder bridges and LED direction',
-      read: (w) => `magnified look at the board\n${w.cause === 'bridge' ? 'a blob of solder joins an AND gate input to the ground wire (0 V)'
+      read: (w) => `magnified look at the board\n${w.cause === 'bridge' ? 'a blob of solder joins the AND gate\'s output pin to the ground wire (0 V)'
         : w.cause === 'backwards' ? 'the carry LED sits the other way round: its flat side is on the wrong pad'
           : 'no solder bridges. The carry LED sits the right way round.'}`,
     },
@@ -130,7 +130,7 @@ export const lampBoardIncident: Incident = {
     {
       id: 'swap', name: 'The wires to the 2-lamp and the 1-lamp are crossed',
       fix: 'Swap the two wires back so each lamp has its own weight',
-      story: 'The wire for the 2s place went to the 1-lamp, and the wire for the 1s place went to the 2-lamp. Numbers that use only 4s and 8s looked fine. Any number with a 1 or a 2 in it showed up wrong.',
+      story: 'The wire for the 2s place went to the 1-lamp, and the wire for the 1s place went to the 2-lamp. Numbers that needed both the 2 and the 1, or neither, looked fine (like 3, 12 or 15). Numbers that needed just one of them showed the other instead: 1 showed as 2, and 5 as 6.',
     },
     {
       id: 'dead', name: 'The 8-lamp is burnt out',

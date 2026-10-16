@@ -11,7 +11,7 @@ export const bits: Lesson = {
   steps: [
     // 1. One lamp.
     say("Hi {name}. Let's start with the smallest idea in every computer: a **switch**. It is either **on** or **off**. Nothing in between."),
-    say('**Why this matters:** every wire inside the chip you are about to build is one of these switches.'),
+    say('**Why this matters:** every wire inside the chip you are about to build carries one of these on/off values.'),
     art(`
    switch UP    ->  lamp ON   = 1
    switch DOWN  ->  lamp OFF  = 0`, 'one switch = one bit'),
@@ -217,7 +217,7 @@ export const bool: Lesson = {
     1    0   |   0
     1    1   |   1      <- only when BOTH are 1`, 'AND: the output is 1 only if both inputs are 1'),
     mc('An AND gate gets inputs 1 and 0. What does it output?', ['0', '1'], 0, 'AND needs both inputs to be 1. One of them is 0, so the output is 0.'),
-    say('Second, **OR**. Think of a hallway light with two switches. The light turns on if **either** switch is on, or both.'),
+    say('Second, **OR**. Think of a doorbell with a button at the front door and one at the back. It rings if **either** button is pressed, or both.'),
     art(`
    A B | OR
    0 0 |  0
@@ -349,7 +349,7 @@ export const rc: Lesson = {
   xp: 70,
   steps: [
     say('Resistors decide how much current flows. **Capacitors** decide how fast things happen. And in a chip, speed is everything.'),
-    say('A capacitor stores charge, like a small bucket. Charging it through a resistor takes time, and that time is set by the product **τ = R × C**, the time constant.'),
+    say('A capacitor stores energy by holding charge apart on its two plates, a bit like a small bucket that fills up. Charging it through a resistor takes time, and that time is set by the product **τ = R × C**, the time constant.'),
     art(`
   V ▲                          after 1τ : 63%
     │           ___________    after 3τ : 95%

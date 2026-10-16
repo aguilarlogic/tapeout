@@ -21,7 +21,7 @@ export const mux: Lesson = {
    s = 1:  y = b`, 'worked example'),
     mc('A mux has a = 1, b = 0 and s = 1. What is y?', ['0', '1'], 0, 's = 1 picks b, and b is 0.'),
     ask('A mux has a = 0, b = 1 and s = 0. What is y?', num(0), 's = 0 picks a, and a is 0.', 'When s is 0, take a.'),
-    say('You build it from two doors and a joiner: one AND lets a through when s is 0, another AND lets b through when s is 1, and an OR joins them.'),
+    say('You build it from two doors and a joiner: one AND lets a through when s is 0 (it needs s flipped by a NOT first), another AND lets b through when s is 1, and an OR joins them.'),
     gen((r) => {
       const n = pick(r, [2, 4, 8]);
       const bitsNeeded = Math.log2(n);
@@ -29,7 +29,7 @@ export const mux: Lesson = {
     }),
     say('Now wire one up yourself, starting with a one-gate warm-up.', 'happy'),
   ],
-  recap: ['A mux picks one input using select switches.', 'select = 0 gives a, select = 1 gives b.', 'More inputs need more select switches: 2 switches pick from 4.', 'Built from two AND doors and an OR.'],
+  recap: ['A mux picks one input using select switches.', 'select = 0 gives a, select = 1 gives b.', 'More inputs need more select switches: 2 switches pick from 4.', 'Built from a NOT, two AND doors and an OR.'],
 };
 
 export const decoder: Lesson = {
@@ -38,7 +38,7 @@ export const decoder: Lesson = {
   concept: 'decoder, one-hot, addresses',
   xp: 50,
   steps: [
-    say('A mux picks one **input**. A **decoder** does the opposite job: it takes a number and lights **one output** out of many. Think of a hotel lift panel: press 3 and only the 3 button lights.'),
+    say('A mux picks one **input**. A **decoder** does the opposite job: it takes a number and lights **one output** out of many. Think of a row of seats with a lamp on each: call out 3 and only seat 3\'s lamp lights.'),
     say('**Why this matters:** your chip uses a decoder to choose which register to write, and which part of memory to open.'),
     art(`
    a1 a0 | y3 y2 y1 y0
@@ -148,11 +148,12 @@ export const seq: Lesson = {
     app('fftrace', 'Let me open a timing diagram. Predict what Q does at each clock edge. This skill is 50% of reading waveforms.', 3),
     say('Now a peek inside, if you are curious. How can gates remember? With **feedback**: two gates that feed each other have two stable states, so they stay in whichever state they were last pushed into. This is called a **latch**. You will meet it as an optional challenge.'),
     art(`
-   S -[NAND]-+---- Q
-       ^     |
-       |     v
-   R -[NAND]-+---- Q-bar
-   two NANDs feeding each other: a latch`),
+   S̄ -[NAND]-+---- Q
+        ^     |
+        |     v
+   R̄ -[NAND]-+---- Q-bar
+   two NANDs feeding each other: a latch
+   (pull S̄ or R̄ low to set or reset; both high holds)`),
     mc('Why do almost all designs use **flip-flops** (clock ticks) instead of latches?', ['The clock gives every part the same moment to update, so timing is easy to check', 'Latches cannot store anything', 'Flip-flops are always smaller'], 0, 'With a clock, everything changes on the tick and holds between ticks, which keeps the whole chip in step. You will learn the timing rules (setup and hold) in the timing chapter.'),
     say('Now build one in the Logic Lab: first a bit that stays, then a lamp that flips every tick.', 'happy'),
   ],
@@ -181,7 +182,7 @@ export const fsm: Lesson = {
                ▲                        │
                └────────────────────────┘`),
     say('Two flavours. In a **Moore** machine the outputs depend only on the state. In a **Mealy** machine they depend on the state and the current inputs, so they react one cycle sooner.'),
-    mc('A traffic light controller shows green, yellow, red. Outputs depend only on which light is on. Moore or Mealy?', ['Moore', 'Mealy'], 0, 'The lights are a pure function of the state, so it is Moore. Moore outputs are glitch-free and easy to register.'),
+    mc('A traffic light controller shows green, yellow, red. Outputs depend only on which light is on. Moore or Mealy?', ['Moore', 'Mealy'], 0, 'The lights are a pure function of the state, so it is Moore. Moore outputs change only after a clock edge, and are easy to register so they never glitch.'),
     say('You also choose how to **encode** the states. Binary uses the fewest flops. **One-hot** uses one flop per state, which makes the next-state logic tiny and fast. **Gray** codes change one bit per transition.'),
     gen((r) => {
       const n = pick(r, [5, 6, 9, 12, 17]);
@@ -230,7 +231,7 @@ export const verilog: Lesson = {
   assign y = (a & b) | c;
   // a = 0, b = 1, c = 1`),
     mc('With a = 0, b = 1, c = 1, what is y?', ['0', '1'], 1, 'a & b is 0, but c is 1. OR gives 1 when either side is 1.'),
-    mc('What does `assign y = (a & b) | c;` build?', ['A flip-flop', 'An AND gate feeding an OR gate', 'An OR gate feeding an AND gate'], 1, 'The brackets go first: AND, then OR. It is just gates soldered together.'),
+    mc('What does `assign y = (a & b) | c;` build?', ['A flip-flop', 'An AND gate feeding an OR gate', 'An OR gate feeding an AND gate'], 1, 'The brackets go first: AND, then OR. It is just gates wired together.'),
     say('**Modify:** now change one thing.'),
     mc('To turn `assign y = a & b;` into a gate that is 1 when **either** input is 1, which change do you make?', ['Change & to |', 'Change & to ^', 'Change y to a'], 0, '| is OR. It is 1 when at least one input is 1.'),
     ask('How many bits is `{4\'b1010, 2\'b11}`? (Curly brackets glue pieces side by side.)', num(6), 'Glue 4 bits and 2 bits: 4 + 2 = 6 bits.', 'Add up the widths inside the brackets.'),
