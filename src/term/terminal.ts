@@ -64,7 +64,7 @@ export class Terminal {
   private q: Output;
 
   constructor() {
-    this.out = h('div', { class: 'term-out', role: 'log', 'aria-live': 'polite' });
+    this.out = h('div', { class: 'term-out', role: 'log', 'aria-live': 'polite', 'aria-label': 'Conversation with TAPEOUT', tabindex: '0' }); // focusable so the keyboard can scroll it
     this.promptEl = h('span', { class: 'term-prompt' });
     this.input = h('input', { class: 'term-input', type: 'text', autocomplete: 'off', spellcheck: 'false', 'aria-label': 'Terminal input', autocapitalize: 'off' }) as HTMLInputElement;
     this.input.readOnly = true;
@@ -117,10 +117,9 @@ export class Terminal {
       e.preventDefault();
       this.hIndex = Math.max(0, Math.min(this.history.length, this.hIndex + (e.key === 'ArrowUp' ? -1 : 1)));
       this.input.value = this.history[this.hIndex] ?? '';
-    } else if (e.key === 'Tab') {
-      const first = this.chipsEl.querySelector('button');
-      if (first && !this.input.value) { e.preventDefault(); (first as HTMLButtonElement).click(); }
     }
+    // Tab is left to the browser: it moves focus to the suggestion chips, which Enter or Space then runs. It used to
+    // click the first chip, so one Tab press ran a command and a keyboard user could never leave the input (WCAG 2.1.1).
   }
 
   private submit(v: string) {

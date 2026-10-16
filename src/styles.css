@@ -51,8 +51,8 @@
     --border: #d8e0e8;
     --text: #17212b;
     --text-dim: #5b6b7b;
-    --accent: #0d9488;
-    --accent-2: #0f766e;
+    --accent: #0f766e; /* teal-700: 4.5:1 or better as text on every light panel and under white text (WCAG 1.4.3) */
+    --accent-2: #115e59;
     --accent-ink: #ffffff;
     --ok: #059669;
     --warn: #b45309;
@@ -86,6 +86,8 @@ body {
 }
 a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
+/* A link inside running text is underlined, so it is not told apart by colour alone (WCAG 1.4.1). */
+:is(p, li, td, .brief-body, .dim) a { text-decoration: underline; text-underline-offset: 2px; }
 code, pre, kbd { font-family: var(--mono); font-size: 0.9em; }
 code { background: var(--panel-2); padding: 1px 5px; border-radius: 4px; }
 kbd { border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; }
@@ -123,7 +125,7 @@ h4 { margin-top: 1em; font-size: 0.8rem; text-transform: uppercase; letter-spaci
 .stars { letter-spacing: 2px; font-size: 1.05rem; }
 .star { color: var(--border); }
 .star.on { color: var(--gold); }
-.xp-chip { font-size: 0.78rem; padding: 2px 8px; border-radius: 99px; background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); font-weight: 600; white-space: nowrap; }
+.xp-chip { font-size: 0.78rem; padding: 2px 8px; border-radius: 99px; background: color-mix(in srgb, var(--accent) 10%, transparent); color: color-mix(in srgb, var(--accent) 80%, var(--text)); font-weight: 600; white-space: nowrap; }
 .tag { display: inline-block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; padding: 2px 8px; border-radius: 99px; background: var(--panel-2); color: var(--text-dim); border: 1px solid var(--border); }
 
 .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; min-width: 0; }
