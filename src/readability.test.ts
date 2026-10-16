@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ACTS } from './curriculum';
-import { findLesson } from './lessons';
+import { findLesson, LESSONS } from './lessons';
 import { reading, syllables } from './readability';
 
 /** What the game says in a lesson: its explanations and its question text. */
@@ -55,6 +55,28 @@ describe('reading level, the electricity primer and the theory lessons', () => {
     it(`${id} stays under grade ${THEORY_CEILING}`, () => {
       const r = reading(spoken(id));
       expect(r.grade, `longest sentence: ${r.longest}`).toBeLessThanOrEqual(THEORY_CEILING);
+    });
+  }
+});
+
+describe('reading level, every lesson', () => {
+  /**
+   * Every lesson, including the later theory, chip and role lessons, stays under this ceiling. The sets above keep
+   * their tighter ceilings; this one catches the rest. Measured max when it was set: 10.4 (emerging).
+   */
+  const ALL_CEILING = 10.5;
+  /** Lessons allowed over ALL_CEILING for now, each with its measured grade. Empty: none needed an exemption. */
+  const EXEMPT: Record<string, number> = {};
+
+  it('covers every lesson in the game', () => {
+    expect(LESSONS.length).toBeGreaterThan(90);
+  });
+
+  for (const l of LESSONS) {
+    if (l.id in EXEMPT) continue;
+    it(`${l.id} stays under grade ${ALL_CEILING}`, () => {
+      const r = reading(spoken(l.id));
+      expect(r.grade, `longest sentence: ${r.longest}`).toBeLessThanOrEqual(ALL_CEILING);
     });
   }
 });

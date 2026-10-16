@@ -203,6 +203,8 @@ body { display: block; }
 .term-mod .stars { font-size: 0.8rem; }
 .term-banner { display: flex; flex-direction: column; margin: 14px 0 6px; padding: 10px 12px; border: 1px solid #1d3441; border-left: 3px solid var(--term-ai); border-radius: 6px; background: #0a161c; }
 .term-banner b { font-size: 1.15rem; color: #fff; }
+.term-goals { margin: 0 0 8px; }
+.term-goals ul { margin: 2px 0 0; padding-left: 1.4em; }
 .term-done { margin: 10px 0; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--term-ok) 45%, transparent); border-radius: 6px; background: color-mix(in srgb, var(--term-ok) 7%, var(--term-bg)); }
 .term-done b { color: var(--term-ok); letter-spacing: 0.06em; }
 .term-done .recap { margin: 8px 0 0; padding-left: 1.2em; color: var(--term-fg); }
