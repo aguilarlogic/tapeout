@@ -76,6 +76,12 @@ interview gauntlet.
 How deep does it go? [docs/CURRICULUM-AUDIT.md](docs/CURRICULUM-AUDIT.md) compares the curriculum with what the industry
 expects, topic by topic.
 
+### Maintaining the curriculum
+
+[docs/STANDARDS-BASELINE.md](docs/STANDARDS-BASELINE.md) is the maintainer's table of which standard or reference
+each topic conforms to, with versions, status (October 2026) and review triggers. The game's text never names these
+standards directly (the silent-standards rule); this file is where they live.
+
 TAPEOUT also runs ten **minigames** it pops open mid-lesson or on demand (`play`): Lamps, Bit Flipper, Truth Table,
 Divider Designer, RC Scope, Flip-Flop Trace, Cache Sim, Branch Predictor, Coherence Lab (MESI) and Handshake (AXI
 VALID/READY).

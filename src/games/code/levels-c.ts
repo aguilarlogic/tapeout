@@ -364,9 +364,9 @@ const bugDangling: CodeLevel = {
 
 const bugUninit: CodeLevel = {
   id: 'code-c-bug-uninit', title: 'Bug hunt: the unset accumulator', concept: 'uninitialised locals hold garbage', xp: 80, tier: 'debug', lang: 'c',
-  ticket: 'Unit test says -842150449, and nobody can explain it.',
+  ticket: 'Unit test says -858993458, and nobody can explain it.',
   build: () => ({
-    brief: `<p><code>count_neg</code> should count the negative values. It returns a huge strange number. Why?</p>`,
+    brief: `<p><code>count_neg</code> should count the negative values. It returns a huge strange number. Why?</p><p>Reading a local that was never set is undefined behaviour: GCC and Clang may give anything. The lab fills fresh stack with <code>0xCC</code> so you can see it. <code>-Wall</code> (<code>-Wuninitialized</code>) and MemorySanitizer catch this.</p>`,
     starter: `int count_neg(const int *a, int n) {
     int count;
     for (int i = 0; i < n; i++)
@@ -375,7 +375,7 @@ const bugUninit: CodeLevel = {
     return count;
 }
 `,
-    hints: ['In C a local variable has no initial value; it holds whatever the stack held before.', '-842150451 is 0xCDCDCDCD: the debug allocator\'s "uninitialised" pattern. Initialise count.'],
+    hints: ['In C a local variable has no initial value; it holds whatever the stack held before.', '-858993460 is 0xCCCCCCCC: the lab\'s fill pattern for fresh stack (a real compiler would leave whatever was there). Initialise count.'],
     solution: 'int count_neg(const int *a, int n) {\n    int count = 0;\n    for (int i = 0; i < n; i++)\n        if (a[i] < 0)\n            count++;\n    return count;\n}\n',
     cases: [
       { pre: 'int a[] = {1, -2, 3, -4};', call: 'count_neg(a, 4)' },
@@ -397,7 +397,8 @@ const bossRing: CodeLevel = {
         if (r() < 0.55) lines.push(`h = h * 31 + ring_push(&r, ${between(r, 1, 99)});`);
         else lines.push('h = h * 31 + (ring_pop(&r, &out) == 0 ? out : -1);');
       }
-      return { pre: `struct ring r; ring_init(&r, ${cap}); int out = 0; long h = 7;\n${lines.join('\n')}`, call: 'h', fmt: '%ld', post: 'ring_free(&r);' };
+      // unsigned: this checksum wraps on purpose, and only unsigned arithmetic may (signed overflow is undefined behaviour)
+      return { pre: `struct ring r; ring_init(&r, ${cap}); int out = 0; unsigned long h = 7;\n${lines.join('\n')}`, call: 'h', fmt: '%lu', post: 'ring_free(&r);' };
     };
     return {
       brief: `<p>Write a FIFO of ints with a fixed capacity, stored on the heap:</p><pre>struct ring;                                  // you define it
@@ -492,4 +493,80 @@ uint8_t crc8(const uint8_t *data, size_t n, uint8_t poly) {
   },
 };
 
-export const C_LEVELS: CodeLevel[] = [swap, strings, array, bits, layout, list, vec, bugOverflow, bugUaf, bugLeak, bugDangling, bugUninit, bossRing, bossSplit, bossCrc];
+const isr: CodeLevel = {
+  id: 'code-c-isr', title: 'Sharing a counter with an interrupt', concept: 'volatile, torn reads and critical sections', xp: 120, tier: 'guided', lang: 'c',
+  ticket: 'The timer interrupt keeps seconds and milliseconds in two variables. Every so often the main loop reports a time that is a whole second out. Find the window and close it.',
+  build: () => ({
+    brief: `<p>A timer interrupt calls <code>tick_isr()</code> once a millisecond. It bumps <code>ms</code>, and when <code>ms</code> reaches 1000 it zeroes it and bumps <code>sec</code>. The main loop calls <code>read_time_ms()</code> to get <code>sec * 1000 + ms</code>.</p>
+<p>In this lab the interrupt can strike between any two statements. At the moment <code>read_time_ms()</code> reads <code>sec</code>, then <code>ms</code>, and the interrupt can land in between: it sees the old second with the new millisecond, or the reverse, and the answer is a whole second wrong.</p>
+<p>Fix <code>read_time_ms()</code> so the two reads are one indivisible step. The lab gives you <code>irq_disable()</code> and <code>irq_enable()</code>, which mask and unmask the interrupt; a request that arrives while masked is held and runs as soon as you unmask. Keep the interrupt masked for as little time as you can, and keep both variables <code>volatile</code>.</p>`,
+    starter: `volatile unsigned sec, ms;
+
+void tick_isr(void) {
+    ms++;
+    if (ms == 1000) { ms = 0; sec++; }
+}
+
+unsigned read_time_ms(void) {
+    unsigned s = sec;
+    unsigned m = ms;
+    return s * 1000 + m;
+}
+`,
+    hints: [
+      'Run it and look at which case fails: the interrupt fires between your two reads, so s and m belong to different instants.',
+      'Mask the interrupt, copy both variables into locals, unmask. The arithmetic can happen after you unmask.',
+      'irq_disable(); unsigned s = sec; unsigned m = ms; irq_enable(); return s * 1000 + m;',
+    ],
+    rules: [
+      { label: 'Masks and unmasks the interrupt', ok: (s) => /irq_disable\s*\(/.test(s) && /irq_enable\s*\(/.test(s) },
+      { label: 'Shared variables stay volatile', ok: (s) => /volatile[^;]*\bsec\b/.test(s) && /volatile[^;]*\bms\b/.test(s) },
+    ],
+    isr: { fn: 'tick_isr', every: 7 },
+    harness: `static void preset(unsigned s0, unsigned m0) {
+    irq_disable();
+    sec = s0; ms = m0;
+    irq_enable();
+}
+
+/* The interrupt fires before every 7th statement. Four fillers put the strike between the two reads. */
+static int check(unsigned s0, unsigned m0, int pad) {
+    unsigned base = s0 * 1000 + m0, v;
+    int d = 0;
+    preset(s0, m0);
+    if (pad > 0) d = 1;
+    if (pad > 1) d = 2;
+    if (pad > 2) d = 3;
+    if (pad > 3) d = 4;
+    if (pad > 4) d = 5;
+    v = read_time_ms();
+    return v >= base && v - base <= 1;
+}
+`,
+    solution: `volatile unsigned sec, ms;
+
+void tick_isr(void) {
+    ms++;
+    if (ms == 1000) { ms = 0; sec++; }
+}
+
+unsigned read_time_ms(void) {
+    irq_disable();
+    unsigned s = sec;
+    unsigned m = ms;
+    irq_enable();
+    return s * 1000 + m;
+}
+`,
+    cases: [
+      { call: 'check(0, 999, 4)' },
+      { call: 'check(5, 999, 4)' },
+      { call: 'check(41, 999, 4)', hidden: true },
+      { call: 'check(0, 999, 3)', hidden: true },
+      { call: 'check(7, 999, 5)', hidden: true },
+      { call: 'check(3, 250, 4)', hidden: true },
+    ],
+  }),
+};
+
+export const C_LEVELS: CodeLevel[] = [swap, strings, array, bits, layout, list, vec, isr, bugOverflow, bugUaf, bugLeak, bugDangling, bugUninit, bossRing, bossSplit, bossCrc];

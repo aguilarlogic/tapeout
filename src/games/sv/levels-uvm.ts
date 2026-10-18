@@ -703,10 +703,10 @@ const uvmPhases: TbLevel = {
     uvm: true,
     maxTime: 40000,
     dut: ALU,
-    brief: `<p>UVM runs <b>phases</b> in order: <code>build</code> (create components, top-down), <code>connect</code>, then <code>run</code> (where simulation time passes), then <code>extract/check/report</code>. All <code>run_phase</code> tasks start together, and the run phase <b>ends when nobody objects any more</b>: a component that wants time to pass calls <code>phase.raise_objection(this)</code> and later <code>phase.drop_objection(this)</code>.</p>
+    brief: `<p>UVM runs <b>phases</b> in order: <code>build</code> (create components, top-down), <code>connect</code> (bottom-up), then <code>run</code> (a task, where simulation time passes; the other phases here are zero-time functions), then <code>extract/check/report</code> (bottom-up) and <code>final</code> (top-down). All <code>run_phase</code> tasks start together, and the run phase <b>ends when nobody objects any more</b>: a component that wants time to pass calls <code>phase.raise_objection(this)</code> and later <code>phase.drop_objection(this)</code>.</p>
 <p>The test below starts the sequence but never raises an objection, so the run phase ends immediately. Fix it. Then notice a subtler trap: the last transaction's result reaches the scoreboard a few clocks <i>after</i> the sequence finishes, so you also need a short <b>drain time</b> before dropping the objection.</p>
 <p>The scoreboard prints how many transactions it checked; it must see all 40.</p>`,
-    hints: ['Wrap the sequence: <code>phase.raise_objection(this); seq.start(env.agent.sqr); phase.drop_objection(this);</code> — now it runs, but the scoreboard sees 39.', 'Add a delay (for example <code>#50;</code>) before <code>drop_objection</code> so the pipeline can drain.'],
+    hints: ['Wrap the sequence: <code>phase.raise_objection(this); seq.start(env.agent.sqr); phase.drop_objection(this);</code> — now it runs, but the scoreboard sees 39.', 'Add a delay (for example <code>#50;</code>) before <code>drop_objection</code> so the pipeline can drain. (Full UVM sets this as a drain time on the objection, <code>set_drain_time</code>; this lab\'s mini-UVM has no such call, so a delay does the job.)'],
     starter: phasesStarter,
     fixed: `${U_IF}\n${U_TXN}\n${U_DRV}\n${U_MON}\n${U_SB()}\n${U_AGENT}\n${U_ENV()}\n${U_SEQ(40)}\n${U_TOP}\n@@DUT@@`,
     goals: [noUvmErrors, sbChecked(40)],

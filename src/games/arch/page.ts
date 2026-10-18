@@ -5,7 +5,7 @@ import { clearDraft, loadDraft, saveDraft } from '../../state';
 import { rng } from '../../sim/harness';
 import { h } from '../../ui/dom';
 import { editor } from '../../ui/editor';
-import { finish, finishLab, goalItems, hintBox, labFrame, type LabGoal, starsFor, useSeed, variantButton } from '../../ui/labkit';
+import { finish, finishLab, goalItems, hintBox, labFrame, type LabGoal, modelNote, starsFor, useSeed, variantButton } from '../../ui/labkit';
 import { highlightAsm } from '../isa/page';
 import { findArchLevel } from './levels';
 import { defaults, type ArchResult, type Control, type Values, type View } from './types';
@@ -86,6 +86,7 @@ export function archPage(id: string): HTMLElement {
   const brief = h('aside', { class: 'brief panel' },
     h('div', { class: 'tag' }, `${level.lab} Lab · ${level.concept}`),
     h('p', { class: 'dim small' }, level.ticket),
+    modelNote(level.model),
     h('div', { class: 'brief-body', html: inst.brief }),
     inst.listing ? h('details', { class: 'src-view', open: '' }, h('summary', null, inst.listing.label), h('pre', { class: 'arch-listing' }, inst.listing.text)) : '',
     boss ? h('p', { class: 'dim small' }, 'Boss mission: no hints. A new variant changes the workload and the targets.') : '',

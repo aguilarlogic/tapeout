@@ -1,6 +1,6 @@
 // Practice banks and bosses for computer architecture: pipelines, out-of-order cores, caches, coherence,
 // DRAM, buses, NoCs, SerDes and performance modeling. Most questions come from small simulators.
-import { hexa, num, qty } from '../lessons/answers';
+import { hexa, num, parseInteger, qty, type Answer } from '../lessons/answers';
 import { calc, choice, count, sim, step, walk } from '../lessons/teach';
 import { art, ask, between, mc, pick, say, type Beat, type Rng } from '../lessons/types';
 import { boss, practice, tier } from './types';
@@ -394,18 +394,57 @@ export const dramPractice = practice('practice-dram', 'DRAM Drills', 'row hits a
   (r, d) => {
     const mt = pick(r, [4800, 5600, 6400]), ch = tier(d, 1, 2, pick(r, [4, 8]));
     const bw = (mt * 8 * ch) / 1000;
-    return walk(ask(`${ch} channel${ch > 1 ? 's' : ''} of DDR5-${mt} (64 data bits per channel). Peak bandwidth, in GB/s?`, qty(bw, 'GB/s', 0.01), `${mt} MT/s × 8 bytes × ${ch} = ${sig(bw)} GB/s. Sustained is usually 70-90% of that.`, 'Transfers/s × bytes per transfer × channels.'),
-      'DRAM peak bandwidth', 'Bandwidth is how many bytes move per second. A DDR channel does "mt" mega-transfers per second, and each transfer moves the channel width: 64 bits = 8 bytes. So one channel moves mt × 8 megabytes per second, and channels add up.',
-      calc('One channel, in GB/s: transfers per second × 8 bytes, divided by 1000 to convert MB to GB:', `${mt} × 8 / 1000`, (mt * 8) / 1000, 'GB/s', sig((mt * 8) / 1000, 4), 0.005),
-      calc(`All ${ch} channel${ch > 1 ? 's' : ''}, in GB/s:`, `${sig((mt * 8) / 1000, 4)} × ${ch}`, bw, 'GB/s', sig(bw), 0.01));
+    return walk(ask(`${ch} DDR5-${mt} DIMM${ch > 1 ? 's' : ''} (each 64 data bits, split into two independent 32-bit subchannels). Peak bandwidth, in GB/s?`, qty(bw, 'GB/s', 0.01), `${mt} MT/s × 8 bytes × ${ch} DIMM${ch > 1 ? 's' : ''} = ${sig(bw)} GB/s. Sustained is usually 70-90% of that.`, 'Transfers/s × bytes per transfer × DIMMs.'),
+      'DRAM peak bandwidth', 'Bandwidth is how many bytes move per second. A DDR5 DIMM does "mt" mega-transfers per second, and each transfer moves its 64 data bits (two 32-bit subchannels side by side) = 8 bytes. So one DIMM moves mt × 8 megabytes per second, and DIMMs add up.',
+      calc('One DIMM, in GB/s: transfers per second × 8 bytes, divided by 1000 to convert MB to GB:', `${mt} × 8 / 1000`, (mt * 8) / 1000, 'GB/s', sig((mt * 8) / 1000, 4), 0.005),
+      calc(`All ${ch} DIMM${ch > 1 ? 's' : ''}, in GB/s:`, `${sig((mt * 8) / 1000, 4)} × ${ch}`, bw, 'GB/s', sig(bw), 0.01));
   },
   (r, d) => {
-    const trfc = pick(r, d === 3 ? [295, 410, 550, 350, 640] : [295, 410, 550]), trefi = pick(r, d === 3 ? [3900, 7800, 1950] : [3900, 7800]);
+    // d1 DDR4 (tREFI 7.8 us), d2 DDR5 (3.9 us), d3 either generation above 85 C (tREFI halves); tRFC is matched to the generation.
+    const D4 = [160, 260, 350, 550], D5 = [295, 410];
+    const [gen, trefi, trfc] = d === 1 ? pick(r, D4.map((t) => ['DDR4', 7800, t] as [string, number, number]))
+      : d === 2 ? pick(r, D5.map((t) => ['DDR5', 3900, t] as [string, number, number]))
+      : pick(r, [...D4.map((t) => ['DDR4', 3900, t]), ...D5.map((t) => ['DDR5', 1950, t])] as [string, number, number][]);
     const f = (trfc / trefi) * 100;
-    return walk(ask(`Each bank is refreshed every tREFI = ${trefi} ns and each refresh blocks it for tRFC = ${trfc} ns. What % of the time is it unavailable?`, qty(f, '%', 0.02, sig(f)), `${trfc}/${trefi} = ${sig(f)}%.${d === 3 ? ' Denser chips have longer tRFC, which is why DDR5 adds same-bank refresh.' : ' Refresh is a tax on bandwidth and latency.'}`, 'tRFC / tREFI.'),
-      'refresh overhead', 'DRAM cells leak, so every row must be refreshed regularly. Every tREFI a refresh command starts, and it blocks the bank for tRFC. The fraction of time lost is the blocked time over the period: tRFC ÷ tREFI.',
+    return walk(ask(`${gen}${d === 3 ? ' above 85 °C' : ''}: a refresh command is issued every tREFI = ${trefi} ns and an all-bank refresh blocks the whole rank for tRFC = ${trfc} ns. What % of the time is the rank unavailable?`, qty(f, '%', 0.02, sig(f)), `${trfc}/${trefi} = ${sig(f)}%.${d === 3 ? ' Heat halves tREFI, so the overhead doubles. DDR5 same-bank refresh (in fine-granularity refresh mode) refreshes the same bank number in every bank group and leaves the other banks free, which recovers much of this.' : ' Refresh is a tax on bandwidth and latency.'}`, 'tRFC / tREFI.'),
+      'refresh overhead', 'DRAM cells leak, so every row must be refreshed regularly. Every tREFI a refresh command starts, and an all-bank refresh blocks the whole rank for tRFC. The fraction of time lost is the blocked time over the period: tRFC ÷ tREFI.',
       calc('First the fraction of each period that is blocked:', `${trfc} / ${trefi}`, trfc / trefi, '', sig(trfc / trefi, 3), 0.02),
       calc('As a percentage, multiply by 100:', `${sig(trfc / trefi, 3)} × 100`, f, '%', sig(f), 0.03));
+  },
+  (r, d) => {
+    // Bandwidth of the memory generations: width x rate per pin / 8.
+    const mems = [['HBM3', 1024, 6.4], ['HBM4', 2048, 8], ['GDDR7', 32, 32], ['GDDR7', 32, 48], ['LPDDR5X', 16, 8.533], ['LPDDR6', 24, 10.7]] as const;
+    const idea = 'Peak bandwidth is the number of data pins times the rate per pin, divided by 8 to turn bits into bytes. Wide-and-slow (HBM) and narrow-and-fast (GDDR7) end up in different places: a GDDR7 device has 32 data pins (four 8-bit channels), an HBM3 stack 1024 and an HBM4 stack 2048.';
+    const [name, w, g] = pick(r, mems), bw = (w * g) / 8;
+    if (d === 1) return walk(ask(`One ${name} ${w === 32 ? 'device' : w === 16 || w === 24 ? 'channel' : 'stack'} has ${w} data pins at ${g} Gb/s each. Peak bandwidth, in GB/s?`, qty(bw, 'GB/s', 0.01, sig(bw)), `${w} × ${g} / 8 = ${sig(bw)} GB/s.`, 'Pins × Gb/s per pin ÷ 8.'),
+      'peak bandwidth from pins and rate', idea,
+      calc('Gigabits per second over all the pins:', `${w} × ${g}`, w * g, 'Gb/s', sig(w * g, 4), 0.005),
+      calc('Divide by 8 to get gigabytes:', `${sig(w * g, 4)} / 8`, bw, 'GB/s', sig(bw), 0.01));
+    const [n2, w2, g2] = pick(r, [['HBM3', 1024, 6.4], ['HBM4', 2048, 8]] as const), k = pick(r, [4, 6, 8]), per = (w2 * g2) / 8, tb = (k * per) / 1000;
+    if (d === 2) return walk(ask(`An accelerator carries ${k} ${n2} stacks (${w2} pins at ${g2} Gb/s each). Total peak bandwidth, in TB/s?`, qty(tb, 'TB/s', 0.01, sig(tb)), `${w2} × ${g2} / 8 = ${sig(per)} GB/s per stack; × ${k} = ${sig(k * per)} GB/s = ${sig(tb)} TB/s.`, 'Per-stack bandwidth times the number of stacks.'),
+      'bandwidth of several stacks', idea,
+      calc('One stack, in GB/s:', `${w2} × ${g2} / 8`, per, 'GB/s', sig(per), 0.01),
+      calc(`${k} stacks, in TB/s (÷ 1000):`, `${k} × ${sig(per)} / 1000`, tb, 'TB/s', sig(tb), 0.01));
+    const nG = pick(r, [8, 12, 16]), mH = pick(r, [4, 6, 8]), a = nG * 192, b = mH * (2048 * 8) / 8, ratio = b / a;
+    return walk(ask(`System A has ${nG} GDDR7 devices at 48 Gb/s (32 pins each). System B has ${mH} HBM4 stacks at 8 Gb/s (2048 pins each). How many times more peak bandwidth does B have than A?`, qty(ratio, 'x', 0.02, sig(ratio)), `A: ${nG} × 192 = ${a} GB/s. B: ${mH} × 2048 = ${b} GB/s. B / A = ${sig(ratio)}×. HBM wins on bandwidth per board area; GDDR7 wins on cost.`, 'Compute each system, then divide.'),
+      'comparing two memory systems', idea,
+      calc(`System A: ${nG} devices × (32 × 48 / 8) GB/s =`, `${nG} × 192`, a, 'GB/s', String(a), 0.005),
+      calc(`System B: ${mH} stacks × (2048 × 8 / 8) GB/s =`, `${mH} × 2048`, b, 'GB/s', String(b), 0.005),
+      calc('Ratio B ÷ A:', `${b} / ${a}`, ratio, 'x', sig(ratio), 0.02));
+  },
+  (r, d) => {
+    // How many activations fit in one refresh window, and how that compares with the Rowhammer flip threshold.
+    const trc = tier(d, pick(r, [40, 50, 100]), pick(r, [45, 48, 52]), pick(r, [45, 48, 52, 50])), n = 32e-3 / (trc * 1e-9);
+    const idea = 'Rowhammer hammers one row with back-to-back activations. A row can be activated once every tRC (the row cycle time), so in one refresh window the most activations is the window length divided by tRC. If that is far above the number of activations that flips a neighbouring bit, refresh alone cannot protect the data.';
+    if (d < 3) return walk(ask(`tRC = ${trc} ns. How many activations of a single row fit in DDR5's 32 ms refresh window?`, qty(n, '', 0.01, String(Math.round(n))), `32e-3 / ${trc}e-9 ≈ ${Math.round(n).toLocaleString('en-US')}.`, 'Window length divided by tRC.'),
+      'activation budget in a refresh window', idea,
+      calc('The window in nanoseconds, 32 ms × 10⁶:', '32 × 1000000', 32e6, 'ns', '32e6', 0.005),
+      calc('Divide by tRC:', `32e6 / ${trc}`, n, '', String(Math.round(n)), 0.01));
+    const th = pick(r, [4800, 9600, 2400]), x = n / th;
+    return walk(ask(`tRC = ${trc} ns and the flip threshold is ${th.toLocaleString('en-US')} activations. DDR5's 32 ms window allows how many times the threshold?`, qty(x, 'x', 0.02, sig(x)), `${Math.round(n).toLocaleString('en-US')} / ${th.toLocaleString('en-US')} ≈ ${sig(x)}×. Refreshing every 32 ms leaves a huge margin for an attacker, so activations must be counted.`, 'Activations per window, divided by the threshold.'),
+      'activations versus the flip threshold', idea,
+      calc('Activations in the window = 32e6 ns ÷ tRC:', `32e6 / ${trc}`, n, '', String(Math.round(n)), 0.01),
+      calc('Times over the threshold:', `${Math.round(n)} / ${th}`, x, 'x', sig(x), 0.02));
   },
   (r, d) => concept(r, [...atLevel(2, [
     ['Why do memory controllers interleave consecutive cache lines across banks and channels?', 'So many banks work in parallel', ['To make refresh simpler to schedule', 'To hide data from other processes', 'To save power by idling channels'], 'address interleaving', 'Each bank can only serve one row at a time and takes a long time to switch. If consecutive addresses went to the same bank, a streaming read would queue up there. Spreading them across banks and channels lets many work at the same time.', ['Consecutive lines placed in different banks can be:', 'Accessed in parallel', ['Accessed only one at a time', 'Never accessed']], 'Streaming accesses spread across banks and channels instead of queueing behind one.'],
@@ -414,8 +453,19 @@ export const dramPractice = practice('practice-dram', 'DRAM Drills', 'row hits a
   ]),
     ...atLevel(1, [['Is a read from an open row faster than from a closed row?', 'Yes: no precharge or activate needed', ['No: the same, since rows are always open', 'Slower, because the row must be refreshed', 'Only for writes'], 'row hits', 'When a row is already open in the row buffer, a read is a row hit: the data comes straight from the sense amps. A closed or different row needs a precharge and an activate first, which takes many more cycles.', ['A row hit skips which steps?', 'Precharge and activate', ['The read itself', 'The column select']]]]),
     ...atLevel(2, [['What does an ACTIVATE command do?', 'Copies one whole row into the row buffer', ['Sends a refresh command to every bank at once', 'Closes the row in every bank', 'Resets the memory controller'], 'activate', 'An ACTIVATE reads one entire row of a bank into the row buffer (the sense amplifiers). Column reads then pick words out of that buffer until the row is closed with a precharge.', ['How many rows can a bank have open at once?', 'One', ['Two', 'As many as needed']]]]),
-    ...atLevel(2, [['Why does DRAM need periodic refresh?', 'Its capacitor cells leak and must be rewritten', ['The sense amplifiers drain their power over time', 'Bus clocks drift when the chip runs warm', 'Caches flush the rows every few milliseconds'], 'DRAM refresh', 'Each DRAM bit is a tiny capacitor that loses charge through leakage. Refresh reads and rewrites every row within a fixed period (about 64 ms), so no bit fades before it is needed.', ['How often must every row be refreshed (typical)?', 'About every 64 ms', ['Once, at power-on', 'Every clock cycle']]]]),
+    ...atLevel(2, [['Why does DRAM need periodic refresh?', 'Its capacitor cells leak and must be rewritten', ['The sense amplifiers drain their power over time', 'Bus clocks drift when the chip runs warm', 'Caches flush the rows every few milliseconds'], 'DRAM refresh', 'Each DRAM bit is a tiny capacitor that loses charge through leakage. Refresh reads and rewrites every row within a fixed period (64 ms for DDR4, 32 ms for DDR5), so no bit fades before it is needed.', ['How often must every row be refreshed (typical)?', 'Every 32 to 64 ms', ['Once, at power-on', 'Every clock cycle']]]]),
     ...atLevel(3, [['A bank has a row open, and a read needs another row. What must happen first?', 'Precharge the open row, then activate', ['Refresh the bank and retry the read', 'Wait for the next refresh cycle', 'Nothing: DRAM keeps many rows open'], 'row conflicts', 'A row conflict costs a precharge (close the open row, restoring its bitlines) and then an activate for the new row, so the read waits for both. This is why scheduling reads to the open row matters so much.', ['A row conflict needs which two commands, in order?', 'Precharge, then activate', ['Activate, then precharge', 'Refresh, then read']]]]),
+    ...atLevel(3, [
+      ['Why did target-row refresh alone fail against Rowhammer?', 'It tracks few aggressor rows, so many-sided patterns overflow it', ['It refreshes every row so often that the bandwidth runs out', 'It only works when the DRAM is cold, below 85 °C', 'It refreshes the aggressor row itself, which then flips its neighbours'],
+        'Rowhammer defences', 'Target-row refresh keeps a small table of the rows that were activated most. A pattern that hammers more rows than the table holds makes it forget some, and their neighbours are never refreshed. Counting activations in the controller (refresh management) or in the DRAM on every row (per-row activation counting) removes that limit.',
+        ['A tracker with a few entries is overflowed by hammering:', 'More rows than it has entries', ['Only one row', 'Rows in another bank']], 'It tracks only a few aggressor rows, so many-sided patterns overflow the tracker'],
+      ['DDR5 has on-die ECC. Why does a server still need system ECC?', 'On-die ECC is invisible to the system and misses bus faults', ['On-die ECC is only used while the DIMM is being tested', 'System ECC is what corrects the data inside the array itself', 'On-die ECC works only on the commands, not on the data bits'],
+        'two levels of ECC', 'On-die ECC fixes a single-bit error inside the chip before the data leaves it, silently. The controller never learns of it, and it does not protect the bus or a whole failed chip. System ECC is end to end, and it reports what it corrects so errors can be logged and pages retired.',
+        ['A correction that the controller never sees is:', 'Invisible to the system', ['Logged by the operating system', 'Done by the controller']], 'On-die ECC is invisible to the system and misses bus and chip faults, so system ECC is still needed'],
+      ['A phone SoC needs DRAM. Which family fits best?', 'LPDDR: it is built for the lowest energy per bit', ['GDDR7: it gives the most bandwidth per dollar', 'HBM: it has the widest interface of all', 'DDR5 DIMMs: they are the standard part of every system'],
+        'matching memory to the product', 'Phones run on a battery, so energy per bit and standby power rule: LPDDR. Graphics cards want cheap bandwidth: GDDR. Training accelerators need the most bandwidth per watt and per board area: HBM on an interposer. Servers use DDR5 DIMMs for capacity.',
+        ['Which constraint decides memory in a phone?', 'Battery life', ['Board area', 'Capacity per DIMM slot']], 'LPDDR: low-power DRAM suits a battery-powered phone'],
+    ]),
   ], (why) => `${why}.`, d),
 ]);
 
@@ -427,6 +477,12 @@ export function axiBeat(start: number, size: number, len: number, kind: 'INCR' |
   const span = size * len, base = Math.floor(start / span) * span;
   return base + ((start - base + k * size) % span);
 }
+
+/** A comma- or space-separated list of hex addresses, in order. */
+const hexList = (vals: number[], w: number): Answer => ({
+  canonical: vals.map((v) => hex(v, w)).join(', '),
+  check: (s) => { const t = s.trim().split(/[\s,]+/).filter(Boolean); return t.length === vals.length && t.every((x, i) => parseInteger(x, 16) === vals[i]); },
+});
 
 export const busPractice = practice('practice-bus', 'Bus & Protocol Drills', 'VALID/READY handshakes, AXI bursts, 4 KB rule, credits', [
   (r, d) => {
@@ -466,7 +522,7 @@ export const busPractice = practice('practice-bus', 'Bus & Protocol Drills', 'VA
     const start = 0x20000 + off, end = start + size * len - 1;
     const cross = Math.floor(start / 4096) !== Math.floor(end / 4096);
     return walk(mcs(r, `An AXI INCR burst starts at ${hex(start, 5)} with ${len} beats of ${size} bytes. Is it legal?`, cross ? `No: it ends at ${hex(end, 5)}, crossing a 4 KB boundary` : `Yes: it ends at ${hex(end, 5)}, inside the same 4 KB page`, [cross ? `Yes: it ends at ${hex(end, 5)}, inside the same 4 KB page` : `No: it ends at ${hex(end, 5)}, crossing a 4 KB boundary`, cross ? 'Yes: INCR bursts may be any length up to 256 beats' : 'No: a burst must start on a 4 KB boundary', 'Only if it is a WRAP burst, which may cross a 4 KB boundary'], 'AXI bursts must not cross 4 KB, so that a burst never spans two pages (or two subordinates).'),
-      'the AXI 4 KB rule', 'An AXI burst may never cross a 4 KB boundary (an address that is a multiple of 0x1000), so that a whole burst stays in one page and one slave. To check a burst, find its LAST byte: start + total bytes - 1. If that is in the same 4 KB block as the start (same address with the bottom 12 bits removed), it is legal.',
+      'the AXI 4 KB rule', 'An AXI burst may never cross a 4 KB boundary (an address that is a multiple of 0x1000), so that a whole burst stays in one page and one subordinate. To check a burst, find its LAST byte: start + total bytes - 1. If that is in the same 4 KB block as the start (same address with the bottom 12 bits removed), it is legal.',
       count('Total bytes in the burst = beats × beat size:', `${len} × ${size}`, len * size),
       step('The last byte is at start + total - 1 (hex):', hexa(end, 5)),
       choice(`The start is in block ${hex(Math.floor(start / 4096) * 4096, 5)} (the address with its bottom 12 bits cleared). The last byte is in block ${hex(Math.floor(end / 4096) * 4096, 5)}. Is the burst legal?`, cross ? 'No: two blocks' : 'Yes: one block', [cross ? 'Yes: one block' : 'No: two blocks']));
@@ -482,15 +538,62 @@ export const busPractice = practice('practice-bus', 'Bus & Protocol Drills', 'VA
       choice(`With only ${have} credits, how many flits can be sent per round trip of ${rtt} cycles?`, `${have}: one per credit`, [`${rtt}`, '1']),
       calc('Throughput in flits per cycle = credits ÷ round trip:', `${have} / ${rtt}`, have / rtt, '', sig(have / rtt), 0.02));
   },
+  (r, d) => {
+    // Pick the AMBA protocol that fits a use case.
+    const cases: [string, string, string][] = [
+      ['Reading and writing a UART\'s handful of control registers', 'APB', 'it is simple and unpipelined, which is all a register block needs'],
+      ['The bus joining a small microcontroller\'s CPU, flash and peripherals', 'AHB', 'it is a single-channel pipelined bus, the microcontroller-class choice'],
+      ['A DMA engine bursting data to a DRAM controller with several requests in flight', 'AXI', 'five channels with outstanding, out-of-order transactions give it the throughput'],
+      ['Passing video pixels from one block to the next, with no addresses at all', 'AXI-Stream', 'it carries a data stream with VALID/READY and no address channel'],
+      ['Keeping the caches of dozens of cores coherent over a packet network', 'CHI', 'it is the packetised coherent interconnect built for many-core designs'],
+      ['Configuring a timer block through its memory-mapped control registers', 'APB', 'a register block needs no pipelining or bursts, so the smallest protocol wins'],
+      ['Connecting the CPU of a small microcontroller to its on-chip SRAM and peripherals', 'AHB', 'a single pipelined channel is enough for a small, single-manager system'],
+    ];
+    const [use, right, why] = pick(r, cases);
+    const names = [...new Set(cases.map((c) => c[1]))];
+    const wrong = names.filter((n) => n !== right);
+    return walk(mcs(r, `Which AMBA protocol fits best: ${use.charAt(0).toLowerCase()}${use.slice(1)}?`, right, d === 3 ? [...wrong, 'ACE-Lite'] : wrong, `${right}: ${why}.`),
+      'picking a bus protocol', 'The AMBA family is a ladder. APB is simple and unpipelined, for registers. AHB is single-channel and pipelined, for microcontrollers. AXI has five channels with outstanding and out-of-order transactions, for high throughput. AXI-Stream carries data with no addresses. CHI is a packetised coherent interconnect for many cores (ACE and ACE-Lite extend AXI with coherency).',
+      choice('Does this use case need addresses and random access?', right === 'AXI-Stream' ? 'No: it is a one-way data stream' : 'Yes: it reads and writes locations', [right === 'AXI-Stream' ? 'Yes: it reads and writes locations' : 'No: it is a one-way data stream']),
+      choice('Which feature of the protocol decides it?', why.slice(0, 1).toUpperCase() + why.slice(1), cases.filter((c) => c[1] !== right).slice(0, 2).map((c) => c[2].slice(0, 1).toUpperCase() + c[2].slice(1))));
+  },
+  (r, d) => {
+    // WRAP bursts: the window, the list of beat addresses, and the wrap boundary.
+    const size = pick(r, [4, 8]), len = pick(r, [4, 8, 16]), span = size * len;
+    const start = 0x1000 + span * between(r, 0, 3) + size * between(r, 1, len - 1), base = Math.floor(start / span) * span;
+    const idea = `A WRAP burst of ${len} beats of ${size} bytes covers an aligned window of beat size × length bytes. It starts anywhere inside the window, climbs by the beat size, and when it reaches the top of the window it wraps to the bottom, so every byte of the window is read once.`;
+    if (d === 1) return walk(ask(`A WRAP burst has ${len} beats of ${size} bytes. How big is its aligned window, in bytes?`, num(span), `${len} × ${size} = ${span} bytes.`, 'Beats × bytes per beat.'),
+      'the WRAP window', idea,
+      count('Window = beats × bytes per beat:', `${len} × ${size}`, span));
+    if (d === 2) {
+      const addrs = Array.from({ length: 4 }, (_, k) => axiBeat(start, size, len, 'WRAP', k));
+      return walk(ask(`A WRAP burst starts at ${hex(start, 4)} with ${len} beats of ${size} bytes. List the first four beat addresses, in hex, separated by commas.`, hexList(addrs, 4), `Window ${hex(base, 4)}-${hex(base + span - 1, 4)}; the beats are ${addrs.map((a) => hex(a, 4)).join(', ')}${addrs.some((a, i) => i > 0 && a < addrs[i - 1]) ? ', wrapping back to the bottom of the window' : ''}.`, `Add ${size} each time and wrap at ${hex(base + span, 4)}.`),
+        'listing a WRAP burst', idea,
+        count('The window size in bytes:', `${len} × ${size}`, span),
+        step(`The window containing ${hex(start, 4)} starts at (hex):`, hexa(base, 4)),
+        step('The four beat addresses, in hex:', hexList(addrs, 4)));
+    }
+    const top = base + span;
+    return walk(ask(`A WRAP burst starts at ${hex(start, 4)} with ${len} beats of ${size} bytes. The burst climbs until it reaches the top of its window and wraps. At which address does it wrap (the first address past the top of the window), in hex?`, hexa(top, 4), `The window is ${span} bytes starting at ${hex(base, 4)}, so it wraps at ${hex(base, 4)} + ${hex(span, 1)} = ${hex(top, 4)}.`, 'Round the start down to a multiple of the window size, then add the size.'),
+      'the wrap boundary', idea,
+      count('The window size in bytes:', `${len} × ${size}`, span),
+      step(`Round ${hex(start, 4)} down to a multiple of ${span} (hex):`, hexa(base, 4)),
+      step(`Add the window size to get the wrap boundary (hex):`, hexa(top, 4)));
+  },
   (r, d) => concept(r, [...atLevel(2, [
     ['Why may an AXI source not wait for READY before raising VALID?', 'Both sides could wait forever: deadlock', ['Raising VALID early is only a style rule, not a requirement', 'Raising VALID early saves power', 'READY is optional in AXI'], 'handshake deadlock', 'If the sender waits for READY before raising VALID, and the receiver waits for VALID before raising READY, both wait forever. So the rule is that the sender must never wait for READY; the receiver may choose to wait for VALID.', ['If both sides wait for the other before acting:', 'Neither ever moves: deadlock', ['They take turns, sender first', 'The bus retries after a timeout']], 'The receiver is allowed to wait for VALID before raising READY, so a source that waited for READY could hang the bus.'],
-    ['What are AXI IDs for?', 'Several outstanding transactions, possibly out of order', ['Choosing which subordinate a transaction is addressed to', 'Detecting and correcting bus errors', 'Setting the length of each burst'], 'AXI IDs', 'A master can send many requests before the first reply arrives. The ID tags each one so replies can come back in a different order (a fast slave can answer before a slow one), but replies with the SAME ID stay in order.', ['Replies with different IDs:', 'May arrive out of order', ['Must still arrive in order', 'Are merged into one reply']], 'A manager can have several transactions in flight; with different IDs they may complete out of order, with the same ID they stay in order.'],
+    ['What are AXI IDs for?', 'Several outstanding transactions, possibly out of order', ['Choosing which subordinate a transaction is addressed to', 'Detecting and correcting bus errors', 'Setting the length of each burst'], 'AXI IDs', 'A manager can send many requests before the first reply arrives. The ID tags each one so replies can come back in a different order (a fast subordinate can answer before a slow one), but replies with the SAME ID stay in order.', ['Replies with different IDs:', 'May arrive out of order', ['Must still arrive in order', 'Are merged into one reply']], 'A manager can have several transactions in flight; with different IDs they may complete out of order, with the same ID they stay in order.'],
     ['APB vs AXI: when is APB used?', 'Simple, low-bandwidth register access', ['High-bandwidth DMA transfers', 'Cache-coherent traffic between the CPU clusters', 'Main-memory (DRAM) access'], 'picking a bus', 'AXI has separate channels, bursts and outstanding transactions, which costs area but gives speed. APB has no pipelining: one slow access at a time with a tiny interface. That is ideal for configuration registers that are rarely touched.', ['A block that just holds a few control registers should use:', 'APB: simple and small', ['AXI with long bursts for speed', 'A cache-coherent CHI port']], 'APB is a simple, unpipelined bus for peripheral registers; AXI handles the high-bandwidth traffic.'],
   ]),
     ...atLevel(1, [['In AXI, which side raises VALID?', 'The source, when its data is ready', ['The destination, once it has room for the data', 'Both sides, at the same time', 'Neither: the clock does it'], 'VALID and READY', 'In AXI the source raises VALID when its information is valid, and the destination raises READY when it can accept. A transfer happens on a clock edge where both are high.', ['A transfer happens when VALID and READY are:', 'Both high on the same edge', ['Both low at the same time', 'Only VALID high on the bus']]]]),
     ...atLevel(2, [['In AXI, once VALID is high and READY is still low, what must the source do?', 'Hold its data steady until READY', ['Drop VALID to save power', 'The destination must raise READY at once', 'The transfer is cancelled by the clock'], 'holding a transfer', 'Once VALID is asserted it must stay asserted, with stable data, until the handshake completes. Dropping it early would lose or corrupt the transfer. The rule is what keeps the handshake safe.', ['Can VALID be withdrawn before the handshake?', 'No: it must stay high', ['Yes, at any time you like', 'Only during reset']]]]),
-    ...atLevel(2, [['Which AXI channel carries read data back to the master?', 'The R channel', ['The AR channel', 'The B channel', 'The W channel'], 'AXI channels', 'AXI splits each transaction into five channels: AW and AR for addresses, W for write data, and R and B for the responses. Read data comes back on R, tagged with the same ID as its request.', ['How many independent channels does AXI have?', 'Five', ['Two', 'Only one']]]]),
-    ...atLevel(3, [['AXI lets read responses come back out of order. What makes that safe?', 'Each response carries its request ID', ['Responses are always in issue order', 'The bus has a single outstanding request', 'The slave buffers and sorts all data'], 'AXI IDs', 'Transactions with different IDs may complete in any order, but transactions with the same ID must stay in order. The ID on each response tells the master which request it answers.', ['Transactions with the same ID must complete:', 'In issue order', ['In any order', 'Only in reverse']]]]),
+    ...atLevel(2, [['Which AXI channel carries read data back to the manager?', 'The R channel', ['The AR channel', 'The B channel', 'The W channel'], 'AXI channels', 'AXI splits each transaction into five channels: AW and AR for addresses, W for write data, and R and B for the responses. Read data comes back on R, tagged with the same ID as its request.', ['How many independent channels does AXI have?', 'Five', ['Two', 'Only one']]]]),
+    ...atLevel(3, [['AXI lets read responses come back out of order. What makes that safe?', 'Each response carries its request ID', ['Responses are always in issue order', 'The bus has a single outstanding request', 'The subordinate buffers and sorts all data'], 'AXI IDs', 'Transactions with different IDs may complete in any order, but transactions with the same ID must stay in order. The ID on each response tells the manager which request it answers.', ['Transactions with the same ID must complete:', 'In issue order', ['In any order', 'Only in reverse']]]]),
+    ...atLevel(3, [
+      ['A DMA streams data into a hardware FIFO that has a single address. Which AXI burst type?', 'FIXED: every beat goes to the same address', ['INCR: the address steps up with every beat', 'WRAP: the address wraps inside an aligned window', 'None: a FIFO port cannot take bursts at all'],
+        'burst types', 'A FIXED burst keeps the same address for every beat, which is what a FIFO port wants: each beat pushes the next word. INCR moves through memory, and WRAP is for filling a cache line starting at the missing word.',
+        ['A FIFO port has how many addresses?', 'One', ['As many as it has entries', 'None']], 'FIXED: every beat goes to the same address, as a FIFO port needs'],
+    ]),
   ], (why) => `${why}.`, d),
 ]);
 
@@ -577,15 +680,39 @@ export const serdesPractice = practice('practice-serdes', 'SerDes Drills', 'line
       calc('Add the deterministic part:', `${dj} + ${sig(2 * q * rj, 4)}`, tj, 'ps', sig(tj), 0.01));
   },
   (r, d) => {
-    const gens: [number, number, number][] = d === 1 ? [[2, 5, 0.8]] : [[3, 8, 128 / 130], [4, 16, 128 / 130], [5, 32, 128 / 130]];
+    const gens: [number, number, number][] = d === 1 ? [[2, 5, 0.8]] : d === 2 ? [[3, 8, 128 / 130], [4, 16, 128 / 130], [5, 32, 128 / 130]] : [[6, 64, 236 / 256], [7, 128, 236 / 256]];
     const [g, gt, eff] = pick(r, gens);
     const lanes = pick(r, [1, 4, 8, 16]);
     const bw = (gt * eff * lanes) / 8;
-    return walk(ask(`PCIe Gen${g} x${lanes} (${gt} GT/s, ${g === 2 ? '8b/10b' : '128b/130b'}). Usable bandwidth per direction, in GB/s?`, qty(bw, 'GB/s', 0.02), `${gt} × ${g === 2 ? '0.8' : '128/130'} × ${lanes} / 8 = ${sig(bw)} GB/s.`, 'Rate × efficiency × lanes / 8.'),
-      'PCIe bandwidth', `PCIe moves data on several lanes in parallel. Each lane runs at the raw rate in GT/s (billions of transfers per second, 1 bit each). The line code adds extra bits: ${g === 2 ? '8b/10b sends 10 bits for each 8 of data: 80% efficient' : '128b/130b sends 130 bits for each 128 of data: about 98.5% efficient'}. So usable Gb/s per lane = rate × efficiency, then multiply by the lanes, and divide by 8 to get bytes.`,
-      calc('Efficiency of the line code:', g === 2 ? '8 / 10' : '128 / 130', eff, '', sig(eff, 4), 0.005),
+    return walk(ask(`PCIe Gen${g} x${lanes} (${gt} GT/s, ${g === 2 ? '8b/10b' : g >= 6 ? 'flit mode: about 236 of every 256 bytes carry TLP data' : '128b/130b'}). Usable bandwidth per direction, in GB/s?`, qty(bw, 'GB/s', 0.02), `${gt} × ${g === 2 ? '0.8' : g >= 6 ? '236/256' : '128/130'} × ${lanes} / 8 = ${sig(bw)} GB/s.`, 'Rate × efficiency × lanes / 8.'),
+      'PCIe bandwidth', `PCIe moves data on several lanes in parallel. Each lane runs at the raw rate in GT/s (billions of transfers per second, 1 bit each). The line code adds extra bits: ${g === 2 ? '8b/10b sends 10 bits for each 8 of data: 80% efficient' : g >= 6 ? 'PAM4 flit mode packs TLP data into 256-byte flits, of which about 236 bytes carry TLP data (the rest is CRC, FEC and framing): about 92% efficient' : '128b/130b sends 130 bits for each 128 of data: about 98.5% efficient'}. So usable Gb/s per lane = rate × efficiency, then multiply by the lanes, and divide by 8 to get bytes.`,
+      calc('Efficiency of the line code:', g === 2 ? '8 / 10' : g >= 6 ? '236 / 256' : '128 / 130', eff, '', sig(eff, 4), 0.005),
       calc(`Usable Gb/s on all ${lanes} lane${lanes > 1 ? 's' : ''}:`, `${gt} × ${sig(eff, 4)} × ${lanes}`, gt * eff * lanes, '', sig(gt * eff * lanes, 4), 0.01),
       calc('Divide by 8 to get GB/s:', `${sig(gt * eff * lanes, 4)} / 8`, bw, 'GB/s', sig(bw), 0.02));
+  },
+  (r, d) => {
+    // Ethernet port speed from lanes x 200 Gb/s per lane.
+    const idea = 'Ethernet ports are built from lanes, and today a lane runs 200 Gb/s. The port speed is the number of lanes times the rate per lane: 4 lanes make an 800G port and 8 lanes a 1.6T port.';
+    if (d === 1) { const l = pick(r, [2, 4, 8]); return walk(ask(`An Ethernet port uses ${l} lanes at 200 Gb/s each. Port speed, in Gb/s?`, qty(l * 200, 'Gb/s', 0.005, String(l * 200)), `${l} × 200 = ${l * 200} Gb/s.`, 'Lanes × rate per lane.'),
+      'port speed from lanes', idea, count('Lanes × rate per lane, in Gb/s:', `${l} × 200`, l * 200)); }
+    if (d === 2) { const l = pick(r, [4, 8]); return walk(ask(`A switch port must run ${l * 200} Gb/s using 200 Gb/s lanes. How many lanes does it need?`, num(l), `${l * 200} / 200 = ${l} lanes.`, 'Port speed ÷ lane rate.'),
+      'lanes for a port', idea, count('Port speed ÷ rate per lane:', `${l * 200} / 200`, l)); }
+    const tb = pick(r, [3.2, 4, 4.8, 5.6, 6.4, 9.6, 12.8]), lanes = Math.round((tb * 1000) / 200), ports = Math.ceil(lanes / 8);
+    return walk(ask(`An accelerator needs ${tb} Tb/s of scale-out bandwidth. How many 1.6T ports (8 lanes of 200 Gb/s each) does that take?`, num(ports), `${tb} Tb/s = ${tb * 1000} Gb/s = ${lanes} lanes of 200 Gb/s; 8 lanes per port gives ${lanes / 8} → ${ports} ports.`, 'Total ÷ 1.6 Tb/s, rounded up.'),
+      'sizing the scale-out ports', `${idea} A 1.6T port is therefore 8 × 200 Gb/s = 1,600 Gb/s. To cover a bandwidth target, divide it by the port speed and round up to whole ports.`,
+      count('Lanes needed at 200 Gb/s each:', `${tb * 1000} / 200`, lanes),
+      count('Ports at 8 lanes each, rounded up:', `ceil(${lanes} / 8)`, ports));
+  },
+  (r, d) => {
+    // CXL rides on the PCIe PHY: raw GT/s per lane x lanes / 8 (encoding and flit overhead ignored).
+    const gens: [string, string, number][] = d === 1 ? [['2.0', 'PCIe 5.0', 32]] : d === 2 ? [['3.x', 'PCIe 6.0', 64]] : [['3.x', 'PCIe 6.0', 64], ['4.0', 'PCIe 7.0', 128]];
+    const [cxl, pcie, gt] = pick(r, gens);
+    const lanes = pick(r, [4, 8, 16]);
+    const raw = (gt * lanes) / 8;
+    return walk(ask(`A CXL ${cxl} x${lanes} link runs at the same raw rate as ${pcie} (${gt} GT/s per lane). Ignoring encoding and flit overhead, raw GB/s per direction?`, qty(raw, 'GB/s', 0.02, sig(raw)), `${gt} × ${lanes} / 8 = ${sig(raw)} GB/s per direction. CXL reuses the PCIe physical layer, so a generation's raw rate is the PCIe rate; usable bandwidth is a little lower.`, 'GT/s × lanes ÷ 8.'),
+      'CXL raw bandwidth', 'CXL rides on the PCIe physical layer, so each lane runs at the PCIe rate of its generation: 32 GT/s for CXL 1.x and 2.0, 64 GT/s for 3.x, 128 GT/s for 4.0. Each transfer is 1 bit, so raw bytes per second = GT/s × lanes ÷ 8.',
+      calc(`Raw Gb/s on ${lanes} lanes:`, `${gt} × ${lanes}`, gt * lanes, '', String(gt * lanes), 0.005),
+      calc('Divide by 8 to get GB/s:', `${gt * lanes} / 8`, raw, 'GB/s', sig(raw), 0.02));
   },
   (r, d) => concept(r, [...atLevel(2, [
     ['What does a CTLE do?', 'Boosts high frequencies to undo channel loss', ['Recovers the clock from the data', 'Encodes the data as 8b/10b', 'Adds deliberate jitter to spread the emission spectrum'], 'CTLE', 'A long channel loses high frequencies more than low ones, which smears each bit into the next. A continuous-time linear equalizer (CTLE) is a filter that boosts the high frequencies back up, which undoes some of the smearing. It also boosts high-frequency noise.', ['A CTLE works by:', 'Boosting high frequencies', ['Boosting the low frequencies', 'Recovering the clock from data']], 'It is a linear equalizer: the channel is low-pass, so the CTLE gives the high frequencies back.'],
@@ -595,6 +722,7 @@ export const serdesPractice = practice('practice-serdes', 'SerDes Drills', 'line
     ...atLevel(1, [['What is a SerDes?', 'A serializer and deserializer for a fast link', ['A memory with a serial interface on the die', 'A clock divider for the core', 'A power regulator'], 'SerDes', 'A SerDes turns a wide parallel bus into one or a few fast serial lanes at the transmitter, and back into parallel data at the receiver. It is how chips talk over long, high-speed links.', ['A SerDes converts parallel data into:', 'Fast serial data', ['Slower parallel data', 'Analog audio']]]]),
     ...atLevel(2, [['What does an equalizer compensate for?', 'Frequency-dependent loss in the channel', ['Clock drift between two chips', 'Supply noise on the board', 'Packets that arrive out of order on the link'], 'equalization', 'A long channel attenuates high frequencies more than low ones, which smears each bit into its neighbours (inter-symbol interference). An equalizer boosts the high frequencies to reopen the eye.', ['Which part of the signal does a channel attenuate most?', 'The high frequencies', ['The DC level', 'The low frequencies']]]]),
     ...atLevel(2, [['Why do links use 8b/10b or scrambling?', 'Keep enough transitions for clock recovery', ['Make the data smaller on the wire', 'Hide the data from eavesdroppers on the link', 'Add a checksum to every packet'], 'transition density', 'The receiver recovers its clock from the edges in the data. A long run of identical bits has no edges, and the clock can drift. Encoding or scrambling keeps the transitions frequent enough.', ['A long run of identical bits hurts clock recovery because:', 'It has no edges to lock to', ['It uses too much power', 'It makes the link faster']]]]),
+    ...atLevel(3, [['Which CXL device type is a pure memory expander?', 'Type 3', ['Type 1', 'Type 2', 'A CXL switch'], 'CXL device types', 'CXL devices come in three types. Type 1 devices have a cache but no memory of their own (CXL.io and CXL.cache). Type 2 devices, such as accelerators, have both a cache and their own memory, which the host can also use. Type 3 devices only add memory for the host to load and store through CXL.mem: memory expanders.', ['A device that only adds memory for the host to use is Type:', '3', ['1', '2']], 'Type 3: it adds memory for the host through CXL.mem and has no cache of its own to keep coherent']]),
     ...atLevel(3, [['What does transmitter pre-emphasis do?', 'Boosts an edge\'s high frequencies', ['Lowers the supply voltage', 'Removes all jitter from the link', 'Adds a parity bit to each word on the link'], 'pre-emphasis', 'Pre-emphasis makes the transmitter send the transitions (edges) with extra high-frequency strength. The channel then attenuates them less relative to the flat part of the bit, so they arrive with clean edges.', ['Pre-emphasis boosts which part of each bit?', 'Its transitions', ['Its steady level', 'Its supply']]]]),
   ], (why) => `${why}.`, d),
 ]);
@@ -701,8 +829,10 @@ export const memBoss = boss({
     mc('Two threads each write their own partial sum; sums[0] and sums[1] are adjacent doubles. Why did the second thread make things slower?', ['False sharing: both sums sit in one cache line', 'The threads contend for one shared register file', 'DRAM refresh stalls both cores more often', 'The OS keeps migrating the threads between cores'], 0, 'The line ping-pongs between the cores in M state. Pad the sums to separate lines.'),
     { t: 'gen', make: () => { const { wb } = mesi([[0, 'W'], [1, 'W'], [0, 'W'], [1, 'W'], [0, 'W'], [1, 'W']], 2); return ask('Under MESI, C0 and C1 alternately write that line 6 times (C0 first). How many times must a Modified copy be handed over?', num(wb), `Every write after the first finds the line Modified in the other core: ${wb} transfers.`); } },
     { t: 'gen', make: () => { const o = dramOpen([7, 7, 7, 12, 7, 12], 16, 16, 16); return ask('The DRAM bank (CL = tRCD = tRP = 16, open page, starts precharged) sees rows 7, 7, 7, 12, 7, 12. Total latency, in cycles?', num(o.t), `32 + 16 + 16 + 48 + 48 + 48 = ${o.t}. The alternating rows at the end each pay a full conflict.`); } },
+    { t: 'gen', make: () => { const n = 32e-3 / 48e-9; return ask('The bank above has tRC = 48 ns. A hostile thread activates one row back to back for a whole DDR5 32 ms refresh window, and the flip threshold is 4,800 activations. How many times over the threshold does it go?', qty(n / 4800, 'x', 0.02, sig(n / 4800)), `32e-3 / 48e-9 ≈ ${Math.round(n).toLocaleString('en-US')} activations; ÷ 4,800 ≈ ${sig(n / 4800)}×. Refresh alone cannot stop that.`); } },
+    mc('A many-sided Rowhammer pattern still flips bits although the DRAM has target-row refresh. What closes the hole?', ['Count activations in the controller or with a counter on every row', 'Double the refresh rate, since every row is then refreshed twice as often', 'Add more entries to the tracker, until it follows every row in the bank', 'Switch the page policy to close-page, so that no row stays open for long'], 0, 'The tracker holds a few rows and the attacker uses more, so counting must not depend on a small table. Doubling the refresh rate only halves the budget (still a huge multiple of the threshold), and close-page does not limit activations.'),
   ],
-  recap: ['Conflict misses and associativity.', 'AMAT.', 'False sharing.', 'Row-buffer locality.'],
+  recap: ['Conflict misses and associativity.', 'AMAT.', 'False sharing.', 'Row-buffer locality.', 'Activations per refresh window versus the flip threshold.'],
 });
 
 export const interconnectBoss = boss({
@@ -717,9 +847,10 @@ export const interconnectBoss = boss({
     { t: 'gen', make: () => ask('Links are 64 GB/s per direction. Bisection bandwidth of the 8×8 mesh in one direction, in GB/s?', qty(512, 'GB/s', 0.01, '512'), '8 links cross the middle: 512 GB/s.') },
     { t: 'gen', make: () => ask('The router-to-router credit round trip is 6 cycles, but each input buffer holds 4 flits. Max throughput per link, in flits/cycle?', qty(4 / 6, '', 0.02, sig(4 / 6)), '4/6 = 0.667: buffers are too shallow. Need 6 to run at full rate.') },
     mc('Under heavy load, requests and responses share one virtual channel and the chip hangs. Why?', ['Protocol deadlock: requests block the responses', 'Routing deadlock: the mesh has a cycle', 'XY routing is not deadlock-free on a mesh', 'Credit loss: shallow buffers leak credits until the links stall'], 0, 'Responses cannot drain because requests fill every buffer; use separate virtual networks. Routing deadlock and protocol deadlock are different; this is protocol deadlock.'),
+    { t: 'gen', make: () => ask('Between racks the chip scales out over Ethernet: 8 lanes at 200 Gb/s each. Port speed, in Gb/s?', qty(1600, 'Gb/s', 0.005, '1600'), '8 × 200 = 1,600 Gb/s, a 1.6T port. Inside a rack the accelerators use a scale-up fabric instead (NVLink-class, UALink).') },
     { t: 'gen', make: () => ask('Host link: PCIe Gen5 x16 (32 GT/s, 128b/130b). Usable bandwidth per direction, in GB/s?', qty((32 * (128 / 130) * 16) / 8, 'GB/s', 0.02), `${sig((32 * (128 / 130) * 16) / 8)} GB/s: 1/8 of the on-chip bisection. Keep weights on chip.`) },
   ],
-  recap: ['Mesh diameter and wormhole latency.', 'Bisection bandwidth.', 'Credits vs buffer depth.', 'Protocol deadlock.'],
+  recap: ['Mesh diameter and wormhole latency.', 'Bisection bandwidth.', 'Credits vs buffer depth.', 'Protocol deadlock.', 'Scale-up fabrics versus scale-out Ethernet (200 Gb/s per lane).'],
 });
 
 export const perfBoss = boss({
@@ -756,9 +887,11 @@ Interconnect: waits for ARVALID before asserting ARREADY`),
     mc('Another INCR burst starts at 0x2FC0 with 16 beats of 8 bytes. Problem?', ['It crosses the 4 KB boundary at 0x3000', 'None: a 128-byte burst is legal', 'Beats must be 4 bytes wide', 'INCR bursts cannot exceed 8 beats'], 0, '0x2FC0 + 128 - 1 = 0x303F, so the burst crosses 0x3000: illegal, split it.'),
     { t: 'gen', make: () => ask('The trace shows VALID high in 10 cycles and READY high in 6 of those same cycles. How many beats transferred?', num(6), 'A beat moves only when both are high: 6.') },
     mc('The PCIe link to the boot flash sees a TLP with a bad LCRC. What does the data link layer do?', ['NAKs it, so the sender replays it', 'Drops the link and retrains it from scratch', 'Passes the data up and flags an error', 'Asks software to resend the request'], 0, 'The sender replays the TLP from its replay buffer. Link-level retry makes PCIe reliable without software.'),
+    mc('The boot flash controller sits behind the PCIe link and must interrupt a core when its DMA finishes. How does it signal?', ['By writing an MSI or MSI-X message, since a link carries packets and not wires', 'By driving a dedicated wire to the interrupt controller of the SoC, as on-chip blocks do', 'By raising VALID on the AXI read channel until a core notices the request there', 'By polling only: PCIe devices cannot signal an interrupt to a core at all'], 0, 'A link has no spare wires, so the device writes a message that the interrupt controller turns into an interrupt.'),
+    mc('The DMA also streams pixels to a display block with no addresses involved. Which AMBA protocol carries that?', ['APB, the simple protocol for registers', 'AXI-Stream, which has no address channel', 'AHB, the pipelined microcontroller bus', 'CHI, the packetised coherent interconnect'], 1, 'AXI-Stream is a one-way data stream with VALID/READY. APB is for registers, AHB for microcontroller-class buses and CHI for coherent many-core fabrics.'),
     { t: 'gen', make: () => { const s = 1 / (32e9 * 1e-12); return ask('That link runs 32 Gb/s at BER 1e-12. Average seconds between bit errors?', qty(s, 's', 0.02, sig(s)), `1/(32e9 × 1e-12) = ${sig(s)} s: errors every half-minute, handled silently by replay.`); } },
   ],
-  recap: ['VALID never waits for READY.', 'WRAP bursts and the 4 KB rule.', 'Transfers need both.', 'PCIe replay and BER.'],
+  recap: ['VALID never waits for READY.', 'WRAP bursts and the 4 KB rule.', 'Transfers need both.', 'PCIe replay and BER.', 'MSI over a link; AXI-Stream for address-less data.'],
 });
 
 export const ARCH_BOSSES = [cpuBoss, memBoss, interconnectBoss, perfBoss, protocolBoss];

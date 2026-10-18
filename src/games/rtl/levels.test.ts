@@ -13,6 +13,7 @@ describe('level integrity', () => {
   for (const level of ALL_RTL) {
     it(`${level.id}: golden is lint-clean and passes its own regression`, () => {
       expect(new Design(level.golden).lints).toEqual([]);
+      expect(new Design(level.golden).warnings).toEqual([]); // no x/z literals outside casez/casex (E8)
       const r = run(level.golden, level.golden, level.stimulus());
       expect(r.error).toBeUndefined();
       expect(r.ok).toBe(true);

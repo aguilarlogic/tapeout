@@ -7,7 +7,7 @@ const CLASSES: Record<string, string> = {
 export class RegexError extends Error {}
 
 /** Translate a POSIX pattern. In basic mode ( ) { } + ? | are literal and their backslashed forms are special (GNU behaviour). */
-export function posixToJs(pat: string, extended: boolean): string {
+export function posixToJs(pat: string, extended: boolean, onStray?: (c: string) => void): string {
   let out = '';
   let i = 0;
   const special = (c: string) => (extended ? '(){}+?|'.includes(c) : false);
@@ -18,7 +18,8 @@ export function posixToJs(pat: string, extended: boolean): string {
       if (n === undefined) throw new RegexError('Trailing backslash');
       if ('(){}+?|'.includes(n)) out += extended ? '\\' + n : n;
       else if (n === '<' || n === '>') out += '\\b';
-      else if (n === 'w' || n === 'W' || n === 's' || n === 'S' || n === 'b' || n === 'B' || n === 'd') out += '\\' + n;
+      else if (n === 'w' || n === 'W' || n === 's' || n === 'S' || n === 'b' || n === 'B') out += '\\' + n;
+      else if (n === 'd') { onStray?.(n); out += 'd'; } // \d is Perl-only: GNU grep warns, then matches a literal d
       else if (/[1-9]/.test(n)) out += '\\' + n;
       else out += '\\' + n;
       i += 2;
@@ -57,8 +58,9 @@ export function posixToJs(pat: string, extended: boolean): string {
   return out;
 }
 
-export function makeRegex(pat: string, opts: { extended?: boolean; ignoreCase?: boolean; global?: boolean; word?: boolean; fixed?: boolean } = {}): RegExp {
-  let src = opts.fixed ? pat.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&') : posixToJs(pat, !!opts.extended);
+export function makeRegex(pat: string, opts: { extended?: boolean; ignoreCase?: boolean; global?: boolean; word?: boolean; fixed?: boolean; perl?: boolean; onStray?: (c: string) => void } = {}): RegExp {
+  // perl (grep -P): JavaScript regex semantics, where \d and lookahead work
+  let src = opts.fixed ? pat.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&') : opts.perl ? pat : posixToJs(pat, !!opts.extended, opts.onStray);
   if (opts.word) src = `\\b(?:${src})\\b`;
   try { return new RegExp(src, `${opts.ignoreCase ? 'i' : ''}${opts.global ? 'g' : ''}m`.replace('m', '')); } catch { throw new RegexError(`Invalid regular expression: ${pat}`); }
 }

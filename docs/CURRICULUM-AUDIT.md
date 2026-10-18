@@ -208,3 +208,8 @@ Supporting mechanics:
 A realistic end state is 150+ lessons, 3,000+ generated problems, and 100+ labs and bosses. That is several times today's
 size. It is buildable incrementally, one act at a time, because every piece plugs into the existing lesson, lab and
 curriculum framework.
+
+
+---
+
+**Update.** The curriculum standards audit (`reports/Chip curriculum standards audit.md`) has been worked through in `docs/STANDARDS-PLAN.md`; its status table is at the top of that file.

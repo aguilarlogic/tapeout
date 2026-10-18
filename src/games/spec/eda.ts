@@ -143,16 +143,22 @@ const pllLoop: ArchLevel = {
 
 // ============================================================ clocking 2: PLL jitter optimum
 interface Jit { fout: number; a: number; b: number }
-const jitter = (j: Jit, fref: number, bw: number) => { const n = j.fout / fref; return { ref: Math.sqrt(j.a * n * n * bw), vco: Math.sqrt(j.b / (bw * bw)), tot: Math.sqrt(j.a * n * n * bw + j.b / (bw * bw)) }; };
+export const jitter = (j: Jit, fref: number, bw: number) => {
+  const n = j.fout / fref, r2 = j.a * n * n * bw, v2 = j.b / bw; // 1/f² VCO noise high-passed by the loop: ∝ 1/BW
+  return { ref: Math.sqrt(r2), vco: Math.sqrt(v2), tot: Math.sqrt(r2 + v2) };
+};
 const JIT_FREFS = [25, 50, 100];
 const pllJitter: ArchLevel = {
   id: 'pll-jitter', title: 'Minimize PLL jitter', concept: 'reference noise vs VCO noise, optimum bandwidth, reference frequency choice', xp: 190, lab: 'Signals', tier: 'guided',
+  model: 'Noise models are idealised (white reference noise, 1/f² VCO noise).',
   ticket: 'The serial link needs a clock with less than a given RMS jitter. Pick the reference frequency and the loop bandwidth: too narrow and the VCO\'s own noise wanders through, too wide and the reference and charge-pump noise pass.',
   build: (r) => {
-    let j: Jit = { fout: 2400, a: 0.05, b: 2000 }, best: { fref: number; bw: number; tot: number } | undefined, spec = 0;
+    let j: Jit = { fout: 2400, a: 0.05, b: 7000 }, best: { fref: number; bw: number; tot: number } | undefined, spec = 0;
     const grid = Array.from({ length: 48 }, (_, i) => 0.25 + 0.25 * i);
     for (let tries = 0; tries < 80 && !best; tries++) {
-      j = { fout: pick(r, [1200, 2400, 4800]), a: (2 + between(r, 0, 8)) / 100, b: 1000 + between(r, 0, 5000) };
+      // b is set from the wanted optimum at the 50 MHz reference, BW* = √(b / (a·N²)) = t MHz (1.5-5 MHz, inside the 0.25-12 MHz grid at every reference).
+      const fout = pick(r, [1200, 2400, 4800]), a = (2 + between(r, 0, 8)) / 100, t = pick(r, [1.5, 2, 2.5, 3, 4, 5]), n50 = fout / 50;
+      j = { fout, a, b: Number((a * (n50 * t) ** 2).toPrecision(3)) };
       let cand: { fref: number; bw: number; tot: number } | undefined;
       const perRef = JIT_FREFS.map((fref) => { let m = Infinity; for (const bw of grid) if (bw <= fref / 10) m = Math.min(m, jitter(j, fref, bw).tot); return m; });
       for (const fref of JIT_FREFS) for (const bw of grid) if (bw <= fref / 10) { const t = jitter(j, fref, bw).tot; if (!cand || t < cand.tot) cand = { fref, bw, tot: t }; }
@@ -166,9 +172,9 @@ const pllJitter: ArchLevel = {
     return {
       brief: `<p>A PLL generates <b>${j.fout} MHz</b> from a crystal-derived reference of <b>25, 50 or 100 MHz</b> (divide ratio N = ${j.fout}/f<sub>ref</sub>). Two noise sources shape the output, integrated over the band that matters:</p>
 <ul><li><b>Reference + charge-pump noise</b> pass through the loop: σ² = ${j.a}·N²·BW (fs², BW in MHz). A higher reference frequency lowers N and so this term.</li>
-<li><b>VCO noise</b> is suppressed inside the loop bandwidth: σ² = ${j.b}/BW² (fs²).</li></ul>
+<li><b>VCO noise</b> is suppressed inside the loop bandwidth: σ² = ${j.b}/BW (fs²).</li></ul>
 <p>The loop bandwidth may not exceed f<sub>ref</sub>/10. Reach an RMS jitter of at most <b>${spec} fs</b>.</p>`,
-      hints: ['Total σ² = a·N²·BW + b/BW². At the minimum, the reference term is twice the VCO term (the derivative is zero).', 'Try each reference frequency at its own optimum bandwidth: the smallest f<sub>ref</sub> can force the optimum above f<sub>ref</sub>/10.', 'The best bandwidth moves with N: halve N and the optimum moves up by 2<sup>2/3</sup>.'],
+      hints: ['Total σ² = a·N²·BW + b/BW. At the minimum the two terms are equal, so BW* = √(b / (a·N²)).', 'A higher reference frequency halves N and doubles the optimum bandwidth, as long as BW stays under f<sub>ref</sub>/10.', 'Try each reference frequency at its own optimum bandwidth: a higher f<sub>ref</sub> lowers N, and with it the best jitter you can reach.'],
       controls: [
         { id: 'fref', kind: 'select', label: 'Reference', options: JIT_FREFS.map((x) => ({ value: String(x), label: `${x} MHz` })), value: '25' },
         { id: 'bw', kind: 'number', label: 'Loop bandwidth (MHz)', min: 0.25, max: 12, step: 0.25, value: 1 },

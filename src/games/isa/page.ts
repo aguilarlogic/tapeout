@@ -3,7 +3,7 @@
 import { clearDraft, loadDraft, saveDraft } from '../../state';
 import { h } from '../../ui/dom';
 import { editor } from '../../ui/editor';
-import { busyWhile, finishLab, goalItems, hintBox, labFrame, report, useSeed, variantButton } from '../../ui/labkit';
+import { busyWhile, finishLab, goalItems, hintBox, labFrame, modelNote, report, useSeed, variantButton } from '../../ui/labkit';
 import { rng } from '../../sim/harness';
 import { AsmError, assemble, MNEMONICS, REG_NAMES, type Program } from './asm';
 import { evaluate, setupMachine, SENTINEL, type Evaluation } from './check';
@@ -11,7 +11,7 @@ import { findIsaLevel } from './levels';
 import { Machine, STACK_TOP } from './sim';
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-const PSEUDO = ['nop', 'li', 'la', 'mv', 'not', 'neg', 'seqz', 'snez', 'sltz', 'sgtz', 'beqz', 'bnez', 'blez', 'bgez', 'bltz', 'bgtz', 'bgt', 'ble', 'bgtu', 'bleu', 'j', 'jr', 'ret', 'call', 'tail'];
+const PSEUDO = ['nop', 'li', 'la', 'mv', 'not', 'neg', 'seqz', 'snez', 'sltz', 'sgtz', 'beqz', 'bnez', 'blez', 'bgez', 'bltz', 'bgtz', 'bgt', 'ble', 'bgtu', 'bleu', 'j', 'jr', 'ret', 'call', 'tail', 'csrr', 'csrw', 'csrs', 'csrc', 'csrwi', 'csrsi', 'csrci', 'unimp'];
 const OPSET = new Set([...MNEMONICS, ...PSEUDO]);
 const REGSET = new Set([...REG_NAMES, ...Array.from({ length: 32 }, (_, i) => `x${i}`), 'fp']);
 
@@ -29,6 +29,8 @@ export function highlightAsm(src: string): string {
 
 const hx = (v: number) => `0x${(v >>> 0).toString(16).padStart(8, '0')}`;
 
+export const MODEL_NOTE = 'RV32IM, machine mode only, with CSRs, traps and a memory-mapped timer. ecall numbers are RARS-style (a7 = service); once mtvec is set, ecall traps instead. The stack pointer must stay 16-byte aligned.';
+
 export function isaPage(id: string): HTMLElement {
   const level = findIsaLevel(id);
   if (!level) return h('p', null, 'Unknown mission.');
@@ -45,6 +47,7 @@ export function isaPage(id: string): HTMLElement {
   const brief = h('aside', { class: 'brief panel' },
     h('div', { class: 'tag' }, `ISA Lab · ${level.concept}`),
     h('p', { class: 'dim small' }, level.ticket),
+    modelNote(MODEL_NOTE),
     h('div', { class: 'brief-body', html: inst.brief }),
     inst.fixed ? h('details', { class: 'src-view' }, h('summary', null, 'Provided code (appended after yours)'), h('pre', { class: 'ed-hl src', html: highlightAsm(inst.fixed) })) : '',
     boss ? h('p', { class: 'dim small' }, 'Boss mission: no hints, hidden cases. A new variant picks a different routine.') : '',

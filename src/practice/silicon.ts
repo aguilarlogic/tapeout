@@ -4,7 +4,7 @@ import { num, qty } from '../lessons/answers';
 import { calc, choice, count, sim, walk } from '../lessons/teach';
 import { art, ask, mc, pick, say } from '../lessons/types';
 import { boss, practice, tier } from './types';
-import { atLevel, concept, sci, sig } from './util';
+import { atLevel, concept, mcs, sci, sig } from './util';
 
 /** Elmore delay of a distributed RC wire, in ps: r in Ω/µm, c in fF/µm, length in µm. */
 const wire = (rr: number, cc: number, len: number) => 0.5 * rr * cc * len * len * 1e-3;
@@ -13,6 +13,9 @@ const yieldOf = (mm2: number, d0: number) => Math.exp(-(mm2 / 100) * d0);
 /** Dies per 300 mm wafer (the usual approximation). */
 const dpw = (mm2: number, dmm = 300) => (Math.PI * (dmm / 2) ** 2) / mm2 - (Math.PI * dmm) / Math.sqrt(2 * mm2);
 const poisson = (lam: number, k: number) => { let p = Math.exp(-lam), s = p; for (let i = 1; i <= k; i++) { p *= lam / i; s += p; } return s; };
+
+/** HBM generations as [name, interface width in bits, Gb/s per pin]: the width doubles at HBM4. */
+const HBM_GENS: [string, number, number][] = [['HBM2E', 1024, 3.2], ['HBM3', 1024, 6.4], ['HBM3E', 1024, 9.6], ['HBM4', 2048, 8]];
 
 // ------------------------------------------------------------------ physical design
 
@@ -65,7 +68,7 @@ export const pnrPractice = practice('practice-pnr', 'Physical Design Drills', 'f
     const idea = 'A clock tree is a tree of buffers that delivers the clock to every flop at nearly the same time. Each buffer drives a fixed number of loads (its fan-out f). With L levels of buffers a balanced tree can reach f^L flops: each level multiplies by f.';
     if (d === 1) {
       const lv = pick(r, [3, 4, 5]), s = f ** lv;
-      return walk(ask(`A clock tree drives ${s} flops and each buffer drives ${f} loads. How many buffer levels deep is a balanced tree?`, num(lv), `${f}^${lv} = ${s}, so ${lv} levels.`, 'Fan-out per level, to the power of the depth.'),
+      return walk(ask(`A clock tree drives ${s} flops and each buffer drives ${f} loads (an illustrative fan-out). How many buffer levels deep is a balanced tree?`, num(lv), `${f}^${lv} = ${s}, so ${lv} levels.`, 'Fan-out per level, to the power of the depth.'),
         'clock tree depth', idea,
         ...sim(Array.from({ length: lv }, (_, i) => ({ beats: [count(`After level ${i + 1}, how many loads can the tree drive? Multiply the previous ${i === 0 ? '1' : f ** i} by ${f}:`, `${i === 0 ? 1 : f ** i} × ${f}`, f ** (i + 1))], row: `after level ${i + 1}: ${f ** (i + 1)} loads` })), 3, `each level multiplies by ${f}`),
         count(`How many levels does it take to reach ${s} flops?`, `${f}^levels = ${s}`, lv));
@@ -123,6 +126,31 @@ export const pnrPractice = practice('practice-pnr', 'Physical Design Drills', 'f
       calc('Allowed drop in mV = budget × Vdd × 1000:', `${b} / 100 × ${vdd} × 1000`, (b / 100) * vdd * 1000, 'mV', sig((b / 100) * vdd * 1000, 4), 0.005),
       calc('Maximum R = allowed drop ÷ current, in mΩ (mV ÷ A):', `${sig((b / 100) * vdd * 1000, 4)} / ${i}`, res, 'mΩ', sig(res), 0.02));
   },
+  (r, d) => {
+    const idea = 'IR drop is V = I × R, so with the current unchanged the drop falls in proportion to the resistance. A model like this is how a lower-resistance supply path (more straps, or rails delivered from the back of the wafer) is judged: by how much R falls, and what the current then does.';
+    const p = pick(r, [20, 25, 30, 40]);
+    if (d < 3) return walk(ask(`A supply path's resistance falls by ${p}% and the current stays the same. By what percentage does the IR drop fall?`, qty(p, '%', 0.01, String(p)), `V = I·R: the drop scales with R, so it also falls by ${p}%.`, 'Same current: drop ∝ R.'),
+      'IR drop against resistance', idea,
+      calc('New drop as a fraction of the old one, 1 − the fall:', `1 − ${p}/100`, 1 - p / 100, '', String(1 - p / 100), 0.005),
+      calc('Fall in the drop, as a %:', `(1 − ${1 - p / 100}) × 100`, p, '%', String(p), 0.01));
+    const up = pick(r, [10, 20]), fall = (1 - (1 - p / 100) * (1 + up / 100)) * 100;
+    return walk(ask(`A supply path's resistance falls by ${p}%, but the block now draws ${up}% more current. By what percentage does the IR drop fall? (Negative means it rises.)`, qty(fall, '%', 0.02, sig(fall)), `New drop = (1 − ${p / 100}) × (1 + ${up / 100}) = ${sig((1 - p / 100) * (1 + up / 100), 4)} of the old: a fall of ${sig(fall)}%.`, 'Multiply the two factors.'),
+      'IR drop when both R and I change', idea,
+      calc('Resistance factor × current factor:', `${1 - p / 100} × ${1 + up / 100}`, (1 - p / 100) * (1 + up / 100), '', sig((1 - p / 100) * (1 + up / 100), 4), 0.005),
+      calc('Fall in the drop = (1 − that factor) × 100, in %:', `(1 − ${sig((1 - p / 100) * (1 + up / 100), 4)}) × 100`, fall, '%', sig(fall), 0.02));
+  },
+  (r, d) => {
+    const pitch = pick(r, [28, 30, 36, 42]), tracks = tier(d, pick(r, [5, 6, 7]), pick(r, [6, 7.5, 9]), pick(r, [6, 7.5, 9]));
+    const idea = 'A standard cell is as tall as its metal tracks: height = (number of tracks) × (metal pitch). Fewer tracks make smaller cells, which is one reason designers want power rails out of the way of the signal tracks.';
+    if (d < 3) return walk(ask(`Cells are ${tracks} metal tracks tall at a ${pitch} nm track pitch. Cell height, in nm?`, qty(tracks * pitch, 'nm', 0.01, String(tracks * pitch)), `${tracks} × ${pitch} = ${tracks * pitch} nm.`, 'Tracks × pitch.'),
+      'cell height from tracks', idea,
+      calc('Height = tracks × pitch, in nm:', `${tracks} × ${pitch}`, tracks * pitch, 'nm', String(tracks * pitch), 0.01));
+    const rows = pick(r, [100, 200, 400]), h = tracks * pitch;
+    return walk(ask(`A block is ${rows} rows of ${tracks}-track cells at a ${pitch} nm pitch. How tall is the cell area, in µm?`, qty((rows * h) / 1000, 'um', 0.01, sig((rows * h) / 1000)), `Each row is ${h} nm; ${rows} rows = ${rows * h} nm = ${sig((rows * h) / 1000)} µm.`, 'Rows × height, then nm to µm.'),
+      'height of a block of rows', idea,
+      calc('One row, tracks × pitch, in nm:', `${tracks} × ${pitch}`, h, 'nm', String(h), 0.01),
+      calc('All rows, in µm (÷ 1000):', `${rows} × ${h} / 1000`, (rows * h) / 1000, 'um', sig((rows * h) / 1000), 0.01));
+  },
   (r, d) => concept(r, [...atLevel(2, [
     ['DRC and LVS both pass. What did each check?', 'DRC: manufacturable shapes. LVS: layout matches the netlist', ['DRC: setup timing. LVS: hold timing on every path', 'DRC: logic function. LVS: the power grid\'s IR drop at each cell', 'DRC: scan chains. LVS: the memory BIST controllers'], 'DRC versus LVS', 'Design Rule Check (DRC) asks whether the drawn shapes obey the factory\'s spacing and width rules, so they can be manufactured. Layout Versus Schematic (LVS) extracts the circuit from the drawn shapes and compares it with the intended netlist. Neither looks at timing.', ['Checking that the layout is the circuit you intended is:', 'LVS', ['DRC', 'CTS']], 'DRC checks the shapes obey the fab\'s geometric rules; LVS checks the layout\'s transistors and connections match the netlist.'],
     ['Why does CTS run after placement and before routing?', 'It needs the flop locations; clocks then get the best tracks', ['Clock nets are not timed until routing is finished, so it waits', 'Routing tools cannot see clock nets at all', 'It is only a naming convention in the flow'], 'the order of the flow', 'The clock tree has to reach each flop, so it cannot be built before the flops have a place. And clock wires are the most timing-critical, so they get the best routing tracks first, before signal wires fill them.', ['A clock tree needs to know:', 'Where every flop is placed', ['The final routed clock wires', 'The test patterns']], 'The tree must know where every flop is, and clock nets need the best routing resources before signal nets take them.'],
@@ -132,6 +160,11 @@ export const pnrPractice = practice('practice-pnr', 'Physical Design Drills', 'f
   ]),
     ...atLevel(1, [['What does placement decide?', 'Where each cell sits on the die', ['How the clock tree is wired', 'Which metal layers the route uses', 'The fuse settings for the chip'], 'placement', 'Placement puts every standard cell and macro at a legal location. Routing comes after it and connects the cells; the quality of placement sets wire lengths and timing.', ['Routing happens:', 'After placement', ['Before floorplanning', 'Never']]]]),
     ...atLevel(3, [['Why keep spare ECO cells in a design?', 'So small late fixes avoid a full re-spin', ['They lower the power of the whole chip', 'They improve the yield of the wafer', 'Spare cells replace the scan chain entirely'], 'ECO spare cells', 'Late bugs are often small. Spare gates scattered in the layout can be rewired with only a few metal layers changed, instead of redoing every mask. That is far faster and cheaper than a full re-spin.', ['A metal-only ECO changes:', 'Only the upper metal masks', ['Every mask', 'The wafer']]]]),
+    ...atLevel(3, [
+    ['What is the main routing benefit of backside power delivery?', 'Front-side tracks freed from power straps', ['Signals can be sent over the back of the chip', 'Clock trees need no buffers any more', 'Vias between metal layers are no longer used'], 'backside power', 'The supply rails move under the transistors after the wafer is thinned. Power no longer competes with signals for the front-side metal, so signals get more tracks and cells can shrink. The costs are heat leaving through a thinned stack, harder backside debug and extra process steps.', ['Backside power moves the:', 'Power rails, off the front side', ['Signals, off the front side', 'Transistors, to the package']], 'Front-side tracks are freed from the power straps'],
+    ['Which physical-design file holds the extracted parasitics for timing?', 'The SPEF file', ['The LEF abstract file', 'The DEF file', 'The GDS mask file'], 'physical-design data formats', 'LEF holds cell and macro abstracts (outline, pins, blockages). DEF holds the placement and routing of a design. SPEF holds the extracted parasitic resistance and capacitance. GDS or OASIS holds the mask shapes for the fab.', ['The placement and routing of a design are stored in:', 'DEF', ['LEF', 'SPEF']], 'SPEF holds the extracted parasitics'],
+    ['Which file gives the placer the outline and pins of a library cell, without its internals?', 'The LEF abstract', ['The SPEF file', 'The GDS mask data', 'The DEF placement'], 'physical-design data formats', 'The placer and router only need each cell\'s outline, pin shapes and blockages, not its transistors. That abstract view is the LEF; the full shapes are in GDS or OASIS.', ['A cell\'s abstract view is called:', 'LEF', ['SPEF', 'DEF']], 'The LEF holds each cell\'s outline, pins and blockages'],
+    ]),
   ], (why) => `${why}.`, d),
 ]);
 
@@ -149,6 +182,7 @@ export const pdBoss = boss({
     { t: 'gen', make: () => { const t = 6 * wire(0.8, 0.2, 500) + 5 * 25; return ask('Split it into 6 segments with 5 repeaters of 25 ps each. New delay, in ps?', qty(t, 'ps', 0.02, sig(t)), `6 × ${sig(wire(0.8, 0.2, 500))} + 5 × 25 = ${sig(t)} ps.`); } },
     { t: 'gen', make: () => ask('The block draws 2 A through 25 mΩ of grid. IR drop, in mV?', qty(50, 'mV', 0.02, '50'), '2 × 25 = 50 mV: 6% of 0.8 V, over a 5% budget. Add straps or vias in the worst region.') },
     { t: 'gen', make: () => ask('The clock tree drives 4096 flops with fan-out 8. How many levels?', num(4), '8⁴ = 4096: 4 levels.') },
+    mc('The team proposes moving the power rails to the back of the wafer. What is the main routing benefit?', ['Front-side tracks freed from power straps', 'Clock trees no longer need any buffers at all', 'No vias are needed between the metal layers', 'Signals get routed on the back of the die'], 0, 'Power and signals no longer compete for the same front-side metal. The costs: heat leaves through a thinned stack, backside debug is harder, and there are extra process steps.'),
   ],
   recap: ['Utilization and congestion.', 'Wire delay and repeaters.', 'IR drop budgets.', 'Clock tree depth.'],
 });
@@ -227,8 +261,11 @@ export const sramPractice = practice('practice-sram', 'Memory Drills', 'array ar
         'refresh interval', 'Every row has to be refreshed within the retention window. The controller spreads the work evenly: one refresh command per row-share, so the interval between commands is the window divided by the number of rows. ms ÷ rows × 1000 gives µs.',
         calc('Interval = window ÷ rows, in µs (× 1000 to go from ms):', `${w} / ${rows} × 1000`, t, 'us', sig(t), 0.02));
     }
-    const trfc = pick(r, [260, 300, 350, 410, 550, 650]), trefi = d === 3 ? 3.9 : 7.8, o = (trfc / (trefi * 1000)) * 100;
-    return walk(ask(`Each refresh blocks the bank for tRFC = ${trfc} ns and refreshes come every ${trefi} µs${d === 3 ? ' (above 85 °C, where refresh rate doubles)' : ''}. What fraction of time is lost, in %?`, qty(o, '%', 0.02, sig(o)), `${trfc} ns / ${trefi * 1000} ns = ${sig(o)}%. Bigger chips have longer tRFC, so refresh overhead grows with density${d === 3 ? ', and heat makes it twice as bad' : ''}.`, 'Busy time / period.'),
+    // d2: DDR4 (7.8 us, tRFC 160-550) or DDR5 (3.9 us, tRFC1 295/410 for 16/32 Gb); d3: either above 85 C (tREFI halves).
+    const D4 = [160, 260, 350, 550], D5 = [295, 410], hot = d === 3;
+    const [gen, trefi, trfc] = pick(r, [...D4.map((t) => ['DDR4', hot ? 3.9 : 7.8, t]), ...D5.map((t) => ['DDR5', hot ? 1.95 : 3.9, t])] as [string, number, number][]);
+    const o = (trfc / (trefi * 1000)) * 100;
+    return walk(ask(`${gen}${hot ? ' above 85 °C (the refresh rate doubles)' : ''}: each refresh blocks the rank for tRFC = ${trfc} ns and refreshes come every tREFI = ${trefi} µs. What fraction of time is lost, in %?`, qty(o, '%', 0.02, sig(o)), `${trfc} ns / ${sig(trefi * 1000)} ns = ${sig(o)}%. Bigger chips have longer tRFC, so refresh overhead grows with density${hot ? ', and heat makes it twice as bad' : ''}.`, 'Busy time / period.'),
       'refresh overhead', 'The time lost to refresh is the time busy (tRFC) divided by the time between refreshes (tREFI). Put both in the same unit first: 1 µs = 1000 ns.',
       calc('The period in ns (µs × 1000):', `${trefi} × 1000`, trefi * 1000, 'ns', String(trefi * 1000), 0.001),
       calc('Fraction lost = tRFC ÷ period, as a %:', `${trfc} / ${trefi * 1000} × 100`, o, '%', sig(o), 0.02));
@@ -270,7 +307,7 @@ export const sramPractice = practice('practice-sram', 'Memory Drills', 'array ar
     ['During a read, the stored 0 node rises because the bit line pulls on it. How do designers stop it from flipping?', 'A pull-down stronger than the access transistor', ['Raise the bit line precharge voltage during reads', 'Remove the access transistor from the cell', 'Use a bigger, faster sense amplifier'], 'SRAM read stability', 'While reading, the access transistor connects the stored 0 node to the bit line, which is held high. The pull-down transistor inside the cell fights that. If the pull-down is stronger than the access transistor (a good "cell ratio"), the node stays low enough, and the cell does not flip.', ['If the access transistor is stronger than the pull-down, a read may:', 'Flip the stored bit', ['Finish faster and safely', 'Leave the bit unchanged']], 'This is the cell ratio: the stronger pull-down holds the node low enough that the cell does not flip.'],
     ['Why do SRAMs need sense amplifiers?', 'A tiny cell moves a heavy bit line only slowly', ['To write new data into the cells faster', 'To refresh the cells before their charge leaks', 'To store extra parity bits next to each word'], 'sense amplifiers', 'A cell is tiny and the bit line is long and heavy with capacitance, so the cell can only move the bit line voltage very slowly. A sense amplifier detects the tiny difference early (tens of millivolts) and amplifies it to a full logic level, much faster than waiting.', ['A sense amp lets the read finish:', 'Before the bit line has swung fully', ['After the bit line has fully swung', 'Without a bit line']], 'The sense amp resolves a small difference (tens of millivolts) quickly instead of waiting for a full swing.'],
     ['Why is 6T SRAM volatile but flash is not?', 'SRAM needs power to hold; flash traps charge', ['SRAM is slower, so its data has time to leak', 'Flash stores bits in tiny magnets that keep their state', 'SRAM cells are too small to hold a charge'], 'volatile versus non-volatile', 'An SRAM cell is two inverters feeding each other, which only hold a value while powered. Flash puts electrons on an electrically insulated gate, where they remain for years with the power off.', ['Charge on an insulated gate stays without power because it is:', 'Electrically isolated', ['Refreshed by the controller', 'Held by the clock']], 'SRAM holds its bit in powered cross-coupled inverters; flash traps charge in an insulated gate that stays without power.'],
-    ['What is row hammer?', 'Repeated activations flip bits in neighbouring rows', ['A refresh scheme that hammers every row in turn', 'A burn-in test that stresses DRAM at high voltage', 'An SRAM write assist that boosts the word line'], 'row hammer', 'DRAM cells are packed so tightly that activating a row disturbs its neighbours a little, leaking some of their charge. Do it often enough between refreshes and neighbouring bits flip. Mitigations: refresh the neighbours sooner, and ECC.', ['Hammering one row disturbs:', 'Its neighbours', ['Only itself', 'Every row in the bank']]],
+    ['What is row hammer?', 'Repeated activations flip bits in neighbouring rows', ['A refresh scheme that hammers every row in turn', 'A burn-in test that stresses DRAM at high voltage', 'An SRAM write assist that boosts the word line'], 'row hammer', 'DRAM cells are packed so tightly that activating a row disturbs its neighbours a little, leaking some of their charge. Do it often enough between refreshes and neighbouring bits flip. Mitigations: in-DRAM target-row refresh, controller-issued refresh management (RFM), and in the newest DDR5 per-row activation counters that make the DRAM signal the controller to back off (PRAC). ECC catches the remaining flips.', ['Hammering one row disturbs:', 'Its neighbours', ['Only itself', 'Every row in the bank']]],
   ]),
     ...atLevel(1, [['What stores each bit in a 6T SRAM cell?', 'A pair of cross-coupled inverters', ['A capacitor that must be refreshed', 'A floating gate that holds charge', 'A fuse that is blown once'], '6T cell', 'Two inverters feed each other, so the cell holds one of two stable states as long as power is on. Two access transistors connect the cell to the bit lines during reads and writes.', ['How many transistors does a 6T cell have?', 'Six', ['Four', 'One']]]]),
     ...atLevel(2, [['What does the word line do during a read?', 'Turns on the access transistors of one row', ['Refreshes the whole array', 'Sets the sense amplifier threshold', 'Disconnects the bit lines from the sense amplifier'], 'word line', 'Raising the word line connects one row of cells to the bit lines. The cells then pull one bit line slightly down, and the sense amplifier detects that small swing.', ['A read starts by raising:', 'The word line', ['The bit line only', 'The supply']]]]),
@@ -324,7 +361,7 @@ export const fabPractice = practice('practice-fab', 'Fab & Yield Drills', 'litho
   },
   (r, d) => {
     const d0 = pick(r, [0.05, 0.1, 0.2]), a = pick(r, [50, 100, 300, 600]), y = yieldOf(a, d0) * 100;
-    const idea = 'The Poisson yield model says defects land randomly on the wafer. The chance a die has none is Y = e^(-A × D₀), where A is the die area in cm² (1 cm² = 100 mm²) and D₀ is the defect density in defects per cm². Bigger dies catch more defects, so yield falls exponentially with area.';
+    const idea = 'The Poisson yield model says defects land randomly on the wafer. The chance a die has none is Y = e^(-A × D₀), where A is the die area in cm² (1 cm² = 100 mm²) and D₀ is the defect density in defects per cm². Bigger dies catch more defects, so yield falls exponentially with area. Poisson is the simplest and most pessimistic yield model: fabs use clustered models such as Y = (1 + A·D₀/α)^(-α), which predict higher yield for large dies.';
     if (d === 1) return walk(ask(`D₀ = ${d0} defects/cm², die ${a} mm². Poisson yield, in %?`, qty(y, '%', 0.02, sig(y)), `Y = e^(-A·D₀) = e^(-${a / 100} × ${d0}) = ${sig(y)}%.`, 'Convert mm² to cm² first.'),
       'Poisson yield', idea,
       calc('The die area in cm² (mm² ÷ 100):', `${a} / 100`, a / 100, 'cm2', String(a / 100), 0.001),
@@ -343,6 +380,26 @@ export const fabPractice = practice('practice-fab', 'Fab & Yield Drills', 'litho
       'the defect density a yield target needs', `${idea} To find D₀ for a yield target, take the natural log of both sides: ln(Y) = -A × D₀, so D₀ = -ln(Y) ÷ A.`,
       calc('-ln(Y), with Y as a fraction:', `-ln(${t / 100})`, -Math.log(t / 100), '', sig(-Math.log(t / 100), 4), 0.005),
       calc(`D₀ = that ÷ A, with A = ${a / 100} cm²:`, `${sig(-Math.log(t / 100), 4)} / ${a / 100}`, dd, '', sig(dd), 0.02));
+  },
+  // W6 R2.11: clustered (negative binomial) yield versus Poisson. Example in the idea: A·D₀ = 1, α = 2 gives 36.8% versus 44.4%.
+  (r, d) => {
+    const x = pick(r, [0.5, 1, 2, 3]), al = pick(r, [1, 2, 4]);
+    const yp = Math.exp(-x) * 100, yc = (1 + x / al) ** -al * 100;
+    const idea = 'Real defects cluster: they pile up on some dies and miss others, so more dies escape untouched than Poisson predicts. Fabs therefore use clustered models, such as the negative binomial Y = (1 + A·D₀/α)^(-α), where a small α means heavy clustering and α → ∞ gives back Poisson, Y = e^(-A·D₀). For A·D₀ = 1 and α = 2, Poisson gives 36.8% and the clustered model 44.4%. Poisson is the simplest and most pessimistic model, especially for large dies.';
+    if (d === 1) return walk(ask(`A·D₀ = ${x} and the clustering parameter α = ${al}. Clustered yield Y = (1 + A·D₀/α)^(-α), in %?`, qty(yc, '%', 0.02, sig(yc)), `(1 + ${x}/${al})^(-${al}) = ${sig(yc)}%.`, 'Add 1, then raise to the power -α.'),
+      'clustered yield', idea,
+      calc('The base, 1 + A·D₀/α:', `1 + ${x} / ${al}`, 1 + x / al, '', sig(1 + x / al, 4), 0.005),
+      calc('Y = base^(-α), as a %:', `${sig(1 + x / al, 4)}^(-${al}) × 100`, yc, '%', sig(yc), 0.02));
+    if (d === 2) return walk(ask(`A·D₀ = ${x}. By how many percentage points does a clustered model with α = ${al} beat the Poisson yield?`, qty(yc - yp, '', 0.05, sig(yc - yp)), `Poisson ${sig(yp)}%; clustered ${sig(yc)}%; gain ${sig(yc - yp)} points.`, 'Compute both yields and subtract.'),
+      'clustering gain', idea,
+      calc('Poisson yield e^(-A·D₀), as a %:', `e^(-${x}) × 100`, yp, '%', sig(yp), 0.02),
+      calc('Clustered yield (1 + A·D₀/α)^(-α), as a %:', `(1 + ${x}/${al})^(-${al}) × 100`, yc, '%', sig(yc), 0.02),
+      calc('The gain, in percentage points:', `${sig(yc)} - ${sig(yp)}`, yc - yp, '', sig(yc - yp), 0.05));
+    return walk(ask(`A large die has A·D₀ = ${x}. A fab quotes the clustered yield with α = ${al}. How many times higher is that than the Poisson yield?`, qty(yc / yp, '', 0.03, sig(yc / yp)), `${sig(yc)}% / ${sig(yp)}% = ${sig(yc / yp)}. Poisson is pessimistic, and more so for large dies.`, 'Divide the clustered yield by the Poisson yield.'),
+      'Poisson versus clustered yield', idea,
+      calc('Poisson yield e^(-A·D₀), as a %:', `e^(-${x}) × 100`, yp, '%', sig(yp), 0.02),
+      calc('Clustered yield (1 + A·D₀/α)^(-α), as a %:', `(1 + ${x}/${al})^(-${al}) × 100`, yc, '%', sig(yc), 0.02),
+      calc('The ratio, clustered ÷ Poisson:', `${sig(yc)} / ${sig(yp)}`, yc / yp, '', sig(yc / yp), 0.03));
   },
   (r, d) => {
     const a = pick(r, [50, 100, 200, 400, 600]), n = dpw(a);
@@ -390,6 +447,48 @@ export const fabPractice = practice('practice-fab', 'Fab & Yield Drills', 'litho
       calc('The half-width, (USL - LSL) ÷ 2:', `(${usl} - ${lsl}) / 2`, (usl - lsl) / 2, '', sig((usl - lsl) / 2, 4), 0.005),
       calc('σ = half-width ÷ (3 × 1.33):', `${sig((usl - lsl) / 2, 4)} / (3 × 1.33)`, sm, '', sig(sm), 0.02));
   },
+  (r, d) => {
+    // Weibull shape parameter by region of the bathtub curve.
+    const regions = [
+      { beta: 'β < 1', names: ['infant mortality', 'the falling start'], looks: ['the failure rate falls with time, as the weak parts die first', 'the failure rate drops steeply over the first weeks'], mech: ['defective parts that fail early', 'weak oxide or particle defects that kill parts in the first weeks'] },
+      { beta: 'β = 1', names: ['random failures', 'the flat middle'], looks: ['the failure rate is constant, so the FIT figure applies', 'the failure rate is flat and does not depend on age'], mech: ['chance events such as a particle strike', 'failures that show no link to the age of the part'] },
+      { beta: 'β > 1', names: ['wear-out', 'the rising end'], looks: ['the failure rate climbs with time as the part ages', 'the failure rate rises faster and faster late in life'], mech: ['aging mechanisms such as electromigration', 'oxide breakdown after years of stress'] },
+    ] as const;
+    const g = pick(r, regions), all = ['β < 1', 'β = 1', 'β > 1'];
+    const idea = 'Over a part\'s life the failure rate follows a bathtub curve. A Weibull shape parameter β describes each region: below 1 the rate falls with time (infant mortality), at 1 it is constant (random failures, the FIT figure) and above 1 it rises (wear-out).';
+    const q = d === 1 ? `On a failure-rate plot, ${pick(r, g.looks)}. Which Weibull β describes that region?` : d === 2 ? `Which Weibull β describes ${pick(r, g.names)}?` : `A failure analysis finds ${pick(r, g.mech)}. Which Weibull β does that region of the bathtub curve have?`;
+    return walk(mcs(r, q, g.beta, all.filter((b) => b !== g.beta), `${g.beta} is ${g.names[0]}: below 1 the rate falls (infant mortality), at 1 it is constant (random failures) and above 1 it rises (wear-out).`),
+      'reading the bathtub curve', idea,
+      choice(`A constant failure rate means β is:`, 'Equal to 1', ['Below 1', 'Above 1']));
+  },
+  (r, d) => {
+    const mb = pick(r, [16, 64, 256]), rate = pick(r, [100, 500, 1000]);
+    const idea = 'Soft errors are bit flips from neutron or alpha-particle strikes: the cell is not damaged. Their rate is quoted in FIT per Mbit, so a memory of M Mbit has M × (FIT per Mbit) FIT. ECC corrects single flips, so only the uncorrected fraction can cause trouble.';
+    if (d === 1) return walk(ask(`A memory of ${mb} Mbit has a soft-error rate of ${rate} FIT per Mbit. Total soft-error FIT?`, qty(mb * rate, '', 0.01, String(mb * rate)), `${mb} × ${rate} = ${mb * rate} FIT.`, 'Mbit × FIT per Mbit.'),
+      'soft-error FIT of a memory', idea, calc('Total FIT = Mbit × FIT per Mbit:', `${mb} × ${rate}`, mb * rate, '', String(mb * rate), 0.01));
+    if (d === 2) { const f = mb * rate, h = 1e9 / f; return walk(ask(`A memory of ${mb} Mbit has a soft-error rate of ${rate} FIT per Mbit. On average, how many hours between soft errors?`, qty(h, 'h', 0.02, sig(h)), `${mb * rate} FIT, so 10⁹ / ${mb * rate} = ${sig(h)} h.`, 'MTBF = 10⁹ / FIT.'),
+      'time between soft errors', idea,
+      calc('Total FIT = Mbit × FIT per Mbit:', `${mb} × ${rate}`, f, '', String(f), 0.01),
+      calc('Hours between errors = 10⁹ ÷ FIT:', `1e9 / ${f}`, h, 'h', sig(h), 0.02)); }
+    const cov = pick(r, [0.99, 0.999]), f = mb * rate, res = f * (1 - cov);
+    return walk(ask(`A memory of ${mb} Mbit has a soft-error rate of ${rate} FIT per Mbit. ECC corrects ${cov * 100}% of the events. Residual FIT?`, qty(res, '', 0.03, sig(res)), `${f} × ${sig(1 - cov, 3)} = ${sig(res)} FIT left over.`, 'Total FIT times the uncorrected fraction.'),
+      'residual soft-error FIT', idea,
+      calc('Total FIT = Mbit × FIT per Mbit:', `${mb} × ${rate}`, f, '', String(f), 0.01),
+      calc('Residual = total × (1 - coverage):', `${f} × ${sig(1 - cov, 3)}`, res, '', sig(res), 0.03));
+  },
+  (r, d) => {
+    const layers = tier(d, pick(r, [4, 6]), pick(r, [8, 10, 12]), pick(r, [14, 16, 18])), colours = pick(r, [2, 3, 4]);
+    const idea = 'When one exposure cannot print a layer, the shapes are split across several masks: each shape gets a colour, one colour per mask. A layer printed with k colours needs k masks (double patterning: 2, triple: 3). The more layers need it, the more masks the whole stack costs.';
+    const name = colours === 2 ? 'double patterning (2 colours)' : colours === 3 ? 'triple patterning (3 colours)' : 'quadruple patterning (4 colours)';
+    if (d < 3) return walk(ask(`${layers} layers are printed with ${name}. How many masks do those layers need?`, num(layers * colours), `${layers} layers × ${colours} masks each = ${layers * colours} masks.`, 'Layers × colours.'),
+      'masks from colours', idea,
+      count('Masks = layers × colours:', `${layers} × ${colours}`, layers * colours));
+    const single = pick(r, [2, 4, 6]);
+    return walk(ask(`${layers} layers use ${name}. A newer tool prints ${single} of them in a single exposure instead, one mask each. How many masks do the ${layers} layers need now?`, num((layers - single) * colours + single), `(${layers} − ${single}) × ${colours} + ${single} = ${(layers - single) * colours + single}. Single exposure removes the colouring and the extra masks for those layers.`, 'Multi-patterned layers cost colours each; single-exposure layers cost one.'),
+      'masks with single exposure', idea,
+      count('Layers still multi-patterned, times colours:', `(${layers} − ${single}) × ${colours}`, (layers - single) * colours),
+      count('Plus one mask for each single-exposure layer:', `${(layers - single) * colours} + ${single}`, (layers - single) * colours + single));
+  },
   (r, d) => concept(r, [...atLevel(2, [
     ['Designers sign off at TT, FF, SS, FS and SF. What do the letters mean?', 'NMOS and PMOS speed', ['Temperature and frequency', 'Test and functional mode', 'Film and substrate'], 'process corners', 'Manufacturing variation makes the N and P transistors on a chip each come out typical, fast or slow. The two letters name the NMOS and PMOS speeds: TT, FF, SS, and the skewed corners FS (fast N, slow P) and SF. Timing is checked at each.', ['In "FS", the F stands for the speed of:', 'The NMOS transistors', ['The PMOS transistors', 'The film thickness']], 'Each transistor type comes out typical, fast or slow.'],
     ['After years at high temperature a chip\'s paths are slower. Likely mechanism?', 'BTI and HCI raising thresholds', ['Poisson yield loss from defects', 'EMI from the board', 'Lithography blur in the metal layers'], 'transistor aging', 'Bias temperature instability (BTI) traps charge near the gate while a transistor is on, and hot-carrier injection (HCI) damages the oxide. Both raise the threshold voltage, which slows transistors down with age. Designs therefore add margin for aging.', ['A higher threshold voltage makes a transistor:', 'Slower', ['Faster', 'Unchanged']], 'Bias temperature instability and hot-carrier injection shift transistor thresholds over time.'],
@@ -399,6 +498,10 @@ export const fabPractice = practice('practice-fab', 'Fab & Yield Drills', 'litho
   ]),
     ...atLevel(1, [['What does a wafer yield of 80% mean?', 'Four in five good dies on the wafer', ['Eighty dies per wafer in total', 'Eighty percent of the wafer is silicon', 'Eighty wafers out of a hundred pass'], 'yield', 'Yield is the fraction of dies that pass test. A yield of 80% means about four of every five dies on the wafer work, which feeds straight into cost per good die.', ['If 80% of 500 dies are good, how many are good?', '400', ['80', '500']]]]),
     ...atLevel(3, [['What does optical proximity correction (OPC) do?', 'Pre-distorts mask shapes to print correctly', ['Corrects the wafer alignment before each exposure step', 'Adds extra metal to balance the density', 'Reduces the number of masks needed'], 'optical proximity correction', 'Light diffraction rounds corners and shifts line ends when a pattern is printed. OPC changes the drawn mask shapes in advance, adding serifs and bias, so the printed wafer shape matches the design.', ['OPC changes:', 'The mask shapes, in advance', ['The wafer after printing', 'The clock tree']]]]),
+    ...atLevel(3, [
+    ['Two wires on the same colour are too close. What is the fix?', 'Recolour one, or spread them apart', ['Merge them into one wire', 'Print them with a third mask over both', 'Waive it, as colours are only advisory'], 'colouring conflicts', 'In multi-patterning, shapes on the same mask blur together if they are too close, so the rules demand a larger spacing for the same colour. A conflict is solved by moving one shape to the other mask or by moving the shapes apart.', ['Same-colour shapes sit on:', 'The same mask', ['Different masks', 'No mask']], 'Recolour one, or spread them to legal spacing'],
+    ['A FinFET inverter needs 2.5 times the drive of a one-fin version. How is it sized?', 'Three fins, since widths come in whole fins', ['Two and a half fins, with a fractional fin', 'Two fins, rounding down to save area', 'One wider fin, drawn at any width'], 'quantized widths', 'Fins and nanosheets set the transistor width in discrete steps, so a designer picks the next step that meets the drive. Rounding down would miss the target; fractions are not available.', ['Transistor widths at advanced nodes come in:', 'Discrete steps', ['Any value', 'Multiples of the supply']], 'Three fins: widths come in whole fins'],
+    ]),
   ], (why) => `${why}.`, d),
 ]);
 
@@ -422,11 +525,33 @@ export const processBoss = boss({
     mc('Failures cluster on the right edge of every wafer in lot 7. Most likely cause?', ['A tool problem at that edge of the wafer', 'Random particle defects that landed in that lot', 'A design bug in one block of the die', 'A marginal test program on one tester'], 0, 'A chuck, film or focus issue at that edge, not random defects. Random defects fall like rain; systematic signatures point at a tool. Find the tool the lot shared and fix it.'),
     { t: 'gen', make: () => ask('Split the die into four 150 mm² chiplets. Yield of one chiplet at D₀ = 0.1, in %?', qty(yieldOf(150, 0.1) * 100, '%', 0.02, sig(yieldOf(150, 0.1) * 100)), `e^(-1.5 × 0.1) = ${sig(yieldOf(150, 0.1) * 100)}%.`) },
     { t: 'gen', make: () => { const c = 17000 / (dpw(150) * yieldOf(150, 0.1)) * 4; return ask('Cost of four good 150 mm² chiplets (known-good dies, before packaging), in $?', qty(c, '', 0.04, sig(c)), `${Math.round(dpw(150))} dies per wafer × ${sig(yieldOf(150, 0.1))} = ${Math.round(dpw(150) * yieldOf(150, 0.1))} good. 4 × 17000 / that = $${sig(c)}, less than the monolithic die. Packaging and die-to-die links eat part of the savings.`); } },
+    mc('The customer is an automotive maker for engine-bay electronics. What is the lowest temperature grade the part can have, and its ambient range?', ['Grade 3, −40 to 85 °C', 'Grade 2, −40 to 105 °C', 'Grade 1, −40 to 125 °C', 'Commercial, 0 to 70 °C'], 2, 'Engine-bay parts need grade 1 (−40 to 125 °C) or grade 0 (−40 to 150 °C). Grade 2 is −40 to 105 °C and grade 3 −40 to 85 °C, fine for the cabin only.'),
+    mc('Failures in the field fall steeply in the first weeks, then settle to a constant rate. Which Weibull β describes the first weeks?', ['β < 1', 'β = 1', 'β > 1', 'β = 0'], 0, 'A falling failure rate has β below 1: infant mortality. A constant rate is β = 1 and wear-out is above 1. Burn-in and early-life screening target the first region.'),
   ],
-  recap: ['Dies per wafer and yield.', 'Cost per good die.', 'Systematic vs random signatures.', 'The chiplet trade.'],
+  recap: ['Dies per wafer and yield.', 'Cost per good die.', 'Systematic vs random signatures.', 'The chiplet trade.', 'Temperature grades and the bathtub curve.'],
 });
 
 // ------------------------------------------------------------------ packaging
+
+/** In-system junction temperature from the case-top temperature: Tj ~ T_top + Psi_JT x P (theta_JA is for comparing packages). */
+const psiJt = (r: () => number, d: number) => {
+  const ttop = pick(r, [70, 78, 85, 92]), psi = pick(r, [0.3, 0.5, 0.8]), p = pick(r, [8, 12, 20]), tj = ttop + psi * p;
+  const idea = 'Datasheet θja is measured on a standard test board, so it is for comparing packages, not for predicting your product. In a real system, measure the temperature on top of the package and add the junction-to-top characterisation parameter Ψjt times the power: Tj ≈ T_top + Ψjt × P. Ψjt is small because little heat leaves through the top, so the case-top reading is already close to the junction.';
+  if (d === 1) return walk(ask(`In a running system the package-top temperature is measured: T_top = ${ttop} °C, Ψ_JT = ${psi} °C/W, P = ${p} W. What is the junction temperature, in °C?`, qty(tj, '°C', 0.01, sig(tj)), `Tj ≈ T_top + Ψ_JT × P = ${ttop} + ${psi} × ${p} = ${sig(tj)} °C.`, 'Add Ψ_JT × P to the top temperature.'),
+    'junction temperature from the case top', idea,
+    calc('The rise above the case top = Ψ_JT × P, in °C:', `${psi} × ${p}`, psi * p, '°C', sig(psi * p, 4), 0.005),
+    calc('Tj = T_top + rise:', `${ttop} + ${sig(psi * p, 4)}`, tj, '°C', sig(tj), 0.01));
+  const tmax = pick(r, [105, 125, 150]);
+  if (d === 2) return walk(ask(`The case top reads ${ttop} °C at ${p} W and Ψ_JT is ${psi} °C/W. How many °C of headroom are left to a ${tmax} °C junction limit?`, qty(tmax - tj, '°C', 0.02, sig(tmax - tj)), `Tj ≈ ${ttop} + ${psi} × ${p} = ${sig(tj)} °C; ${tmax} - ${sig(tj)} = ${sig(tmax - tj)} °C of headroom.`, 'Estimate Tj first, then subtract it from the limit.'),
+    'headroom to the junction limit', idea,
+    calc('Tj = T_top + Ψ_JT × P, in °C:', `${ttop} + ${psi} × ${p}`, tj, '°C', sig(tj), 0.01),
+    calc('Headroom = limit - Tj, in °C:', `${tmax} - ${sig(tj, 4)}`, tmax - tj, '°C', sig(tmax - tj), 0.02));
+  const pmax = (tmax - ttop) / psi;
+  return walk(ask(`With the case top held at ${ttop} °C and Ψ_JT = ${psi} °C/W, how much power, in W, takes the junction to its ${tmax} °C limit?`, qty(pmax, 'W', 0.02, sig(pmax)), `(${tmax} - ${ttop}) / ${psi} = ${sig(pmax)} W.`, 'Rearrange Tj = T_top + Ψ_JT × P for P.'),
+    'power that reaches the limit', idea,
+    calc('Allowed rise = limit - T_top, in °C:', `${tmax} - ${ttop}`, tmax - ttop, '°C', String(tmax - ttop), 0.001),
+    calc('P = rise ÷ Ψ_JT, in W:', `${tmax - ttop} / ${psi}`, pmax, 'W', sig(pmax), 0.02));
+};
 
 export const pkgPractice = practice('practice-pkg', 'Packaging Drills', 'chiplet yield, bump density, thermal resistance, HBM bandwidth, warpage', [
   (r, d) => {
@@ -455,7 +580,7 @@ export const pkgPractice = practice('practice-pkg', 'Packaging Drills', 'chiplet
   },
   (r, d) => {
     const ta = pick(r, [25, 35, 45]), p = pick(r, [15, 50, 150]);
-    const idea = 'Heat flows from the chip to the air through a chain of thermal resistances θ (in °C per watt), like current through resistors in series. The temperature rise is power × total θ, and the junction (chip) temperature is the ambient temperature plus that rise: Tj = Ta + P × θtotal. Resistances in series add.';
+    const idea = 'Heat flows from the chip to the air through a chain of thermal resistances θ (in °C per watt), like current through resistors in series. The temperature rise is power × total θ, and the junction (chip) temperature is the ambient temperature plus that rise: Tj = Ta + P × θtotal. Resistances in series add. (Datasheet θja is measured on a standard test board, so use it to compare packages; real designs model the path θjc + θcs + θsa.)';
     if (d === 1) {
       const th = p === 15 ? pick(r, [2, 3]) : p === 50 ? pick(r, [0.5, 0.8]) : pick(r, [0.2, 0.3]), tj = ta + p * th;
       return walk(ask(`Ambient ${ta} °C, the chip burns ${p} W, θja = ${th} °C/W. Junction temperature, in °C?`, qty(tj, '°C', 0.02, sig(tj)), `${ta} + ${p} × ${th} = ${sig(tj)} °C.`, 'Tj = Ta + P·θ.'),
@@ -478,22 +603,23 @@ export const pkgPractice = practice('practice-pkg', 'Packaging Drills', 'chiplet
       calc('The total θ allowed = rise ÷ power, in °C/W:', `${tmax - ta} / ${p}`, (tmax - ta) / p, '', sig((tmax - ta) / p, 4), 0.005),
       calc('θsa = total minus θjc minus θcs:', `${sig((tmax - ta) / p, 4)} - ${jc} - ${cs}`, sa, '', sig(sa), 0.03));
   },
+  psiJt,
   (r, d) => {
-    const gbps = pick(r, [3.2, 6.4, 9.6]), bw = (1024 * gbps) / 8;
-    const idea = 'HBM is very wide rather than very fast: each stack has a 1024-bit interface at a modest rate per pin. Bandwidth in GB/s = (number of pins × Gb/s per pin) ÷ 8, since 8 bits make a byte. Several stacks add up.';
-    if (d === 1) return walk(ask(`One HBM stack has a 1024-bit interface at ${gbps} Gb/s per pin. Bandwidth, in GB/s?`, qty(bw, 'GB/s', 0.02, sig(bw)), `1024 × ${gbps} / 8 = ${sig(bw)} GB/s. That width only works on a silicon interposer with thousands of fine wires.`, 'Bits × rate / 8.'),
+    const [gen, w, gbps] = pick(r, HBM_GENS), bw = (w * gbps) / 8;
+    const idea = 'HBM is very wide rather than very fast: each stack has a 1024-bit interface (2048-bit from HBM4) at a modest rate per pin. Bandwidth in GB/s = (number of pins × Gb/s per pin) ÷ 8, since 8 bits make a byte. Several stacks add up.';
+    if (d === 1) return walk(ask(`One ${gen} stack has a ${w}-bit interface at ${gbps} Gb/s per pin. Bandwidth, in GB/s?`, qty(bw, 'GB/s', 0.02, sig(bw)), `${w} × ${gbps} / 8 = ${sig(bw)} GB/s. That width only works on a silicon interposer with thousands of fine wires.`, 'Bits × rate / 8.'),
       'HBM bandwidth per stack', idea,
-      calc('Total Gb/s = pins × rate per pin:', `1024 × ${gbps}`, 1024 * gbps, '', sig(1024 * gbps, 4), 0.005),
-      calc('Convert bits to bytes (÷ 8), in GB/s:', `${sig(1024 * gbps, 4)} / 8`, bw, 'GB/s', sig(bw), 0.02));
+      calc('Total Gb/s = pins × rate per pin:', `${w} × ${gbps}`, w * gbps, '', sig(w * gbps, 4), 0.005),
+      calc('Convert bits to bytes (÷ 8), in GB/s:', `${sig(w * gbps, 4)} / 8`, bw, 'GB/s', sig(bw), 0.02));
     const st = pick(r, [4, 6, 8]);
-    if (d === 2) return walk(ask(`A GPU has ${st} HBM stacks at ${gbps} Gb/s per pin (1024 bits each). Total bandwidth, in TB/s?`, qty((bw * st) / 1000, 'TB/s', 0.02, sig((bw * st) / 1000)), `${st} × ${sig(bw)} GB/s = ${sig((bw * st) / 1000)} TB/s.`, 'Stacks × per-stack bandwidth.'),
+    if (d === 2) return walk(ask(`A GPU has ${st} ${gen} stacks at ${gbps} Gb/s per pin (${w} bits each). Total bandwidth, in TB/s?`, qty((bw * st) / 1000, 'TB/s', 0.02, sig((bw * st) / 1000)), `${st} × ${sig(bw)} GB/s = ${sig((bw * st) / 1000)} TB/s.`, 'Stacks × per-stack bandwidth.'),
       'HBM bandwidth of a GPU', idea,
-      calc('One stack, in GB/s:', `1024 × ${gbps} / 8`, bw, 'GB/s', sig(bw, 4), 0.005),
+      calc('One stack, in GB/s:', `${w} × ${gbps} / 8`, bw, 'GB/s', sig(bw, 4), 0.005),
       calc(`${st} stacks, in TB/s (÷ 1000):`, `${st} × ${sig(bw, 4)} / 1000`, (bw * st) / 1000, 'TB/s', sig((bw * st) / 1000), 0.02));
     const need = pick(r, [4, 6, 8]), n = Math.ceil((need * 1000) / bw);
-    return walk(ask(`An accelerator needs ${need} TB/s from HBM at ${gbps} Gb/s per pin (1024 bits per stack). How many stacks?`, num(n), `${need * 1000} / ${sig(bw)} = ${sig((need * 1000) / bw)}, rounded up: ${n} stacks. Each one takes shoreline on the die edge, which caps how many fit.`, 'Divide and round up.'),
+    return walk(ask(`An accelerator needs ${need} TB/s from ${gen} stacks at ${gbps} Gb/s per pin (${w} bits per stack). How many stacks?`, num(n), `${need * 1000} / ${sig(bw)} = ${sig((need * 1000) / bw)}, rounded up: ${n} stacks. Each one takes shoreline on the die edge, which caps how many fit.`, 'Divide and round up.'),
       'how many HBM stacks', `${idea} To find how many stacks you need, divide the required bandwidth by one stack's bandwidth, and round UP: you cannot fit a fraction of a stack.`,
-      calc('One stack, in GB/s:', `1024 × ${gbps} / 8`, bw, 'GB/s', sig(bw, 4), 0.005),
+      calc('One stack, in GB/s:', `${w} × ${gbps} / 8`, bw, 'GB/s', sig(bw, 4), 0.005),
       calc(`The need in GB/s (${need} TB/s × 1000) ÷ one stack:`, `${need * 1000} / ${sig(bw, 4)}`, (need * 1000) / bw, '', sig((need * 1000) / bw, 4), 0.005),
       count('Round up to a whole number of stacks:', `ceil(${sig((need * 1000) / bw, 4)})`, n));
   },
@@ -504,8 +630,22 @@ export const pkgPractice = practice('practice-pkg', 'Packaging Drills', 'chiplet
       calc('The difference in expansion rates, in ppm/K:', `17 - ${ca}`, 17 - ca, '', sig(17 - ca, 4), 0.005),
       calc('Extra growth = Δα × 1e-6 × ΔT × length, length in µm (mm × 1000):', `${sig(17 - ca, 4)}e-6 × ${dt} × ${l} × 1000`, dl, 'um', sig(dl), 0.03));
   },
+  (r, d) => {
+    const tb = pick(r, [60, 70, 80]), psi = pick(r, [0.2, 0.3, 0.4]), p = pick(r, [10, 20, 30]), tt = pick(r, [85, 90, 95]), pj = pick(r, [0.1, 0.15, 0.2]);
+    const idea = 'Datasheet thermal resistances describe one heat path each, so they compare packages but do not predict a product. The characterisation parameters Ψ tie the junction to a temperature you can measure in the real system, while heat flows by all routes at once: Tj ≈ T_board + Ψ_JB × P from the board side, Tj ≈ T_top + Ψ_JT × P from the top of the package.';
+    if (d === 1) return walk(ask(`The board next to a package reads ${tb} °C, psi_JB = ${psi} °C/W, power ${p} W. Junction temperature, in °C?`, qty(tb + psi * p, '°C', 0.02, sig(tb + psi * p)), `${tb} + ${psi} × ${p} = ${sig(tb + psi * p)} °C.`, 'Tj = T_board + psi_JB × P.'),
+      'the board-side Ψ estimate', idea,
+      calc('The rise above the board, Ψ_JB × P, in °C:', `${psi} × ${p}`, psi * p, '°C', sig(psi * p, 4), 0.01),
+      calc('Add the board temperature:', `${tb} + ${sig(psi * p, 4)}`, tb + psi * p, '°C', sig(tb + psi * p), 0.02));
+    const a1 = tt + pj * p, a2 = tb + psi * p;
+    return walk(ask(`Two sensors, one per side: the top of the package reads ${tt} °C (psi_JT = ${pj} °C/W) and the board reads ${tb} °C (psi_JB = ${psi} °C/W) at ${p} W. Which gives the higher junction estimate, and what is that estimate, in °C? (Answer the higher value.)`, qty(Math.max(a1, a2), '°C', 0.02, sig(Math.max(a1, a2))), `Top: ${tt} + ${pj} × ${p} = ${sig(a1)} °C; board: ${tb} + ${psi} × ${p} = ${sig(a2)} °C. A cautious engineer takes the higher estimate: ${sig(Math.max(a1, a2))} °C.`, 'Compute both, keep the larger.'),
+      'two Ψ estimates', idea,
+      calc('From the top, T_top + Ψ_JT × P, in °C:', `${tt} + ${pj} × ${p}`, a1, '°C', sig(a1), 0.02),
+      calc('From the board, T_board + Ψ_JB × P, in °C:', `${tb} + ${psi} × ${p}`, a2, '°C', sig(a2), 0.02),
+      calc('Design to the higher of the two, in °C:', `max(${sig(a1)}, ${sig(a2)})`, Math.max(a1, a2), '°C', sig(Math.max(a1, a2)), 0.02));
+  },
   (r, d) => concept(r, [...atLevel(2, [
-    ['Why does HBM sit on an interposer next to the GPU instead of on the board?', 'It needs thousands of short, fine wires', ['An interposer is cheaper than a circuit board', 'Boards are too slow for DRAM', 'HBM needs no power when it sits on an interposer'], 'why HBM needs an interposer', 'HBM gets its bandwidth from being very wide, with over a thousand data wires per stack. A circuit board can route only hundreds of wires along a package edge, and they are long. A silicon interposer has much finer, shorter wires, thousands of them.', ['Many fine, short wires between chips need:', 'A silicon interposer', ['A standard circuit board', 'A wider flex cable']], 'Its 1024-bit interface per stack needs wiring that only silicon interposers or bridges provide.'],
+    ['Why does HBM sit on an interposer next to the GPU instead of on the board?', 'It needs thousands of short, fine wires', ['An interposer is cheaper than a circuit board', 'Boards are too slow for DRAM', 'HBM needs no power when it sits on an interposer'], 'why HBM needs an interposer', 'HBM gets its bandwidth from being very wide, with over a thousand data wires per stack. A circuit board can route only hundreds of wires along a package edge, and they are long. A silicon interposer has much finer, shorter wires, thousands of them.', ['Many fine, short wires between chips need:', 'A silicon interposer', ['A standard circuit board', 'A wider flex cable']], 'Its 1024-bit (through HBM3E) or 2048-bit (HBM4) interface per stack needs wiring that only silicon interposers or bridges provide.'],
     ['What does UCIe standardize?', 'A die-to-die interface between chiplets', ['A DRAM command protocol for HBM stacks', 'A board material for high speed', 'A cooling standard for chiplets'], 'chiplet interfaces', 'To mix chiplets from different makers in one package they must all speak the same language over the short wires between them. UCIe is a standard die-to-die interface, like PCIe is for boards.', ['A standard interface lets chiplets from different vendors:', 'Work together in one package', ['Be made on one shared wafer', 'Skip testing before assembly']], 'It lets chiplets from different vendors connect in one package.'],
     ['A 3D stack puts logic under memory. What becomes the hardest problem?', 'Getting the heat out', ['Routing power to the top die', 'Testing the bottom die', 'Clock skew'], '3D stacking and heat', 'In a stack, the heat from the hot logic layer must pass through the layers above it to reach the heatsink on top. Each layer adds thermal resistance, so the logic can get much hotter than it would alone.', ['Each extra layer between the heat source and the heatsink adds:', 'Thermal resistance', ['Extra cooling area', 'Thermal capacitance only']], 'The heat has to pass through the stacked layers to reach the heatsink.'],
     ['What is a known-good die (KGD)?', 'A bare die fully tested before assembly', ['A die cut from a wafer with high overall yield', 'A die that passed visual inspection under a microscope', 'A spare backup die'], 'known-good die', 'Once dies are assembled in one package, a single bad die wastes all the good ones (and the packaging cost). Testing each die before assembly means only good dies go in.', ['Testing before assembly prevents:', 'A bad die scrapping the package', ['Every defect from reaching customers', 'The cost of wafer probing']], 'So a bad die never ruins an expensive multi-die package.'],
@@ -513,6 +653,11 @@ export const pkgPractice = practice('practice-pkg', 'Packaging Drills', 'chiplet
     ...atLevel(1, [['What does a package do for a chip?', 'Connects the die to the board', ['Makes the transistors faster', 'Holds the clock source inside', 'Stores the software of the chip'], 'packaging', 'The package gives the die power and signal paths to the board, spreads heat away, and protects the silicon. It does not change how fast the transistors switch.', ['A package mainly connects the die to:', 'The board', ['The wafer', 'The mask']]]]),
     ...atLevel(2, [['What is a bump?', 'A small solder contact between die and package', ['A thin wire inside the die', 'A test pad used only during wafer probe testing', 'A voltage regulator on the package'], 'bumps', 'A bump is a small solder or copper contact that connects a die to its package or interposer. Flip-chip packages use an array of bumps across the die face instead of wire bonds around the edge.', ['A flip-chip die connects through:', 'An array of bumps', ['Wire bonds only', 'Edge pins only']]]]),
     ...atLevel(3, [['Why are microbumps tighter than C4 bumps in a 2.5D or 3D link?', 'To carry more signals in less area', ['To reduce the cost of the substrate', 'To make the package heavier', 'Because the die is much larger'], 'microbumps', 'Microbumps have a finer pitch than C4 bumps. Dies stacked or placed on an interposer need many short, dense links, and a fine pitch packs far more signals into the same area.', ['A finer bump pitch allows:', 'More signals per area', ['Fewer signals per area']]]]),
+    ...atLevel(3, [
+    ['A fine-pitch link is needed only where two chiplets meet. Which technology fits best?', 'An embedded silicon bridge in the substrate', ['A full silicon interposer under all the dies', 'Longer wire bonds between the dies', 'A thicker organic substrate'], 'bridge versus interposer', 'A full interposer pays for silicon under the whole package. A bridge is a small chip embedded in the substrate under just the die edges, so the fine wiring exists only where it is needed.', ['A bridge sits:', 'Under the edges where two dies meet', ['Under every die', 'On top of the lid']], 'An embedded silicon bridge, so fine wiring exists only where dies meet'],
+    ['What distinguishes hybrid bonding from micro-bump stacking?', 'Face-to-face copper bonding, with no solder', ['It uses a thicker solder ball under each die', 'It joins dies with wire bonds at the edges', 'It only works for a die on a substrate'], 'hybrid bonding', 'Hybrid bonding joins the dielectric and the copper pads of two dies directly, at micron pitch, so there are far more connections per area than with solder micro-bumps. The price is cleanliness, flatness and test.', ['Hybrid bonding has no:', 'Solder', ['Copper', 'Silicon']], 'Face to face, copper to copper, with no solder'],
+    ['Which path does junction-to-board thermal resistance describe?', 'Heat flowing down through the balls to the board', ['Heat flowing up through the lid into the heatsink', 'Heat flowing sideways along the die edge', 'Heat radiated from the package to the room'], 'thermal paths', 'Junction-to-case is the path up to the heatsink, junction-to-board is the path down into the board. Real products lose heat both ways at once, which is why the Ψ parameters and a measured temperature are used in a real system.', ['Junction-to-case describes heat going:', 'Up through the lid', ['Down into the board', 'Out of the sides']], 'Heat flowing down through the balls into the board'],
+    ]),
   ], (why) => `${why}.`, d),
 ]);
 
@@ -526,7 +671,7 @@ export const pkgBoss = boss({
     { t: 'gen', make: () => ask('Yield of the 800 mm² monolithic die at D₀ = 0.1/cm², in %?', qty(yieldOf(800, 0.1) * 100, '%', 0.02, sig(yieldOf(800, 0.1) * 100)), `e^(-0.8) = ${sig(yieldOf(800, 0.1) * 100)}%.`) },
     { t: 'gen', make: () => ask('Split into four 200 mm² chiplets, tested first. Yield of each, in %?', qty(yieldOf(200, 0.1) * 100, '%', 0.02, sig(yieldOf(200, 0.1) * 100)), `e^(-0.2) = ${sig(yieldOf(200, 0.1) * 100)}%.`) },
     { t: 'gen', make: () => ask('The chiplets talk over micro-bumps on a 40 µm grid. How many connections fit under a 2 mm × 5 mm edge region?', qty(2000 / 40 * (5000 / 40), '', 0.02, String((2000 / 40) * (5000 / 40))), `(2000/40) × (5000/40) = ${(2000 / 40) * (5000 / 40)}.`) },
-    { t: 'gen', make: () => ask('Six HBM stacks at 6.4 Gb/s per pin, 1024 bits each. Total bandwidth, in TB/s?', qty((6 * 1024 * 6.4) / 8 / 1000, 'TB/s', 0.02, sig((6 * 1024 * 6.4) / 8 / 1000)), `6 × 819.2 GB/s = ${sig((6 * 1024 * 6.4) / 8 / 1000)} TB/s.`) },
+    { t: 'gen', make: () => ask('Six HBM3 stacks at 6.4 Gb/s per pin, 1024 bits each. Total bandwidth, in TB/s?', qty((6 * 1024 * 6.4) / 8 / 1000, 'TB/s', 0.02, sig((6 * 1024 * 6.4) / 8 / 1000)), `6 × 819.2 GB/s = ${sig((6 * 1024 * 6.4) / 8 / 1000)} TB/s.`) },
     { t: 'gen', make: () => ask('500 W. θjc = 0.04, θcs = 0.03 °C/W, coolant at 35 °C, Tj max 105 °C. Largest θ allowed for the cold plate, in °C/W?', qty(70 / 500 - 0.07, '', 0.03, sig(70 / 500 - 0.07)), `70 / 500 = 0.14 °C/W in total, minus 0.07 = ${sig(70 / 500 - 0.07)} °C/W. That calls for liquid cooling.`) },
     mc('After thermal cycling, the corner bumps crack first. Why?', ['CTE mismatch: shear is largest at the corners', 'Electromigration in the corner bumps', 'The corner bumps carry the most current', 'Solder voids form mostly in the corner bumps during reflow'], 0, 'The substrate grows more than the silicon, and the shear is largest at the corners, farthest from the centre. Shear scales with distance from the neutral point; underfill and stiffeners spread it.'),
   ],
@@ -657,7 +802,7 @@ export const atePractice = practice('practice-ate', 'Production Test Drills', 't
   (r, d) => {
     const y = pick(r, [0.7, 0.8, 0.9]), fc = tier(d, 0.95, pick(r, [0.98, 0.99]), pick(r, [0.995, 0.999])), dl = (1 - y ** (1 - fc)) * 1e6;
     const pw = y ** (1 - fc);
-    return walk(ask(`Yield is ${y * 100}% and fault coverage is ${fc * 100}%. Estimated DPPM (Williams-Brown: DL = 1 - Y^(1 - FC))?`, qty(dl, '', 0.03, String(Math.round(dl))), `1 - ${y}^${sig(1 - fc)} = ${sig(dl / 1e6)} → ${Math.round(dl)} DPPM. Cars want single digits, so coverage has to be very close to 100%.`, 'Plug into the formula and scale to parts per million.'),
+    return walk(ask(`Yield is ${y * 100}% and fault coverage is ${fc * 100}%. Estimated DPPM (Williams-Brown: DL = 1 - Y^(1 - FC))?`, qty(dl, '', 0.03, String(Math.round(dl))), `1 - ${y}^${sig(1 - fc)} = ${sig(dl / 1e6)} → ${Math.round(dl)} DPPM. Automotive customers run zero-defect programmes, far below 1 DPPM, so coverage has to be very close to 100%.`, 'Plug into the formula and scale to parts per million.'),
       'defect level (Williams-Brown)', 'Some defective parts pass the test because the test does not catch every fault. The Williams-Brown model estimates the fraction that escape: DL = 1 - Y^(1 - FC), with yield Y and fault coverage FC both as fractions. Multiply by a million for defective parts per million (DPPM). Because the answer is tiny, keep several decimals in the middle step.',
       calc('The exponent 1 - FC:', `1 - ${fc}`, 1 - fc, '', sig(1 - fc, 4), 0.005),
       calc('Y to that power (give 6 decimals):', `${y}^${sig(1 - fc, 4)}`, pw, '', pw.toFixed(6), 0.00001),
@@ -694,15 +839,93 @@ export const atePractice = practice('practice-ate', 'Production Test Drills', 't
       calc(`New contribution of the $${p3} bin:`, `${r2(f3 - 0.1)} × ${p3}`, r2((f3 - 0.1) * p3), '', String(r2((f3 - 0.1) * p3)), 0.001),
       calc(`Add the unchanged $${p2} bin (${f2} × ${p2} = ${r2(f2 * p2)}) for the new average:`, `${r2((f1 + 0.1) * p1)} + ${r2(f2 * p2)} + ${r2((f3 - 0.1) * p3)}`, newAsp, '', String(newAsp), 0.01));
   },
+  (r, d) => {
+    // part-average testing: reject outside mean ± 6σ of the lot, even when inside the datasheet limits
+    const mu = pick(r, [8, 12, 20, 45]), sg = pick(r, [0.25, 0.5, 1, 2]), hi = mu + 6 * sg, lo = mu - 6 * sg;
+    const idea = 'Part-average testing is outlier screening. A part can meet the datasheet limit and still sit far from the other parts in its lot, which often means a hidden defect. So the test program rejects parts outside the lot mean ± 6σ (six standard deviations), even when they are within the datasheet limits.';
+    if (d === 1) return walk(ask(`A lot has a mean supply current of ${mu} mA and σ = ${sg} mA. Part-average testing rejects above mean + 6σ. Upper reject limit, in mA?`, qty(hi, 'mA', 0.001, String(hi)), `${mu} + 6 × ${sg} = ${hi} mA.`, 'Mean plus six sigma.'),
+      'the outlier limit', idea,
+      calc('Six sigma, in mA:', `6 × ${sg}`, 6 * sg, 'mA', String(6 * sg), 0.001),
+      calc('Upper limit = mean + 6σ:', `${mu} + ${6 * sg}`, hi, 'mA', String(hi), 0.001));
+    if (d === 2) return walk(ask(`A lot has a mean of ${mu} mA and σ = ${sg} mA. Parts outside mean ± 6σ are rejected as outliers. What is the width of the accepted window (upper limit minus lower limit), in mA?`, qty(hi - lo, 'mA', 0.001, String(hi - lo)), `Window = (${mu} + ${6 * sg}) - (${mu} - ${6 * sg}) = ${hi - lo} mA, which is 12σ wide.`, 'Twelve sigma in all.'),
+      'the outlier window', idea,
+      calc('Lower and upper limits are 6σ either side of the mean, so the window is 12σ:', `12 × ${sg}`, 12 * sg, 'mA', String(12 * sg), 0.001));
+    const ds = hi + pick(r, [-1, 1, 2]) * sg, eff = Math.min(hi, ds);
+    return walk(ask(`The lot mean is ${mu} mA, σ = ${sg} mA, and the datasheet maximum is ${ds} mA. A part is rejected if it is above the datasheet limit or above mean + 6σ. At what current, in mA, does the first of the two rejections apply?`, qty(eff, 'mA', 0.001, String(eff)), `Mean + 6σ = ${hi} mA, the datasheet limit is ${ds} mA, so rejection starts at the lower one: ${eff} mA.`, 'Whichever limit is lower applies first.'),
+      'which limit applies first', `${idea} The datasheet limit is a hard limit; the outlier limit is set by the lot. Both apply, so a part is rejected as soon as it crosses the lower of the two.`,
+      choice(`The outlier limit is mean + 6σ = ${hi} mA. Compared with ${ds} mA, which limit is lower?`, hi < ds ? 'The outlier limit' : hi > ds ? 'The datasheet limit' : 'They are equal', [hi < ds ? 'The datasheet limit' : 'The outlier limit', 'Neither, they cannot be compared']),
+      calc('Rejection starts at the lower of the two limits, in mA:', `min(${hi}, ${ds})`, eff, 'mA', String(eff), 0.001));
+  },
+  (r, d) => {
+    // Arrhenius acceleration factor, k in eV/K.
+    const K = 8.617e-5, idea = 'Heat speeds up the chemistry of wear-out, so a short hot test stands in for years of use. The Arrhenius acceleration factor is AF = exp[(Ea/k) × (1/T_use - 1/T_stress)], with both temperatures in kelvin (add 273.15 to °C), k = 8.617e-5 eV/K and Ea the activation energy in eV.';
+    const ea = pick(r, [0.6, 0.7, 0.8]);
+    if (d === 1) {
+      const [tu, ts] = pick(r, [[328, 398], [333, 398], [323, 378], [338, 423]] as const), af = Math.exp((ea / K) * (1 / tu - 1 / ts));
+      return walk(ask(`Ea = ${ea} eV, use at ${tu} K, stress at ${ts} K. Arrhenius acceleration factor? (k = 8.617e-5 eV/K)`, qty(af, '', 0.05, sig(af)), `exp[(${ea} / 8.617e-5) × (1/${tu} - 1/${ts})] = ${sig(af)}.`, 'Put the temperatures in the exponent as 1/T.'),
+        'the Arrhenius acceleration factor', idea,
+        calc('Ea ÷ k, in kelvin:', `${ea} / 8.617e-5`, ea / K, 'K', sig(ea / K, 4), 0.005),
+        calc('1/T_use - 1/T_stress:', `1/${tu} - 1/${ts}`, 1 / tu - 1 / ts, '', sig(1 / tu - 1 / ts, 4), 0.01),
+        calc('AF = e to the power of their product:', `exp(${sig(ea / K, 4)} × ${sig(1 / tu - 1 / ts, 4)})`, af, '', sig(af), 0.05));
+    }
+    const tuC = pick(r, [45, 55, 65, 85]), tsC = pick(r, [105, 125, 150]), tu = tuC + 273.15, ts = tsC + 273.15, af = Math.exp((ea / K) * (1 / tu - 1 / ts));
+    if (d === 2) return walk(ask(`Ea = ${ea} eV, use at ${tuC} °C, stress at ${tsC} °C. Arrhenius acceleration factor? (k = 8.617e-5 eV/K)`, qty(af, '', 0.05, sig(af)), `Kelvin: ${tu} and ${ts}. AF = exp[(${ea} / 8.617e-5) × (1/${tu} - 1/${ts})] = ${sig(af)}.`, 'Convert to kelvin first.'),
+      'the acceleration factor from °C', idea,
+      calc('Use temperature in kelvin:', `${tuC} + 273.15`, tu, 'K', sig(tu, 5), 0.001),
+      calc('Stress temperature in kelvin:', `${tsC} + 273.15`, ts, 'K', sig(ts, 5), 0.001),
+      calc('AF = exp[(Ea/k) × (1/T_use - 1/T_stress)]:', `exp(${sig(ea / K, 4)} × (1/${sig(tu, 5)} - 1/${sig(ts, 5)}))`, af, '', sig(af), 0.05));
+    const yrs = pick(r, [5, 10, 15]), h = (yrs * 8760) / af;
+    return walk(ask(`Ea = ${ea} eV, use at ${tuC} °C, stress at ${tsC} °C. How many stress hours demonstrate ${yrs} years of use? (${yrs} years = ${(yrs * 8760).toLocaleString('en-US')} h)`, qty(h, 'h', 0.06, String(Math.round(h))), `AF = ${sig(af)}, so ${(yrs * 8760).toLocaleString('en-US')} / ${sig(af)} ≈ ${Math.round(h)} h. A standard 1000-hour test covers ${Math.round((1000 * af) / 8760)} years at this AF.`, 'Hours of use divided by AF.'),
+      'stress hours for a life target', `${idea} One hour of stress equals AF hours of use, so the stress time for a target life is (hours of use) ÷ AF.`,
+      calc('AF, with kelvin temperatures:', `exp[(${ea}/8.617e-5) × (1/${sig(tu, 5)} - 1/${sig(ts, 5)})]`, af, '', sig(af), 0.05),
+      calc('Stress hours = hours of use ÷ AF:', `${yrs * 8760} / ${sig(af)}`, h, 'h', String(Math.round(h)), 0.06));
+  },
+  (r, d) => {
+    // Zero-failure FIT at 60% confidence: chi-squared(0.6, 2) = 1.83.
+    const idea = 'A test with no failures still bounds the failure rate. With zero failures at 60% confidence, λ = χ² ÷ (2 × N × t × AF), where χ²(0.6, 2) ≈ 1.83, N is the number of parts, t the hours each and AF the acceleration factor. Multiply by 10⁹ to get FIT.';
+    const n = pick(r, [77, 154, 231, 308]), t = 1000;
+    if (d === 1) {
+      const fit = (1.83 / (2 * n * t)) * 1e9;
+      return walk(ask(`${n} parts run ${t} h with no failures and no acceleration (AF = 1). FIT demonstrated at 60% confidence? (χ² ≈ 1.83)`, qty(fit, '', 0.03, String(+fit.toPrecision(3))), `1.83 / (2 × ${n} × ${t}) × 10⁹ = ${+fit.toPrecision(3)} FIT.`, 'χ² over twice the device-hours, times 10⁹.'),
+        'FIT from a zero-failure test', idea,
+        calc('Twice the device-hours, 2 × N × t:', `2 × ${n} × ${t}`, 2 * n * t, '', String(2 * n * t), 0.001),
+        calc('FIT = 1.83 ÷ that × 10⁹:', `1.83 / ${2 * n * t} × 1e9`, fit, '', String(+fit.toPrecision(3)), 0.03));
+    }
+    const af = pick(r, [40, 78, 120]);
+    if (d === 2) {
+      const fit = (1.83 / (2 * n * t * af)) * 1e9;
+      return walk(ask(`${n} parts run ${t} h at an acceleration factor of ${af} with no failures. FIT demonstrated at 60% confidence? (χ² ≈ 1.83)`, qty(fit, '', 0.03, String(+fit.toPrecision(3))), `1.83 / (2 × ${n} × ${t} × ${af}) × 10⁹ = ${+fit.toPrecision(3)} FIT.`, 'Include AF in the denominator.'),
+        'FIT with acceleration', idea,
+        calc('Equivalent device-hours, 2 × N × t × AF:', `2 × ${n} × ${t} × ${af}`, 2 * n * t * af, '', String(2 * n * t * af), 0.001),
+        calc('FIT = 1.83 ÷ that × 10⁹:', `1.83 / ${2 * n * t * af} × 1e9`, fit, '', String(+fit.toPrecision(3)), 0.03));
+    }
+    const target = pick(r, [25, 50, 100]), need = (1.83e9) / (2 * t * af * target), nn = Math.ceil(need);
+    return walk(ask(`To show ${target} FIT or better at 60% confidence with zero failures, running ${t} h at an acceleration factor of ${af}, how many parts are needed at least? (χ² ≈ 1.83)`, qty(nn, '', 0.03, String(nn)), `N = 1.83 × 10⁹ / (2 × ${t} × ${af} × ${target}) = ${sig(need, 4)}, so ${nn} parts.`, 'Rearrange the FIT formula for N and round up.'),
+      'parts needed for a FIT target', idea,
+      calc('Rearranged: N = 1.83e9 ÷ (2 × t × AF × FIT). The bottom is:', `2 × ${t} × ${af} × ${target}`, 2 * t * af * target, '', String(2 * t * af * target), 0.001),
+      calc('N = 1.83e9 ÷ that, rounded up:', `1.83e9 / ${2 * t * af * target}`, need, '', String(nn), 0.03));
+  },
   (r, d) => concept(r, [...atLevel(2, [
     ['Difference between wafer sort and final test?', 'Sort probes bare dies; final test checks packaged parts', ['They are the same test, run twice for extra confidence in the result', 'Final test happens first, then sort checks the wafer', 'Wafer sort tests only memory; final test tests logic'], 'two test stages', 'Wafer sort tests bare dies on the wafer with needle probes, so bad dies are found before the cost of packaging is spent on them. Final test happens after packaging, to catch assembly damage and to verify speed and temperature specs.', ['Wafer sort happens:', 'Before packaging', ['After packaging', 'After burn-in and packaging']], 'Sorting first means bad dies are not packaged; final test is often at temperature and speed.'],
-    ['Why do some parts get burn-in?', 'To trigger infant-mortality failures early', ['To make the parts run faster afterwards', 'To program fuses with the speed grade', 'To test only the package and its bond wires for opens'], 'burn-in', 'Failures are more common very early in a part\'s life (infant mortality) and late (wear-out). Running parts hot and at high voltage for a while ages weak ones quickly, so they fail in the factory instead of in the customer\'s product.', ['Burn-in makes weak parts fail:', 'In the factory, before shipping', ['At the customer, later', 'Never']], 'Heat and high voltage age weak parts quickly, so they fail before shipping.'],
+    ['Why do some parts get burn-in?', 'To trigger infant-mortality failures early', ['To make the parts run faster afterwards', 'To program fuses with the speed grade', 'To test only the package and its bond wires for opens'], 'burn-in', 'Failures are more common very early in a part\'s life (infant mortality) and late (wear-out). Running parts hot and at high voltage for a while ages weak ones quickly, so they fail in the factory instead of in the customer\'s product.', ['Burn-in makes weak parts fail:', 'In the factory, before shipping', ['At the customer, months or years later', 'Never']], 'Heat and high voltage age weak parts quickly, so they fail before shipping.'],
     ['What does IDDQ testing look for?', 'Abnormal quiescent supply current', ['The part\'s maximum clock rate', 'Slow timing paths between flops', 'Bit errors in the memories'], 'IDDQ', 'A CMOS chip that is not switching draws almost no supply current. A defect such as a short between wires makes a path for current even at rest, so measuring the quiescent current (IDDQ) can reveal it even when the logic outputs are still right.', ['A healthy idle CMOS chip draws:', 'Almost no current', ['A large, steady current', 'Random current']], 'It reveals shorts and leakage defects that logic tests miss.'],
     ['What does adaptive test do?', 'Adds or skips tests per part using earlier data', ['Changes the chip design slightly between wafer lots', 'Tests only one die per wafer to save time', 'Uses random test patterns instead of ATPG'], 'adaptive test', 'Test data from earlier dies shows which tests almost never fail and which parts look marginal. Adaptive test then skips the low-value tests on healthy parts and adds extra ones on suspicious parts, saving time without letting more bad parts escape.', ['Adaptive test spends extra test time on:', 'Parts that look suspicious', ['Every part, equally', 'Parts that look the healthiest']], 'It cuts test cost without losing quality.'],
   ]),
     ...atLevel(1, [['What does a handler do in final test?', 'Places packaged chips on the tester', ['Cuts the wafer into dies', 'Designs the test patterns for the whole design flow', 'Measures the chip temperature only'], 'handlers', 'A handler feeds packaged parts to the tester, holds them in contact, and sorts them into bins by result. It is the automation that keeps the tester busy.', ['A handler sorts parts into:', 'Bins by test result', ['Wafers', 'Masks']]]]),
     ...atLevel(2, [['Why is a probe card used at wafer sort?', 'To make contact with dies on the wafer', ['To mark the bad dies with ink', 'To heat the wafer for burn-in', 'To pack the good dies into shipping trays for sale'], 'probe cards', 'A probe card carries fine needles that touch the bond pads of each die on the wafer, connecting them to the tester. Wafer sort tests the dies before they are cut and packaged.', ['At wafer sort, the probes touch:', 'The bond pads of each die', ['The package leads', 'The backside']]]]),
     ...atLevel(3, [['Why do test engineers guard-band a limit?', 'To absorb tester and measurement error', ['To make the chip run faster in the field', 'To hide the yield from the customer', 'To skip the burn-in step'], 'guard bands', 'A test limit is tightened by a guard band so that tester noise and measurement error cannot pass a bad part. The cost is some good parts that fail the tighter limit.', ['A guard band makes the test limit:', 'Tighter', ['Looser', 'Unchanged']]]]),
+    ...atLevel(3, [
+    ['A grade-1 automotive part\'s ambient range?', '−40 to 125 °C', ['−40 to 85 °C', '−40 to 105 °C', '−40 to 150 °C'],
+      'temperature grades', 'Automotive parts are graded by ambient range: grade 0 is −40 to 150 °C, grade 1 −40 to 125 °C, grade 2 −40 to 105 °C and grade 3 −40 to 85 °C. The qualification stress temperature follows the grade.',
+      ['A part under the hood needs a grade with a:', 'Higher top temperature', ['Lower top temperature', 'Narrower range']], 'Grade 0 reaches 150 °C, grade 1 125 °C, grade 2 105 °C and grade 3 85 °C, all from −40 °C'],
+    ['Qualification runs a high-temperature operating life test. How many lots and parts, and how many failures allowed?', 'Three lots of 77 parts, none allowed', ['One lot of 77 parts, one allowed', 'Three lots of 231 parts, three allowed', 'Ten lots of 10 parts, none allowed'],
+      'the operating life test', 'The usual test runs 1000 hours at the temperature of the part\'s grade on three lots of 77 parts (231 in all) with zero failures allowed. Using several lots shows that the result does not depend on one production run.',
+      ['Three lots of 77 parts make this many parts:', '231', ['77', '154']], 'Three lots of 77 parts (231 in all), run for 1000 hours at the grade temperature, with zero failures allowed'],
+    ]),
+    ...atLevel(3, [
+      ['What is a guard band in production test?', 'A test limit tighter than the datasheet limit', ['A spare row of cells that repairs a failing memory', 'A margin on the wafer edge where no dies are printed', 'A pause between tests so the part can cool'], 'guard bands', 'The tester has measurement error and the part will age. Setting the test limit a little inside the datasheet limit means a part that passes still meets the datasheet with margin. The cost is yield: good parts near the limit are failed.', ['A guard band trades:', 'Some yield for margin on the datasheet limit', ['Speed for power', 'Area for cost']], 'A test limit tighter than the datasheet limit, so passing parts keep some margin'],
+      ['What does system-level test (SLT) catch that scan patterns do not?', 'Faults that show only when real software runs on the part', ['Open and short faults between the pins on the board', 'Leakage faults that show only at high temperature', 'Clock jitter on the PLL output pin of the part'], 'system-level test', 'SLT boots the real software, or a close copy, on the part in a board-like socket. Structural patterns check each fault in isolation; SLT exercises the chip the way a customer will, with all the blocks, clocks and power states interacting. It is slow and costly, so it is used on parts and products where escapes are expensive.', ['SLT runs:', 'Real software on the packaged part', ['Scan patterns only', 'A visual inspection']], 'Faults that show only when the real software runs on the part'],
+    ]),
   ], (why) => `${why}.`, d),
 ]);
 
@@ -713,14 +936,17 @@ export const testBoss = boss({
   xp: 220,
   steps: [
     say('Boss fight, {name}. A car maker returned a failed part and wants a quality plan. Finance also wants test cost down 30%. Exam rules.', 'concerned'),
-    { t: 'gen', make: () => { const dl = (1 - 0.85 ** (1 - 0.98)) * 1e6; return ask('Yield 85%, fault coverage 98%. DPPM?', qty(dl, '', 0.03, String(Math.round(dl))), `1 - 0.85^0.02 = ${Math.round(dl)} DPPM. Automotive wants under 10.`); } },
-    { t: 'gen', make: () => { const fc = 1 - Math.log(1 - 10e-6) / Math.log(0.85); return ask('What fault coverage gives 10 DPPM at 85% yield, in %?', qty(fc * 100, '%', 0.00003, sig(fc * 100, 6)), `1 - FC = ln(1 - 1e-5) / ln(0.85) = ${sig(1 - fc)}, so FC = ${sig(fc * 100, 6)}%. Nearly perfect: add cell-aware and transition-fault patterns.`); } },
+    { t: 'gen', make: () => { const dl = (1 - 0.85 ** (1 - 0.98)) * 1e6; return ask('Yield 85%, fault coverage 98%. DPPM?', qty(dl, '', 0.03, String(Math.round(dl))), `1 - 0.85^0.02 = ${Math.round(dl)} DPPM. Automotive wants far below 1.`); } },
+    { t: 'gen', make: () => { const fc = 1 - Math.log(1 - 1e-6) / Math.log(0.85); return ask('What fault coverage gives 1 DPPM at 85% yield, in %?', qty(fc * 100, '%', 5e-7, sig(fc * 100, 7)), `Invert Williams-Brown, DL = 1 - Y^(1 - FC): 1 - FC = ln(1 - DL) / ln(Y) = ln(1 - 1e-6) / ln(0.85) = (-1.0e-6) / (-0.1625) = ${sig(1 - fc)}, so FC = ${sig(fc * 100, 7)}%. Coverage alone cannot reach this; escapes are attacked with outlier screening (part-average testing), multi-temperature test, cell-aware patterns, burn-in and system-level test.`, 'FC = 1 - ln(1 - DL) / ln(Y), with DL = 1e-6.'); } },
     mc('The returned part passed every test at 25 °C but failed in a hot engine bay. What test change catches this?', ['Test at hot and cold, with at-speed patterns', 'Run longer tests at room temperature', 'Test at a lower supply voltage only', 'Add more stuck-at patterns for higher coverage'], 0, 'Automotive parts are tested at multiple temperatures because defects often show up only at the extremes.'),
+    mc('Lot mean 12 mA, σ 0.5 mA. A part reads 15.5 mA, inside the 20 mA datasheet limit. What does the test program do with it?', ['Reject it: it is beyond the lot mean plus 6σ (15 mA)', 'Pass it: it meets the datasheet limit, which is all that counts', 'Pass it, and widen the lot limits to include it from now on', 'Retest it at room temperature until it falls under the limit'], 0, 'Part-average testing screens outliers: 12 + 6 × 0.5 = 15 mA, so 15.5 mA is rejected even though the datasheet would allow it. A part that far from its siblings often has a defect that will fail in the field.'),
     { t: 'gen', make: () => ask('Test takes 2 s, tester time costs $0.04/s, 4 sites. Cost per die, in cents?', qty(2, '', 0.02, '2'), '2 × 0.04 / 4 = $0.02 = 2¢.') },
     { t: 'gen', make: () => ask('Moving to 8 sites (same 2 s), cost per die in cents?', qty(1, '', 0.02, '1'), '2 × 0.04 / 8 = 1¢: a 50% cut without touching quality.') },
     { t: 'gen', make: () => ask('Throughput at 8 sites with 2 s test and 0.4 s index, in units per hour?', qty((3600 * 8) / 2.4, '', 0.02, String((3600 * 8) / 2.4)), `3600 × 8 / 2.4 = ${(3600 * 8) / 2.4} UPH.`) },
+    { t: 'gen', make: () => { const af = Math.exp((0.7 / 8.617e-5) * (1 / 328.15 - 1 / 398.15)); return ask('Reliability plan: Ea = 0.7 eV, use at 55 °C, stress at 125 °C. Acceleration factor? (k = 8.617e-5 eV/K)', qty(af, '', 0.03, String(Math.round(af))), `exp[(0.7 / 8.617e-5) × (1/328.15 - 1/398.15)] = ${Math.round(af)}, about 78.`); } },
+    { t: 'gen', make: () => { const fit = (1.83 / (2 * 231 * 1000 * 78)) * 1e9; return ask('231 parts run 1000 h at AF 78 with zero failures. FIT at 60% confidence? (χ² ≈ 1.83)', qty(fit, '', 0.02, String(+fit.toPrecision(3))), `1.83 / (2 × 231 × 1000 × 78) × 10⁹ = ${+fit.toPrecision(3)} FIT.`); } },
   ],
-  recap: ['DPPM and coverage.', 'Temperature testing.', 'Multi-site cost and throughput.'],
+  recap: ['DPPM and coverage.', 'Temperature testing.', 'Multi-site cost and throughput.', 'Acceleration factor and zero-failure FIT.'],
 });
 
 // ------------------------------------------------------------------ FPGA prototyping & emulation
@@ -740,9 +966,9 @@ export const emuPractice = practice('practice-emu', 'Prototyping Drills', 'LUTs,
       count('LUTs needed = signals to remove ÷ removed per LUT, rounded up:', `ceil(${n - 1} / ${k - 1})`, l));
   },
   (r, d) => {
-    const cyc = pick(r, [1, 2, 5, 10, 20, 50]), f = tier(d, 1, pick(r, [1, 2]), 0.5), min = (cyc * 1e9) / (f * 1e6) / 60;
+    const cyc = pick(r, [1, 2, 5, 10, 20, 50]), f = tier(d, pick(r, [1, 2]), pick(r, [3, 4, 5]), pick(r, [1.5, 2.5, 3.2, 4.5])), min = (cyc * 1e9) / (f * 1e6) / 60;
     return walk(ask(`Booting Linux takes ${cyc} billion cycles. On an emulator at ${f} MHz, how many minutes?`, qty(min, 'min', 0.03, sig(min)), `${cyc}e9 / ${f}e6 = ${sig(min * 60)} s = ${sig(min)} min. RTL simulation at 100 Hz would take years.`, 'Cycles / frequency.'),
-      'boot time on an emulator', 'Time = number of cycles ÷ cycles per second. An emulator at f MHz does f million cycles per second. That gives seconds; divide by 60 for minutes.',
+      'boot time on an emulator', 'Time = number of cycles ÷ cycles per second. An emulator (roughly 1-5 MHz) at f MHz does f million cycles per second. That gives seconds; divide by 60 for minutes.',
       calc('Seconds = cycles ÷ rate (billion = 1e9, MHz = 1e6):', `${cyc}e9 / ${f}e6`, (cyc * 1e9) / (f * 1e6), 's', sig((cyc * 1e9) / (f * 1e6), 4), 0.005),
       calc('Convert to minutes (÷ 60):', `${sig((cyc * 1e9) / (f * 1e6), 4)} / 60`, min, 'min', sig(min), 0.03));
   },
@@ -768,7 +994,7 @@ export const emuPractice = practice('practice-emu', 'Prototyping Drills', 'LUTs,
       calc('Two frames per design clock, so the design clock in MHz:', `${sig(io / ratio, 4)} / 2`, f, 'MHz', sig(f), 0.03));
   },
   (r, d) => concept(r, [...atLevel(2, [
-    ['Rank by speed: RTL simulation, emulation, FPGA prototype.', 'FPGA prototype > emulation > simulation', ['Simulation > emulation > FPGA prototype', 'Emulation > FPGA prototype > simulation', 'They all run at about the same speed'], 'the speed ladder', 'Simulation is software executing the design, slow but it shows everything. Emulation maps the design onto dedicated hardware, much faster, with good visibility. An FPGA prototype is the fastest, but hardest to see into. You trade visibility for speed.', ['As speed goes up, visibility into the design goes:', 'Down', ['Up', 'Stays the same']], 'Roughly 10-100 MHz, 1-5 MHz, and Hz to kHz.'],
+    ['Rank by speed: RTL simulation, emulation, FPGA prototype.', 'FPGA prototype > emulation > simulation', ['Simulation > emulation > FPGA prototype', 'Emulation > FPGA prototype > simulation', 'They all run at about the same speed'], 'the speed ladder', 'Simulation is software executing the design, slow but it shows everything. Emulation maps the design onto dedicated hardware, much faster, with good visibility. An FPGA prototype is the fastest, but hardest to see into. You trade visibility for speed.', ['As speed goes up, visibility into the design goes:', 'Down', ['Up', 'Stays the same']], 'Roughly 10-50 MHz or more, 1-5 MHz, and Hz to kHz.'],
     ['ASIC RTL uses gated clocks everywhere. What happens on an FPGA?', 'Gates become clock enables', ['Nothing changes at all', 'The FPGA bitstream fails to program', 'The clocks run faster'], 'clock gating on an FPGA', 'An FPGA has a few special low-skew clock networks. Putting gating logic on a clock adds delay and glitches, so the tools convert clock gates into a clock enable: the flop always sees the real clock but only acts when enabled.', ['A clock enable lets a flop:', 'Hold its value on chosen cycles', ['Gate its clock off with a glitch-free cell', 'Run faster']], 'FPGA clock networks cannot be gated freely, so the flops see the global clock with an enable.'],
     ['What is transaction-based co-emulation?', 'Host testbench, emulated DUT, whole transactions', ['Two emulators racing the same design in lockstep', 'Simulating an FPGA bitstream on the host computer', 'Emulating only the testbench, with the DUT simulated'], 'transaction-based emulation', 'If the testbench on the host had to talk to the emulator on every clock cycle, the host would slow everything down. Instead they exchange whole transactions (a read, a write, a packet), so the emulator can run at full speed in between.', ['Exchanging whole transactions instead of each cycle:', 'Keeps the emulator from waiting', ['Makes each cycle slower to run', 'Moves the testbench into the emulator']], 'They exchange transactions, not cycle-by-cycle signals, so the emulator runs at full speed in between.'],
     ['Why prefer an emulator over an FPGA prototype for debug?', 'Full signal visibility and fast recompiles', ['Emulators run faster than any prototype', 'Prototypes cannot run any real software', 'Emulators need no RTL, only a netlist'], 'emulator versus prototype', 'Emulators are built for visibility: they can record any signal and recompile the design quickly after a fix. FPGA prototypes run faster but internal signals are hard to reach. Teams use the emulator to find bugs, and the prototype to run lots of software.', ['For finding a bug inside the design, you want:', 'Visibility into every signal', ['The highest possible clock speed', 'The cheapest board']], 'A prototype is faster but hard to see into.'],
@@ -789,7 +1015,7 @@ export const fpgaBoss = boss({
     { t: 'gen', make: () => ask('Each FPGA holds 50 M gates, usable at 60%. How many FPGAs?', num(Math.ceil(600 / 30)), '600 / 30 = 20 FPGAs.') },
     { t: 'gen', make: () => ask('The worst cut has 6000 signals over 750 pins. TDM ratio?', num(8), '6000 / 750 = 8.') },
     { t: 'gen', make: () => ask('Pins run at 1 Gb/s, 2 frames per design clock. Max design clock, in MHz?', qty(62.5, 'MHz', 0.03, '62.5'), '1000 / 8 / 2 = 62.5 MHz.') },
-    { t: 'gen', make: () => ask('Android boot is 30 billion cycles. At 25 MHz (what timing actually allows), minutes?', qty(20, 'min', 0.03, '20'), '30e9 / 25e6 = 1200 s = 20 min. On a 1 MHz emulator it would be 8 hours.') },
+    { t: 'gen', make: () => ask('Android boot is 30 billion cycles. At 25 MHz (what timing actually allows), minutes?', qty(20, 'min', 0.03, '20'), '30e9 / 25e6 = 1200 s = 20 min. On a 1 MHz emulator (the bottom of the 1-5 MHz range) it would be 8 hours.') },
     mc('The prototype crashes in a way the emulator never did. Most likely cause?', ['An artifact of the FPGA mapping, not the design', 'A real RTL bug that emulation never reached', 'An Android driver bug in the boot path', 'A bug in the RTL that the emulator never exercised at all'], 0, 'Gated clocks mapped wrong, or a partition crossing that broke timing, are typical FPGA-only artifacts. Always check the prototype\'s own conversions before blaming the design.'),
     { t: 'gen', make: () => ask('How many configuration bits in a 6-input LUT?', num(64), '2⁶ = 64: one bit per row of the truth table.') },
   ],

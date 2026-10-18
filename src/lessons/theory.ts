@@ -28,6 +28,7 @@ export const electricity: Lesson = {
     say('Everything is made of tiny **atoms**. Inside them are even tinier bits called **electrons**. Each electron carries a little bit of **charge**.'),
     say('In a metal wire, some electrons are free to move. When they all drift the same way, charge flows along the wire.'),
     mc('What moves along a metal wire when electricity flows?', ['Electrons', 'The atoms themselves', 'Air'], 0, 'Free electrons drift along the wire. The atoms stay where they are.'),
+    say('One catch. Electrons carry negative charge, so they drift from - to +. Engineers still draw current going from + round to -, as if positive charge moved. This is called **conventional current**, and every circuit drawing uses it.'),
     say('That flow of charge is called **current**. Think of water flowing in a pipe. We count current in **amps**, written A.'),
     say('One amp is a lot for small parts. So we often use **milliamps** (mA). There are 1000 mA in 1 A, just like 1000 mm in 1 m.'),
     art(`
@@ -35,7 +36,7 @@ export const electricity: Lesson = {
    a phone charger      about 2 A
    a small lamp (LED)   about 10 mA`, 'how big is an amp?'),
     ask('How many milliamps are in 2 A?', num(2000), '1 A is 1000 mA, so 2 A is 2 x 1000 = 2000 mA.', 'Each amp is 1000 milliamps.'),
-    say('What makes the charge flow? A **push**. We call that push **voltage**, and we count it in **volts**, written V.'),
+    say('What makes the charge flow? A **push**. We call that push **voltage**, and we count it in **volts**, written V. Voltage is always measured **between two points**, like the two ends of a battery.'),
     say('A battery is like a pump. It pushes charge out of one end and pulls it back in at the other end. A bigger voltage is a stronger push.'),
     art(`
    water                    electricity
@@ -379,7 +380,7 @@ export const phasor: Lesson = {
     mc('What is e^(jπ)? (π radians is 180°.)', ['-1', '1', 'j', '0'], 0, 'cos π + j sin π = -1 + 0j = -1. The arrow of length 1 points straight left.'),
     ask('Write e^(jπ/2) as a complex number. (π/2 is 90°.)', words('j', '1j', '0+j', '0+1j', 'i'), 'cos 90° + j sin 90° = 0 + j = j: the arrow points straight up.', 'cos 90° = 0 and sin 90° = 1.'),
     say('So any arrow can be written **r·e^(jθ)**: length r, angle θ. Multiplying two of them is just r1·r2·e^(j(θ1 + θ2)), because exponents add. That is the rule from last lesson, proved.'),
-    say('Now the big idea. A sine wave **A·cos(ωt + φ)** is the real part of an arrow **A·e^(j(ωt + φ))** that spins round at speed ω. In a linear circuit every voltage and current spins at the same ω.'),
+    say('Now the big idea. A sine wave **A·cos(ωt + φ)** is the real part of an arrow **A·e^(j(ωt + φ))** that spins round at speed ω. In a linear circuit driven by one sine wave, once it settles, every voltage and current spins at that same ω.'),
     say('So we drop the spin and keep only the starting arrow, **A·e^(jφ)**, written **A∠φ**. That arrow is the **phasor**. It holds the two things that differ between signals: size and phase.'),
     art(`
    5·cos(ωt + 30°)   →   phasor 5∠30°
@@ -387,7 +388,7 @@ export const phasor: Lesson = {
                      =   4.33 + 2.5j`, 'worked example'),
     gen((r) => {
       const A = pick(r, [2, 4, 10]), ph = pick(r, [0, 30, 60, 90]);
-      const re = A * Math.cos((ph * Math.PI) / 180);
+      const c = A * Math.cos((ph * Math.PI) / 180), re = Math.abs(c) < 1e-9 ? 0 : c; // cos 90° is 6e-17 in floating point, not 0
       return walk(
         ask(`What is the real part of the phasor for ${A}·cos(ωt + ${ph}°)?`, qty(re, '', 0.02, String(r3(re))), `Phasor ${A}∠${ph}°. Real part = ${A}·cos ${ph}° = ${r3(re)}.`, 'Real part = A·cos φ.'),
         'phasor', 'Drop the ωt. The phasor is A∠φ; its real part is A·cos φ and its imaginary part A·sin φ.',
@@ -523,7 +524,7 @@ export const storage: Lesson = {
   xp: 90,
   steps: [
     say('A resistor\'s current depends on its voltage right now. Two other parts care about **change**: the capacitor and the inductor. They store energy, so circuits with them have a memory.'),
-    say('A **capacitor** is two conducting plates with a thin gap. Push charge onto one plate and it holds it: **q = C·v**. C is the **capacitance**, in farads (F). Charge q is counted in **coulombs** (C): one amp is one coulomb flowing past every second.'),
+    say('A **capacitor** is two conducting plates with a thin gap. Push charge onto one plate and an equal, opposite charge gathers on the other: **q = C·v** (q is the charge on either plate). C is the **capacitance**, in farads (F). Charge q is counted in **coulombs** (C): one amp is one coulomb flowing past every second.'),
     say('Current is how fast charge arrives, so take the derivative of q = C·v: **i = C·dv/dt**. A capacitor\'s current depends on how fast its voltage changes.'),
     art(`
    1 µF, voltage rising at 1000 V/s:
@@ -551,7 +552,7 @@ export const storage: Lesson = {
       return ask(`A ${L} mH inductor's current rises by ${di} A in ${ms} ms. What voltage appears across it, in V?`, qty(v, 'V', 0.02, String(r3(v))), `di/dt = ${di} / ${ms} ms = ${(di / ms) * 1000} A/s. v = ${L} mH × that = ${r3(v)} V.`, 'v = L × di/dt.');
     }),
     say('The inductor is the capacitor\'s mirror. Its **current** cannot jump, and at steady DC it is just a wire (di/dt = 0, so v = 0).'),
-    say('Both store energy. A capacitor holds **½·C·v²** in the charge on its plates. An inductor holds **½·L·i²** in its magnetic field. Worked example: 100 µF at 10 V holds ½ × 100×10⁻⁶ × 100 = 5 mJ.'),
+    say('Both store energy. A capacitor holds **½·C·v²** in the charge held apart on its two plates. An inductor holds **½·L·i²** in its magnetic field. Worked example: 100 µF at 10 V holds ½ × 100×10⁻⁶ × 100 = 5 mJ.'),
     gen((r) => {
       const L = pick(r, [10, 50, 100]), i = pick(r, [0.1, 0.2, 0.5]);
       const e = 0.5 * L * 1e-3 * i * i * 1000;
@@ -653,7 +654,7 @@ export const fourier: Lesson = {
     }),
     mc('Which harmonics does a square wave contain?', ['Only the odd ones: 1, 3, 5, ...', 'Only the even ones', 'All of them equally'], 0, 'bₙ = 0 for even n, and 4/(nπ) for odd n.'),
     ask('How big is a square wave\'s third harmonic compared with its fundamental? (as a fraction)', qty(1 / 3, '', 0.02, '0.333'), 'b₃/b₁ = (4/3π)/(4/π) = 1/3.', 'bₙ falls as 1/n.'),
-    say('This is why a clock with fast edges is noisy: its odd harmonics reach far up in frequency, and they radiate. The signals chapter later picks this up as bandwidth and EMI.', 'proud'),
+    say('This is why a clock with fast edges is noisy: its harmonics reach far up in frequency, and the faster the edges, the higher they reach before dying away. They radiate. The signals chapter later picks this up as bandwidth and EMI.', 'proud'),
   ],
   recap: ['Any periodic f(t) = a₀ + Σ aₙ cos(nωt) + bₙ sin(nωt).', 'Orthogonality: ∫ sin(nωt) sin(mωt) dt over T is 0 if n ≠ m, T/2 if n = m.', 'aₙ, bₙ = (2/T) ∫ f·cos, f·sin; a₀ = average.', 'Square wave ±A: odd harmonics only, 4A/(nπ).'],
 };
@@ -784,7 +785,7 @@ export const opamp: Lesson = {
   xp: 90,
   steps: [
     say('An **op-amp** (operational amplifier) is a block with two inputs, + and -, one output, and an enormous gain: often 100,000 or more. Its output is A × (v₊ - v₋).'),
-    say('Huge gain alone is useless: a microvolt would slam the output into the rail. But wire the output back to the **- input** (negative feedback) and two **golden rules** hold:'),
+    say('Huge gain alone is useless: a difference of a few hundred microvolts would slam the output into the rail. But wire the output back to the **- input** (negative feedback) and two **golden rules** hold:'),
     art(`
    1. The inputs draw no current.
    2. The output does whatever it takes to make v₋ = v₊.`, 'the golden rules (with negative feedback)'),

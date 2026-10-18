@@ -12,9 +12,9 @@ export const calc: Lesson = {
     say('Real engineering quantities depend on many variables at once. Chip power depends on capacitance, voltage and frequency. Delay depends on sizing, load and wire length. **Multivariable calculus** is how we reason about all of them together.'),
     say('A **partial derivative** asks: if I nudge one variable and hold the rest fixed, how fast does the output change? It is the math of **sensitivity**.'),
     art(`
-   P(C, V, f) = C · V² · f            dynamic power
+   P(C, V, f) = α · C · V² · f        dynamic power (α = activity, held fixed here) (α = activity, held fixed here)
 
-   ∂P/∂V = 2·C·V·f      ∂P/∂f = C·V²      ∂P/∂C = V²·f`),
+   ∂P/∂V = 2·α·C·V·f    ∂P/∂f = α·C·V²    ∂P/∂C = α·V²·f`),
     gen((r) => {
       const C = pick(r, [0.5, 1, 2]);
       const V = pick(r, [0.7, 0.8, 0.9, 1.0]);
@@ -83,7 +83,7 @@ export const linalg: Lesson = {
       return ask(`What is the **largest** eigenvalue of [[${a}, ${b}], [${b}, ${a}]]?`, num(a + b), `For [[a, b], [b, a]] the eigenvectors are (1, 1) and (1, -1), with eigenvalues a + b = ${a + b} and a - b = ${a - b}.`, 'Try multiplying the matrix by (1, 1).');
     }),
     mc('A feedback loop (a PLL, a voltage regulator) is modelled as dx/dt = A·x. When is it stable?', ['When the determinant of A is positive', 'When every eigenvalue has a negative real part', 'When every entry of A is negative', 'When every eigenvalue of A has magnitude below 1'], 1, 'Each mode evolves like e^(λt). A negative real part decays; a positive one grows. Complex eigenvalues mean ringing, which is fine as long as it decays. (Magnitude below 1 is the test for a discrete-time system x[k+1] = A·x[k].)'),
-    say('The **SVD** writes any matrix as A = U·Σ·Vᵀ: a rotation, a scaling by the singular values, another rotation. Keep only the largest singular values and you get the best low-rank approximation of A.'),
+    say('The **SVD** writes any matrix as A = U·Σ·Vᵀ: an orthogonal transformation (a rotation or reflection), a scaling by the singular values, another orthogonal transformation. Keep only the largest singular values and you get the best low-rank approximation of A.'),
     mc('Where would a chip engineer use the SVD?', ['Counting transistors in a netlist', 'Model order reduction of a huge RC network', 'Finding the shortest route for a wire', 'Solving one large sparse system G·v = i quickly'], 1, 'Model order reduction compresses a huge extracted RC network; PCA finds the few dominant directions of process variation. Low-rank structure is everywhere: parasitic networks, variation models, even ML accelerators compress weight matrices with it.'),
     mc('Are (1, 2, 3), (2, 4, 6) and (0, 1, 0) linearly independent?', ['Yes', 'No'], 1, '(2, 4, 6) = 2 × (1, 2, 3), so the set spans only a 2-D subspace. In circuit terms: a redundant equation, and a singular matrix.'),
   ],

@@ -208,12 +208,15 @@ function parseSed(script: string, ere: boolean): SedCmd[] {
 }
 
 function sed(ctx: Ctx, args: string[]): number {
+  // every -e adds a script (parse() keeps only the last value of an option)
+  const eScripts: string[] = [];
+  for (let i = 0; i < args.length; i++) if (/^-[A-Za-z]*e$/.test(args[i]) && args[i + 1] !== undefined) eScripts.push(args[i + 1]);
   const { flags, vals, rest } = parse(args, ['e', 'f']);
   const quiet = flags.has('n') || flags.has('quiet') || flags.has('silent');
   const inPlace = flags.has('i');
   const scripts: string[] = [];
   const operands = [...rest];
-  if (vals.e !== undefined) scripts.push(vals.e);
+  if (eScripts.length) scripts.push(...eScripts); else if (vals.e !== undefined) scripts.push(vals.e);
   if (vals.f !== undefined) { try { scripts.push(ctx.fs.readFile(ctx.sh.abs(vals.f))); } catch (e) { ctx.err(`sed: couldn't open file ${vals.f}: ${(e as Error).message}\n`); return 1; } }
   if (!scripts.length) { const s = operands.shift(); if (s === undefined) { ctx.err('Usage: sed [OPTION]... {script-only-if-no-other-script} [input-file]...\n'); return 1; } scripts.push(s); }
   let cmds: SedCmd[];
@@ -311,8 +314,9 @@ function grep(ctx: Ctx, args: string[]): number {
     if (recursive && ctx.fs.isDir(abs)) for (const p of ctx.fs.walk(abs)) expanded.push({ shown: f === '.' ? p.slice(abs.length + 1) : `${f.replace(/\/$/, '')}${p.slice(abs.length)}`, path: p });
     else expanded.push({ shown: f, path: abs });
   }
-  let re: RegExp;
-  try { re = makeRegex(patterns.map((p) => (flags.has('F') ? p : p)).join('\n').split('\n').length > 1 ? patterns[0] : patterns[0], { extended: flags.has('E') || flags.has('P'), ignoreCase: flags.has('i'), word: flags.has('w'), fixed: flags.has('F') }); } catch (e) { ctx.err(`grep: ${(e as Error).message}\n`); return 2; }
+  let re: RegExp, warned = false;
+  const stray = (c: string) => { if (!warned) ctx.err(`grep: warning: stray \\ before ${c}\n`); warned = true; };
+  try { re = makeRegex(patterns[0], { extended: flags.has('E'), perl: flags.has('P'), ignoreCase: flags.has('i'), word: flags.has('w'), fixed: flags.has('F'), onStray: stray }); } catch (e) { ctx.err(`grep: ${(e as Error).message}\n`); return 2; }
   const invert = flags.has('v'), count = flags.has('c'), listOnly = flags.has('l'), withNo = flags.has('n'), only = flags.has('o'), quiet = flags.has('q'), noName = flags.has('h');
   const max = vals.m ? parseInt(vals.m, 10) : Infinity;
   const ctxA = parseInt(vals.A ?? vals.C ?? '0', 10), ctxB = parseInt(vals.B ?? vals.C ?? '0', 10);
@@ -356,7 +360,7 @@ function find(ctx: Ctx, args: string[]): number {
   type Pred = (abs: string, shown: string) => boolean;
   const preds: Pred[] = [];
   let maxdepth = Infinity, mindepth = 0, action: 'print' | 'delete' | 'exec' | 'print0' = 'print';
-  let execCmd: string[] = [];
+  let execCmd: string[] = [], batch = false; // batch: -exec … {} + runs once with every match
   let neg = false;
   const push = (p: Pred) => { const n = neg; neg = false; preds.push(n ? (a, s) => !p(a, s) : p); };
   for (; i < args.length; i++) {
@@ -382,7 +386,15 @@ function find(ctx: Ctx, args: string[]): number {
       case '-print': action = 'print'; break;
       case '-print0': action = 'print0'; break;
       case '-delete': action = 'delete'; break;
-      case '-exec': { action = 'exec'; execCmd = []; i++; while (i < args.length && args[i] !== ';' && args[i] !== '+') execCmd.push(args[i++]); break; }
+      case '-exec': {
+        action = 'exec'; execCmd = []; i++;
+        // `+` ends the command only straight after {} (as in real find); elsewhere it is an ordinary argument
+        while (i < args.length && args[i] !== ';' && !(args[i] === '+' && args[i - 1] === '{}')) execCmd.push(args[i++]);
+        // an unquoted ; was already eaten by the shell as a command separator, so the terminator never arrives
+        if (i >= args.length || !execCmd.length) { ctx.err("find: missing argument to '-exec'\n"); return 1; }
+        batch = args[i] === '+';
+        break;
+      }
       default: ctx.err(`find: unknown predicate \`${a}'\n`); return 1;
     }
   }
@@ -398,6 +410,13 @@ function find(ctx: Ctx, args: string[]): number {
       const shown = p === base ? s : `${s.replace(/\/$/, '')}${p.slice(base.length)}`;
       if (preds.every((f) => f(p, shown))) hits.push([p, shown]);
     }
+  }
+  if (action === 'exec' && batch) {
+    if (hits.length) {
+      const argv = execCmd.flatMap((x) => (x === '{}' ? hits.map((h) => h[1]) : [x]));
+      ctx.sh.invoke(argv[0], argv.slice(1), new StdIn(''), ctx.out, ctx.err);
+    }
+    return status;
   }
   for (const [abs, shown] of action === 'delete' ? [...hits].reverse() : hits) {
     if (action === 'print') ctx.out(shown + '\n');
@@ -693,9 +712,11 @@ export const UTILS: Record<string, Utility> = {
     ctx.out(`${a}\n`);
     return 0;
   },
-  xargs: (ctx, args) => {
-    const { flags, vals, rest } = parse(args, ['n', 'I']);
-    const items = ctx.in.rest().split(/\s+/).filter(Boolean);
+  xargs: (ctx, args0) => {
+    const zero = args0.includes('-0'); // parse() would read -0 as a count
+    const { flags, vals, rest } = parse(args0.filter((a) => a !== '-0'), ['n', 'I']);
+    // -0 reads NUL-separated names (from find -print0), so spaces and newlines inside a name are safe; the default splits on any white space
+    const items = ctx.in.rest().split(zero ? '\0' : /\s+/).filter(Boolean);
     const cmd = rest.length ? rest : ['echo'];
     if (!items.length && !flags.has('r')) return ctx.sh.invoke(cmd[0], cmd.slice(1), new StdIn(''), ctx.out, ctx.err);
     let st = 0;

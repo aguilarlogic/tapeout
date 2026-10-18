@@ -1,7 +1,7 @@
 // Elaborates a parsed module and simulates it cycle by cycle.
 //
-// Semantics are a faithful subset of IEEE 1364 for synthesizable RTL, with two
-// simplifications that are called out in the game's help text:
+// Semantics are a faithful subset of IEEE 1800 (SystemVerilog, which absorbed 1364) for synthesizable RTL, with two
+// simplifications that the labs' model note states to the player (plan S0.3):
 //   * 2-state values (no X/Z); registers start at 0.
 //   * All arithmetic is unsigned.
 // Expression widths follow Verilog's context-determined sizing rules, so classic
@@ -61,6 +61,8 @@ export class Design {
   readonly signals = new Map<string, Signal>();
   readonly params = new Map<string, { value: bigint; width: number; signed: boolean }>();
   readonly lints: Lint[] = [];
+  /** Compile warnings that do not cost a star: the 2-state model has no x/z, so such literals read as 0. */
+  readonly warnings: Lint[] = [];
   readonly ports: Signal[] = [];
 
   private values = new Map<string, bigint>();
@@ -75,6 +77,7 @@ export class Design {
   constructor(src: string | ModuleAst) {
     const ast = typeof src === 'string' ? parseModule(src) : src;
     this.name = ast.name;
+    for (const line of new Set(ast.xlits ?? [])) this.warnings.push({ line, message: 'x/z bits are treated as 0 in this 2-state simulator' });
     this.elaborate(ast);
     this.settle();
   }

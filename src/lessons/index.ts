@@ -15,11 +15,12 @@ import { THEORY_LESSONS } from './theory';
 import { Lesson, Question, Rng, Step } from './types';
 import { VERIF_LESSONS } from './verification';
 import { VLSI_LESSONS } from './vlsi';
+import { FLOW_LESSONS } from './flow';
 
 /** Acts 1-6: the path every chip engineer walks. The final review draws from these. */
 export const CORE_LESSONS: Lesson[] = [
   ...FOUNDATION_LESSONS, ...THEORY_LESSONS, ...MATH_LESSONS, ...STATS_LESSONS, ...CIRCUIT_LESSONS, ...SIGNAL_LESSONS, ...PHYSICS_LESSONS,
-  ...TOOLING_LESSONS, ...SYSTEMS_LESSONS, ...DIGITAL_LESSONS, ...VLSI_LESSONS, ...VERIF_LESSONS, ...ARCH_LESSONS,
+  ...TOOLING_LESSONS, ...SYSTEMS_LESSONS, ...DIGITAL_LESSONS, ...VLSI_LESSONS, ...FLOW_LESSONS, ...VERIF_LESSONS, ...ARCH_LESSONS,
 ];
 
 export const LESSONS: Lesson[] = [...CORE_LESSONS, ...ROLE_LESSONS, ...QUANTUM_LESSONS, ...FRONTIER_LESSONS];

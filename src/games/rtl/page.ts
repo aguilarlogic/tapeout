@@ -6,7 +6,11 @@ import { editor } from '../../ui/editor';
 import { levelHeader } from '../../ui/layout';
 import { waveform } from '../../ui/waveform';
 import { ALL_RTL, RtlLevel } from './levels';
-import { finish, HINT_NOTE } from '../../ui/labkit';
+import { finish, HINT_NOTE, modelNote } from '../../ui/labkit';
+import { download, zip } from '../../lib/zip';
+import { draftedRtl, rtlProject, type Drafted } from './export';
+
+export const MODEL_NOTE = 'This simulator is 2-state: X and Z are not modelled, and registers power up at 0. Real simulators start registers at X, so a missing reset shows up as X there.';
 
 export function rtlPage(id: string): HTMLElement {
   const level = ALL_RTL.find((l) => l.id === id);
@@ -36,6 +40,7 @@ export function rtlPage(id: string): HTMLElement {
 
   const brief = h('aside', { class: 'brief panel' },
     h('div', { class: 'tag' }, level.concept),
+    modelNote(MODEL_NOTE),
     h('div', { class: 'brief-body', html: level.brief }),
     h('div', { class: 'hint-box' }, hintBtn, hintList),
   );
@@ -66,6 +71,7 @@ export function rtlPage(id: string): HTMLElement {
       if (res.error.line) errLines.push(res.error.line);
     }
     for (const l of res.lints) messages.append(h('li', { class: 'msg warn' }, h('b', null, 'Lint'), ` line ${l.line}: ${l.message}`));
+    for (const w of res.warnings) messages.append(h('li', { class: 'msg warn' }, h('b', null, 'Warning'), ` line ${w.line}: ${w.message}`));
     ed.markLines(errLines, res.lints.map((l) => l.line));
 
     if (res.error) {
@@ -106,6 +112,16 @@ export function rtlPage(id: string): HTMLElement {
         ed.value = level.golden;
       },
     }, 'Show solution'),
+    h('button', { class: 'btn ghost', title: 'Download this design with a testbench, a Makefile and a README as a .zip', onclick: () => exportZip([{ level, code: ed.value }], `tapeout-${level.id}.zip`) }, 'Export project'),
+    h('button', {
+      class: 'btn ghost',
+      title: 'Download every Verilog level you have worked on as one project',
+      onclick: () => {
+        const all = draftedRtl().map((d) => (d.level.id === level.id ? { level, code: ed.value } : d));
+        if (!all.some((d) => d.level.id === level.id)) all.push({ level, code: ed.value });
+        exportZip(all, 'tapeout-rtl.zip', 'My Tapeout RTL');
+      },
+    }, 'Export all my RTL'),
     h('span', { class: 'spacer' }),
     h('label', { class: 'check' }, internalsToggle, ' internal signals'),
   );
@@ -117,6 +133,13 @@ export function rtlPage(id: string): HTMLElement {
     h('div', { class: 'level-grid' }, brief, h('section', { class: 'work panel' }, toolbar, ed.el)),
     results,
   );
+}
+
+/** Zip the project files and hand them to the browser. */
+function exportZip(items: Drafted[], name: string, title?: string) {
+  const files = rtlProject(items, title);
+  download(name, zip(files.map((f) => ({ path: f.path, data: f.text }))));
+  mentorSay(`Exported ${items.length === 1 ? 'your design' : `${items.length} designs`} with ${items.length === 1 ? 'a testbench' : 'testbenches'}. Unzip it and run \`make sim\` with Icarus Verilog, or \`make verilator\`.`, 'happy');
 }
 
 function fmt(v: bigint): string {

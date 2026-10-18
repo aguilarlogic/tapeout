@@ -7,7 +7,7 @@ import { alignOf, CNode, CSyntaxError, CType, parseC, Program, sizeOf, StructDef
 export { CSyntaxError };
 
 export class CError extends Error {
-  constructor(msg: string, public line: number, public kind: 'segv' | 'asan' | 'fpe' | 'abort' | 'timeout' | 'runtime' = 'runtime') { super(msg); }
+  constructor(msg: string, public line: number, public kind: 'segv' | 'asan' | 'fpe' | 'ubsan' | 'abort' | 'timeout' | 'runtime' = 'runtime') { super(msg); }
 }
 class ExitSignal { constructor(public code: number) {} }
 
@@ -27,7 +27,8 @@ const isPtr = (t: CType): t is Extract<CType, { k: 'ptr' }> => t.k === 'ptr';
 const ptrTo = (to: CType): CType => ({ k: 'ptr', to });
 const hex = (n: number | bigint) => '0x' + n.toString(16);
 
-export interface COptions { stdin?: string; maxSteps?: number; seed?: number; maxOutput?: number; leaks?: boolean }
+/** A simulated interrupt: `fn` runs before every `every`-th statement executed with interrupts enabled (counting restarts at irq_enable()). */
+export interface COptions { stdin?: string; maxSteps?: number; seed?: number; maxOutput?: number; leaks?: boolean; isr?: { fn: string; every: number } }
 
 export class CInterp {
   buf = new ArrayBuffer(MEM);
@@ -58,6 +59,11 @@ export class CInterp {
   seed: number;
   depth = 0;
   private maxOutput: number;
+  private isr?: { fn: string; every: number };
+  private irqOn = true;
+  private inIsr = false;
+  private isrCount = 0;
+  private irqPending = false;
   private builtins = new Map<string, Builtin>();
   private inits: { addr: number; ty: CType; init: CNode | null }[] = [];
 
@@ -66,6 +72,7 @@ export class CInterp {
     this.stdin = opts.stdin ?? '';
     this.seed = (opts.seed ?? 1) >>> 0;
     this.maxOutput = opts.maxOutput ?? 100_000;
+    this.isr = opts.isr;
     this.installBuiltins();
     this.prog = parseC(src);
     this.link();
@@ -149,7 +156,7 @@ export class CInterp {
     if (a < STACK_LIMIT) throw new CError('Segmentation fault: stack overflow (infinite recursion?)', this.line, 'segv');
     this.mark(a - 0, size, S_OK);
     this.mark(a + size, Math.min(rz, this.sp - (a + size)), S_RED);
-    this.u8.fill(0xcd, a, a + size);
+    this.u8.fill(0xcc, a, a + size); // MSVC debug stack fill; real GCC/Clang leave garbage
     this.sp = a;
     return a;
   }
@@ -485,9 +492,21 @@ export class CInterp {
     try { return fn(); } finally { this.scopes.pop(); if (this.sp < sp0) this.releaseStack(sp0); }
   }
 
+  /** The interrupt controller: between statements, never inside the handler, never while irq_disable() is in force. */
+  private isrPoint() {
+    if (!this.isr || this.inIsr) return;
+    if (++this.isrCount % this.isr.every === 0) this.irqPending = true;
+    if (!this.irqOn || !this.irqPending) return; // masked: the request is latched and fires on irq_enable()
+    this.irqPending = false;
+    this.inIsr = true;
+    const line = this.line;
+    try { this.callByName(this.isr.fn, []); } finally { this.inIsr = false; this.line = line; }
+  }
+
   exec(n: CNode): Signal {
     this.tick();
     this.line = n.line;
+    if (this.isr && (n.t === 'expr' || n.t === 'decl' || n.t === 'return')) this.isrPoint();
     switch (n.t) {
       case 'block': return this.scoped(() => this.execBlockBody(n.body));
       case 'decl': this.declare(n.items); return;
@@ -685,7 +704,9 @@ export class CInterp {
         if (isFloat(v.ty)) return { ty: v.ty, v: -(v.v as number) };
         if (!isInt(v.ty)) throw new CError(`wrong type argument to unary minus`, e.line);
         const t = this.promote(v.ty) as Extract<CType, { k: 'int' }>;
-        return this.conv({ ty: t, v: -(v.v as bigint) }, t);
+        const nv = this.conv(v, t).v as bigint;
+        if (t.signed && -nv > (1n << BigInt(t.bits - 1)) - 1n) throw new CError(`runtime error: negation of ${nv} cannot be represented in type '${typeStr(t)}': signed integer overflow`, e.line, 'ubsan');
+        return this.conv({ ty: t, v: -nv }, t);
       }
       case '+': { const v = this.rv(e.e); return isInt(v.ty) ? this.conv(v, this.promote(v.ty)) : v; }
       case '~': {
@@ -742,12 +763,22 @@ export class CInterp {
     const it = ct as Extract<CType, { k: 'int' }>;
     const wrap = (n: bigint): V => ({ ty: it, v: it.signed ? BigInt.asIntN(it.bits, n) : BigInt.asUintN(it.bits, n) });
     const x = this.conv(a, it).v as bigint, y = this.conv(b, it).v as bigint;
+    // signed overflow is undefined behaviour (UBSan reports it); unsigned arithmetic wraps by definition.
+    // Conversions are different: `char c = 127; c++` narrows an int 128 back to char, which is implementation-defined, so it still gives -128.
+    const sw = (n: bigint): V => {
+      if (it.signed && BigInt.asIntN(it.bits, n) !== n) throw new CError(`runtime error: signed integer overflow: ${x} ${op} ${y} cannot be represented in type '${typeStr(it)}'`, line, 'ubsan');
+      return wrap(n);
+    };
     switch (op) {
-      case '+': return wrap(x + y);
-      case '-': return wrap(x - y);
-      case '*': return wrap(x * y);
-      case '/': if (y === 0n) throw new CError('Floating point exception: integer division by zero', line, 'fpe'); return wrap(x / y);
-      case '%': if (y === 0n) throw new CError('Floating point exception: integer modulo by zero', line, 'fpe'); return wrap(x % y);
+      case '+': return sw(x + y);
+      case '-': return sw(x - y);
+      case '*': return sw(x * y);
+      case '/': case '%': {
+        if (y === 0n) throw new CError(`Floating point exception: integer ${op === '/' ? 'division' : 'modulo'} by zero`, line, 'fpe');
+        // x86 idiv raises SIGFPE on INT_MIN / -1 (the quotient does not fit), and the C standard makes it undefined for % too
+        if (it.signed && y === -1n && x === -(1n << BigInt(it.bits - 1))) throw new CError(`Floating point exception: INT_MIN / -1 overflows (${x} ${op} -1)`, line, 'fpe');
+        return wrap(op === '/' ? x / y : x % y);
+      }
       case '&': return wrap(x & y);
       case '|': return wrap(x | y);
       case '^': return wrap(x ^ y);
@@ -755,7 +786,15 @@ export class CInterp {
         // the result has the promoted type of the left operand only
         const lt = this.promote(a.ty) as Extract<CType, { k: 'int' }>;
         const lx = this.conv(a, lt).v as bigint;
-        const cnt = BigInt(Number(BigInt.asUintN(64, b.v as bigint)) & (lt.bits - 1));
+        // C does not mask the count the way RISC-V does (and Verilog gives 0): a negative count or one >= the width is undefined behaviour
+        const cnt = b.v as bigint;
+        if (cnt < 0n) throw new CError(`runtime error: shift exponent ${cnt} is negative`, line, 'ubsan');
+        if (cnt >= BigInt(lt.bits)) throw new CError(`runtime error: shift exponent ${cnt} is too large for ${lt.bits}-bit type '${typeStr(lt)}'`, line, 'ubsan');
+        if (op === '<<' && lt.signed) {
+          if (lx < 0n) throw new CError(`runtime error: left shift of negative value ${lx}`, line, 'ubsan');
+          if ((lx << cnt) >> BigInt(lt.bits - 1) !== 0n) throw new CError(`runtime error: left shift of ${lx} by ${cnt} places cannot be represented in type '${typeStr(lt)}'`, line, 'ubsan');
+        }
+        // >> of a negative signed value is implementation-defined; GCC and Clang shift arithmetically, and so does this lab
         const r = op === '<<' ? lx << cnt : lx >> cnt;
         return { ty: lt, v: lt.signed ? BigInt.asIntN(lt.bits, r) : BigInt.asUintN(lt.bits, r) };
       }
@@ -933,6 +972,8 @@ export class CInterp {
       if (p) { this.u8.copyWithin(p, old, old + Math.min(n, blk.size)); this.free(old); }
       return rptr(p);
     });
+    b('irq_disable', () => { this.irqOn = false; return undefined; });
+    b('irq_enable', () => { this.irqOn = true; this.isrCount = 0; return undefined; });
     b('free', (a) => { this.free(ptr(a[0])); return undefined; });
     b('memcpy', (a) => { const d = ptr(a[0]), s = ptr(a[1]), n = sz(a[2]); if (n) { this.check(s, n, false); this.check(d, n, true); this.u8.copyWithin(d, s, s + n); } return a[0]; });
     b('memmove', (a) => { const d = ptr(a[0]), s = ptr(a[1]), n = sz(a[2]); if (n) { this.check(s, n, false); this.check(d, n, true); this.u8.copyWithin(d, s, s + n); } return a[0]; });
