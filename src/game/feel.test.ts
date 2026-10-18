@@ -3,8 +3,9 @@ import { describe, expect, it } from 'vitest';
 import type { Action } from './input/bindings';
 import type { Room } from './level/room';
 import { TEST_ROOM } from './level/testroom';
+import type Matter from 'matter-js';
 import { Sim } from './sim';
-import { DRONE, FIELD, PROBE, VITALS } from './tuning';
+import { DRONE, throwSpeed, TUNING, VITALS } from './tuning';
 
 const FLOOR = 1000;
 /** A flat empty room 6000 px wide with a wall at x = 3000 and a one-way platform; nothing else. */
@@ -12,7 +13,7 @@ function flat(extra: Partial<Room> = {}): Room {
   return {
     name: 'flat', w: 6000, h: 2000, spawn: { x: 400, y: FLOOR - 24 },
     solids: [{ x: 0, y: FLOOR, w: 6000, h: 80 }, { x: -40, y: -2000, w: 40, h: 4000 }, { x: 6000, y: -2000, w: 40, h: 4000 }],
-    oneWay: [], hazards: [], plates: [], blocks: [], floaters: [], spikes: [], emitters: [], traces: [], signs: [], ...extra,
+    oneWay: [], hazards: [], plates: [], props: [], enemies: [], floaters: [], spikes: [], emitters: [], traces: [], signs: [], ...extra,
   };
 }
 
@@ -214,45 +215,117 @@ describe('walls, crouch and one-way platforms', () => {
   });
 });
 
-describe('Field Coil, Pulse Probe and enemies', () => {
-  it('fires 3 Pulse Probe shots a second that travel 640 px', () => {
+describe('Pulse Probe and Charged Probe (plan E, decision 29)', () => {
+  it('fires 7 bolts a second at 1100 px/s that live 0.7 s (770 px)', () => {
     const sim = settled();
-    let shots = 0, maxLeft = 0;
-    run(sim, 60, () => ['fire'], undefined, (s) => { if (s.events.includes('shot')) shots++; maxLeft = Math.max(maxLeft, ...s.shots.map((x) => PROBE.range - x.left)); });
-    expect(shots).toBe(3);
+    const at: number[] = [];
+    run(sim, 120, () => ['fire'], undefined, (s, i) => { if (s.events.includes('shot')) at.push(i); });
+    expect(Math.abs((at[at.length - 1] - at[0]) / (at.length - 1) - 60 / TUNING.probe.rate)).toBeLessThan(0.15); // 8.57 steps apart, rounded to whole steps
+    const b = sim.shots[sim.shots.length - 1];
+    expect(Math.hypot(b.vx, b.vy) * 60).toBeCloseTo(TUNING.probe.speed, 3);
+    expect(Math.round(TUNING.probe.life * 60) * TUNING.probe.speed / 60).toBeCloseTo(770, 0);
     run(sim, 60, () => []);
     expect(sim.shots.length).toBe(0);
   });
 
-  it('grabs a light block in front, holds it for 5 energy/s, and throws it at 900 px/s', () => {
-    const sim = settled(flat({ blocks: [{ x: 480, y: FLOOR - 20, size: 40 }] }));
-    run(sim, 30, () => ['field']);
-    expect(sim.field.on && sim.field.held).toBeTruthy();
-    expect(sim.vitals.energy).toBeCloseTo(VITALS.energy - 30 * FIELD.holdCost, 3);
-    let speed = 0;
-    run(sim, 2, (i) => (i === 0 ? ['field', 'fire'] : ['field']), undefined, (s) => { const b = s.world.blocks[0].body; speed = Math.max(speed, Math.hypot(b.velocity.x, b.velocity.y)); });
-    expect(speed).toBeGreaterThan(FIELD.throwSpeed * 0.9);
+  it('a single tap fires one bolt, and a tap just before the cooldown ends is buffered', () => {
+    const sim = settled();
+    let shots = 0;
+    run(sim, 12, (i) => (i === 0 || i === 5 ? ['fire'] : []), undefined, (s) => { if (s.events.includes('shot')) shots++; });
+    expect(shots).toBe(2); // the second tap lands 83 ms in, inside the 100 ms buffer, and fires at 143 ms
   });
 
-  it('cannot grab a block heavier than 40 units', () => {
-    const sim = settled(flat({ blocks: [{ x: 500, y: FLOOR - 60, size: 120 }] }));
-    run(sim, 10, () => ['field']);
+  it('Q swaps to the Charged Probe: hold 0.8 s, release fires one 40-damage bolt for 30 energy', () => {
+    const sim = settled();
+    run(sim, 2, (i) => (i === 0 ? ['weapon'] : []));
+    expect(sim.weapon).toBe('charged');
+    const e0 = sim.vitals.energy;
+    run(sim, 48, () => ['fire']);
+    expect(sim.charge).toBe(1);
+    run(sim, 1, () => []);
+    const c = sim.shots.find((s) => s.kind === 'charged')!;
+    expect(c.damage).toBe(TUNING.charged.damage);
+    expect(c.pierce).toBe(TUNING.charged.pierce);
+    expect(e0 - sim.vitals.energy).toBeCloseTo(TUNING.charged.energy, 0);
+    run(sim, 2, (i) => (i === 0 ? ['weapon'] : []));
+    expect(sim.weapon).toBe('pulse');
+  });
+});
+
+describe('Field Coil (plan F)', () => {
+  const crate = (x: number, mass: number) => flat({ props: [{ kind: 'crate', x, y: FLOOR - 40, mass }] });
+
+  it('drains 12 energy/s while on and 25 energy/s while holding', () => {
+    const sim = settled();
+    const e0 = sim.vitals.energy;
+    run(sim, 60, () => ['field']);
+    expect(e0 - sim.vitals.energy).toBeCloseTo(TUNING.field.drain, 0);
+    const held = settled(crate(450, 1));
+    run(held, 30, () => ['field']);
+    expect(held.field.on && held.field.held).toBeTruthy();
+    const e1 = held.vitals.energy;
+    run(held, 60, () => ['field']);
+    expect(e1 - held.vitals.energy).toBeCloseTo(TUNING.field.drainHold, 0);
+  });
+
+  it('grabs a crate inside its 90 px arc but not one farther away', () => {
+    const near = settled(crate(470, 1));
+    run(near, 20, () => ['field']);
+    expect(near.field.on && near.field.held).toBeTruthy();
+    const far = settled(crate(400 + TUNING.field.radius + 80, 1));
+    run(far, 20, () => ['field']);
+    expect(far.field.on && far.field.held).toBeFalsy();
+  });
+
+  it('cannot grab a crate heavier than the grab limit (3)', () => {
+    const sim = settled(crate(470, 5));
+    run(sim, 20, () => ['field']);
     expect(sim.field.on && sim.field.held).toBeFalsy();
   });
 
-  it('kills a Floater with three Pulse Probe hits (20 HP, 8 each)', () => {
-    const sim = settled(flat({ floaters: [{ x: 700, y: FLOOR - 24 }] }));
-    run(sim, 120, () => ['fire'], (s) => ({ x: (s.enemies[0] as unknown as { x: number }).x, y: (s.enemies[0] as unknown as { y: number }).y }));
+  it('a full-charge throw leaves at about 1500 px/s', () => {
+    expect(throwSpeed(1)).toBe(1500);
+    const sim = settled(crate(450, 1));
+    run(sim, 30, () => ['field']);
+    const p = sim.field.on && sim.field.held;
+    expect(p).toBeTruthy();
+    run(sim, 50, () => ['field', 'fire']);
+    let speed = 0;
+    run(sim, 2, () => ['field'], undefined, () => { const b = (p as { body: Matter.Body }).body; speed = Math.max(speed, Math.hypot(b.velocity.x, b.velocity.y) * 60); });
+    expect(speed).toBeGreaterThan(1500 * 0.85);
+    expect(sim.events.length >= 0 && !(sim.field.on && sim.field.held)).toBe(true);
+  });
+});
+
+describe('enemies (plan H)', () => {
+  const room = (kind: 'glitch' | 'spark' | 'latch') => flat({ enemies: [{ kind, x: 760, y: FLOOR - 40 }] });
+  const target = (s: Sim) => ({ x: s.enemies[0].x, y: s.enemies[0].y });
+
+  it('a Glitch dies to three Pulse bolts (30 HP)', () => {
+    const sim = settled(room('glitch'));
+    run(sim, 90, () => ['fire'], target);
     expect(sim.enemies[0].alive).toBe(false);
   });
 
-  it('a Glitch Spike can be hit only while its spike shows', () => {
-    const sim = settled(flat({ spikes: [{ x: 700, y: FLOOR, dir: 'up', offset: 200 }] }));
-    run(sim, 60, () => ['fire'], () => ({ x: 700, y: FLOOR - 80 }));
-    expect(sim.enemies[0].hp).toBe(15);
+  it('a Spark dies to four Pulse bolts (40 HP)', () => {
+    const sim = settled(room('spark'));
+    run(sim, 120, () => ['fire'], target);
+    expect(sim.enemies[0].alive).toBe(false);
   });
 
-  it('dying rebuilds the drone at the save node after 1.2 s with full integrity', () => {
+  it('a Latch takes a fifth of the damage from the front', () => {
+    const sim = settled(room('latch'));
+    const e = sim.enemies[0];
+    const facingDrone = e.facing < 0; // the drone is to its left
+    const hp0 = e.hp;
+    run(sim, 30, (i) => (i === 0 ? ['fire'] : []), target);
+    const lost = hp0 - e.hp;
+    expect(lost).toBeGreaterThan(0);
+    if (facingDrone) expect(lost).toBeCloseTo(TUNING.probe.damage * TUNING.latch.armor, 5);
+    else expect(lost).toBe(TUNING.probe.damage);
+  });
+
+  it('dying rebuilds the drone at the save node with full integrity', () => {
     const sim = settled();
     sim.vitals.integrity = 0;
     run(sim, 1, () => []);
@@ -264,10 +337,17 @@ describe('Field Coil, Pulse Probe and enemies', () => {
 });
 
 describe('the test room', () => {
-  it('loads and settles with the drone on the floor', () => {
+  it('loads and settles with the drone on the floor and six enemies', () => {
     const sim = new Sim(TEST_ROOM);
     run(sim, 60, () => []);
     expect(sim.drone.grounded).toBe(true);
-    expect(sim.enemies.length).toBe(4);
+    expect(sim.enemies.length).toBe(6);
+  });
+
+  it('the stress scene holds 30 enemies, 50 props and 200 shots without throwing', () => {
+    const sim = new Sim(TEST_ROOM);
+    sim.stress();
+    run(sim, 120, () => ['fire']);
+    expect(sim.enemies.length).toBeGreaterThanOrEqual(6);
   });
 });

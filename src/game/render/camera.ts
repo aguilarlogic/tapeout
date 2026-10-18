@@ -1,17 +1,19 @@
-// The camera: follows the drone with a 120 px lookahead toward the aim, eased at 0.12 a step, kept inside the room.
-// Screen shake (at most 6 px, 0.2 s) is off with reduced motion.
+// The camera (plan I): follows the drone at 0.12 per 60 Hz step, looks ahead 20% of the way toward the cursor (at
+// most 120 px), kept inside the room. Shake decays linearly from its strongest recent kick; "Reduce screen shake"
+// (or reduced motion) turns it off.
 import type { Room } from '../level/room';
 import type { Vec } from '../physics/geom';
-import { CAMERA, VIEW_H, VIEW_W } from '../tuning';
+import { TUNING, VIEW_H, VIEW_W } from '../tuning';
 
 export class Camera {
   x = 0; // top-left of the view in world px
   y = 0;
   prevX = 0;
   prevY = 0;
-  private shakeT = 0;
   shakeX = 0;
   shakeY = 0;
+  private amp = 0;
+  private decay = 0; // px per step
 
   snap(target: Vec, room: Room) {
     [this.x, this.y] = this.clamp(target.x - VIEW_W / 2, target.y - VIEW_H / 2, room);
@@ -19,24 +21,30 @@ export class Camera {
     this.prevY = this.y;
   }
 
-  step(drone: Vec, aim: Vec, room: Room, rand: () => number) {
+  step(drone: Vec, cursor: Vec, room: Room, rand: () => number) {
+    const C = TUNING.camera;
     this.prevX = this.x;
     this.prevY = this.y;
-    const tx = drone.x + aim.x * CAMERA.lookahead - VIEW_W / 2, ty = drone.y + aim.y * CAMERA.lookahead - VIEW_H / 2;
-    const [cx, cy] = this.clamp(tx, ty, room);
-    this.x += (cx - this.x) * CAMERA.smoothing;
-    this.y += (cy - this.y) * CAMERA.smoothing;
-    if (this.shakeT > 0) {
-      const k = (this.shakeT-- / CAMERA.shakeSteps) * CAMERA.shakeMax;
-      this.shakeX = (rand() * 2 - 1) * k;
-      this.shakeY = (rand() * 2 - 1) * k;
+    let lx = (cursor.x - drone.x) * C.lookahead, ly = (cursor.y - drone.y) * C.lookahead;
+    const l = Math.hypot(lx, ly);
+    if (l > C.lookMax) { lx *= C.lookMax / l; ly *= C.lookMax / l; }
+    const [cx, cy] = this.clamp(drone.x + lx - VIEW_W / 2, drone.y + ly - VIEW_H / 2, room);
+    this.x += (cx - this.x) * C.follow;
+    this.y += (cy - this.y) * C.follow;
+    if (this.amp > 0) {
+      this.shakeX = (rand() * 2 - 1) * this.amp;
+      this.shakeY = (rand() * 2 - 1) * this.amp;
+      this.amp = Math.max(0, this.amp - this.decay);
     } else {
       this.shakeX = this.shakeY = 0;
     }
   }
 
-  shake(reduced: boolean) {
-    if (!reduced) this.shakeT = CAMERA.shakeSteps;
+  /** Kick the shake to `px` for `ms` (keeps a stronger shake already running). */
+  shake(px: number, ms: number, off: boolean) {
+    if (off || px <= this.amp) return;
+    this.amp = px;
+    this.decay = px / Math.max(1, (ms / 1000) * 60);
   }
 
   private clamp(x: number, y: number, room: Room): [number, number] {

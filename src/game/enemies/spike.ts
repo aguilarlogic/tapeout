@@ -1,8 +1,9 @@
 // Glitch Spike (a combinational hazard): invisible, then a thin warning line for 0.4 s, then a spike across 160 px that
-// stays for 1 s. It can be hit only while the spike shows. It strikes again after a rest.
+// stays for 1 s. It can be hit only while the spike shows. It strikes again after a rest. Kept for phase 2 levels.
 import type { Dir, Rect } from '../level/room';
 import { SPIKE } from '../tuning';
-import type { Enemy, Shape } from './types';
+import type { Vec } from '../physics/geom';
+import type { Enemy } from './types';
 
 export type SpikePhase = 'rest' | 'warn' | 'strike';
 const THICK = 10;
@@ -12,6 +13,9 @@ export class GlitchSpike implements Enemy {
   hp = SPIKE.hp;
   maxHp = SPIKE.hp;
   alive = true;
+  facing: 1 | -1 = 1;
+  flash = 0;
+  telegraph = 0;
   phase: SpikePhase = 'rest';
   t: number;
   readonly rect: Rect;
@@ -25,13 +29,19 @@ export class GlitchSpike implements Enemy {
   }
   hittable() { return this.alive && this.phase === 'strike'; }
   touchDamage() { return this.alive && this.phase === 'strike' ? SPIKE.damage : 0; }
-  shape(): Shape { return { kind: 'rect', rect: this.rect }; }
+  outline(): Vec[] {
+    const r = this.rect;
+    return [{ x: r.x, y: r.y }, { x: r.x + r.w, y: r.y }, { x: r.x + r.w, y: r.y + r.h }, { x: r.x, y: r.y + r.h }];
+  }
   damage(n: number) {
-    if (!this.hittable()) return;
+    if (!this.hittable()) return 0;
     this.hp -= n;
     if (this.hp <= 0) this.alive = false;
+    return n;
   }
+  knock() { /* anchored to the floor */ }
   step() {
+    this.telegraph = this.alive && this.phase === 'warn' ? 1 - this.t / SPIKE.warn : 0;
     if (!this.alive || --this.t > 0) return;
     if (this.phase === 'rest') { this.phase = 'warn'; this.t = SPIKE.warn; }
     else if (this.phase === 'warn') { this.phase = 'strike'; this.t = SPIKE.visible; }

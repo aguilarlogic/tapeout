@@ -9,7 +9,7 @@ import Matter from 'matter-js';
 import type { Action } from '../input/bindings';
 import type { Rect, Room } from '../level/room';
 import { type Vec, approach, overlaps } from '../physics/geom';
-import { blockRect, CAT, type World } from '../physics/world';
+import { boundsRect, CAT, MASK, type World } from '../physics/world';
 import { DRONE } from '../tuning';
 
 export interface Controls {
@@ -58,7 +58,7 @@ const cancelGravity = (b: Matter.Body, w: World) => {
 export function createDrone(w: World, x: number, y: number): Drone {
   const body = Matter.Bodies.rectangle(x, y, DRONE.w, DRONE.h, {
     friction: 0, frictionStatic: 0, frictionAir: 0, restitution: 0, chamfer: { radius: 4 },
-    collisionFilter: { category: CAT.drone, mask: CAT.room | CAT.block },
+    collisionFilter: { category: CAT.drone, mask: MASK.drone },
   });
   Matter.Body.setInertia(body, Infinity);
   Matter.Body.setMass(body, 20);
@@ -94,9 +94,9 @@ function setHeight(d: Drone, h: number) {
   d.y = d.body.position.y;
 }
 
-/** Solid things the drone stands on or bumps into: the room and the blocks not being held. */
+/** Solid things the drone stands on or bumps into: the room, the closed door and the props it collides with. */
 function solidsNear(w: World): Rect[] {
-  return [...w.statics, ...w.blocks.filter((b) => !b.held).map(blockRect)];
+  return [...w.statics, ...w.props.filter((p) => p.body.collisionFilter.category === CAT.prop).map((p) => boundsRect(p.body))];
 }
 
 /** Read what the drone touches, using thin probe rects just outside its body. */

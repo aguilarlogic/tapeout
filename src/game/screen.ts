@@ -1,19 +1,27 @@
-// The story game screen: a full-window canvas over the desktop, the loop, input, camera, pause menu and (dev builds
-// only) the F9 debug overlay. Phase 1 shows the test room.
+// The story game screen: a full-window canvas over the desktop, the loop, input, camera, effects, sound, pause menu,
+// the F3 tuning panel and (dev builds only) the F9 debug overlay. Entry fades to black in 300 ms and boots the drone
+// (polish bar P2); quitting fades out the same way.
 import { prefs } from '../state';
 import { prefersReducedMotion } from '../term/typewriter';
 import { h } from '../ui/dom';
-import { type Bindings, resolve } from './input/bindings';
+import { GameAudio } from './audio';
+import { type Action, type Bindings, resolve } from './input/bindings';
 import { InputDevice } from './input/device';
 import { TEST_ROOM } from './level/testroom';
 import { Loop } from './loop';
 import { pauseMenu } from './pause';
 import { Camera } from './render/camera';
-import { drawBackdrop, drawBlocks, drawDrone, drawEnemies, drawField, drawRoom, drawShots } from './render/draw';
-import { drawHud } from './render/hud';
-import { FONT, PAL } from './render/palette';
+import { drawAimLine, drawEnemies, drawField, drawShots } from './render/combat';
+import { DroneRig } from './render/drone';
+import { Fx } from './render/fx';
+import { Hud } from './render/hud';
+import { easeOut, FONT, PAL, rgba } from './render/palette';
+import { WorldArt } from './render/world';
 import { rng, Sim } from './sim';
-import { VIEW_H, VIEW_W } from './tuning';
+import { Tuner } from './tuner';
+import { frames, HZ, TUNING, VIEW_H, VIEW_W, VITALS } from './tuning';
+import type { Rect } from './level/room';
+import { boundsRect } from './physics/world';
 
 let current: GameScreen | null = null;
 
@@ -22,7 +30,7 @@ export function reducedMotion(): boolean {
   return p === 'on' || (p === 'system' && prefersReducedMotion());
 }
 
-/** Open the story game, or return the one already open. `onQuit` runs when the player picks Back to desktop. */
+/** Open the story game, or return the one already open. `onQuit` runs when the player picks Quit to title. */
 export function openGame(onQuit: () => void): GameScreen {
   current ??= new GameScreen(onQuit);
   return current;
@@ -33,6 +41,9 @@ export function closeGame() {
   current?.close(false);
 }
 
+const BOOT_LINES = ['PROBE-7 FIRMWARE 7.0.3 . . . . . . . OK', 'LEGS / PULSE PROBE / FIELD COIL . . ONLINE', 'HULL PANELS 4 OF 6 . . . . SELF-REPAIR STANDBY'];
+const BOOT = { fadeIn: 0.3, eye: 0.6, cps: 40, hold: 0.35, hud: 0.25 };
+
 export class GameScreen {
   el: HTMLElement;
   private canvas: HTMLCanvasElement;
@@ -41,6 +52,12 @@ export class GameScreen {
   private cam = new Camera();
   private input: InputDevice;
   loop: Loop;
+  private audio = new GameAudio();
+  private fx = new Fx();
+  private rig = new DroneRig();
+  private hud = new Hud();
+  private art = new WorldArt(TEST_ROOM);
+  private tuner: Tuner;
   private paused = false;
   private pauseEl: HTMLElement | null = null;
   private debug = false;
@@ -50,13 +67,24 @@ export class GameScreen {
   private view = { s: 1, ox: 0, oy: 0, w: 0, h: 0 };
   private offs: (() => void)[] = [];
   private stepMs: number[] = [];
+  /** Seconds since the screen opened (drives the boot sequence). */
+  private age = 0;
+  /** True once the boot sequence hands over control. */
+  ready = false;
+  private hitStop = 0;
+  private fieldPower = 0;
+  private respawnFade = 0;
+  private quitting = false;
+  private bootLen = BOOT_LINES.reduce((a, l) => a + l.length, 0);
 
   constructor(private onQuit: () => void) {
     this.canvas = h('canvas', { class: 'gm-canvas', 'aria-label': 'Story game. Press Escape to pause.', tabindex: '0' });
-    this.el = h('div', { class: 'gm-screen', 'data-testid': 'game' }, this.canvas);
+    this.el = h('div', { class: 'gm-screen gm-fading', 'data-testid': 'game' }, this.canvas);
     document.body.append(this.el);
+    requestAnimationFrame(() => requestAnimationFrame(() => this.el.classList.remove('gm-fading')));
     this.ctx = this.canvas.getContext('2d')!;
     this.input = new InputDevice(this.canvas, resolve(prefs().keys), (code) => this.onKey(code));
+    this.tuner = new Tuner(this.el, { repair: () => this.sim.repairPanel(), breakPanels: () => this.sim.breakPanels(), stress: () => this.stress() });
     this.loop = new Loop(() => this.step(), (a) => this.render(a));
     this.cam.snap(this.sim.drone, this.sim.room);
     this.prev = { x: this.sim.drone.x, y: this.sim.drone.y };
@@ -64,10 +92,13 @@ export class GameScreen {
     const vis = () => { if (document.hidden) this.pause(); };
     const mq = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null;
     const rm = () => (this.reduced = reducedMotion());
+    // F3 is the browser's find shortcut: take it before the browser does
+    const f3 = (e: KeyboardEvent) => { if (e.code === 'F3') { e.preventDefault(); if (!this.paused) this.tuner.toggle(); } };
     window.addEventListener('resize', resize);
+    window.addEventListener('keydown', f3, true);
     document.addEventListener('visibilitychange', vis);
     mq?.addEventListener('change', rm);
-    this.offs.push(() => window.removeEventListener('resize', resize), () => document.removeEventListener('visibilitychange', vis), () => mq?.removeEventListener('change', rm));
+    this.offs.push(() => window.removeEventListener('resize', resize), () => window.removeEventListener('keydown', f3, true), () => document.removeEventListener('visibilitychange', vis), () => mq?.removeEventListener('change', rm));
     this.resize();
     this.canvas.focus();
     this.loop.start();
@@ -75,24 +106,30 @@ export class GameScreen {
   }
 
   private onKey(code: string) {
-    if (this.paused) return;
+    if (this.paused || !this.ready) return;
     const b = this.input.bindings;
     if (b.pause.includes(code)) this.pause();
     else if (code === 'F9' && import.meta.env.DEV) this.debug = !this.debug;
   }
 
   pause() {
-    if (this.paused) return;
+    if (this.paused || this.quitting) return;
     this.paused = true;
     this.loop.stop();
     this.input.clear();
     this.input.active = false;
+    this.audio.fieldHum(false);
+    this.audio.duck(true);
+    this.audio.play('uiOpen');
+    this.tuner.close();
+    this.render(0);
     this.pauseEl = pauseMenu({
       input: this.input,
       resume: () => this.resume(),
-      quit: () => this.close(),
+      quit: () => this.quit(),
       onBindings: (b: Bindings) => (this.input.bindings = b),
-      onReducedMotion: () => (this.reduced = reducedMotion()),
+      onSettings: () => { this.reduced = reducedMotion(); this.audio.applyVolumes(); },
+      sound: (s) => this.audio.play(s),
     });
     this.el.append(this.pauseEl);
     const esc = (e: KeyboardEvent) => {
@@ -110,11 +147,14 @@ export class GameScreen {
     if (!this.paused) return;
     this.escOff?.();
     this.input.capture = null;
-    this.pauseEl?.remove();
+    const el = this.pauseEl;
     this.pauseEl = null;
+    if (el) { el.classList.add('gm-leave'); setTimeout(() => el.remove(), 160); }
     this.paused = false;
     this.input.active = true;
     this.input.clear();
+    this.audio.duck(false);
+    this.audio.play('uiClose');
     this.canvas.focus();
     this.loop.start();
   }
@@ -123,9 +163,19 @@ export class GameScreen {
     return this.paused;
   }
 
+  /** Quit to title: fade to black over 300 ms, then close. */
+  quit() {
+    if (this.quitting) return;
+    this.quitting = true;
+    this.audio.stopMusic(0.3);
+    this.el.classList.add('gm-fading');
+    setTimeout(() => this.close(), 320);
+  }
+
   close(notify = true) {
     this.loop.stop();
     this.input.dispose();
+    this.audio.dispose();
     this.offs.forEach((f) => f());
     this.el.remove();
     if (current === this) current = null;
@@ -145,21 +195,130 @@ export class GameScreen {
   }
   private mouseScale = { s: 1, ox: 0, oy: 0 };
 
+  /**
+   * For the recorded demo and browser tests: a scripted player. Returns the actions held this step and the aim point
+   * in world px, or null to hand control back to the keyboard and mouse.
+   */
+  drive: ((sim: Sim) => { held: Action[]; aim: { x: number; y: number } } | null) | null = null;
+  private driven: { held: Set<Action>; aim: { x: number; y: number } } | null = null;
+
+  /** The mouse in view px (0..1280, 0..720). */
+  private mouseView() {
+    if (this.driven) return { x: this.driven.aim.x - this.cam.x, y: this.driven.aim.y - this.cam.y };
+    const m = this.input.mouse, k = this.mouseScale;
+    return { x: Math.max(0, Math.min(VIEW_W, (m.x - k.ox) / k.s)), y: Math.max(0, Math.min(VIEW_H, (m.y - k.oy) / k.s)) };
+  }
   /** The mouse in world px. */
   private aimPoint() {
-    const m = this.input.mouse, k = this.mouseScale;
-    return { x: (m.x - k.ox) / k.s + this.cam.x, y: (m.y - k.oy) / k.s + this.cam.y };
+    if (this.driven) return this.driven.aim;
+    const m = this.mouseView();
+    return { x: m.x + this.cam.x, y: m.y + this.cam.y };
+  }
+
+  /** The boot sequence's timeline (P2), in seconds since the screen opened. */
+  private bootTimes() {
+    const text = BOOT.fadeIn + BOOT.eye, typed = text + this.bootLen / BOOT.cps;
+    return { text, typed, hud: typed + BOOT.hold, control: typed + BOOT.hold + BOOT.hud };
   }
 
   private step() {
     const t0 = performance.now();
+    this.age += 1 / HZ;
+    const bt = this.bootTimes();
+    if (!this.ready && this.age >= bt.control) { this.ready = true; this.input.clear(); }
+    if (!this.ready) {
+      this.sim.booting = this.age < bt.typed ? VITALS.bootSteps : Math.min(this.sim.booting, VITALS.bootSteps);
+      if (Math.abs(this.age - BOOT.fadeIn) < 0.5 / HZ) { this.audio.play('boot'); this.audio.startMusic(); }
+    }
+    this.art.step(this.reduced);
+    if (this.hitStop > 0) {
+      // hit-stop: the world holds for a beat; particles keep moving so it reads as impact, not lag
+      this.hitStop--;
+      this.fx.step(this.sim.world.statics);
+      return;
+    }
     this.prev = { x: this.sim.drone.x, y: this.sim.drone.y };
-    this.sim.step(this.input.sample(), this.aimPoint());
-    if (this.sim.events.includes('hit') || this.sim.events.includes('pit')) this.cam.shake(this.reduced);
-    if (this.sim.events.includes('respawn') || this.sim.events.includes('pit')) this.prev = { x: this.sim.drone.x, y: this.sim.drone.y };
-    this.cam.step(this.sim.drone, this.sim.aim, this.sim.room, this.shakeRand);
+    let input = this.input.sample();
+    const prevHeld = this.driven?.held ?? new Set<Action>();
+    const auto = this.ready ? this.drive?.(this.sim) ?? null : null;
+    this.driven = auto ? { held: new Set(auto.held), aim: auto.aim } : null;
+    if (this.driven) input = { held: this.driven.held, pressed: new Set([...this.driven.held].filter((a) => !prevHeld.has(a))) };
+    if (!this.ready) input = { held: new Set(), pressed: new Set() };
+    this.sim.step(input, this.aimPoint());
+    this.handleFx();
+    this.cam.step(this.sim.drone, this.aimPoint(), this.sim.room, this.shakeRand);
+    const solids: Rect[] = [...this.sim.world.statics, ...this.sim.world.props.filter((p) => !p.held).map((p) => boundsRect(p.body))];
+    this.rig.step(this.sim, this.fx, solids);
+    this.hud.step(this.sim);
+    this.fx.step(this.sim.world.statics);
+    this.fieldPower += ((this.sim.field.on ? 1 : 0) - this.fieldPower) * 0.3;
+    this.audio.fieldHum(this.sim.field.on);
+    this.respawnFade = Math.max(0, this.respawnFade - 1);
     this.stepMs.push(performance.now() - t0);
     if (this.stepMs.length > 240) this.stepMs.shift();
+  }
+
+  /** Turn the sim's fx records into particles, shake and sound. */
+  private handleFx() {
+    const sim = this.sim, fx = this.fx, a = this.audio, F = TUNING.feel;
+    const noShake = prefs().reduceShake || this.reduced;
+    for (const f of sim.fx) {
+      switch (f.t) {
+        case 'shot':
+          fx.flash(f.x, f.y, f.weapon === 'charged' ? 30 : 14, f.weapon === 'charged' ? PAL.neon : PAL.trace, 3);
+          a.play(f.weapon === 'charged' ? 'charged' : 'shot');
+          this.cam.shake(f.weapon === 'charged' ? 4 : TUNING.probe.shake, f.weapon === 'charged' ? 140 : 60, noShake);
+          break;
+        case 'hit':
+          if (f.enemy) {
+            fx.sparks(f.x, f.y, -f.dx, -f.dy, F.sparks, f.armored ? '#FFFFFF' : PAL.neon, 4.5);
+            fx.flash(f.x, f.y, f.armored ? 12 : 18, f.armored ? '#FFFFFF' : PAL.neon, 4);
+            if (f.n > 0) fx.number(f.x, f.y, f.n, f.armored ? PAL.idle : PAL.text);
+            a.play(f.armored ? 'clank' : 'hit');
+          } else {
+            fx.sparks(f.x, f.y, -f.dx, -f.dy, 3, PAL.trace, 3);
+          }
+          break;
+        case 'kill':
+          fx.shatter(f.outline, f.x, f.y, f.vx, f.vy, PAL.neon, Math.round(F.fragmentS * HZ));
+          fx.flash(f.x, f.y, 46, PAL.neon, 8);
+          fx.ring(f.x, f.y, 40, PAL.neon, 18);
+          fx.sparks(f.x, f.y, 0, -1, 10, PAL.neon, 6, Math.PI);
+          a.play('kill');
+          this.hitStop = frames(F.hitStopMs);
+          this.cam.shake(F.killShake, F.killShakeMs, noShake);
+          break;
+        case 'orb': a.play('orb', 0.7); fx.flash(f.x, f.y, 16, PAL.neon, 5); break;
+        case 'reflect': a.play('reflect'); fx.ring(f.x, f.y, 18, PAL.trace, 10); fx.sparks(f.x, f.y, sim.aim.x, sim.aim.y, 4, PAL.trace, 4); break;
+        case 'push': a.play('push'); fx.ring(f.x, f.y, 26, PAL.trace, 12); break;
+        case 'grab': a.play('grab'); fx.ring(f.x, f.y, 22, PAL.trace, 10); break;
+        case 'throw': a.play('throw', 0.6 + 0.5 * f.charge); fx.sparks(f.x, f.y, sim.aim.x, sim.aim.y, 4 + Math.round(f.charge * 6), PAL.trace, 4 + f.charge * 4); break;
+        case 'drop': a.play('drop'); break;
+        case 'thud': a.play('thud', Math.min(1, f.speed / 900)); fx.dust(f.x, f.y + 10, 3, 1); break;
+        case 'jump': a.play('jump'); break;
+        case 'land': if (f.speed > 120) a.play('land', Math.min(1, 0.3 + f.speed / 1200)); break;
+        case 'dash': a.play('dash'); break;
+        case 'hurt':
+          a.play('hurt');
+          fx.sparks(f.x, f.y, 0, -1, 8, '#FFFFFF', 4, Math.PI);
+          this.cam.shake(TUNING.camera.hurtShake, TUNING.camera.hurtShakeMs, noShake);
+          break;
+        case 'death': a.play('death'); a.fieldHum(false); break;
+        case 'respawn': this.respawnFade = frames(400); a.play('boot'); this.fx.clear(); break;
+        case 'door': a.play('door'); this.cam.shake(2, 300, noShake); break;
+        case 'swap': a.play('swap'); break;
+        case 'fizzle': a.play('fizzle'); fx.sparks(f.x, f.y, sim.aim.x, sim.aim.y, 4, PAL.idle, 2); break;
+        case 'repair': a.play('repair'); break;
+        case 'enemyBoot': fx.ring(f.x, f.y, 30, PAL.neon, 20); break;
+      }
+    }
+    if (sim.weapon === 'charged' && sim.charge > 0 && sim.charge < 1 && sim.steps % 6 === 0) a.play('charge', 0.4 + sim.charge * 0.6);
+  }
+
+  private stress() {
+    this.sim.stress();
+    // fill the particle pool too, so the frame budget is measured at the plan's worst case
+    for (let i = 0; i < 400; i++) this.fx.spawn({ kind: 'spark', x: 2400 + Math.random() * 1100, y: 500 + Math.random() * 400, vx: (Math.random() - 0.5) * 4, vy: -Math.random() * 4, life: 600, len: 6, size: 1.5, color: PAL.neon, grav: 0.02, drag: 0.99 });
   }
 
   private render(alpha: number) {
@@ -176,33 +335,88 @@ export class GameScreen {
     c.clip();
     c.translate(-camX, -camY);
     const t = sim.steps + alpha;
-    drawBackdrop(c, sim.room, t, this.reduced, { x: camX, y: camY, w: VIEW_W, h: VIEW_H });
-    drawRoom(c, sim);
-    drawBlocks(c, sim);
-    drawEnemies(c, sim, t, this.reduced);
+    const cam = { x: camX, y: camY };
+    const reducedFlash = prefs().reduceFlash;
+    this.art.drawBackdrop(c, cam);
+    this.art.drawSigns(c);
+    this.art.drawFixtures(c, sim, t);
+    this.art.drawSolids(c, sim, cam);
+    this.art.drawProps(c, sim, t);
+    drawEnemies(c, sim, t, reducedFlash);
     const dx = this.prev.x + (sim.drone.x - this.prev.x) * alpha, dy = this.prev.y + (sim.drone.y - this.prev.y) * alpha;
-    drawField(c, sim, dx, dy);
-    drawDrone(c, sim, dx, dy, t, this.reduced);
-    drawShots(c, sim);
+    const core = { x: dx, y: dy - sim.drone.h / 2 + 13 };
+    const emitter = { x: dx - sim.drone.facing * 9, y: core.y - 1 };
+    drawField(c, sim, core.x, core.y, emitter.x, emitter.y, t, this.fieldPower);
+    if (this.ready && !(sim.field.on && sim.field.held)) {
+      const m = { x: dx + sim.drone.facing * 8 + sim.aim.x * TUNING.anim.barrel, y: dy - sim.drone.h / 2 + 2 + sim.aim.y * TUNING.anim.barrel };
+      drawAimLine(c, sim, m.x, m.y);
+    }
+    this.rig.draw(c, sim, dx, dy, { reducedFlash, reduced: this.reduced });
+    drawShots(c, sim, alpha);
+    this.fx.draw(c, alpha, reducedFlash, prefs().damageNumbers);
+    this.art.drawMotes(c, cam);
     c.restore();
-    drawHud(c, sim);
+
+    // view space: vignette, HUD, boot text, crosshair, fades
+    this.art.drawVignette(c);
+    const bt = this.bootTimes();
+    this.hud.draw(c, sim, Math.max(0, Math.min(1, (this.age - bt.hud) / BOOT.hud)), t);
+    if (!this.ready || this.age < bt.control + 1) this.drawBoot(c, bt);
+    if (this.ready && !this.paused) { const m = this.mouseView(); this.hud.crosshair(c, sim, m.x, m.y); }
+    let black = 0;
+    if (this.age < BOOT.fadeIn + BOOT.eye) black = 1 - easeOut((this.age - BOOT.fadeIn) / BOOT.eye);
+    if (sim.dying > 0) black = Math.max(black, Math.max(0, (1 - sim.dying / VITALS.deathSteps - 0.6) / 0.4));
+    if (this.respawnFade > 0) black = Math.max(black, this.respawnFade / frames(400));
+    if (black > 0) { c.fillStyle = rgba('#000000', Math.min(1, black)); c.fillRect(0, 0, VIEW_W, VIEW_H); }
+    if (this.paused) { c.fillStyle = 'rgba(11,10,26,0.35)'; c.fillRect(0, 0, VIEW_W, VIEW_H); }
     if (this.debug) this.drawDebug(c);
+  }
+
+  /** Three lines of boot text typed at 40 characters a second, then faded out (P2). */
+  private drawBoot(c: CanvasRenderingContext2D, bt: ReturnType<GameScreen['bootTimes']>) {
+    if (this.age < bt.text) return;
+    let chars = Math.floor((this.age - bt.text) * BOOT.cps);
+    const fade = this.ready ? Math.max(0, 1 - (this.age - bt.control) / 1) : 1;
+    c.save();
+    c.font = `14px ${FONT}`;
+    c.textBaseline = 'top';
+    const x = 64, y = VIEW_H - 150;
+    BOOT_LINES.forEach((line, i) => {
+      const n = Math.max(0, Math.min(line.length, chars));
+      chars -= line.length;
+      if (n <= 0 && i > 0) return;
+      const s = line.slice(0, n);
+      c.fillStyle = rgba(i === BOOT_LINES.length - 1 ? PAL.gold : PAL.trace, 0.9 * fade);
+      c.fillText(s, x, y + i * 22);
+      if (n < line.length && n > 0 && Math.floor(this.age * 6) % 2) c.fillRect(x + c.measureText(s).width + 2, y + i * 22, 8, 15);
+    });
+    c.restore();
   }
 
   /** Frame statistics, for the debug overlay and the frame-budget check. */
   frameStats() {
     const pct = (a: number[], p: number) => (a.length ? [...a].sort((x, y) => x - y)[Math.min(a.length - 1, Math.floor(a.length * p))] : 0);
     const f = this.loop.stats.frameMs, w = this.loop.stats.workMs;
-    return { fps: f.length ? 1000 / (f.reduce((a, b) => a + b, 0) / f.length) : 0, workAvg: w.length ? w.reduce((a, b) => a + b, 0) / w.length : 0, workP95: pct(w, 0.95), stepP95: pct(this.stepMs, 0.95), frames: f.length };
+    return { fps: f.length ? 1000 / (f.reduce((a, b) => a + b, 0) / f.length) : 0, workAvg: w.length ? w.reduce((a, b) => a + b, 0) / w.length : 0, workP95: pct(w, 0.95), stepP95: pct(this.stepMs, 0.95), frames: f.length, particles: this.fx.count, enemies: this.sim.enemies.filter((e) => e.alive).length, props: this.sim.world.props.length };
   }
+
+  /** For the browser test: reset the frame statistics. */
+  resetStats() {
+    this.loop.stats.frameMs.length = 0;
+    this.loop.stats.workMs.length = 0;
+    this.stepMs.length = 0;
+  }
+
+  /** For the browser test: run the stress scene. */
+  stressTest() { this.stress(); }
 
   private drawDebug(c: CanvasRenderingContext2D) {
     const d = this.sim.drone, s = this.frameStats();
     const lines = [
       `fps ${s.fps.toFixed(0)}  frame work ${s.workAvg.toFixed(2)} ms (p95 ${s.workP95.toFixed(2)})  step p95 ${s.stepP95.toFixed(2)} ms`,
       `pos ${d.x.toFixed(1)}, ${d.y.toFixed(1)}  vel ${(d.vx * 60).toFixed(0)}, ${(d.vy * 60).toFixed(0)} px/s`,
-      `ground ${d.grounded ? (d.onOneWay ? 'one-way' : 'yes') : 'no'}  wall ${d.wall}  latched ${d.latched}  coyote ${d.coyote}  buffer ${d.buffer}`,
-      `air jumps ${d.airJumps}  dash cd ${d.dashCd}  energy ${this.sim.vitals.energy.toFixed(0)}  shots ${this.sim.shots.length}  bodies ${this.sim.world.engine.world.bodies.length}`,
+      `ground ${d.grounded ? (d.onOneWay ? 'one-way' : 'yes') : 'no'}  wall ${d.wall}  coyote ${d.coyote}  buffer ${d.buffer}`,
+      `energy ${this.sim.vitals.energy.toFixed(0)}  shots ${this.sim.shots.length}  particles ${s.particles}  enemies ${s.enemies}  props ${s.props}`,
     ];
     c.save();
     c.fillStyle = 'rgba(11,10,26,0.8)';

@@ -19,7 +19,7 @@ export const ACTIONS: { id: Action; label: string; later?: boolean }[] = [
   { id: 'field', label: 'Field Coil' },
   { id: 'dash', label: 'Dash' },
   { id: 'interact', label: 'Interact', later: true },
-  { id: 'weapon', label: 'Next weapon', later: true },
+  { id: 'weapon', label: 'Next weapon' },
   { id: 'slot1', label: 'Weapon slot 1', later: true },
   { id: 'slot2', label: 'Weapon slot 2', later: true },
   { id: 'slot3', label: 'Weapon slot 3', later: true },

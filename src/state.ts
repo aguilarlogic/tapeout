@@ -29,6 +29,14 @@ export interface Prefs {
   keys: Record<string, [string | null, string | null]>;
   /** Reduced motion for the story game: follow the system setting, or force it on or off. */
   reducedMotion: 'system' | 'on' | 'off';
+  /** Story game settings (Feel and Combat Plan sections I and J, polish bar P5): no screen shake; flashes drawn as
+   * outlines; floating damage numbers; master, effects and music volume, 0-100. */
+  reduceShake: boolean;
+  reduceFlash: boolean;
+  damageNumbers: boolean;
+  volume: number;
+  sfxVolume: number;
+  musicVolume: number;
 }
 
 export interface Progress {
@@ -45,11 +53,12 @@ const KEY = 'tapeout.progress.v1';
 /** 2: the curriculum-order rework moved chapters between acts. Progress is keyed by module id and no id changed, so an
  * older save needs no rewriting: it is stamped with the new version and every level, star, card and rank stays. */
 /** 3: the story game's preview adds prefs.keys and prefs.reducedMotion. Missing fields get their defaults on load. */
-export const SAVE_VERSION = 3;
+/** 4: the story game's settings add prefs.reduceShake, reduceFlash, damageNumbers, volume, sfxVolume and musicVolume. */
+export const SAVE_VERSION = 4;
 let cache: Progress | null = null;
 
 function blank(): Progress {
-  return { levels: {}, cards: {}, prefs: { speed: 'normal', muted: false, keys: {}, reducedMotion: 'system' }, best: {}, daily: emptyDaily(), version: SAVE_VERSION };
+  return { levels: {}, cards: {}, prefs: { speed: 'normal', muted: false, keys: {}, reducedMotion: 'system', reduceShake: false, reduceFlash: false, damageNumbers: false, volume: 70, sfxVolume: 100, musicVolume: 60 }, best: {}, daily: emptyDaily(), version: SAVE_VERSION };
 }
 
 export function load(): Progress {

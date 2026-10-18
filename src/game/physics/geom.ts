@@ -46,3 +46,35 @@ export function norm(v: Vec): Vec {
   return l < 1e-9 ? { x: 1, y: 0 } : { x: v.x / l, y: v.y / l };
 }
 export const approach = (v: number, target: number, step: number) => (v < target ? Math.min(target, v + step) : Math.max(target, v - step));
+
+/** Where a segment p→p+d first enters a convex polygon, as a fraction 0..1 of d, or undefined (Cyrus-Beck). */
+export function segPoly(p: Vec, d: Vec, verts: readonly Vec[]): number | undefined {
+  let t0 = 0, t1 = 1;
+  const n = verts.length;
+  // winding: matter's vertices run clockwise on screen (y down); work out the sign once
+  let area = 0;
+  for (let i = 0; i < n; i++) { const a = verts[i], b = verts[(i + 1) % n]; area += a.x * b.y - b.x * a.y; }
+  const s = area > 0 ? 1 : -1;
+  for (let i = 0; i < n; i++) {
+    const a = verts[i], b = verts[(i + 1) % n];
+    // outward normal of edge a→b
+    const nx = s * (b.y - a.y), ny = s * -(b.x - a.x);
+    const num = nx * (a.x - p.x) + ny * (a.y - p.y), den = nx * d.x + ny * d.y;
+    if (Math.abs(den) < 1e-12) { if (num < 0) return undefined; continue; }
+    const t = num / den;
+    if (den < 0) t0 = Math.max(t0, t); else t1 = Math.min(t1, t);
+    if (t0 > t1) return undefined;
+  }
+  return t0;
+}
+
+/** Is a point inside a convex polygon? */
+export function inPoly(q: Vec, verts: readonly Vec[]): boolean {
+  return segPoly(q, { x: 0, y: 0 }, verts) === 0;
+}
+
+/** Angle between unit vector u and the direction to v, in radians (0..π). */
+export function angleTo(u: Vec, v: Vec): number {
+  const l = len(v) || 1;
+  return Math.acos(Math.max(-1, Math.min(1, (u.x * v.x + u.y * v.y) / l)));
+}
