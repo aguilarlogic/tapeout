@@ -53,8 +53,8 @@ export const TEST_ROOM: Room = {
   dummy: { x: 1300, y: FLOOR },
   door: { rect: r(2240, FLOOR - 200, 48, 200), plate: r(2060, FLOOR - 8, 120, 8) },
   enemies: [
-    { kind: 'glitch', x: 2480, y: FLOOR - 12 },
-    { kind: 'glitch', x: 2900, y: FLOOR - 12 },
+    { kind: 'glitch', x: 2480, y: FLOOR - 16 },
+    { kind: 'glitch', x: 2900, y: FLOOR - 16 },
     { kind: 'spark', x: 2670, y: FLOOR - 380 },
     { kind: 'spark', x: 3170, y: FLOOR - 460 },
     { kind: 'latch', x: 2760, y: FLOOR - 24 },
@@ -78,5 +78,6 @@ export const TEST_ROOM: Room = {
     { x: 1440, y: 702, text: 'THROW  HOLD + RELEASE LEFT CLICK' },
     { x: 1680, y: 940, text: 'INPUT PAD' },
     { x: 2010, y: 760, text: 'PUT A CRATE ON THE PLATE' },
+    { x: 2330, y: 700, text: 'LATCH: ARMOURED FRONT. HIT IT FROM BEHIND, OR THROW A CRATE' },
   ],
 };

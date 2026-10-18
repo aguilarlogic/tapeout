@@ -162,7 +162,7 @@ export class WorldArt {
 
   /** Room signs, painted on the back wall. */
   drawSigns(c: C) {
-    c.fillStyle = 'rgba(244,243,255,0.32)';
+    c.fillStyle = 'rgba(244,243,255,0.46)';
     c.font = `13px ${FONT}`;
     for (const s of this.room.signs) c.fillText(s.text, s.x, s.y);
   }

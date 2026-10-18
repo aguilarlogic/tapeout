@@ -380,7 +380,7 @@ export class GameScreen {
     c.save();
     c.font = `14px ${FONT}`;
     c.textBaseline = 'top';
-    const x = 64, y = VIEW_H - 150;
+    const x = 24, y = 72; // under the HUD, clear of the drone
     BOOT_LINES.forEach((line, i) => {
       const n = Math.max(0, Math.min(line.length, chars));
       chars -= line.length;

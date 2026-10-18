@@ -39,8 +39,8 @@ export function drawEnemies(c: C, sim: Sim, t: number, reducedFlash: boolean) {
     c.fill();
     c.save();
     c.globalCompositeOperation = 'lighter';
-    c.strokeStyle = rgba(PAL.neon, 0.22);
-    c.lineWidth = 7;
+    c.strokeStyle = rgba(PAL.neon, 0.34);
+    c.lineWidth = 8;
     c.stroke();
     c.restore();
     c.strokeStyle = flash ? '#FFFFFF' : tele > 0.6 ? '#FFC8F0' : PAL.neon;
@@ -155,13 +155,13 @@ export function drawShots(c: C, sim: Sim, alpha: number) {
     const l = Math.hypot(s.vx, s.vy) || 1, ux = s.vx / l, uy = s.vy / l;
     if (s.kind === 'orb') {
       const col = s.friendly ? PAL.trace : PAL.neon;
-      const g = c.createRadialGradient(x, y, 0, x, y, 14);
+      const g = c.createRadialGradient(x, y, 0, x, y, 18);
       g.addColorStop(0, rgba('#FFFFFF', 0.95));
       g.addColorStop(0.3, rgba(col, 0.8));
       g.addColorStop(1, rgba(col, 0));
       c.fillStyle = g;
       c.beginPath();
-      c.arc(x, y, 14, 0, Math.PI * 2);
+      c.arc(x, y, 18, 0, Math.PI * 2);
       c.fill();
       continue;
     }

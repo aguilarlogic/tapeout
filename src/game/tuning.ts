@@ -77,8 +77,8 @@ export const TUNING = {
   /** Props (plan G, decisions 13-16). */
   props: { crateK: 28, logicSize: 32, logicMass: 1 },
   /** Test enemies (plan H, decisions 17-20). Sizes are bounding widths in px. */
-  glitch: { size: 18, hp: 30, patrol: 90, charge: 380, chargeRange: 300, chargeMs: 800, cooldownMs: 1000, touch: 15, mass: 2 },
-  spark: { size: 22, hp: 40, period: 1.6, orbSpeed: 260, orbDamage: 10, range: 700, bob: 6, leash: 80, mass: 2 },
+  glitch: { size: 26, hp: 30, patrol: 90, charge: 380, chargeRange: 300, chargeMs: 800, cooldownMs: 1000, touch: 15, mass: 2 },
+  spark: { size: 26, hp: 40, period: 1.6, orbSpeed: 260, orbDamage: 10, range: 700, bob: 6, leash: 80, mass: 2 },
   latch: { size: 44, hp: 120, armor: 0.2, walk: 60, sight: 500, turnMs: 600, biteRange: 70, biteReach: 60, bite: 20, biteCooldownMs: 1200, touch: 10, mass: 8 },
   enemy: { telegraphMs: 400, respawnS: 5, stunMs: 150, knockDrone: 300 },
   /** Drone body art and animation (plan C and D). */
