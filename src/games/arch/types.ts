@@ -50,6 +50,8 @@ export interface ArchLevel {
   /** which lab the mission belongs to, for the header tag */
   lab: 'Pipeline' | 'Cache' | 'Out-of-order' | 'DFT' | 'PD' | 'Layout' | 'STA' | 'Signals' | 'RF' | 'Photonics' | 'Memory' | 'Process' | 'Package' | 'FPGA' | 'AI' | 'Security' | 'Safety' | 'Quantum';
   ticket: string;
+  /** "About this simulator" line: where the lab simplifies something a professional would notice */
+  model?: string;
   build: (r: Rng) => ArchInstance;
 }
 

@@ -2,7 +2,7 @@
 import { mentorSay } from '../../os/mentor';
 import { clearDraft, loadDraft, saveDraft } from '../../state';
 import { h } from '../../ui/dom';
-import { finishLab, hintBox, labFrame, useSeed, variantButton } from '../../ui/labkit';
+import { finishLab, hintBox, labFrame, modelNote, useSeed, variantButton } from '../../ui/labkit';
 import { findShellLevel, shellInstanceFor } from './levels';
 import { boot, evaluate, exec, passed, replay, type Machine } from './run';
 import { parseScript } from './sh';
@@ -19,6 +19,8 @@ function incomplete(src: string): boolean {
     return /unexpected EOF|unexpected token `newline'/.test(msg);
   }
 }
+
+export const MODEL_NOTE = 'A POSIX-style shell with GNU tools. Bash-only and GNU-only features are marked where they appear.';
 
 export function shellPage(id: string): HTMLElement {
   const level = findShellLevel(id);
@@ -37,6 +39,7 @@ export function shellPage(id: string): HTMLElement {
   const brief = h('aside', { class: 'brief panel' },
     h('div', { class: 'tag' }, `Shell · ${level.concept}`),
     h('p', { class: 'dim small' }, level.ticket),
+    modelNote(MODEL_NOTE),
     h('div', { class: 'brief-body', html: inst.brief }),
     boss ? h('p', { class: 'dim small' }, 'Boss mission: no hints. Check runs hidden verification.') : '',
     hintEl,

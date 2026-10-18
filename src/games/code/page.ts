@@ -2,10 +2,13 @@
 import { mentorSay } from '../../os/mentor';
 import { clearDraft, loadDraft, saveDraft } from '../../state';
 import { h } from '../../ui/dom';
-import { editor, highlightC, highlightPy } from '../../ui/editor';
-import { finishLab, hintBox, labFrame, useSeed, variantButton } from '../../ui/labkit';
+import { editor, highlightC, highlightPy, highlightTcl } from '../../ui/editor';
+import { finishLab, hintBox, labFrame, modelNote, useSeed, variantButton } from '../../ui/labkit';
 import { findCodeLevel, instanceFor } from './levels';
 import { runCode, type CodeReport } from './run';
+
+export const TCL_NOTE = 'A Tcl subset with a toy netlist; real EDA shells have far more commands.';
+export const MODEL_NOTE = 'C here behaves like 64-bit Linux with GCC: int is 32 bits, long is 64, char is signed. Undefined behaviour stops the program with a sanitizer-style error instead of doing something unpredictable.';
 
 export function codePage(id: string): HTMLElement {
   const level = findCodeLevel(id);
@@ -15,19 +18,20 @@ export function codePage(id: string): HTMLElement {
   const seed = useSeed(seedKey);
   const inst = instanceFor(level, seed);
   const draftKey = `code.${level.id}.${seed}`;
-  const langName = level.lang === 'py' ? 'Python' : 'C';
+  const langName = ({ py: 'Python', c: 'C', tcl: 'Tcl' })[level.lang];
 
   const ed = editor(loadDraft<string>(draftKey) ?? inst.starter, (v) => saveDraft(draftKey, v), () => run(false), {
-    highlight: level.lang === 'py' ? highlightPy : highlightC, label: `${langName} source`,
+    highlight: ({ py: highlightPy, c: highlightC, tcl: highlightTcl })[level.lang], label: `${langName} source`,
   });
 
   // --- brief and hints
   const { usage, box: hintEl } = hintBox(inst.hints, `${draftKey}.usage`);
 
-  const tierNote = level.tier === 'debug' ? 'Bug hunt: run it, read the sanitizer report, find the root cause.' : boss ? 'Boss mission: no hints. Hidden cases run on Submit.' : '';
+  const tierNote = level.tier === 'debug' ? 'Bug hunt: run it, read the error report, find the root cause.' : boss ? 'Boss mission: no hints. Hidden cases run on Submit.' : '';
   const brief = h('aside', { class: 'brief panel' },
     h('div', { class: 'tag' }, `${langName} · ${level.concept}`),
     h('p', { class: 'dim small' }, level.ticket),
+    modelNote(level.lang === 'tcl' ? TCL_NOTE : MODEL_NOTE),
     h('div', { class: 'brief-body', html: inst.brief }),
     tierNote ? h('p', { class: 'dim small' }, tierNote) : '',
     hintEl,

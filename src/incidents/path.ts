@@ -44,7 +44,7 @@ export const numbersIncident: Incident = {
     {
       id: 'hex', name: 'The hex decoder is wrong for digits A to F',
       fix: 'Correct the hex decoder table so A to F light the right segments',
-      story: 'The seven-segment decoder used only the low three bits of the digit. A showed as 2, B as 3, and so on up to F as 7. Digits 0 to 9 were fine, so only the letter digits were wrong.',
+      story: 'The seven-segment decoder\'s table had wrong rows for A to F: each letter lit the pattern of the digit 8 places lower, so A showed as 2, B as 3, and so on up to F as 7. Digits 0 to 9 were fine, so only the letter digits were wrong.',
     },
     {
       id: 'nib', name: 'The carry out of bit 3 never reaches bit 4',
@@ -138,7 +138,7 @@ export const isaIncident: Incident = {
     {
       id: 'signed', name: 'The loop test uses bgeu, an unsigned compare',
       fix: 'Use the signed compare bge for the loop test, since n is an int',
-      story: 'The count n is a signed int, but the loop test used bgeu, an unsigned compare. A count of -1 is 0xffffffff unsigned, so the loop never reached its bound. Counts of 0 or more behaved, so only empty input hung.',
+      story: 'The count n is a signed int, but the loop test used bgeu, an unsigned compare. A count of -1 is 0xffffffff unsigned, so the loop never reached its bound. Counts of 0 or more behaved, so only the negative-count test hung.',
     },
     {
       id: 'offby1', name: 'The loop exit is bgt, so it runs n + 1 times',
@@ -190,16 +190,16 @@ export const isaIncident: Incident = {
           return `loop, n = 3 (3 elements expected)\niterations: ${off ? 4 : 3}\nlast load address: ${off ? '0x0000100c' : '0x00001008'}`;
         }
         return w.cause === 'signed'
-          ? 'loop, n = -1 (empty input)\nstill running after 4096 steps: the exit test never fires'
-          : 'loop, n = -1 (empty input)\niterations: 0 (exits at once)';
+          ? 'loop, n = -1 (a negative count, an error input)\nstill running after 4096 steps: the exit test never fires'
+          : 'loop, n = -1 (a negative count, an error input)\niterations: 0 (exits at once)';
       },
     },
     {
       cmd: 'tests', cost: 5,
-      what: 'one run of the program tests: arrays, record, empty input, and the caller\'s registers',
+      what: 'one run of the program tests: arrays, record, a negative count, and the caller\'s registers',
       read: (w) => {
         const f = (bad: boolean) => (bad ? 'FAIL' : 'pass');
-        return `program tests, one run each\narrays (base 0x1000, n = 3): ${f(w.cause === 'offby1')}\nrecord (caller's packed field): ${w.cause === 'align' ? 'FAIL (trap)' : 'pass'}\nempty (n = -1): ${f(w.cause === 'signed')}\ncalls (main's s0 and sp): ${f(w.cause === 'clobber' || w.cause === 'stack')}`;
+        return `program tests, one run each\narrays (base 0x1000, n = 3): ${f(w.cause === 'offby1')}\nrecord (caller's packed field): ${w.cause === 'align' ? 'FAIL (trap)' : 'pass'}\nnegative count (n = -1): ${f(w.cause === 'signed')}\ncalls (main's s0 and sp): ${f(w.cause === 'clobber' || w.cause === 'stack')}`;
       },
     },
   ],
@@ -209,8 +209,10 @@ export const isaIncident: Incident = {
 
 /** The DC sweep: output for each input pair. */
 function nandDc(cause: string): (string | number)[][] {
+  // The sweep drives pins A and B at the cell; with B's joint broken, B has no effect and the output stalls when A is 1.
+  if (cause === 'float') return [['A', 'B', 'out'], [0, 0, '1.00 V'], [0, 1, '1.00 V'], [1, 0, '0.48 V'], [1, 1, '0.48 V']];
   if (cause === 'swap') return [['A', 'B', 'out'], [0, 0, 'floats'], [0, 1, '0.60 V'], [1, 0, '0.60 V'], [1, 1, '0.30 V']];
-  const high = cause === 'body' ? '0.93 V' : '1.00 V';
+  const high = '1.00 V'; // a floating n-well forward-biases the PMOS: it still pulls up all the way
   return [['A', 'B', 'out'], [0, 0, high], [0, 1, high], [1, 0, high], [1, 1, '0.00 V']];
 }
 
@@ -218,7 +220,7 @@ function nandDc(cause: string): (string | number)[][] {
 function edge(cause: string, dir: 'fall' | 'rise') {
   if (cause === 'swap' || cause === 'float') return 'no clean edge: output stalls near 0.5 V';
   if (dir === 'fall') return `${cause === 'stack' || cause === 'weak' ? 120 : 60} ps`;
-  return `${cause === 'body' ? 70 : 45} ps`;
+  return `${cause === 'body' ? 38 : 45} ps`; // a forward-biased PMOS is a little stronger
 }
 
 export const cellIncident: Incident = {
@@ -237,7 +239,7 @@ export const cellIncident: Incident = {
     {
       id: 'weak', name: 'The NAND pull-downs are high-Vt, so they are too weak',
       fix: 'Replace the NAND with the standard-Vt cell variant of the same size',
-      story: 'The cell was picked from the low-power library. Its NMOS threshold is high, so each pull-down passes less current, and every fall took about twice as long. Rises and DC levels were normal.',
+      story: 'The cell was picked from the low-power library. Its NMOS threshold is high, so each pull-down passes less current, and every fall took much longer (about twice, at this low supply). Rises and DC levels were normal.',
     },
     {
       id: 'stack', name: 'The stacked NMOS pull-downs are drawn at half the needed width',
@@ -247,7 +249,7 @@ export const cellIncident: Incident = {
     {
       id: 'body', name: 'The PMOS n-well is not tied to VDD',
       fix: 'Add a well tap that ties the PMOS n-well to VDD, then retest',
-      story: 'The n-well of the PMOS devices had no tie to VDD, so its potential floated and drifted. The PMOS threshold moved, so the output high sagged to 0.93 V and rises slowed to 70 ps. The well probe read 0.71 V where it should read 1.00 V.',
+      story: 'The n-well of the PMOS devices had no tap to VDD, so it floated about a diode drop low: the well probe read 0.71 V where it should read 1.00 V. That forward-biases the PMOS body, which lowers its threshold, so the pull-ups leaked more and rose a little faster (38 ps). The real danger is latch-up: an untied well can trigger it under a supply spike.',
     },
     {
       id: 'float', name: 'Input B is open: the joint from the switch to pin B is broken',

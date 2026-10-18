@@ -96,5 +96,8 @@ export const exact = (canonical: string, ...alts: string[]): Answer => {
 };
 
 /** Tag every row of a concept bank with one difficulty level (see concept()). */
+/** A small concept pool with no level tags: d1 draws from the first four (easier) rows, d2 and d3 from all of them. */
+export const easyFirst = <T,>(d: number, rows: T[]): T[] => (d === 1 ? rows.slice(0, 4) : rows);
+
 export const atLevel = (level: Difficulty, rows: readonly ConceptQ[]): ConceptQ[] =>
   rows.map((row) => [row[0], row[1], row[2], row[3], row[4], row[5], row[6] ?? '', level]);

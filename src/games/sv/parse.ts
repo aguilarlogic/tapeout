@@ -982,7 +982,7 @@ class Parser {
       const digits = t.v.replace(/[xXzZ?]/g, '0');
       let v = 0n;
       for (const ch of digits) v = v * BigInt(radix) + BigInt(parseInt(ch, radix));
-      return { k: 'num', v, w: t.w, signed: false };
+      return { k: 'num', v, w: t.w, signed: false, ...(/[xXzZ?]/.test(t.v) ? { xz: true } : {}) };
     }
     if (t.t === 'real') { this.next(); return { k: 'real', v: parseFloat(t.v) }; }
     if (t.t === 'str') { this.next(); return { k: 'str', v: t.v }; }

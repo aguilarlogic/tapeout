@@ -31,6 +31,14 @@ describe('lessons', () => {
       expect(l.recap.length).toBeGreaterThan(0);
     });
   }
+  it('answer keys survive option reorders (a merge once left two pointing at a distractor)', () => {
+    const key = (q: string) => {
+      const m = LESSONS.flatMap((l) => l.steps).find((s) => s.t === 'mc' && s.q.includes(q));
+      return m && m.t === 'mc' ? m.options[m.a] : undefined;
+    };
+    expect(key('INT_MAX; x = x + 1;')).toMatch(/behaviour is undefined/);
+    expect(key('`always_comb if (en) y = d;`')).toBe('A latch');
+  });
   it('the final review draws FINAL_COUNT questions from distinct lessons', () => {
     for (let seed = 1; seed < 20; seed++) {
       const ex = finalExam(rng(seed));

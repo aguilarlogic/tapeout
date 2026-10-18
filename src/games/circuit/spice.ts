@@ -501,7 +501,7 @@ function evalDevice(e: Elem, v: (n: number) => number): Dev | null {
       const pol = e.m.kind === KIND.PMOS ? -1 : 1;
       if (pol * (v(d) - v(s)) < 0) [d, s] = [s, d];
       const vgs = pol * (v(g) - v(s)), vds = pol * (v(d) - v(s));
-      // Channel-length modulation shrinks as the channel gets longer: lambda is quoted for L = 1 um.
+      // This simulator scales lambda as 1/L (quoted for L = 1 um); plain SPICE Level 1 keeps LAMBDA fixed per model card.
       const vt = Math.abs(e.m.vto ?? 0.5), beta = (e.m.kp ?? 200e-6) * (e.w / e.l), lam = (e.m.lambda ?? 0) * (1e-6 / e.l);
       const vov = vgs - vt;
       let id = 0, gm = 0, gds = 0;

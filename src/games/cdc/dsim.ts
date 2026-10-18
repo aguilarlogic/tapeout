@@ -18,6 +18,8 @@ export interface Scenario {
 
 export interface Io {
   set(name: string, v: number | bigint): void;
+  /** like set, but the change happens at a random instant just before the coming edge (an asynchronous reset asserting at any moment) */
+  asyncSet(name: string, v: number | bigint): void;
   get(name: string): bigint;
   rnd(): number;
   time: number;
@@ -60,8 +62,21 @@ export function simulateCdc(
   const last = new Map<string, { t: number; old: bigint }>();
   const prev = new Map<string, bigint>();
   let now = 0;
+  let curDom = doms[0];
   const io: Io = {
     set: (n, v) => d.apply({ [n]: v }),
+    asyncSet: (n, v) => {
+      d.apply({ [n]: v });
+      // the sources it changed (through an asynchronous reset) changed inside the capture window of the coming edge
+      for (const s of srcs) {
+        const cur = d.get(s), was = prev.get(s)!;
+        if (cur === was) continue;
+        last.set(s, { t: now - r() * 0.9 * window * scen.periods[curDom], old: was });
+        const f = popcount(cur ^ was);
+        if (f > (out.maxFlips.get(s) ?? 0)) out.maxFlips.set(s, f);
+        prev.set(s, cur);
+      }
+    },
     get: (n) => d.get(n),
     rnd: r,
     get time() { return now; },
@@ -92,6 +107,7 @@ export function simulateCdc(
       if (now > horizon) break;
       next.set(dm, now + scen.periods[dm]);
       const clk = domClock[dm];
+      curDom = dm;
       bench.sample(dm, io);
       // sources captured by this domain that changed inside the window
       const hot = report.crossings.filter((c) => c.domain === dm && last.has(c.src) && now - last.get(c.src)!.t < window * scen.periods[dm]).map((c) => c.src);

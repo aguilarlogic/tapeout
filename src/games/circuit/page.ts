@@ -46,10 +46,11 @@ export function circuitPage(id: string): HTMLElement {
   const brief = h('aside', { class: 'brief panel' },
     h('div', { class: 'tag' }, level.concept),
     h('p', { class: 'dim small' }, level.ticket),
-    h('div', { class: 'brief-body', html: inst.brief }),
+    h('div', { class: 'brief-body', tabindex: '0', html: inst.brief }),
     hintEl || h('p', { class: 'dim small' }, 'Boss mission: no hints. Standard parts only.'),
     h('details', { class: 'cheat' }, h('summary', null, 'Netlist cheat-sheet'), h('pre', null, CHEATS)),
   );
+  brief.querySelectorAll('.brief-body pre').forEach((p) => p.setAttribute('tabindex', '0')); // wide diagrams scroll: reachable by keyboard
 
   // --- results
   const status = h('div', { class: 'status idle' }, 'Press Run (Ctrl+Enter) to simulate, or Check design to test it against the goals.');

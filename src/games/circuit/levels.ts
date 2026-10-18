@@ -375,7 +375,7 @@ const mirror: CircuitLevel = {
       <p>A <b>current mirror</b> forces the same V<sub>GS</sub> on two transistors, so their currents are in the ratio of their
       W/L. M1 is "diode-connected" (gate tied to drain), which makes it set V<sub>GS</sub> for any current you push in.</p>
       <p>But a real transistor's current rises a little with its drain voltage (<b>channel-length modulation</b>), so the
-      copy drifts as the output node moves. A <b>longer channel</b> flattens it (λ shrinks as 1/L), but a longer
+      copy drifts as the output node moves. A <b>longer channel</b> flattens it (this simulator scales λ as 1/L; simple SPICE models keep λ fixed per model card), but a longer
       device must be wider to keep the same W/L, and silicon area is money.</p>
       <h4>Goals</h4><ul><li>Output current within ±2% of 2 × 100 µA for every output voltage from 0.8 V to 2.0 V.</li>
       <li>Total gate area (W × L, both devices) at most 150 µm².</li></ul>`,
@@ -426,6 +426,7 @@ const buck: CircuitLevel = {
       <pre>ΔI<sub>L</sub> = (V<sub>in</sub> - V<sub>out</sub>) × D × T / L        ΔV ≈ ΔI<sub>L</sub> / (8 × f × C)</pre>
       <p>A bigger L cuts the current ripple (and the inductor's heating), a bigger C cuts the voltage ripple. Neither is free:
       parts get larger and slower to respond. Keep the pulse width you found in the last mission.</p>
+      <p>These formulas assume continuous conduction: the inductor current never reaches zero, so ΔI<sub>L</sub>/2 is less than the load current. The 10 µH starter breaks that (about 3.1 A peak-to-peak on a 1 A load), which is part of why it misbehaves.</p>
       <h4>Goals</h4><ul><li>Average output 5 V ± 3%.</li><li>Output ripple at most 50 mV peak-to-peak.</li>
       <li>Inductor current ripple at most 0.5 A peak-to-peak (current through L1).</li></ul>`,
     starter: `* Buck converter, 12 V -> 5 V at 1 A\nVin in 0 12\nVg g 0 PULSE(0 5 0 10n 10n 4.4u 10u)\nS1 in sw g 0 vt=2.5 ron=0.02\nD1 0 sw schottky\nL1 sw out 10u\nC1 out 0 2.2u\nRload out 0 5\n\n.tran 200n 3m\n`,
@@ -436,6 +437,31 @@ const buck: CircuitLevel = {
     ],
     hints: ['ΔI = (12 - 5) × 0.44 × 10 µs / L ≤ 0.5 A gives L ≥ 62 µH.', 'With ΔI = 0.4 A: C ≥ 0.4 / (8 × 100 kHz × 0.05 V) = 10 µF.', 'Try L1 = 100u and C1 = 47u.'],
     solution: 'Vin in 0 12\nVg g 0 PULSE(0 5 0 10n 10n 4.4u 10u)\nS1 in sw g 0 vt=2.5 ron=0.02\nD1 0 sw schottky\nL1 sw out 100u\nC1 out 0 47u\nRload out 0 5\n',
+  }),
+};
+
+const dcm: CircuitLevel = {
+  id: 'clab-dcm', title: 'Light Load', concept: 'continuous versus discontinuous conduction at light load', xp: 375, tier: 'guided',
+  ticket: 'The 5 V rail is right at full load, but when the board idles it drifts up past 7 V and the sleeping chips do not like it.',
+  build: () => ({
+    brief: `
+      <p>Run the starter and look at the inductor current, <b>i(L1)</b>. At a light load it falls to zero and stays there for part of
+      every cycle: the converter has entered <b>discontinuous conduction (DCM)</b>. The diode D1 will not let the current reverse,
+      so the energy stored each cycle is more than the load takes, and with a fixed pulse width the output climbs.</p>
+      <p>The edge between the two modes is where the load current equals half the peak-to-peak ripple:</p>
+      <pre>I<sub>boundary</sub> = ΔI / 2        ΔI = (V<sub>in</sub> - V<sub>out</sub>) × D × T / L</pre>
+      <p>This idle load is 100 mA (50 Ω at 5 V). Measure the ripple on the starter: with L = 47 µH it is about 0.65 A, so the
+      boundary is far above the load. Leave the pulse width alone and choose an inductor that keeps the converter in
+      <b>continuous conduction (CCM)</b> down to this load.</p>
+      <h4>Goals</h4><ul><li>Average output 5 V ± 3% at the 100 mA load.</li>
+      <li>The inductor current never falls to zero (it stays above 10 mA).</li></ul>`,
+    starter: `* Buck converter at an idle load: 12 V -> 5 V, 100 mA\nVin in 0 12\nVg g 0 PULSE(0 5 0 10n 10n 4.4u 10u)\nS1 in sw g 0 vt=2.5 ron=0.02\nD1 0 sw schottky\nL1 sw out 47u\nC1 out 0 10u\nRload out 0 50\n\n.tran 200n 3m\n`,
+    goals: [
+      goal('Average output is 5 V ± 3% at the light load', (l) => { const t = l.tran({ step: 200e-9, stop: 3e-3 }); const [a, b] = tail(t, 0.2); const m = stats(t.t, t.v.out, a, b).mean; return { ok: within(m, 5, 3), detail: `average ${f(m)} V` }; }),
+      goal('Inductor current stays above 10 mA (continuous conduction)', (l) => { const t = l.tran({ step: 200e-9, stop: 3e-3 }); const [a, b] = tail(t, 0.2); const s = stats(t.t, t.i.l1, a, b); return { ok: s.min >= 0.01, detail: `lowest current ${f(s.min)} A` }; }),
+    ],
+    hints: ['A 100 mA load stays in CCM while ΔI/2 is below 100 mA, so ΔI must be at most 0.2 A.', 'ΔI = (12 - 5) × 0.44 × 10 µs / L ≤ 0.2 A gives L ≥ 154 µH.', 'Try L1 = 220u, the next standard value up. The cost is a larger, slower inductor.'],
+    solution: 'Vin in 0 12\nVg g 0 PULSE(0 5 0 10n 10n 4.4u 10u)\nS1 in sw g 0 vt=2.5 ron=0.02\nD1 0 sw schottky\nL1 sw out 220u\nC1 out 0 10u\nRload out 0 50\n',
   }),
 };
 
@@ -469,7 +495,7 @@ const lcfilter: CircuitLevel = {
   build: () => ({
     brief: `
       <p>An inductor in series and a capacitor to ground make a second-order low-pass filter, falling at 40 dB per decade
-      (four times the attenuation of an RC at the same distance). Between a 50 Ω source and a 50 Ω load, the
+      (twice the slope of an RC in dB: a decade past the corner an RC gives 10× attenuation (20 dB), the LC 100× (40 dB)). Between a 50 Ω source and a 50 Ω load, the
       <b>Butterworth</b> choice has the flattest passband:</p>
       <pre>L = √2 × R / (2π f<sub>c</sub>)        C = √2 / (2π f<sub>c</sub> × R)</pre>
       <p>Because the load and source split the signal, the passband gain is -6 dB, not 0 dB. All gains below are measured
@@ -871,7 +897,7 @@ const dac: CircuitLevel = {
 };
 
 export const CIRCUIT_LEVELS: CircuitLevel[] = [
-  divider, led, thevenin, bridge, lowpass, debounce, rlc, rectifier, inverting, gbw, bjt, csamp, mirror, duty, buck, pdn, lcfilter, mesh, kickback, dac,
+  divider, led, thevenin, bridge, lowpass, debounce, rlc, rectifier, inverting, gbw, bjt, csamp, mirror, duty, buck, dcm, pdn, lcfilter, mesh, kickback, dac,
   bossOhm, bossKcl, bossAc, bossOde, bossBjt, bossAmp, bossBuck, bossPdn,
 ];
 

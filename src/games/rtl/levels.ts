@@ -206,35 +206,36 @@ endmodule`,
     id: 'mux4',
     track: 'rtl',
     title: 'Case Closed',
-    concept: 'always @(*) & case',
+    concept: 'always_comb & case',
     xp: 150,
     brief: `
       <p>For wider logic, a <b>combinational always block</b> is easier to read than nested <code>?:</code>.</p>
-      <pre>always @(*) begin
-  case (sel)
+      <pre>always_comb begin
+  unique case (sel)
     2'd0: y = d0;
     ...
     default: y = 8'd0;
   endcase
 end</pre>
-      <p>Rules for combinational blocks: use <code>@(*)</code> so every input is in the sensitivity list, use blocking
-      <code>=</code>, and <b>assign every output on every path</b> (otherwise you infer a latch). Signals assigned in an
-      always block must be declared <code>reg</code> (or <code>logic</code> in SystemVerilog) &mdash; that's a language rule,
-      it does <i>not</i> mean a register is built.</p>
+      <p>Rules for combinational blocks: use <code>always_comb</code>, which works out the sensitivity list for you and
+      warns about latches, use blocking <code>=</code>, and <b>assign every output on every path</b> (otherwise you infer a
+      latch). <code>unique case</code> tells the tools the arms never overlap. Signals assigned in an always block are
+      declared <code>logic</code> &mdash; that's a language rule, it does <i>not</i> mean a register is built. (Older
+      Verilog-2001 code spells this <code>reg</code> and <code>always @(*)</code>.)</p>
       <h4>Spec</h4><ul><li>8-bit 4:1 mux: <code>sel</code> = 0..3 selects <code>d0</code>..<code>d3</code></li></ul>`,
     starter: `module mux4(
   input      [7:0] d0, d1, d2, d3,
   input      [1:0] sel,
-  output reg [7:0] y
+  output logic [7:0] y
 );
-  always @(*) begin
+  always_comb begin
     // TODO
   end
 endmodule
 `,
-    golden: `module mux4(input [7:0] d0, d1, d2, d3, input [1:0] sel, output reg [7:0] y);
-  always @(*) begin
-    case (sel)
+    golden: `module mux4(input [7:0] d0, d1, d2, d3, input [1:0] sel, output logic [7:0] y);
+  always_comb begin
+    unique case (sel)
       2'd0: y = d0;
       2'd1: y = d1;
       2'd2: y = d2;
@@ -243,7 +244,7 @@ endmodule
   end
 endmodule`,
     stimulus: () => ({ vectors: random(7, 120, [['d0', 8], ['d1', 8], ['d2', 8], ['d3', 8], ['sel', 2]]) }),
-    hints: ['Write one case item per value of sel.', "Declaring y as 'output reg' is required because it's assigned in an always block."],
+    hints: ['Write one case item per value of sel.', "Declaring y as 'output logic' is required because it's assigned in an always block. Older code writes 'output reg'."],
   },
   {
     id: 'prio',
@@ -262,16 +263,16 @@ endmodule`,
       <li><code>valid</code> = 1 if any bit of <code>req</code> is set; when <code>req == 0</code>, <code>idx = 0</code> and <code>valid = 0</code></li></ul>`,
     starter: `module prio_enc(
   input      [7:0] req,
-  output reg [2:0] idx,
-  output reg       valid
+  output logic [2:0] idx,
+  output logic       valid
 );
-  always @(*) begin
+  always_comb begin
     // TODO
   end
 endmodule
 `,
-    golden: `module prio_enc(input [7:0] req, output reg [2:0] idx, output reg valid);
-  always @(*) begin
+    golden: `module prio_enc(input [7:0] req, output logic [2:0] idx, output logic valid);
+  always_comb begin
     valid = |req;
     casez (req)
       8'b1???????: idx = 3'd7;
@@ -305,9 +306,9 @@ endmodule`,
       <tr><td>3</td><td>7'h4F</td><td>7</td><td>7'h07</td><td>B</td><td>7'h7C</td><td>F</td><td>7'h71</td></tr></table>`,
     starter: `module seg7(
   input      [3:0] hex,
-  output reg [6:0] seg   // {g,f,e,d,c,b,a}
+  output logic [6:0] seg   // {g,f,e,d,c,b,a}
 );
-  always @(*) begin
+  always_comb begin
     case (hex)
       4'h0: seg = 7'h3F;
       // TODO: the other 15
@@ -316,8 +317,8 @@ endmodule`,
   end
 endmodule
 `,
-    golden: `module seg7(input [3:0] hex, output reg [6:0] seg);
-  always @(*) begin
+    golden: `module seg7(input [3:0] hex, output logic [6:0] seg);
+  always_comb begin
     case (hex)
       4'h0: seg = 7'h3F; 4'h1: seg = 7'h06; 4'h2: seg = 7'h5B; 4'h3: seg = 7'h4F;
       4'h4: seg = 7'h66; 4'h5: seg = 7'h6D; 4'h6: seg = 7'h7D; 4'h7: seg = 7'h07;
@@ -337,7 +338,7 @@ endmodule`,
     xp: 150,
     brief: `
       <p>Registers hold state between clock edges. The canonical flip-flop template:</p>
-      <pre>always @(posedge clk) begin
+      <pre>always_ff @(posedge clk) begin
   if (rst)     q &lt;= 0;
   else if (en) q &lt;= d;
 end</pre>
@@ -351,19 +352,19 @@ end</pre>
   input            rst,
   input            en,
   input      [7:0] d,
-  output reg [7:0] q
+  output logic [7:0] q
 );
   // TODO
 endmodule
 `,
-    golden: `module reg8(input clk, input rst, input en, input [7:0] d, output reg [7:0] q);
-  always @(posedge clk) begin
+    golden: `module reg8(input clk, input rst, input en, input [7:0] d, output logic [7:0] q);
+  always_ff @(posedge clk) begin
     if (rst) q <= 8'd0;
     else if (en) q <= d;
   end
 endmodule`,
     stimulus: () => ({ clock: 'clk', vectors: seq('rst', 1, 2, 40, (_i, r) => ({ en: r() < 0.5 ? 1 : 0, d: randInt(r, 256) }), 3) }),
-    hints: ['Use always @(posedge clk) and non-blocking <= assignments.'],
+    hints: ['Use always_ff @(posedge clk) and non-blocking <= assignments.'],
   },
   {
     id: 'bcd',
@@ -383,15 +384,15 @@ endmodule`,
   input            clk,
   input            rst,
   input            en,
-  output reg [3:0] count,
+  output logic [3:0] count,
   output           tc
 );
   // TODO
 endmodule
 `,
-    golden: `module bcd_counter(input clk, input rst, input en, output reg [3:0] count, output tc);
+    golden: `module bcd_counter(input clk, input rst, input en, output logic [3:0] count, output tc);
   assign tc = en && (count == 4'd9);
-  always @(posedge clk) begin
+  always_ff @(posedge clk) begin
     if (rst) count <= 4'd0;
     else if (en) count <= (count == 4'd9) ? 4'd0 : count + 4'd1;
   end
@@ -419,15 +420,15 @@ endmodule`,
   input            load,
   input      [7:0] d,
   input            sin,
-  output reg [7:0] q,
+  output logic [7:0] q,
   output           sout
 );
   // TODO
 endmodule
 `,
-    golden: `module shifter(input clk, input rst, input load, input [7:0] d, input sin, output reg [7:0] q, output sout);
+    golden: `module shifter(input clk, input rst, input load, input [7:0] d, input sin, output logic [7:0] q, output sout);
   assign sout = q[7];
-  always @(posedge clk) begin
+  always_ff @(posedge clk) begin
     if (rst) q <= 8'd0;
     else if (load) q <= d;
     else q <= {q[6:0], sin};
@@ -460,8 +461,8 @@ endmodule`,
 endmodule
 `,
     golden: `module edge_detect(input clk, input rst, input sig, output rise);
-  reg prev;
-  always @(posedge clk) begin
+  logic prev;
+  always_ff @(posedge clk) begin
     if (rst) prev <= 1'b0;
     else prev <= sig;
   end
@@ -479,12 +480,12 @@ endmodule`,
     brief: `
       <p>FSMs control everything from bus protocols to cache coherence. The standard style splits the FSM into a
       <b>state register</b> (clocked) and <b>next-state logic</b> (combinational):</p>
-      <pre>localparam S0 = 3'd0, S1 = 3'd1, ...;
-reg [2:0] state, next;
-always @(posedge clk) state &lt;= rst ? S0 : next;
-always @(*) begin
+      <pre>typedef enum logic [2:0] { S0, S1, ... } state_t;
+state_t state, next;
+always_ff @(posedge clk) state &lt;= rst ? S0 : next;
+always_comb begin
   next = state;
-  case (state) ... endcase
+  unique case (state) ... endcase
 end</pre>
       <h4>Spec</h4>
       <ul><li>Detect the serial pattern <code>1011</code> on <code>din</code> (one bit per clock, oldest first)</li>
@@ -501,15 +502,15 @@ end</pre>
 endmodule
 `,
     golden: `module seq_detect(input clk, input rst, input din, output found);
-  localparam S0 = 3'd0, S1 = 3'd1, S10 = 3'd2, S101 = 3'd3, S1011 = 3'd4;
-  reg [2:0] state, next;
-  always @(posedge clk) begin
+  typedef enum logic [2:0] { S0, S1, S10, S101, S1011 } state_t;
+  state_t state, next;
+  always_ff @(posedge clk) begin
     if (rst) state <= S0;
     else state <= next;
   end
-  always @(*) begin
+  always_comb begin
     next = state;
-    case (state)
+    unique case (state)
       S0:    next = din ? S1 : S0;
       S1:    next = din ? S1 : S10;
       S10:   next = din ? S101 : S0;
@@ -540,7 +541,7 @@ endmodule`,
       <p>Population count shows up in error correction, bitmaps and crypto. A <code>for</code> loop in RTL is not a runtime
       loop: synthesis <b>unrolls</b> it into an adder tree. Loop bounds must be constants.</p>
       <pre>integer i;
-always @(*) begin
+always_comb begin
   count = 0;
   for (i = 0; i &lt; 16; i = i + 1)
     count = count + v[i];
@@ -548,20 +549,20 @@ end</pre>
       <h4>Spec</h4><ul><li><code>count</code> = number of 1 bits in the 16-bit input <code>v</code> (0..16, so 5 bits)</li></ul>`,
     starter: `module popcount(
   input      [15:0] v,
-  output reg [4:0]  count
+  output logic [4:0]  count
 );
   // TODO
 endmodule
 `,
-    golden: `module popcount(input [15:0] v, output reg [4:0] count);
+    golden: `module popcount(input [15:0] v, output logic [4:0] count);
   integer i;
-  always @(*) begin
+  always_comb begin
     count = 5'd0;
     for (i = 0; i < 16; i = i + 1) count = count + v[i];
   end
 endmodule`,
     stimulus: () => ({ vectors: random(33, 200, [['v', 16]]) }),
-    hints: ['Initialize count to 0 before the loop, or you infer a latch / accumulate forever.'],
+    hints: ['Initialize count to 0 before the loop, or you build a combinational loop (no latch: the value feeds back into itself).'],
   },
   {
     id: 'gray',
@@ -580,15 +581,15 @@ endmodule`,
   input      [7:0] bin,
   output     [7:0] gray,
   input      [7:0] gray_in,
-  output reg [7:0] bin_out
+  output logic [7:0] bin_out
 );
   // TODO
 endmodule
 `,
-    golden: `module gray_conv(input [7:0] bin, output [7:0] gray, input [7:0] gray_in, output reg [7:0] bin_out);
+    golden: `module gray_conv(input [7:0] bin, output [7:0] gray, input [7:0] gray_in, output logic [7:0] bin_out);
   integer i;
   assign gray = bin ^ (bin >> 1);
-  always @(*) begin
+  always_comb begin
     bin_out[7] = gray_in[7];
     for (i = 6; i >= 0; i = i - 1) bin_out[i] = bin_out[i + 1] ^ gray_in[i];
   end
@@ -608,7 +609,7 @@ endmodule`,
     brief: `
       <p>FIFOs decouple producers from consumers and are the #1 verification interview topic. Store data in a memory,
       write at <code>wptr</code>, read at <code>rptr</code>, and track occupancy.</p>
-      <pre>reg [7:0] mem [0:3];   // 4 words of 8 bits</pre>
+      <pre>logic [7:0] mem [0:3];   // 4 words of 8 bits</pre>
       <h4>Spec</h4>
       <ul><li>Depth 4, width 8, synchronous active-high <code>rst</code> empties the FIFO</li>
       <li>A push is accepted only if not full; a pop only if not empty (use the flags from <i>before</i> the edge)</li>
@@ -627,20 +628,21 @@ endmodule`,
   output       full,
   output       empty
 );
-  reg [7:0] mem [0:3];
+  logic [7:0] mem [0:3];
   // TODO
 endmodule
 `,
     golden: `module fifo(input clk, input rst, input push, input [7:0] din, input pop, output [7:0] dout, output full, output empty);
-  reg [7:0] mem [0:3];
-  reg [1:0] wptr, rptr;
-  reg [2:0] count;
-  wire do_push = push && !full;
-  wire do_pop = pop && !empty;
+  logic [7:0] mem [0:3];
+  logic [1:0] wptr, rptr;
+  logic [2:0] count;
+  logic do_push, do_pop;
+  assign do_push = push && !full;
+  assign do_pop = pop && !empty;
   assign full = (count == 3'd4);
   assign empty = (count == 3'd0);
   assign dout = mem[rptr];
-  always @(posedge clk) begin
+  always_ff @(posedge clk) begin
     if (rst) begin
       wptr <= 2'd0; rptr <= 2'd0; count <= 3'd0;
     end else begin
@@ -727,21 +729,21 @@ endmodule`,
   input      [7:0] a,
   input      [7:0] b,
   input      [2:0] op,
-  output reg [7:0] y,
+  output logic [7:0] y,
   output           zero,
-  output reg       carry
+  output logic       carry
 );
   // TODO: zero is one assign line
-  always @(*) begin
+  always_comb begin
     // TODO: a case on op, and carry for add and subtract
   end
 endmodule
 `,
-    golden: `module alu8(input [7:0] a, input [7:0] b, input [2:0] op, output reg [7:0] y, output zero, output reg carry);
+    golden: `module alu8(input [7:0] a, input [7:0] b, input [2:0] op, output logic [7:0] y, output zero, output logic carry);
   wire [8:0] sum = {1'b0, a} + {1'b0, b};
   wire [8:0] dif = {1'b0, a} - {1'b0, b};
   assign zero = (y == 8'd0);
-  always @(*) begin
+  always_comb begin
     y = 8'd0;
     carry = 1'b0;
     case (op)
@@ -776,9 +778,9 @@ endmodule`,
       <p>A CPU keeps its working values in a small set of <b>registers</b>, called a register file. It needs
       one <b>write port</b>, which changes one register on a clock edge, and two <b>read ports</b>, which look at two
       registers at once with no clock. Two read ports let the ALU get both operands in the same cycle.</p>
-      <pre>reg [7:0] regs [0:3];        // four 8-bit registers, picked by a 2-bit address
+      <pre>logic [7:0] regs [0:3];      // four 8-bit registers, picked by a 2-bit address
 assign x = regs[addr];       // a read is just wiring
-always @(posedge clk)
+always_ff @(posedge clk)
   if (we) regs[addr] &lt;= d;  // a write waits for the clock edge</pre>
       <h4>Spec</h4>
       <ul><li>On each rising edge, if <code>we</code> is 1, register <code>waddr</code> gets <code>wdata</code>. Otherwise nothing changes.</li>
@@ -795,15 +797,15 @@ always @(posedge clk)
   output     [7:0] rdata1,
   output     [7:0] rdata2
 );
-  reg [7:0] regs [0:3];
+  logic [7:0] regs [0:3];
   // TODO: two assign lines for the reads, one clocked always block for the write
 endmodule
 `,
     golden: `module regfile4(input clk, input we, input [1:0] waddr, input [7:0] wdata, input [1:0] raddr1, input [1:0] raddr2, output [7:0] rdata1, output [7:0] rdata2);
-  reg [7:0] regs [0:3];
+  logic [7:0] regs [0:3];
   assign rdata1 = regs[raddr1];
   assign rdata2 = regs[raddr2];
-  always @(posedge clk) begin
+  always_ff @(posedge clk) begin
     if (we) regs[waddr] <= wdata;
   end
 endmodule`,
@@ -840,13 +842,13 @@ endmodule`,
   input            rst,
   input            load,
   input      [7:0] target,
-  output reg [7:0] pc
+  output logic [7:0] pc
 );
   // TODO
 endmodule
 `,
-    golden: `module pc8(input clk, input rst, input load, input [7:0] target, output reg [7:0] pc);
-  always @(posedge clk) begin
+    golden: `module pc8(input clk, input rst, input load, input [7:0] target, output logic [7:0] pc);
+  always_ff @(posedge clk) begin
     if (rst) pc <= 8'd0;
     else if (load) pc <= target;
     else pc <= pc + 8'd1;
@@ -892,26 +894,26 @@ endmodule`,
     starter: `module cpu_decode(
   input      [7:0] instr,
   input            zero,
-  output reg       reg_we,
-  output reg [2:0] alu_op,
-  output reg       use_imm,
-  output reg       flag_we,
-  output reg       out_en,
-  output reg       pc_load,
+  output logic       reg_we,
+  output logic [2:0] alu_op,
+  output logic       use_imm,
+  output logic       flag_we,
+  output logic       out_en,
+  output logic       pc_load,
   output     [1:0] rd,
   output     [1:0] rs
 );
   assign rd = instr[3:2];
   assign rs = instr[1:0];
-  // TODO: an always @(*) block with a case on instr[7:4]
+  // TODO: an always_comb block with a case on instr[7:4]
 endmodule
 `,
     golden: `module cpu_decode(input [7:0] instr, input zero,
-  output reg reg_we, output reg [2:0] alu_op, output reg use_imm, output reg flag_we,
-  output reg out_en, output reg pc_load, output [1:0] rd, output [1:0] rs);
+  output logic reg_we, output logic [2:0] alu_op, output logic use_imm, output logic flag_we,
+  output logic out_en, output logic pc_load, output [1:0] rd, output [1:0] rs);
   assign rd = instr[3:2];
   assign rs = instr[1:0];
-  always @(*) begin
+  always_comb begin
     reg_we = 1'b0; alu_op = 3'd0; use_imm = 1'b0; flag_we = 1'b0; out_en = 1'b0; pc_load = 1'b0;
     case (instr[7:4])
       4'h1: begin reg_we = 1'b1; use_imm = 1'b1; end
@@ -965,11 +967,11 @@ endmodule`,
   input            clk,
   input            rst,
   output     [7:0] pc,
-  output reg [7:0] out
+  output logic [7:0] out
 );
   // The program (ROM): the instruction byte at each address
-  reg [7:0] instr;
-  always @(*) begin
+  logic [7:0] instr;
+  always_comb begin
     case (pc)
       8'd0:  instr = 8'h15;  // LDI r1, 1
       8'd1:  instr = 8'h1F;  // LDI r3, 3
@@ -991,9 +993,9 @@ endmodule`,
   // TODO: the decoder, the ALU, the registers, the zero flag, the PC and OUT
 endmodule
 `,
-    golden: `module cpu_tiny(input clk, input rst, output [7:0] pc, output reg [7:0] out);
-  reg [7:0] instr;
-  always @(*) begin
+    golden: `module cpu_tiny(input clk, input rst, output [7:0] pc, output logic [7:0] out);
+  logic [7:0] instr;
+  always_comb begin
     case (pc)
       8'd0:  instr = 8'h15;
       8'd1:  instr = 8'h1F;
@@ -1012,21 +1014,21 @@ endmodule
   wire [1:0] rd = instr[3:2];
   wire [1:0] rs = instr[1:0];
 
-  reg [7:0] pc_r;
-  reg [7:0] regs [0:3];
-  reg zf;
+  logic [7:0] pc_r;
+  logic [7:0] regs [0:3];
+  logic zf;
   wire [7:0] a = regs[rd];
   wire [7:0] b = regs[rs];
   wire [8:0] sum = {1'b0, a} + {1'b0, b};
   wire [8:0] dif = {1'b0, a} - {1'b0, b};
-  reg [7:0] alu;
-  reg [2:0] alu_op;
-  reg reg_we, use_imm, flag_we, out_en, pc_load;
+  logic [7:0] alu;
+  logic [2:0] alu_op;
+  logic reg_we, use_imm, flag_we, out_en, pc_load;
   wire [7:0] wdata = use_imm ? {6'd0, rs} : alu;
   assign pc = pc_r;
 
   // decoder (the cpu_decode level, with zero = zf)
-  always @(*) begin
+  always_comb begin
     reg_we = 1'b0; alu_op = 3'd0; use_imm = 1'b0; flag_we = 1'b0; out_en = 1'b0; pc_load = 1'b0;
     case (instr[7:4])
       4'h1: begin reg_we = 1'b1; use_imm = 1'b1; end
@@ -1042,7 +1044,7 @@ endmodule
   end
 
   // ALU
-  always @(*) begin
+  always_comb begin
     alu = 8'd0;
     case (alu_op)
       3'd0: alu = sum[7:0];
@@ -1055,7 +1057,7 @@ endmodule
   end
 
   // clocked state
-  always @(posedge clk) begin
+  always_ff @(posedge clk) begin
     if (rst) begin
       pc_r <= 8'd0;
       out <= 8'd0;
@@ -1071,7 +1073,7 @@ endmodule
 endmodule`,
     stimulus: () => ({ clock: 'clk', vectors: seq('rst', 1, 2, 80, () => ({}), 1) }),
     hints: [
-      'Copy the decoder from the last level into an always @(*) block. Its zero input is your zero flag.',
+      'Copy the decoder from the last level into an always_comb block. Its zero input is your zero flag.',
       'Use the ALU from the level before: a case on the op code. Then wdata = use_imm ? {6\'d0, rs} : alu; is the value written back.',
       'On the clock edge: reset everything. Otherwise pc <= pc_load ? jump address : pc + 1, write the register if reg_we, set the flag if flag_we, and copy regs[rs] into out on OUT.',
     ],
@@ -1094,20 +1096,20 @@ export const DEBUG_LEVELS: RtlLevel[] = [
     starter: `module delay3(
   input            clk,
   input      [7:0] d,
-  output reg [7:0] q
+  output logic [7:0] q
 );
-  reg [7:0] s1, s2;
+  logic [7:0] s1, s2;
 
-  always @(posedge clk) begin
+  always_ff @(posedge clk) begin
     s1 = d;
     s2 = s1;
     q  = s2;
   end
 endmodule
 `,
-    golden: `module delay3(input clk, input [7:0] d, output reg [7:0] q);
-  reg [7:0] s1, s2;
-  always @(posedge clk) begin
+    golden: `module delay3(input clk, input [7:0] d, output logic [7:0] q);
+  logic [7:0] s1, s2;
+  always_ff @(posedge clk) begin
     s1 <= d;
     s2 <= s1;
     q <= s2;
@@ -1132,9 +1134,9 @@ endmodule`,
   input      [1:0] op,
   input      [7:0] a,
   input      [7:0] b,
-  output reg [7:0] y
+  output logic [7:0] y
 );
-  always @(*) begin
+  always_comb begin
     case (op)
       2'd0: y = a + b;
       2'd1: y = a - b;
@@ -1143,8 +1145,8 @@ endmodule`,
   end
 endmodule
 `,
-    golden: `module alu(input [1:0] op, input [7:0] a, input [7:0] b, output reg [7:0] y);
-  always @(*) begin
+    golden: `module alu(input [1:0] op, input [7:0] a, input [7:0] b, output logic [7:0] y);
+  always_comb begin
     case (op)
       2'd0: y = a + b;
       2'd1: y = a - b;
@@ -1171,7 +1173,8 @@ endmodule`,
   input  [7:0] c,
   output [9:0] total
 );
-  wire [7:0] ab = a + b;
+  logic [7:0] ab;
+  assign ab = a + b;
   assign total = ab + c;
 endmodule
 `,
@@ -1189,15 +1192,15 @@ endmodule`,
     xp: 150,
     brief: `
       <p><b>Bug report:</b> "After reset the counter is stuck at zero." The spec uses an <b>active-low asynchronous</b> reset,
-      which is by far the most common reset style in ASICs (the <code>_n</code> suffix means active low).</p>
+      which is a very common reset style in ASICs (the <code>_n</code> suffix means active low).</p>
       <h4>Spec</h4><ul><li><code>rst_n == 0</code> clears count immediately</li><li>Otherwise count increments on each clock edge where <code>en</code> is high</li></ul>`,
     starter: `module counter(
   input            clk,
   input            rst_n,
   input            en,
-  output reg [7:0] count
+  output logic [7:0] count
 );
-  always @(posedge clk or negedge rst_n) begin
+  always_ff @(posedge clk or negedge rst_n) begin
     if (rst_n)
       count <= 8'd0;
     else if (en)
@@ -1205,8 +1208,8 @@ endmodule`,
   end
 endmodule
 `,
-    golden: `module counter(input clk, input rst_n, input en, output reg [7:0] count);
-  always @(posedge clk or negedge rst_n) begin
+    golden: `module counter(input clk, input rst_n, input en, output logic [7:0] count);
+  always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) count <= 8'd0;
     else if (en) count <= count + 8'd1;
   end
@@ -1223,12 +1226,13 @@ endmodule`,
     brief: `
       <p><b>Bug report:</b> "Gate-level sim of the saturating adder passes but RTL sim fails." A classic
       <b>sim/synth mismatch</b>: synthesis ignores sensitivity lists and builds the logic you described, but a simulator
-      only re-runs the block when a listed signal changes.</p>
+      only re-runs the block when a listed signal changes. Hand-written lists like this one are the old way (Verilog-2001);
+      <code>always_comb</code> builds the list for you.</p>
       <h4>Spec</h4><ul><li><code>y = min(a + b, 255)</code></li></ul>`,
     starter: `module sat_add(
   input      [7:0] a,
   input      [7:0] b,
-  output reg [7:0] y
+  output reg [7:0] y   // older Verilog-2001 style on purpose: this is where the bug lives
 );
   always @(a) begin
     if (a + b > 255)
@@ -1238,8 +1242,8 @@ endmodule`,
   end
 endmodule
 `,
-    golden: `module sat_add(input [7:0] a, input [7:0] b, output reg [7:0] y);
-  always @(*) begin
+    golden: `module sat_add(input [7:0] a, input [7:0] b, output logic [7:0] y);
+  always_comb begin
     if (a + b > 255) y = 8'd255;
     else y = a + b;
   end
@@ -1254,7 +1258,7 @@ endmodule`,
       }
       return { vectors };
     },
-    hints: ['Replace @(a) with @(*) (or always_comb in SystemVerilog) so the block wakes up when b changes too.'],
+    hints: ['The list @(a) leaves out b. Use always_comb (older code wrote @(*)) so the block wakes up when b changes too.'],
   },
   {
     id: 'bug-fsm',
@@ -1273,9 +1277,9 @@ endmodule`,
   output found
 );
   localparam S0 = 2'd0, S1 = 2'd1, S10 = 2'd2, S101 = 2'd3;
-  reg [1:0] state;
+  logic [1:0] state;
 
-  always @(posedge clk) begin
+  always_ff @(posedge clk) begin
     if (rst) state <= S0;
     else case (state)
       S0:   state <= din ? S1   : S0;
@@ -1290,8 +1294,8 @@ endmodule
 `,
     golden: `module det101(input clk, input rst, input din, output found);
   localparam S0 = 2'd0, S1 = 2'd1, S10 = 2'd2, S101 = 2'd3;
-  reg [1:0] state;
-  always @(posedge clk) begin
+  logic [1:0] state;
+  always_ff @(posedge clk) begin
     if (rst) state <= S0;
     else case (state)
       S0: state <= din ? S1 : S0;
@@ -1320,9 +1324,9 @@ endmodule`,
     starter: `module mod10(
   input            clk,
   input            rst,
-  output reg [3:0] count
+  output logic [3:0] count
 );
-  always @(posedge clk) begin
+  always_ff @(posedge clk) begin
     if (rst)
       count <= 4'd0;
     else if (count == 4'd10)
@@ -1332,8 +1336,8 @@ endmodule`,
   end
 endmodule
 `,
-    golden: `module mod10(input clk, input rst, output reg [3:0] count);
-  always @(posedge clk) begin
+    golden: `module mod10(input clk, input rst, output logic [3:0] count);
+  always_ff @(posedge clk) begin
     if (rst) count <= 4'd0;
     else if (count == 4'd9) count <= 4'd0;
     else count <= count + 4'd1;

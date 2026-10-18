@@ -1,18 +1,20 @@
-// Spaced recall: when a player comes back, three quick questions from lessons they already finished in the first three
-// chapters. A simple Leitner schedule decides which come back: a right answer moves a question up a box and it returns
-// later, a wrong one drops it to box 0 and it returns soon. Everything is stored in this browser only.
+// Spaced recall: when a player comes back, a few quick questions from lessons they already finished, anywhere in the
+// game. A Leitner schedule decides which come back: a right answer moves a question up a box and it returns later, a
+// wrong one drops it to box 0 and it returns soon. Typed and generated questions are in the pool too; a generated one is
+// made fresh each time it comes back, so it is the method that is recalled, not the numbers. Stored in this browser only.
 import { ACTS } from './curriculum';
-import { findLesson } from './lessons';
-import type { McStep } from './lessons/types';
+import { LESSONS } from './lessons';
+import type { Question, Rng } from './lessons/types';
 import { levelRecord } from './state';
 
-export interface RecallItem { key: string; lesson: string; q: McStep }
+/** `q` makes the question; a generated step makes a new instance each call. */
+export interface RecallItem { key: string; lesson: string; q: (r: Rng) => Question }
 interface Slot { box: number; due: number }
 
 const KEY = 'tapeout.recall.v1';
 /** Days until a question returns, by box. */
-export const GAPS_DAYS = [0, 1, 3, 7, 21];
-export const RECALL_COUNT = 3;
+export const GAPS_DAYS = [0, 1, 3, 7, 21, 60];
+export const RECALL_COUNT = 5;
 
 let cache: Record<string, Slot> | null = null;
 
@@ -24,18 +26,21 @@ function slots(): Record<string, Slot> {
 function save() { try { localStorage.setItem(KEY, JSON.stringify(cache)); } catch { /* storage unavailable: recall just restarts */ } }
 export function resetRecall() { cache = null; }
 
-/** Lesson ids in the first three chapters of the main path. */
+/** Lesson ids in the first three chapters of the main path (the warm-up favours these for a new player). */
 export function earlyLessons(): string[] {
   const chapters = ACTS[0]?.chapters.filter((c) => !c.need).slice(0, 3) ?? [];
   return chapters.flatMap((c) => c.modules).filter((m) => m.kind === 'lesson').map((m) => m.id);
 }
 
-/** Every plain multiple-choice question in the early lessons the player has finished. */
+/** Every question in every lesson the player has finished: multiple choice, typed, and generated. */
 export function pool(done: (id: string) => boolean = (id) => !!levelRecord(id)): RecallItem[] {
   const out: RecallItem[] = [];
-  for (const id of earlyLessons()) {
-    if (!done(id)) continue;
-    findLesson(id)?.steps.forEach((s, i) => { if (s.t === 'mc') out.push({ key: `${id}#${i}`, lesson: id, q: s }); });
+  for (const l of LESSONS) {
+    if (!done(l.id)) continue;
+    l.steps.forEach((s, i) => {
+      if (s.t === 'mc' || s.t === 'ask') out.push({ key: `${l.id}#${i}`, lesson: l.id, q: () => s });
+      else if (s.t === 'gen') out.push({ key: `${l.id}#${i}`, lesson: l.id, q: (r) => s.make(r) });
+    });
   }
   return out;
 }

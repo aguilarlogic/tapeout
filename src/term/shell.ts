@@ -1,4 +1,5 @@
 // TAPEOUT's brain: onboarding, the command shell, and the lesson runner.
+import { markSeen, pickDue } from '../mixdue';
 import { ACTS, actProgress, ALL_MODULES, findModule, KIND_APP, KIND_LABEL, Module, neighbours, readiness, recommended, startAct } from '../curriculum';
 import { CARDS, DECKS } from '../games/drills/cards';
 import { GLOSSARY, lookup } from '../glossary';
@@ -19,12 +20,31 @@ import { Interrupted, Redirect, rich, Terminal } from './terminal';
 import { award, promotionLine, type Promotion } from '../mastery/promotion';
 import { finishGoal, type GoalResult } from '../daily';
 import { dayKey, MILESTONE_XP, MIX_RECORD, streakLine } from '../streak';
-import { signsOff } from './stakes';
+import { LESSON_PASS, meetsBar, signsOff } from './stakes';
+import { topUp } from '../practice/topup';
+import { missingNeeds } from '../prereqs';
 import { pick as pickRecall, pool as poolRecall, record as recordRecall } from '../recall';
 import { readableReport, recordQuit, recordStep } from '../steplog';
 import { GOAL_CHOICES, progressReport, runWrap, wrapDue } from './wrap';
+import { printGoals } from './goals-banner';
 
 const pickOne = <T>(xs: T[]) => xs[Math.floor(Math.random() * xs.length)];
+/** Another instance of a generated question, different from `not` when a few tries allow. */
+function freshInstance(make: (r: () => number) => Question, r: () => number, not: Question): Question {
+  let q = make(r);
+  for (let k = 0; k < 8 && q.q === not.q; k++) q = make(r);
+  return q;
+}
+
+/** The first line of a question's text, without a code block, for a review list. */
+const firstLine = (q: string) => q.split('```')[0].trim().split('\n')[0];
+
+/** The practice set to run before retrying a checkpoint: the first one in the skill that owns it. */
+/** The practice sets of the skill a checkpoint examines (hiring panels already draw on every set of their role). */
+const bossSets = (bossId: string) => (bossId.startsWith('cap-') ? [] : (SKILLS.find((s) => s.boss.includes(bossId))?.practice ?? []).map(findPractice).filter((p): p is PracticeSet => !!p));
+
+const practiceFor = (bossId: string) => SKILLS.find((s) => s.boss.includes(bossId))?.practice.find((p) => !!findPractice(p));
+
 const PRAISE = ['Correct.', 'Yes.', 'Exactly.', 'Nice.', 'Right on.', 'That\'s it.'];
 /** What a player types (or the chip sends) to have a problem taught instead of hinted. */
 const TEACH_WORDS = /^(teach( me)?( how)?|how|how\?|how do i (do|solve) (this|it)\??|show me how|walk( me through( it)?)?|explain( it| this)?|i don'?t know how|help me)$/;
@@ -41,6 +61,8 @@ export class Shell {
   /** Hints given on the current question (the hint ladder), and whether the player ended up shown the answer. */
   private rung = 0;
   private revealed = false;
+  /** For a generated question: makes another instance of the same kind, for a worked example with other numbers. */
+  private sibling?: () => Question;
   /** The lesson step the player is on, so a quit can be logged. */
   private at: { id: string; step: number } | null = null;
   /** The shell is idle, waiting at its prompt. */
@@ -118,23 +140,30 @@ export class Shell {
     else await t.say('You have finished everything. Every block of your chip is signed off. Want to replay something for stars, or run the arcade?', 'proud');
   }
 
-  /** On return: up to three quick questions from lessons already finished, on a spaced schedule. Skippable. */
+  /** On return: up to five quick questions from lessons already finished, on a spaced schedule. Skippable. */
   private async recall() {
     const t = this.term;
     const items = pickRecall(poolRecall());
     if (!items.length) return;
-    const go = await t.choose(['Warm up with 3 quick questions', 'Skip, take me to my next step'], 'warm-up>');
+    const go = await t.choose([`Warm up with ${items.length} quick question${items.length === 1 ? '' : 's'}`, 'Skip, take me to my next step'], 'warm-up>');
     if (go !== 0) return;
-    await t.say('Quick warm-up. These come from things you already did. No hints, no score.', 'happy');
+    await t.say('Quick warm-up. These come from things you already did. No hints, no score. Pulling an answer out of memory is what makes it stick.', 'happy');
     let right = 0;
     for (const it of items) {
-      await t.say(it.q.q, 'thinking');
-      const order = this.order(it.q.options);
-      const pick = await t.choose(order.map((j) => it.q.options[j]), 'answer>');
-      const ok = order[pick] === it.q.a;
+      const q = it.q(Math.random);
+      await this.pose(q.q);
+      let ok: boolean;
+      if (q.t === 'mc') {
+        const order = this.order(q.options);
+        const pick = await t.choose(order.map((j) => q.options[j]), 'answer>');
+        ok = order[pick] === q.a;
+      } else {
+        const v = (await t.ask({ prompt: 'answer>', chips: ['skip'] })).trim();
+        ok = v.toLowerCase() !== 'skip' && q.a.check(v);
+      }
       recordRecall(it.key, ok);
-      if (ok) right++;
-      else await t.say(`Not quite. ${it.q.why} It will come back soon.`, 'concerned');
+      if (ok) { right++; await t.say(`${pickOne(PRAISE)}`, 'happy'); }
+      else await t.say(`Not quite: it is **${q.t === 'mc' ? q.options[q.a] : q.a.canonical}**. ${q.why} It will come back soon.`, 'concerned');
     }
     await t.say(right === items.length ? 'All right. Nice memory.' : `${right} of ${items.length}. Good, now it will stick better.`, right === items.length ? 'proud' : 'happy');
   }
@@ -487,10 +516,12 @@ export class Shell {
           yourTurn = undefined;
           await t.say(pickOne(['Your turn. Same kind of problem, new numbers: use the same steps.', 'Now you try one like it, on your own. Same method, different numbers.', 'Your turn: same method, fresh numbers. Take it one step at a time.']), 'excited');
         } else {
-          si = Math.floor(Math.random() * sets.length);
+          // The Daily Mix favours the topics practised longest ago (spacing); a single set has only itself.
+          si = o.mix ? pickDue(sets.map((x) => x.id)) : Math.floor(Math.random() * sets.length);
           ({ q, gen } = problem(sets[si], Math.random, d, si === lastSet ? lastGen : -1));
         }
         lastSet = si; lastGen = gen;
+        markSeen(sets[si].id);
         t.print(`${o.endless ? `#${i + 1}` : bonus ? '[bonus, unscored]' : `[${i + 1}/${PRACTICE_COUNT}]`}  ${'◆'.repeat(d)}${'◇'.repeat(3 - d)} ${['warm-up', 'standard', 'hard'][d - 1]}${o.mix ? ` · ${sets[si].title}` : ''}${o.endless ? ` · streak ${streak}` : ''}`, 'dim');
         const ok = await this.question(q, false);
         if (this.taught && !bonus) yourTurn = { si, gen, d, method: q.teach?.method };
@@ -652,9 +683,18 @@ export class Shell {
     if (findIncident(id)) return this.incident(id);
     const exam = id === FINAL_ID;
     const bossDef = findBoss(id);
-    const lesson: Lesson | undefined = exam ? finalExam(Math.random) : bossDef ?? findLesson(id);
+    const lesson: Lesson | undefined = exam ? finalExam(Math.random) : bossDef ? topUp(bossDef, bossSets(id)) : findLesson(id);
     if (!lesson) return this.term.print(`unknown lesson ${id}`, 'err');
     if (this.busy) return;
+    // The map stays open, but a jump past an unfinished prerequisite is a choice, not an accident.
+    if (!exam && !bossDef && !levelRecord(id)) {
+      const miss = missingNeeds(id, (n) => !!levelRecord(n)).map((n) => findModule(n)?.module).filter((m): m is Module => !!m);
+      if (miss.length) {
+        await this.term.say(`**${lesson.title}** builds on ${miss.map((m) => `**${m.title}**`).join(', ')}, which you have not done yet.`, 'thinking');
+        const pick = await this.term.choose([`Do ${miss[0].title} first`, 'Start anyway'], 'next>', (v) => this.queue.push(v));
+        if (pick === 0) { this.queue.push(`learn ${miss[0].id}`); return; }
+      }
+    }
     this.busy = true;
     try {
       await this.lesson(lesson, exam ? 'final' : bossDef ? 'boss' : 'lesson');
@@ -678,10 +718,13 @@ export class Shell {
     void t.block(h('div', { class: `term-banner${bossDef ? ' boss' : ''}` },
       h('span', { class: 'dim' }, bossDef ? `${l.id.startsWith('cap-') ? 'HIRING PANEL' : 'CHECKPOINT'} · no hints · one attempt per question · ${Math.round(bossDef.pass * 100)}% to win` : f ? `ACT ${f.act.n} · ${f.chapter.name.toUpperCase()}` : 'LESSON'),
       h('b', null, l.title), h('span', { class: 'dim' }, l.concept)), 'type', 2.5);
+    if (!exam) printGoals(t, l.id);
     const rnd = Math.random;
     let asked = 0, firstTry = 0;
     const skippedQs: { n: number; q: Question }[] = [];
-    const comeBack: Question[] = [];
+    /** Missed questions that come back near the end: a generated one returns with new numbers. */
+    const comeBack: { q: Question; remake?: () => Question }[] = [];
+    const missed: Question[] = [];
     for (let i = 0; i < l.steps.length; i++) {
       const s = l.steps[i];
       const nextIsQuestion = (() => { const n = l.steps[i + 1]; return !n || n.t === 'ask' || n.t === 'mc' || n.t === 'gen' || n.t === 'app' || n.t === 'art'; })();
@@ -703,17 +746,22 @@ export class Shell {
         const t0 = Date.now();
         this.rung = 0;
         this.revealed = false;
+        this.sibling = s.t === 'gen' ? () => s.make(rnd) : undefined;
         const ok = await this.question(q, exam);
+        this.sibling = undefined;
         if (mode === 'lesson') recordStep(l.id, i, q.q, { firstTry: ok && this.rung === 0, hints: this.rung, secs: (Date.now() - t0) / 1000, skipped: this.skipped });
         if (ok) firstTry++;
         else if (this.skipped) skippedQs.push({ n: asked, q });
-        if (!ok && this.revealed && !this.skipped && mode === 'lesson') comeBack.push(q);
+        if (!ok && !this.skipped) missed.push(q);
+        // A miss (typed or multiple choice) comes back once near the end; a generated question with fresh numbers, so
+        // it is the method that is checked again, not the answer just shown.
+        if (!ok && !this.skipped && mode === 'lesson' && (this.revealed || q.t === 'mc' || this.taught)) comeBack.push({ q, remake: s.t === 'gen' ? () => freshInstance(s.make, rnd, q) : undefined });
       }
     }
-    // Hint ladder, last rung: a question the player was shown the answer to comes back once, near the end.
+    let recovered = 0;
     if (comeBack.length) {
-      await t.say('One more look at ' + (comeBack.length === 1 ? 'a question' : 'some questions') + ' from earlier. You have seen how it works now.', 'happy');
-      for (const q of comeBack) { this.rung = 0; this.revealed = false; await this.question(q, false); }
+      await t.say('One more look at ' + (comeBack.length === 1 ? 'a question' : 'some questions') + ' from earlier' + (comeBack.some((c) => c.remake) ? ', some with new numbers' : '') + '. You have seen how it works now.', 'happy');
+      for (const c of comeBack) { this.rung = 0; this.revealed = false; if (await this.question(c.remake ? c.remake() : c.q, false)) recovered++; }
     }
     // A lesson skipped by more than half stays unsigned: no level record, no XP, nothing lights on the chip.
     if (mode === 'lesson' && !signsOff(asked, skippedQs.length)) return this.unsigned(l, asked, skippedQs);
@@ -724,16 +772,24 @@ export class Shell {
       const pct = asked ? firstTry / asked : 0;
       st = pct >= 0.95 ? 3 : pct >= bossDef.pass - 1e-9 ? 2 : 0;
       t.print(`score: ${firstTry}/${asked} (${Math.round(pct * 100)}%) · need ${Math.round(bossDef.pass * 100)}%`, 'hl');
+      if (missed.length) await this.reviewCard(missed);
       if (!st) {
-        await t.say(pickOne(['The checkpoint wins this round. Every miss above tells you exactly what to practise; come back when you are ready.', 'Not this time. That is normal for a checkpoint: go run the practice sets, then come back and take it down.']), 'concerned');
+        await t.say(pickOne(['The checkpoint wins this round. The review above says what each miss was about; practise those, then come back.', 'Not this time. That is normal for a checkpoint: go over the review above, run the practice sets, then come back and take it down.']), 'concerned');
+        const pr = practiceFor(l.id);
+        if (pr) t.print(`practise first: \`practice ${pr}\``, 'dim');
         return;
       }
     } else if (exam) {
       const pct = asked ? firstTry / asked : 0;
       st = pct >= 0.9 ? 3 : pct >= 0.75 ? 2 : pct >= 0.6 ? 1 : 0;
       t.print(`score: ${firstTry}/${asked} (${Math.round(pct * 100)}%)`, 'hl');
+      if (missed.length) await this.reviewCard(missed);
       if (!st) { await t.say('Not quite enough to sign off yet: you need 60%. Every question you missed points at a lesson worth revisiting. Try again whenever you are ready.', 'concerned'); return; }
-    } else st = misses === 0 ? 3 : misses <= 2 ? 2 : 1;
+    } else {
+      // A lesson signs off only at the mastery bar; below it, a "not yet" card and a retry with new numbers.
+      if (!meetsBar(asked, firstTry, recovered)) return this.notYet(l, asked, firstTry, recovered, missed);
+      st = misses === 0 ? 3 : misses <= 2 ? 2 : 1;
+    }
     const { gained, promotedTo } = award(l.id, l.xp, st);
     const card = h('div', { class: 'term-done' },
       h('div', null, h('b', null, bossDef ? (l.id.startsWith('cap-') ? 'PANEL PASSED' : 'CHECKPOINT PASSED') : exam ? 'TAPEOUT REVIEW PASSED' : 'LESSON COMPLETE'), ' ', starEls(st)),
@@ -750,6 +806,25 @@ export class Shell {
       const pick = await t.choose([`Continue: **${nx.title}** (${KIND_LABEL[nx.kind].toLowerCase()})`, 'Back to the shell'], 'next>', (v) => this.queue.push(v));
       if (pick === 0) this.queue.push(`learn ${nx.id}`);
     }
+  }
+
+  /** Below the mastery bar: no sign-off yet. Show what to look at again and offer a retry (new numbers each time). */
+  private async notYet(l: Lesson, asked: number, firstTry: number, recovered: number, missed: Question[]) {
+    const t = this.term;
+    void t.block(h('div', { class: 'term-done' },
+      h('div', null, h('b', null, 'NOT YET')),
+      h('div', { class: 'dim' }, `${firstTry}/${asked} first try${recovered ? `, ${recovered} more on the second go` : ''}. A lesson signs off at ${Math.round(LESSON_PASS * 100)}% (a second-go answer counts half). Your best result so far is kept.`),
+      l.recap.length ? h('ul', { class: 'recap' }, ...l.recap.map((r) => h('li', null, ...rich(r)))) : null), 'type', 1.6);
+    await t.say(`Close. ${missed.length === 1 ? 'One idea' : 'A few ideas'} did not land yet, which is normal the first time. Read the points above, then run it again: the numbers will be new.`, 'thinking');
+    const pick = await t.choose(['Try this lesson again', 'Back to the shell'], 'next>', (v) => this.queue.push(v));
+    if (pick === 0) this.queue.push(`learn ${l.id}`);
+  }
+
+  /** After an exam: each miss with its explanation, so a failed checkpoint says what to fix. */
+  private async reviewCard(missed: Question[]) {
+    void this.term.block(h('div', { class: 'term-done' },
+      h('div', null, h('b', null, 'REVIEW')),
+      h('ul', { class: 'recap' }, ...missed.map((q) => h('li', null, h('b', null, firstLine(q.q)), ' ', h('span', { class: 'dim' }, '→ '), ...rich(`**${q.t === 'mc' ? q.options[q.a] : q.a.canonical}**. ${q.why}`))))), 'type', 1.2);
   }
 
   /** The sign-off card for a lesson skipped by more than half: how many were skipped, and a walkthrough for each one. */
@@ -857,7 +932,12 @@ export class Shell {
           : c ? `The answer starts with "${c[0]}".` : 'Think about what each choice would do.';
       return `Bigger hint: ${shape}${teach ? ' Or type `teach me` for a walk-through.' : ''}`;
     }
-    if (rung === 2) return `Worked example: ${q.why} Now type the answer yourself.`;
+    if (rung === 2) {
+      // A worked example of the same kind with other numbers, so the method is shown without handing over this answer.
+      const sib = this.sibling ? freshInstance(this.sibling, Math.random, q) : undefined;
+      if (sib && sib.t === 'ask') return `Worked example, same kind with other numbers: ${firstLine(sib.q)} → **${sib.a.canonical}**. ${sib.why} Now do yours the same way.`;
+      return `Explanation: ${q.why} Now type the answer yourself.`;
+    }
     return 'That is every hint I have. Type `skip` and I will show the answer and bring it back later.';
   }
 

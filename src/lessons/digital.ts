@@ -21,7 +21,7 @@ export const mux: Lesson = {
    s = 1:  y = b`, 'worked example'),
     mc('A mux has a = 1, b = 0 and s = 1. What is y?', ['0', '1'], 0, 's = 1 picks b, and b is 0.'),
     ask('A mux has a = 0, b = 1 and s = 0. What is y?', num(0), 's = 0 picks a, and a is 0.', 'When s is 0, take a.'),
-    say('You build it from two doors and a joiner: one AND lets a through when s is 0, another AND lets b through when s is 1, and an OR joins them.'),
+    say('You build it from two doors and a joiner: one AND lets a through when s is 0 (it needs s flipped by a NOT first), another AND lets b through when s is 1, and an OR joins them.'),
     gen((r) => {
       const n = pick(r, [2, 4, 8]);
       const bitsNeeded = Math.log2(n);
@@ -29,7 +29,7 @@ export const mux: Lesson = {
     }),
     say('Now wire one up yourself, starting with a one-gate warm-up.', 'happy'),
   ],
-  recap: ['A mux picks one input using select switches.', 'select = 0 gives a, select = 1 gives b.', 'More inputs need more select switches: 2 switches pick from 4.', 'Built from two AND doors and an OR.'],
+  recap: ['A mux picks one input using select switches.', 'select = 0 gives a, select = 1 gives b.', 'More inputs need more select switches: 2 switches pick from 4.', 'Built from a NOT, two AND doors and an OR.'],
 };
 
 export const decoder: Lesson = {
@@ -38,7 +38,7 @@ export const decoder: Lesson = {
   concept: 'decoder, one-hot, addresses',
   xp: 50,
   steps: [
-    say('A mux picks one **input**. A **decoder** does the opposite job: it takes a number and lights **one output** out of many. Think of a hotel lift panel: press 3 and only the 3 button lights.'),
+    say('A mux picks one **input**. A **decoder** does the opposite job: it takes a number and lights **one output** out of many. Think of a row of seats with a lamp on each: call out 3 and only seat 3\'s lamp lights.'),
     say('**Why this matters:** your chip uses a decoder to choose which register to write, and which part of memory to open.'),
     art(`
    a1 a0 | y3 y2 y1 y0
@@ -148,11 +148,12 @@ export const seq: Lesson = {
     app('fftrace', 'Let me open a timing diagram. Predict what Q does at each clock edge. This skill is 50% of reading waveforms.', 3),
     say('Now a peek inside, if you are curious. How can gates remember? With **feedback**: two gates that feed each other have two stable states, so they stay in whichever state they were last pushed into. This is called a **latch**. You will meet it as an optional challenge.'),
     art(`
-   S -[NAND]-+---- Q
-       ^     |
-       |     v
-   R -[NAND]-+---- Q-bar
-   two NANDs feeding each other: a latch`),
+   S̄ -[NAND]-+---- Q
+        ^     |
+        |     v
+   R̄ -[NAND]-+---- Q-bar
+   two NANDs feeding each other: a latch
+   (pull S̄ or R̄ low to set or reset; both high holds)`),
     mc('Why do almost all designs use **flip-flops** (clock ticks) instead of latches?', ['The clock gives every part the same moment to update, so timing is easy to check', 'Latches cannot store anything', 'Flip-flops are always smaller'], 0, 'With a clock, everything changes on the tick and holds between ticks, which keeps the whole chip in step. You will learn the timing rules (setup and hold) in the timing chapter.'),
     say('Now build one in the Logic Lab: first a bit that stays, then a lamp that flips every tick.', 'happy'),
   ],
@@ -181,8 +182,8 @@ export const fsm: Lesson = {
                ▲                        │
                └────────────────────────┘`),
     say('Two flavours. In a **Moore** machine the outputs depend only on the state. In a **Mealy** machine they depend on the state and the current inputs, so they react one cycle sooner.'),
-    mc('A traffic light controller shows green, yellow, red. Outputs depend only on which light is on. Moore or Mealy?', ['Moore', 'Mealy'], 0, 'The lights are a pure function of the state, so it is Moore. Moore outputs are glitch-free and easy to register.'),
-    say('You also choose how to **encode** the states. Binary uses the fewest flops. **One-hot** uses one flop per state, which makes the next-state logic tiny and fast. **Gray** codes change one bit per transition.'),
+    mc('A traffic light controller shows green, yellow, red. Outputs depend only on which light is on. Moore or Mealy?', ['Moore', 'Mealy'], 0, 'The lights are a pure function of the state, so it is Moore. Moore outputs change only after a clock edge, and are easy to register so they never glitch.'),
+    say('You also choose how to **encode** the states. Binary uses the fewest flops. **One-hot** uses one flop per state, which makes the next-state logic tiny and fast. **Gray** codes change only one bit per step along a counting sequence (a jump between arbitrary codes can change several).'),
     gen((r) => {
       const n = pick(r, [5, 6, 9, 12, 17]);
       const b = Math.ceil(Math.log2(n));
@@ -230,7 +231,7 @@ export const verilog: Lesson = {
   assign y = (a & b) | c;
   // a = 0, b = 1, c = 1`),
     mc('With a = 0, b = 1, c = 1, what is y?', ['0', '1'], 1, 'a & b is 0, but c is 1. OR gives 1 when either side is 1.'),
-    mc('What does `assign y = (a & b) | c;` build?', ['A flip-flop', 'An AND gate feeding an OR gate', 'An OR gate feeding an AND gate'], 1, 'The brackets go first: AND, then OR. It is just gates soldered together.'),
+    mc('What does `assign y = (a & b) | c;` build?', ['A flip-flop', 'An AND gate feeding an OR gate', 'An OR gate feeding an AND gate'], 1, 'The brackets go first: AND, then OR. It is just gates wired together.'),
     say('**Modify:** now change one thing.'),
     mc('To turn `assign y = a & b;` into a gate that is 1 when **either** input is 1, which change do you make?', ['Change & to |', 'Change & to ^', 'Change y to a'], 0, '| is OR. It is 1 when at least one input is 1.'),
     ask('How many bits is `{4\'b1010, 2\'b11}`? (Curly brackets glue pieces side by side.)', num(6), 'Glue 4 bits and 2 bits: 4 + 2 = 6 bits.', 'Add up the widths inside the brackets.'),
@@ -242,37 +243,51 @@ export const verilog: Lesson = {
 export const verilogSeq: Lesson = {
   id: 'verilog-seq',
   title: 'Verilog: Memory and Clocks',
-  concept: 'always @(posedge clk), <= vs =',
+  concept: 'always_ff, always_comb, <= vs =',
   xp: 80,
   steps: [
     say('So far every line was a gate. To write **memory** in Verilog we need one new kind of block. It is the code version of a flip-flop: it copies its input on each clock tick.'),
     say('**Why this matters:** registers, counters and state machines all use this block.'),
     art(`
-  always @(posedge clk) begin
+  always_ff @(posedge clk) begin
     q <= d;      // on each tick, q copies d
   end`, 'a flip-flop in code'),
-    say('`posedge clk` means "on the rising tick of the clock". Inside the block we use `<=`. Think of it as "gets the value on the tick".'),
+    say('`posedge clk` means "on the rising tick of the clock". `always_ff` tells the tool "this block is flip-flops", so it can warn you if it is not. Inside the block we use `<=`. Think of it as "gets the value on the tick".'),
     mc('What does that block build?', ['A flip-flop', 'An AND gate', 'Nothing'], 0, 'It stores d into q on every clock tick. That is a flip-flop.'),
     art(`
-  always @(posedge clk) begin
+  always_ff @(posedge clk) begin
     if (rst) count <= 0;
     else     count <= count + 1;   // a register with an adder feeding it
   end`, 'a counter'),
-    mc('Two flops: `always @(posedge clk) begin b <= a; c <= b; end`. What is c one clock later?', ['The new value of a', 'The old value of b', 'Zero'], 1, 'Every <= reads its right side before any of them change. So c gets the old b. That gives you a two-step shift register.'),
+    mc('Two flops: `always_ff @(posedge clk) begin b <= a; c <= b; end`. What is c one clock later?', ['The new value of a', 'The old value of b', 'Zero'], 1, 'Every <= reads its right side before any of them change. So c gets the old b. That gives you a two-step shift register.'),
     say('The rule: **use `<=` in clocked blocks.** Use `=` only in blocks without a clock, which come next.'),
     art(`
-  always @(*) begin
+  always_comb begin
     case (sel)
       2'd0: y = a;
       2'd1: y = b;
       default: y = 0;
     endcase
   end`, 'a block without a clock'),
-    say('`always @(*)` with no clock builds plain gates, like `assign`, but lets you use `case` and `if`. Give every output a value on **every path**, or the tool will build a latch you did not want.'),
-    mc('`always @(*) if (en) y = d;` What does this build?', ['A mux', 'A flip-flop', 'A latch'], 2, 'When en is 0, y has to hold its old value, and holding without a clock is a latch. Add an else branch, or a default value at the top.'),
+    say('`always_comb` has no clock. It builds plain gates, like `assign`, but lets you use `case` and `if`. Give every output a value on **every path**, or the tool will build a latch you did not want. `always_comb` warns you when that happens.'),
+    mc('`always_comb if (en) y = d;` What does this build?', ['A mux', 'A flip-flop', 'A latch'], 2, 'When en is 0, y has to hold its old value, and holding without a clock is a latch. Add an else branch, or a default value at the top.'),
+    say('State machines name their states. `typedef enum` gives each state a name, and `unique case` tells the tool that only one arm can match.'),
+    art(`
+  typedef enum logic [1:0] { IDLE, RUN, DONE } state_t;
+  state_t state, next;
+
+  always_comb begin
+    next = state;                 // default first: no latch
+    unique case (state)
+      IDLE: if (start) next = RUN;
+      RUN:  if (last)  next = DONE;
+      DONE: next = IDLE;
+    endcase
+  end`, 'a state machine with named states'),
+    say('You will also read older code. It says `reg` and `wire` instead of `logic`, and `always @(*)` instead of `always_comb`. It means the same thing. VHDL is the other HDL, common in FPGA, aerospace and defence work.'),
     say('That is all the Verilog you need to start building clocked designs.', 'happy'),
   ],
-  recap: ['always @(posedge clk) with <= builds registers.', 'always @(*) with = builds plain logic.', 'Give every output a value on every path, or you get a latch.'],
+  recap: ['always_ff @(posedge clk) with <= builds registers.', 'always_comb with = builds plain logic.', 'Give every output a value on every path, or you get a latch.', 'typedef enum names the states of an FSM.'],
 };
 
 export const alu: Lesson = {
@@ -341,6 +356,8 @@ export const clk: Lesson = {
     mc('What is the difference between clock **skew** and clock **jitter**?', ['They are the same effect measured in different units', 'Skew is spatial (across flops), jitter is temporal (over time)', 'Skew is temporal (over time), jitter is spatial (across flops)', 'Skew only hurts setup, and jitter only hurts hold'], 1, 'Skew: the same edge arrives at different flops at different times (spatial). Jitter: the edge-to-edge period varies over time at one flop (temporal). Both eat into the timing budget. Skew is mostly deterministic (from the tree); jitter comes from the PLL and supply noise, and is modelled as clock uncertainty in STA.'),
     say('**Resets** put the chip into a known state. Synchronous resets are sampled by the clock; asynchronous resets act immediately. The industry\'s favourite: **assert asynchronously, deassert synchronously**, using a reset synchronizer.'),
     mc('Why must the **release** of an asynchronous reset be synchronized?', ['Releasing it asynchronously wastes power', 'Flops could leave reset on different cycles', 'Verilog requires resets to be synchronous', 'An asynchronous release glitches the clock tree'], 1, 'If reset releases close to a clock edge, some flops leave reset this cycle and others next cycle (a recovery/removal violation), so the design starts in an inconsistent state. A 2-flop reset synchronizer lets reset hit instantly (even without a clock) but releases it cleanly on a clock edge.'),
+    say('Resets have crossings of their own. A **reset-domain crossing** (RDC) is a flop reset by one asynchronous reset that feeds a flop which that reset does not reach. When the reset asserts, it can do so at any moment: the source flop snaps to its reset value in the middle of the receiver\'s cycle, the receiver\'s setup time is broken, and its output goes metastable. Several such flops can then settle to different values and leave the receiver in a state no input could produce.'),
+    mc('A flop in reset domain A feeds an FSM in reset domain B. Reset A asserts asynchronously while B is running. What is the risk?', ['The FSM captures a value that changed inside its setup window, and can end up in an illegal state', 'The FSM is held in reset too, because the two reset domains share a clock', 'The FSM just receives a zero, which is always safe to capture at any moment', 'Nothing happens, since a reset can only change the flop that it is wired to'], 0, 'The source flop changes at a time unrelated to the receiver\'s clock. Fixes: reset the receiver with the same reset (so it is held, not capturing), use a synchronous reset in the source so it changes only on a clock edge, or order the resets so the receiver is already in reset when the source is.'),
     say('Now the big one: **clock domain crossing** (CDC). When a signal goes from a flop on clock A to a flop on unrelated clock B, it can change right inside B\'s setup/hold window. The receiving flop goes **metastable**: its output hangs between 0 and 1 for an unpredictable time.'),
     say('You can not prevent metastability. You can only make failure **astronomically unlikely**: add a second flop and give the first one a whole cycle to resolve. MTBF grows **exponentially** with the resolution time.'),
     art(`
@@ -368,9 +385,12 @@ export const clk: Lesson = {
       const depth = Math.ceil(B - (B * fr) / fw);
       return ask(`A burst of ${B} words is written at ${fw} MHz (one per cycle) and read out at ${fr} MHz (one per cycle). What minimum FIFO depth avoids overflow?`, num(depth), `The burst lasts ${B}/${fw} MHz; in that time ${B * fr / fw} words are read. Depth ≥ ${B} - ${B * fr / fw} = ${depth}. Real designs add margin for synchronizer latency.`, 'Words left over = written during the burst - read during the burst.');
     }),
-    mc('Which of these is a CDC **bug**?', ['A 2-flop synchronizer on a slow single-bit enable', 'A synchronizer fed by an AND of two domain-A signals', 'An async FIFO with Gray-coded read and write pointers', 'A req/ack handshake carrying a multi-bit bus'], 1, 'Combinational logic before the synchronizer can glitch, and the synchronizer may capture the glitch. Always register the signal in the source domain first. CDC lint tools (Spyglass, Questa CDC) check for exactly this.'),
+    say('Switching a block between two clocks needs care too. A bare multiplexer on the clock can cut a pulse short when the select changes in the middle of a high phase, and that runt pulse is a glitch every flop may see differently. A **glitch-free clock mux** changes the select only while the old clock is low and the new clock is low: each select is registered on the falling edge of its own clock and waits for the other side to switch off first.'),
+    mc('Why can a plain multiplexer on two clocks produce a runt pulse?', ['The select can change while the selected clock is high, cutting the pulse short', 'Multiplexers always add one gate delay, which shortens every pulse', 'The two clocks are always at different frequencies in such a design', 'The multiplexer output is undefined until the first rising edge'], 0, 'If the select changes mid-pulse the output falls early (or rises late), giving a pulse narrower than the minimum width. A glitch-free mux hands over only when both clocks are low, with the select synchronized into each domain.'),
+    say('RTL simulation never shows metastability: a flop is either 0 or 1. So a missing synchronizer passes every normal test. The remedy is **metastability injection**: the simulation model does what silicon does. When the input changes close to the capture edge, the flop returns a random mix of the old and the new value, or resolves late. A broken crossing then fails in simulation, and a correct synchronizer hides the effect. The CDC Lab does exactly this.'),
+    mc('Which of these is a CDC **bug**?', ['A 2-flop synchronizer on a slow single-bit enable', 'A synchronizer fed by an AND of two domain-A signals', 'An async FIFO with Gray-coded read and write pointers', 'A req/ack handshake carrying a multi-bit bus'], 1, 'Combinational logic before the synchronizer can glitch, and the synchronizer may capture the glitch. Always register the signal in the source domain first. CDC tools (Synopsys VC SpyGlass CDC, Siemens Questa CDC and Questa Signoff CDC, Cadence Jasper CDC/RDC App with Conformal Litmus on the implementation side, Real Intent Meridian CDC) check for exactly this.'),
   ],
-  recap: ['CTS builds a low-skew clock tree; skew is spatial, jitter temporal.', 'Resets: assert async, deassert sync (reset synchronizer).', 'Metastability can\'t be avoided; MTBF grows as e^(t/τ) with each synchronizer flop.', 'Multi-bit crossings: Gray codes, handshakes, async FIFOs.', 'Never put combinational logic right before a synchronizer.'],
+  recap: ['CTS builds a low-skew clock tree; skew is spatial, jitter temporal.', 'Resets: assert async, deassert sync (reset synchronizer).', 'A reset-domain crossing: an async reset asserted in one domain can corrupt a flop in another that it does not reset.', 'Clock muxes must switch while both clocks are low (glitch-free); metastability injection makes simulation expose bad crossings.', 'Metastability can\'t be avoided; MTBF grows as e^(t/τ) with each synchronizer flop.', 'Multi-bit crossings: Gray codes, handshakes, async FIFOs.', 'Never put combinational logic right before a synchronizer.'],
 };
 
 export const DIGITAL_LESSONS = [mux, decoder, adder, compare, seq, fsm, verilog, verilogSeq, alu, clk];

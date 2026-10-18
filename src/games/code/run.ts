@@ -2,6 +2,7 @@
 import { CInterp } from './c';
 import { Interp, PyRaise } from './py';
 import { PySyntaxError } from './pyparse';
+import { TclError, TclInterp, TclSyntaxError } from './tcl';
 
 export interface CodeCase {
   /** Python: an expression evaluated after the program (and `pre`) ran. C: an argument list for printf. */
@@ -12,7 +13,7 @@ export interface CodeCase {
   post?: string;
   /** C only: printf format for the values in `call`. */
   fmt?: string;
-  /** Python only: the answer is a number and only has to be this close to the reference's. */
+  /** Python and Tcl: the answer is a number and only has to be this close to the reference's. */
   tol?: number;
   /** Not listed in the brief; only run on Submit. */
   hidden?: boolean;
@@ -31,6 +32,8 @@ export interface CodeInstance {
   rules?: Rule[];
   /** C only: fail if the program leaves heap blocks unfreed. */
   leaks?: boolean;
+  /** C only: a simulated interrupt handler (see COptions.isr). */
+  isr?: { fn: string; every: number };
   /** Step budget for each case. */
   maxSteps?: number;
 }
@@ -86,10 +89,10 @@ function cProgram(inst: CodeInstance, src: string, c: CodeCase, solution = false
 
 function cCase(inst: CodeInstance, src: string, c: CodeCase): CaseResult & { out: string } {
   const base = { call: c.call, pre: c.pre, hidden: !!c.hidden, out: '' };
-  const ref = CInterp.run(cProgram(inst, src, c, true), { maxSteps: 4_000_000, leaks: inst.leaks });
+  const ref = CInterp.run(cProgram(inst, src, c, true), { maxSteps: 4_000_000, leaks: inst.leaks, isr: inst.isr });
   if (ref.error) return { ...base, ok: false, error: `reference solution failed: ${ref.error}` };
   const userLines = src.split('\n').length;
-  const r = CInterp.run(cProgram(inst, src, c), { maxSteps: inst.maxSteps ?? 3_000_000, leaks: inst.leaks });
+  const r = CInterp.run(cProgram(inst, src, c), { maxSteps: inst.maxSteps ?? 3_000_000, leaks: inst.leaks, isr: inst.isr });
   base.out = r.stdout;
   const expected = ref.stdout.replace(/\n$/, '');
   if (r.error) {
@@ -101,15 +104,46 @@ function cCase(inst: CodeInstance, src: string, c: CodeCase): CaseResult & { out
   return { ...base, ok: got === expected, expected, got };
 }
 
+// Tcl: `call` is a script whose result (a string) is compared with the reference's; lines past this base belong to the call, not the learner.
+const CALL_BASE = 1_000_000;
+function tclCase(inst: CodeInstance, src: string, c: CodeCase): CaseResult & { out: string } {
+  const base = { call: c.call, pre: c.pre, hidden: !!c.hidden, out: '' };
+  const ref = new TclInterp({ maxSteps: 4_000_000 });
+  let want: string;
+  try {
+    ref.load(inst.solution);
+    if (c.pre) ref.load(c.pre);
+    want = ref.evalTop(c.call);
+  } catch (e) {
+    return { ...base, ok: false, error: `reference solution failed: ${ref.describe(e)}` };
+  }
+  const it = new TclInterp({ maxSteps: 6_000_000 });
+  const lineOf = (e: unknown) => { const l = e instanceof TclError || e instanceof TclSyntaxError ? e.line : it.line; return l > 0 && l < CALL_BASE ? l : undefined; };
+  try {
+    it.load(src);
+    if (c.pre) it.evalScript(c.pre, CALL_BASE);
+    it.steps = 0; // setup is free: the budget is for the call under test
+    it.maxSteps = inst.maxSteps ?? 3_000_000;
+    const got = it.evalTop(c.call, CALL_BASE);
+    base.out = it.stdout;
+    let ok = got === want;
+    if (!ok && c.tol !== undefined) { const g = Number(got), w = Number(want); ok = got.trim() !== '' && !Number.isNaN(g) && Math.abs(g - w) <= c.tol; }
+    return { ...base, ok, expected: want, got };
+  } catch (e) {
+    base.out = it.stdout;
+    return { ...base, ok: false, expected: want, error: it.describe(e), line: lineOf(e) };
+  }
+}
+
 /** Run every case (or only the visible ones) and the static rules. */
-export function runCode(lang: 'py' | 'c', inst: CodeInstance, src: string, onlyVisible = false): CodeReport {
+export function runCode(lang: 'py' | 'c' | 'tcl', inst: CodeInstance, src: string, onlyVisible = false): CodeReport {
   const rules = (inst.rules ?? []).map((r) => ({ label: r.label, ok: r.ok(src) }));
   let fatal: CodeReport['fatal'];
   const results: CaseResult[] = [];
   let stdout = '';
   for (const c of inst.cases) {
     if (onlyVisible && c.hidden) continue;
-    const r = lang === 'py' ? pyCase(inst, src, c) : cCase(inst, src, c);
+    const r = lang === 'py' ? pyCase(inst, src, c) : lang === 'tcl' ? tclCase(inst, src, c) : cCase(inst, src, c);
     if (!stdout && r.out) stdout = r.out;
     const { out: _out, ...rest } = r;
     void _out;
