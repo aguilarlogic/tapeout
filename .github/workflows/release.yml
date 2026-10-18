@@ -1,6 +1,7 @@
 name: Release
 
-# Publishes a GitHub release with the game attached: a single Tapeout.html you can double-click, and a zip of it.
+# Publishes a GitHub release with the game attached: a single Tapeout.html you can double-click, a zip of it, and the
+# Windows desktop app (an installer and a portable exe, built by the windows job and added to the same release).
 # Run it from the Actions tab ("Release" > "Run workflow"), or push a tag like v0.2.0.
 on:
   push:
@@ -17,6 +18,8 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.pkg.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -51,6 +54,37 @@ jobs:
           cat > notes.md <<'NOTES'
           **To play:** download `Tapeout.html` below and double-click it. It runs in your browser, offline, with nothing to install.
           The zip holds the same file plus a short readme.
+
+          **On Windows** you can also install the desktop app: `Tapeout-Setup-<version>.exe` installs it for you only (no admin),
+          and `Tapeout-<version>-portable.exe` runs without installing. They appear below a few minutes after this release.
+          Windows may say it protected your PC. Click More info, then Run anyway.
+          The app keeps its own save; use Settings > Move your save to bring progress over from the browser.
           NOTES
           gh release create "$TAG" out/Tapeout.html "out/tapeout-$TAG.zip" \
             --target "$GITHUB_SHA" --title "Tapeout $TAG" --notes-file notes.md --generate-notes
+
+  windows:
+    needs: release
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # The exe file names carry the version, so match package.json to the release tag first.
+      - run: npm version "${TAG#v}" --no-git-tag-version --allow-same-version
+        env:
+          TAG: ${{ needs.release.outputs.tag }}
+      - run: npm run build
+      - run: npm run desktop:build
+      - run: npx playwright test --project=electron
+      - name: Attach the exe files
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.release.outputs.tag }}
+        run: gh release upload "$TAG" release/Tapeout-Setup-*.exe release/Tapeout-*-portable.exe --clobber
