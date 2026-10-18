@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="512" height="512">
+  <!-- Tapeout app icon: TAPEOUT's face (a chip with LED eyes) in line art on the game's deep background. -->
+  <defs>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2.2" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <rect width="100" height="100" rx="18" fill="#0B0A1A"/>
+  <g fill="none" stroke="#E8E6F5" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M29 12v8 M43 12v8 M57 12v8 M71 12v8 M29 80v8 M43 80v8 M57 80v8 M71 80v8 M12 29h8 M12 43h8 M12 57h8 M12 71h8 M80 29h8 M80 43h8 M80 57h8 M80 71h8"/>
+    <rect x="20" y="20" width="60" height="60" rx="9"/>
+    <circle cx="29" cy="29" r="2.6"/>
+    <path d="M43 61h14"/>
+  </g>
+  <path d="M36 40h7v9h-7z M57 40h7v9h-7z" fill="#2EF2FF" filter="url(#glow)"/>
+</svg>

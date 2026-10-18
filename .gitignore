@@ -2,3 +2,7 @@ node_modules/
 dist/
 *.log
 .DS_Store
+release/
+desktop/app/
+test-results/
+playwright-report/

@@ -24,6 +24,11 @@ export interface Profile {
 export interface Prefs {
   speed: 'slow' | 'normal' | 'fast' | 'instant';
   muted: boolean; // true silences the synthesized sound cues (see ui/sound.ts); sound is on by default
+  /** The story game's key bindings: action id -> [main key, second key] as KeyboardEvent.code or Mouse0/Mouse2/Wheel.
+   * Only actions the player changed are stored; the rest use the defaults in game/input/bindings.ts. */
+  keys: Record<string, [string | null, string | null]>;
+  /** Reduced motion for the story game: follow the system setting, or force it on or off. */
+  reducedMotion: 'system' | 'on' | 'off';
 }
 
 export interface Progress {
@@ -39,11 +44,12 @@ export interface Progress {
 const KEY = 'tapeout.progress.v1';
 /** 2: the curriculum-order rework moved chapters between acts. Progress is keyed by module id and no id changed, so an
  * older save needs no rewriting: it is stamped with the new version and every level, star, card and rank stays. */
-export const SAVE_VERSION = 2;
+/** 3: the story game's preview adds prefs.keys and prefs.reducedMotion. Missing fields get their defaults on load. */
+export const SAVE_VERSION = 3;
 let cache: Progress | null = null;
 
 function blank(): Progress {
-  return { levels: {}, cards: {}, prefs: { speed: 'normal', muted: false }, best: {}, daily: emptyDaily(), version: SAVE_VERSION };
+  return { levels: {}, cards: {}, prefs: { speed: 'normal', muted: false, keys: {}, reducedMotion: 'system' }, best: {}, daily: emptyDaily(), version: SAVE_VERSION };
 }
 
 export function load(): Progress {
