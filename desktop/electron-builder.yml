@@ -1,0 +1,36 @@
+# Builds the Windows app from desktop/main.cjs and desktop/app/Tapeout.html (see scripts/desktop-prep.mjs).
+# Outputs to release/: an NSIS per-user installer (no admin) and a portable exe. Unsigned; no auto-update.
+appId: com.aguilarlogic.tapeout
+productName: Tapeout
+copyright: Copyright © aguilarlogic
+directories:
+  output: release
+  buildResources: build
+files:
+  - desktop/main.cjs
+  - desktop/app/Tapeout.html
+  - build/icon.png
+  - package.json
+  # matter-js is already inlined into Tapeout.html by the web build
+  - "!node_modules/**"
+extraMetadata:
+  main: desktop/main.cjs
+asar: true
+publish: null
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: portable
+      arch: [x64]
+  icon: build/icon.png
+nsis:
+  oneClick: true
+  perMachine: false
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Tapeout
+  deleteAppDataOnUninstall: false
+  artifactName: Tapeout-Setup-${version}.exe
+portable:
+  artifactName: Tapeout-${version}-portable.exe
