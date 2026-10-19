@@ -200,6 +200,8 @@ export class GameScreen {
    * in world px, or null to hand control back to the keyboard and mouse.
    */
   drive: ((sim: Sim) => { held: Action[]; aim: { x: number; y: number } } | null) | null = null;
+  /** For recordings: a close-up zoom about the drone (1 = the normal view). */
+  zoom = 1;
   private driven: { held: Set<Action>; aim: { x: number; y: number } } | null = null;
 
   /** The mouse in view px (0..1280, 0..720). */
@@ -333,6 +335,13 @@ export class GameScreen {
     c.beginPath();
     c.rect(0, 0, VIEW_W, VIEW_H);
     c.clip();
+    const dx = this.prev.x + (sim.drone.x - this.prev.x) * alpha, dy = this.prev.y + (sim.drone.y - this.prev.y) * alpha;
+    if (this.zoom !== 1) {
+      // close-up for recordings: scale the world about the drone, which sits a little below the middle of the view
+      c.translate(VIEW_W / 2, VIEW_H * 0.6);
+      c.scale(this.zoom, this.zoom);
+      c.translate(-(dx - camX), -(dy - camY));
+    }
     c.translate(-camX, -camY);
     const t = sim.steps + alpha;
     const cam = { x: camX, y: camY };
@@ -343,7 +352,6 @@ export class GameScreen {
     this.art.drawSolids(c, sim, cam);
     this.art.drawProps(c, sim, t);
     drawEnemies(c, sim, t, reducedFlash);
-    const dx = this.prev.x + (sim.drone.x - this.prev.x) * alpha, dy = this.prev.y + (sim.drone.y - this.prev.y) * alpha;
     const core = { x: dx, y: dy - sim.drone.h / 2 + 13 };
     const emitter = { x: dx - sim.drone.facing * 9, y: core.y - 1 };
     drawField(c, sim, core.x, core.y, emitter.x, emitter.y, t, this.fieldPower);

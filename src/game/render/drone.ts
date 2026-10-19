@@ -55,6 +55,9 @@ export class DroneRig {
   private hurtFlash = 0;
   private sparkIn = [2, 2, 2, 2, 2, 2];
   private lastVx = 0;
+  /** Which way the knees bend (-1..1): follows the facing, eased over about 120 ms so a turn never snaps. */
+  kneeFace = 1;
+  private lastFace = 0;
   /** The chassis centre in world px, as last drawn (for effects). */
   cx = 0;
   cy = 0;
@@ -67,7 +70,17 @@ export class DroneRig {
     const d = sim.drone;
     const speed = Math.abs(d.vx) * HZ;
     const cx = d.x, cy = d.y - d.h / 2 + 13;
-    if (!this.feet.length) this.feet = HIPS.map((hx) => ({ x: cx + hx, y: d.y + d.h / 2, planted: true, lift: 0 }));
+    const face = d.facing;
+    // hips are mirrored with the body, so hip i sits at cx + HIPS[i] × facing
+    if (!this.feet.length) { this.feet = HIPS.map((hx) => ({ x: cx + hx * face, y: d.y + d.h / 2, planted: true, lift: 0 })); this.lastFace = face; this.kneeFace = face; }
+    if (face !== this.lastFace) {
+      // turning round mirrors the hips: hand each foot to the hip now on its side, and shift the step cycle half
+      // a stride with it, so no foot jumps and the legs never cross
+      this.feet.reverse();
+      this.phase = (this.phase + 0.5) % 1;
+      this.lastFace = face;
+    }
+    this.kneeFace += (face - this.kneeFace) * (1 - Math.exp(-DT / 0.04)); // 95% there in 120 ms
 
     for (const f of sim.fx) {
       if (f.t === 'land') {
@@ -101,7 +114,9 @@ export class DroneRig {
 
     // lean: into the run, back while charging a throw
     const charge = sim.field.on ? sim.field.charge : 0;
-    const want = (d.vx * HZ / 240) * A.lean - (sim.field.on && sim.field.held ? charge * TUNING.field.lean * Math.sign(sim.aim.x || 1) : 0);
+    // backpedalling (moving away from the aim side) leans half as much: the drone is bracing, not running
+    const back = d.vx * face < 0 ? 0.5 : 1;
+    const want = (d.vx * HZ / 240) * A.lean * back - (sim.field.on && sim.field.held ? charge * TUNING.field.lean * Math.sign(sim.aim.x || 1) : 0);
     this.lean += (want - this.lean) * 0.25;
     // antenna: a damped spring pushed by horizontal acceleration
     const ax = (d.vx - this.lastVx) * HZ;
@@ -136,10 +151,10 @@ export class DroneRig {
       this.phase = (this.phase + (speed * DT) / (A.stride * 2)) % 1;
       HIPS.forEach((hx, i) => {
         const f = this.feet[i];
-        const hip = cx + hx;
+        const hip = cx + hx * face;
         if (speed < 12) {
           // idle: settle each foot under its hip
-          const tx = hip + hx * 0.3;
+          const tx = hip + hx * face * 0.3;
           f.x += (tx - f.x) * 0.25;
           f.y = ground(f.x) ?? d.y + d.h / 2;
           f.lift *= 0.7;
@@ -168,7 +183,7 @@ export class DroneRig {
       HIPS.forEach((hx, i) => {
         const f = this.feet[i];
         const reach = (d.y + d.h / 2 - (cy + HIP_Y)) * (dying ? 0.15 : 1 - A.tuck);
-        const tx = cx + hx - d.vx * 1.2, ty = cy + HIP_Y + reach;
+        const tx = cx + hx * face - d.vx * 1.2, ty = cy + HIP_Y + reach;
         f.x += (tx - f.x) * 0.35;
         f.y += (ty - f.y) * 0.35;
         f.planted = false;
@@ -182,6 +197,20 @@ export class DroneRig {
       this.sparkIn[i] = A.panelSparkMin + this.rand() * (A.panelSparkMax - A.panelSparkMin);
       const p = PANELS[i][0];
       fx.sparks(cx + p[0] * d.facing, cy + p[1], 0, -1, 3, PAL.gold, 2.5, 1.4);
+    });
+  }
+
+  /**
+   * Each leg's hip, knee and foot in world px for a chassis centre (cx, cy). The knees bend toward the facing side
+   * (eased through kneeFace on a turn); `pull` draws the feet up toward the hips (the death drop).
+   */
+  pose(cx: number, cy: number, tilt = this.lean, face = this.lastFace || 1, squashX = 1, squashY = 1, pull = 0) {
+    return HIPS.map((hx, i) => {
+      const f = this.feet[i] ?? { x: cx + hx * face, y: cy + HIP_Y + 20 };
+      const hip = rotate(hx * squashX, HIP_Y * squashY, tilt, face);
+      const hipX = cx + hip.x, hipY = cy + hip.y;
+      const fy = hipY + (f.y - hipY) * (1 - pull);
+      return { hipX, hipY, knee: ik(hipX, hipY, f.x, fy, A.leg, A.leg, this.kneeFace) };
     });
   }
 
@@ -235,23 +264,16 @@ export class DroneRig {
     // legs (world space, behind the chassis)
     c.strokeStyle = PAL.line;
     c.lineWidth = 2.5;
-    const feet = this.feet;
-    HIPS.forEach((hx, i) => {
-      const f = feet[i];
-      if (!f) return;
-      const hip = rotate(hx * squashX, HIP_Y * squashY, tilt, face);
-      const hipX = cx + hip.x, hipY = cy + hip.y;
-      const fy = dying ? hipY + (f.y - hipY) * (1 - easeIn(k) * 0.85) : f.y;
-      const knee = ik(hipX, hipY, f.x, fy, A.leg, A.leg, face);
+    this.pose(cx, cy, tilt, face, squashX, squashY, dying ? easeIn(k) * 0.85 : 0).forEach(({ hipX, hipY, knee }, i) => {
       c.globalAlpha = alpha * (i === 0 ? 0.75 : 1); // the far leg slightly dimmer
       c.beginPath();
       c.moveTo(hipX, hipY);
       c.lineTo(knee.x, knee.y);
       c.lineTo(knee.fx, knee.fy);
       c.stroke();
-      // foot
+      // foot: the toe points the way the drone faces, mirrored exactly
       c.beginPath();
-      c.moveTo(knee.fx - 3, knee.fy);
+      c.moveTo(knee.fx - 3 * face, knee.fy);
       c.lineTo(knee.fx + 4 * face, knee.fy);
       c.stroke();
       // knee joint
@@ -463,7 +485,7 @@ function toLocal(x: number, y: number, deg: number, face: number) {
   return { x: rx * face, y: ry };
 }
 
-/** 2-bone IK: the knee for a hip and a foot target, bending toward the facing side. */
+/** 2-bone IK: the knee for a hip and a foot target, bending toward the facing side (`face` in -1..1). */
 function ik(hx: number, hy: number, fx: number, fy: number, l1: number, l2: number, face: number) {
   let dx = fx - hx, dy = fy - hy;
   let dist = Math.hypot(dx, dy);
