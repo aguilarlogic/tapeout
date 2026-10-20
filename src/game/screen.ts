@@ -4,10 +4,13 @@
 import { prefs } from '../state';
 import { prefersReducedMotion } from '../term/typewriter';
 import { h } from '../ui/dom';
-import { GameAudio } from './audio';
+import { GameAudio, type Sfx, type Track } from './audio';
 import { type Action, type Bindings, resolve } from './input/bindings';
 import { InputDevice } from './input/device';
 import { TEST_ROOM } from './level/testroom';
+import { Director } from './story/director';
+import { gameMount, openCard, openChoice, openLab, openLoft, openPort, openProfile, type OverlayHost } from './story/overlay';
+import { drawBossHud, drawBubble, drawDark, drawExitLift, drawPrompt, drawStoryBack, drawStoryFront } from './story/render';
 import { Loop } from './loop';
 import { pauseMenu } from './pause';
 import { Camera } from './render/camera';
@@ -30,9 +33,10 @@ export function reducedMotion(): boolean {
   return p === 'on' || (p === 'system' && prefersReducedMotion());
 }
 
-/** Open the story game, or return the one already open. `onQuit` runs when the player picks Quit to title. */
-export function openGame(onQuit: () => void): GameScreen {
-  current ??= new GameScreen(onQuit);
+/** Open the story game, or return the one already open. `onQuit` runs when the player picks Quit to title. `test`: the
+ * phase 1 test room (`#/story/test`) instead of the story. */
+export function openGame(onQuit: () => void, opts: { test?: boolean } = {}): GameScreen {
+  current ??= new GameScreen(onQuit, opts);
   return current;
 }
 
@@ -41,14 +45,22 @@ export function closeGame() {
   current?.close(false);
 }
 
-const BOOT_LINES = ['PROBE-7 FIRMWARE 7.0.3 . . . . . . . OK', 'LEGS / PULSE PROBE / FIELD COIL . . ONLINE', 'HULL PANELS 4 OF 6 . . . . SELF-REPAIR STANDBY'];
+const TEST_BOOT = ['PROBE-7 FIRMWARE 7.0.3 . . . . . . . OK', 'LEGS / PULSE PROBE / FIELD COIL . . ONLINE', 'HULL PANELS 4 OF 6 . . . . SELF-REPAIR STANDBY'];
 const BOOT = { fadeIn: 0.3, eye: 0.6, cps: 40, hold: 0.35, hud: 0.25 };
 
 export class GameScreen {
   el: HTMLElement;
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
-  sim = new Sim(TEST_ROOM, Date.now() >>> 0);
+  /** The story director (null in the test room). It owns the sim and swaps it on every room load. */
+  story: Director | null = null;
+  private testSim: Sim | null = null;
+  get sim(): Sim { return this.story?.sim ?? this.testSim!; }
+  private bootLines: string[];
+  private track: Track = 'test';
+  private speedAcc = 0;
+  private showLog = false;
+  private dark: { canvas: HTMLCanvasElement | null } = { canvas: null };
   private cam = new Camera();
   private input: InputDevice;
   loop: Loop;
@@ -56,7 +68,7 @@ export class GameScreen {
   private fx = new Fx();
   private rig = new DroneRig();
   private hud = new Hud();
-  private art = new WorldArt(TEST_ROOM);
+  private art: WorldArt;
   private tuner: Tuner;
   private paused = false;
   private pauseEl: HTMLElement | null = null;
@@ -75,9 +87,18 @@ export class GameScreen {
   private fieldPower = 0;
   private respawnFade = 0;
   private quitting = false;
-  private bootLen = BOOT_LINES.reduce((a, l) => a + l.length, 0);
+  private bootLen: number;
 
-  constructor(private onQuit: () => void) {
+  constructor(private onQuit: () => void, opts: { test?: boolean } = {}) {
+    if (opts.test) {
+      this.testSim = new Sim(TEST_ROOM, Date.now() >>> 0);
+      this.bootLines = TEST_BOOT;
+    } else {
+      this.story = new Director();
+      this.bootLines = this.story.bootLines;
+    }
+    this.art = new WorldArt(this.sim.room);
+    this.bootLen = this.bootLines.reduce((a, l) => a + l.length, 0);
     this.canvas = h('canvas', { class: 'gm-canvas', 'aria-label': 'Story game. Press Escape to pause.', tabindex: '0' });
     this.el = h('div', { class: 'gm-screen gm-fading', 'data-testid': 'game' }, this.canvas);
     document.body.append(this.el);
@@ -128,7 +149,8 @@ export class GameScreen {
       resume: () => this.resume(),
       quit: () => this.quit(),
       onBindings: (b: Bindings) => (this.input.bindings = b),
-      onSettings: () => { this.reduced = reducedMotion(); this.audio.applyVolumes(); },
+      onSettings: () => { this.reduced = reducedMotion(); this.audio.applyVolumes(); this.story?.applyPrefs(); },
+      story: !!this.story,
       sound: (s) => this.audio.play(s),
     });
     this.el.append(this.pauseEl);
@@ -227,10 +249,16 @@ export class GameScreen {
     const t0 = performance.now();
     this.age += 1 / HZ;
     const bt = this.bootTimes();
-    if (!this.ready && this.age >= bt.control) { this.ready = true; this.input.clear(); }
+    if (!this.ready && this.age >= bt.control) { this.ready = true; this.input.clear(); if (this.story) this.story.live = true; }
     if (!this.ready) {
       this.sim.booting = this.age < bt.typed ? VITALS.bootSteps : Math.min(this.sim.booting, VITALS.bootSteps);
-      if (Math.abs(this.age - BOOT.fadeIn) < 0.5 / HZ) { this.audio.play('boot'); this.audio.startMusic(); }
+      if (Math.abs(this.age - BOOT.fadeIn) < 0.5 / HZ) { this.audio.play('boot'); this.audio.startMusic(this.track); }
+    }
+    // the game speed assist: below 100% some steps are skipped (the world runs slower; nothing else changes)
+    if (this.story) {
+      this.speedAcc += Math.max(50, Math.min(100, prefs().gameSpeed ?? 100)) / 100;
+      if (this.speedAcc < 1 - 1e-9) return;
+      this.speedAcc -= 1;
     }
     this.art.step(this.reduced);
     if (this.hitStop > 0) {
@@ -246,8 +274,11 @@ export class GameScreen {
     this.driven = auto ? { held: new Set(auto.held), aim: auto.aim } : null;
     if (this.driven) input = { held: this.driven.held, pressed: new Set([...this.driven.held].filter((a) => !prevHeld.has(a))) };
     if (!this.ready) input = { held: new Set(), pressed: new Set() };
+    this.showLog = input.held.has('map');
+    if (this.story) input = this.story.before(input);
     this.sim.step(input, this.aimPoint());
     this.handleFx();
+    if (this.story) { this.story.after(); this.handleStory(); }
     this.cam.step(this.sim.drone, this.aimPoint(), this.sim.room, this.shakeRand);
     const solids: Rect[] = [...this.sim.world.statics, ...this.sim.world.props.filter((p) => !p.held).map((p) => boundsRect(p.body))];
     this.rig.step(this.sim, this.fx, solids);
@@ -317,6 +348,68 @@ export class GameScreen {
     if (sim.weapon === 'charged' && sim.charge > 0 && sim.charge < 1 && sim.steps % 6 === 0) a.play('charge', 0.4 + sim.charge * 0.6);
   }
 
+  /** The overlay host the story's DOM layer mounts into. */
+  private host: OverlayHost = {
+    el: null as unknown as HTMLElement,
+    sound: (s) => this.audio.play(s),
+    busy: (on) => {
+      this.input.active = !on;
+      this.input.clear();
+      this.audio.duck(on);
+      this.audio.fieldHum(false);
+      if (!on) this.canvas.focus();
+    },
+  };
+
+  /** Turn the director's out records into sound, shake, overlays and room loads. */
+  private handleStory() {
+    const st = this.story!, host = this.host;
+    host.el = this.el;
+    const noShake = prefs().reduceShake || this.reduced;
+    const outs = st.out;
+    st.out = [];
+    for (const o of outs) {
+      switch (o.t) {
+        case 'sfx': this.audio.play(o.name as Sfx, o.gain ?? 1); break;
+        case 'shake': this.cam.shake(o.px, o.ms, noShake); break;
+        case 'music': this.track = o.track; if (this.age >= BOOT.fadeIn) this.audio.startMusic(o.track); break;
+        case 'shatter': {
+          const r = o.rect, outline = [{ x: r.x, y: r.y }, { x: r.x + r.w, y: r.y }, { x: r.x + r.w, y: r.y + r.h }, { x: r.x, y: r.y + r.h }];
+          this.fx.shatter(outline, r.x + r.w / 2, r.y + r.h / 2, 2, -1, PAL.x, Math.round(TUNING.feel.fragmentS * HZ));
+          this.fx.flash(r.x + r.w / 2, r.y + r.h / 2, 60, PAL.x, 8);
+          break;
+        }
+        case 'enter':
+          this.art = new WorldArt(this.sim.room);
+          this.rig = new DroneRig();
+          this.fx.clear();
+          this.cam.snap(this.sim.drone, this.sim.room);
+          this.prev = { x: this.sim.drone.x, y: this.sim.drone.y };
+          this.hud.syncKit(this.sim);
+          break;
+        case 'overlay':
+          if (o.kind === 'panel' || o.kind === 'bench') openLab(host, o.kind, o.module, (passed) => st.overlayClosed(o.module, passed));
+          else openPort(host, o.module, (ok) => { if (ok) st.lampOn(); }, (passed) => st.overlayClosed(o.module, passed));
+          break;
+        case 'card': openCard(host, o, () => st.cardClosed()); break;
+        case 'choose': openChoice(host, { title: o.title, options: o.options, back: o.kind === 'cause' || o.kind === 'loftLift' ? 'Back' : undefined }, (i) => st.chose(o.kind, i)); break;
+        case 'profile': st.waiting = true; openProfile(host, () => { st.waiting = false; st.applyPrefs(); }); break;
+        case 'loft':
+          if (o.station === 'crt') { this.quit(); break; }
+          if (o.station === 'interview') break;
+          openLoft(host, o.station, {
+            log: st.world.heard,
+            openLesson: (id) => { st.waiting = true; openPort(host, id, () => {}, (passed) => st.overlayClosed(id, passed)); },
+            settings: () => { this.quit(); setTimeout(() => (location.hash = '#/settings'), 340); },
+          }, () => { st.waiting = false; });
+          break;
+      }
+    }
+  }
+
+  /** For the recorder and tests: the arcade's frame inside the game. */
+  get arcadeMount() { return gameMount(this.host); }
+
   private stress() {
     this.sim.stress();
     // fill the particle pool too, so the frame budget is measured at the plan's worst case
@@ -349,32 +442,39 @@ export class GameScreen {
     this.art.drawBackdrop(c, cam);
     this.art.drawSigns(c);
     this.art.drawFixtures(c, sim, t);
+    const st = this.story;
+    if (st) drawStoryBack(c, st, t);
     this.art.drawSolids(c, sim, cam);
     this.art.drawProps(c, sim, t);
+    if (st) drawStoryFront(c, st, t, { x: dx + sim.drone.facing * 12, y: dy - 4 });
     drawEnemies(c, sim, t, reducedFlash);
     const core = { x: dx, y: dy - sim.drone.h / 2 + 13 };
     const emitter = { x: dx - sim.drone.facing * 9, y: core.y - 1 };
     drawField(c, sim, core.x, core.y, emitter.x, emitter.y, t, this.fieldPower);
-    if (this.ready && !(sim.field.on && sim.field.held)) {
+    if (this.ready && sim.kit.gun && !(sim.field.on && sim.field.held)) {
       const m = { x: dx + sim.drone.facing * 8 + sim.aim.x * TUNING.anim.barrel, y: dy - sim.drone.h / 2 + 2 + sim.aim.y * TUNING.anim.barrel };
       drawAimLine(c, sim, m.x, m.y);
     }
     this.rig.draw(c, sim, dx, dy, { reducedFlash, reduced: this.reduced });
     drawShots(c, sim, alpha);
     this.fx.draw(c, alpha, reducedFlash, prefs().damageNumbers);
+    if (st) drawPrompt(c, st, t);
     this.art.drawMotes(c, cam);
     c.restore();
 
-    // view space: vignette, HUD, boot text, crosshair, fades
+    // view space: the dark, vignette, HUD, TAPEOUT, boot text, crosshair, fades
+    if (st) drawDark(c, st, cam, { x: dx, y: dy - sim.drone.h / 2 + 13 }, this.dark);
     this.art.drawVignette(c);
     const bt = this.bootTimes();
     this.hud.draw(c, sim, Math.max(0, Math.min(1, (this.age - bt.hud) / BOOT.hud)), t);
+    if (st) { drawBossHud(c, st, t, this.showLog); drawBubble(c, st, t); drawExitLift(c, st.exitLift); }
     if (!this.ready || this.age < bt.control + 1) this.drawBoot(c, bt);
-    if (this.ready && !this.paused) { const m = this.mouseView(); this.hud.crosshair(c, sim, m.x, m.y); }
+    if (this.ready && !this.paused && (sim.kit.gun || sim.kit.coil)) { const m = this.mouseView(); this.hud.crosshair(c, sim, m.x, m.y); }
     let black = 0;
     if (this.age < BOOT.fadeIn + BOOT.eye) black = 1 - easeOut((this.age - BOOT.fadeIn) / BOOT.eye);
     if (sim.dying > 0) black = Math.max(black, Math.max(0, (1 - sim.dying / VITALS.deathSteps - 0.6) / 0.4));
     if (this.respawnFade > 0) black = Math.max(black, this.respawnFade / frames(400));
+    if (st?.fade) { const half = frames(TUNING.story.fadeMs); black = Math.max(black, st.fade.t < half ? st.fade.t / half : 1 - (st.fade.t - half) / half); }
     if (black > 0) { c.fillStyle = rgba('#000000', Math.min(1, black)); c.fillRect(0, 0, VIEW_W, VIEW_H); }
     if (this.paused) { c.fillStyle = 'rgba(11,10,26,0.35)'; c.fillRect(0, 0, VIEW_W, VIEW_H); }
     if (this.debug) this.drawDebug(c);
@@ -389,12 +489,13 @@ export class GameScreen {
     c.font = `14px ${FONT}`;
     c.textBaseline = 'top';
     const x = 24, y = 72; // under the HUD, clear of the drone
-    BOOT_LINES.forEach((line, i) => {
+    const lines = this.bootLines;
+    lines.forEach((line, i) => {
       const n = Math.max(0, Math.min(line.length, chars));
       chars -= line.length;
       if (n <= 0 && i > 0) return;
       const s = line.slice(0, n);
-      c.fillStyle = rgba(i === BOOT_LINES.length - 1 ? PAL.gold : PAL.trace, 0.9 * fade);
+      c.fillStyle = rgba(i === lines.length - 1 ? PAL.gold : PAL.trace, 0.9 * fade);
       c.fillText(s, x, y + i * 22);
       if (n < line.length && n > 0 && Math.floor(this.age * 6) % 2) c.fillRect(x + c.measureText(s).width + 2, y + i * 22, 8, 15);
     });

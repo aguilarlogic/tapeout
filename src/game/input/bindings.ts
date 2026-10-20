@@ -18,7 +18,7 @@ export const ACTIONS: { id: Action; label: string; later?: boolean }[] = [
   { id: 'fire', label: 'Fire' },
   { id: 'field', label: 'Field Coil' },
   { id: 'dash', label: 'Dash' },
-  { id: 'interact', label: 'Interact', later: true },
+  { id: 'interact', label: 'Interact' },
   { id: 'weapon', label: 'Next weapon' },
   { id: 'slot1', label: 'Weapon slot 1', later: true },
   { id: 'slot2', label: 'Weapon slot 2', later: true },
@@ -27,7 +27,7 @@ export const ACTIONS: { id: Action; label: string; later?: boolean }[] = [
   { id: 'scan', label: 'Scan', later: true },
   { id: 'rewind', label: 'Rewind', later: true },
   { id: 'sync', label: 'Sync', later: true },
-  { id: 'map', label: 'Map', later: true },
+  { id: 'map', label: 'Notes (hold)' },
   { id: 'pause', label: 'Pause' },
 ];
 

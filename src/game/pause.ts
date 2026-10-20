@@ -1,7 +1,7 @@
 // The pause menu (Esc or P), in line art (polish bar P2): Resume, Settings and Quit to title, each with hover and
 // press states and sounds. Settings holds the story game's options (plan I and J, P5) and the Controls remapping.
 // Controls: click a cell, press a key (or click a mouse button); Esc cancels. A key already used elsewhere swaps.
-import { type Prefs, prefs, setPrefs } from '../state';
+import { type Prefs, prefs, profile, setPrefs } from '../state';
 import { h } from '../ui/dom';
 import type { Sfx } from './audio';
 import { ACTIONS, type Action, assign, type Bindings, DEFAULTS, keyName, overrides, resolve } from './input/bindings';
@@ -15,6 +15,8 @@ export interface PauseHooks {
   /** Settings changed (motion, shake, flashes, numbers, volumes). */
   onSettings(): void;
   sound(s: Sfx): void;
+  /** The story is running (not the test room): the menu offers difficulty and assists. */
+  story?: boolean;
 }
 
 export function pauseMenu(hooks: PauseHooks): HTMLElement {
@@ -39,8 +41,31 @@ export function pauseMenu(hooks: PauseHooks): HTMLElement {
       h('h2', null, 'PAUSED'),
       resume,
       btn('Settings', settings),
+      hooks.story ? btn('Difficulty and assists', assists) : null,
       btn('Quit to title', hooks.quit),
-      h('p', { class: 'gm-note' }, 'A preview of the new story game: one test room to try the drone, its guns and the Field Coil. Your course progress is not touched.')), resume);
+      h('p', { class: 'gm-note' }, hooks.story
+        ? 'A preview of the new story game: Level 1, Bit Zero. Your progress saves as you go and counts in the course too.'
+        : 'The test room: try the drone, its guns and the Field Coil. Your course progress is not touched.')), resume);
+  };
+
+  /** Difficulty and assists (Level 1 spec, "Difficulty"): Story halves damage taken and weakens the boss. */
+  const assists = () => {
+    const p = prefs();
+    const diff = p.difficulty ?? (profile()?.background === 'pro' ? 'standard' : 'story');
+    const flip = (label: string, key: 'invincible' | 'autoFire' | 'infiniteEnergy') =>
+      btn(`${label}: ${p[key] ? 'On' : 'Off'}`, () => { setPrefs({ [key]: !prefs()[key] } as Partial<Prefs>); hooks.onSettings(); assists(); }, 'toggle');
+    const out = h('output', null, `${p.gameSpeed}%`);
+    const speed = h('input', { type: 'range', min: '50', max: '100', step: '10', value: `${p.gameSpeed}`, 'aria-label': 'Game speed' }) as HTMLInputElement;
+    speed.addEventListener('input', () => { out.textContent = `${speed.value}%`; setPrefs({ gameSpeed: Number(speed.value) }); hooks.onSettings(); });
+    const back = btn('Back', main, 'primary');
+    show(h('div', { class: 'gm-panel wide' },
+      h('h2', null, 'DIFFICULTY'),
+      btn(`Difficulty: ${diff === 'story' ? 'Story' : 'Standard'}`, () => { setPrefs({ difficulty: diff === 'story' ? 'standard' : 'story' }); hooks.onSettings(); assists(); }, 'toggle'),
+      h('p', { class: 'gm-note' }, diff === 'story' ? 'Story: you take half damage and the boss has less health. The puzzles are the same.' : 'Standard: full damage, full boss. The puzzles are the same.'),
+      h('label', { class: 'gm-slider' }, h('span', null, 'Game speed'), speed, out),
+      h('div', { class: 'gm-grid' }, flip('Invincible', 'invincible'), flip('Auto-fire', 'autoFire'), flip('Endless energy', 'infiniteEnergy')),
+      h('p', { class: 'gm-note' }, 'Assists never cost stars or progress. Turn them on and off whenever you like.'),
+      h('div', { class: 'gm-row' }, h('span'), back)), back);
   };
 
   const settings = () => {

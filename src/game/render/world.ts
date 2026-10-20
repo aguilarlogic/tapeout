@@ -4,7 +4,7 @@
 import type { Rect, Room } from '../level/room';
 import type { Prop } from '../physics/world';
 import { rng, type Sim } from '../sim';
-import { TUNING, VIEW_H, VIEW_W } from '../tuning';
+import { VIEW_H, VIEW_W } from '../tuning';
 import { FONT, LINE, PAL, rgba } from './palette';
 
 type C = CanvasRenderingContext2D;
@@ -348,7 +348,7 @@ export class WorldArt {
 
 function drawProp(c: C, p: Prop, sim: Sim, t: number) {
   const b = p.body, v = b.vertices;
-  const heavy = p.mass > TUNING.field.grabLimit;
+  const heavy = p.mass > sim.kit.grabLimit;
   let alpha = 1;
   if (p.kind === 'debris' && p.life > 0) alpha = Math.min(1, p.life / 30);
   c.save();

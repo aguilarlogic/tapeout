@@ -48,6 +48,8 @@ export interface Drone {
   drop: number; // steps left ignoring one-way platforms
   prevX: number; // body position before the world step
   prevBottom: number;
+  /** Upgrades that switch moves on (Level 1 spec): double jump comes in Level 2, wall latch in Level 5. */
+  abilities: { doubleJump: boolean; wallLatch: boolean };
 }
 
 const cancelGravity = (b: Matter.Body, w: World) => {
@@ -67,6 +69,7 @@ export function createDrone(w: World, x: number, y: number): Drone {
     body, x, y, vx: 0, vy: 0, h: DRONE.h, facing: 1, crouched: false, grounded: false, onOneWay: false, ceiling: false,
     wall: 0, latched: 0, coyote: 0, buffer: 0, shortHop: false, airJumps: 1, wallTime: 0, lastLatch: 0, wallLock: 0,
     lockSide: 1, dash: null, dashCd: 0, dashUsed: false, drop: 0, prevX: x, prevBottom: y + DRONE.h / 2,
+    abilities: { doubleJump: true, wallLatch: true },
   };
 }
 
@@ -211,7 +214,7 @@ export function stepDrone(d: Drone, c: Controls, w: World, energy: number, froze
       d.lockSide = d.latched;
       d.airJumps = 1;
       res.jumped = true;
-    } else if (pressed('jump') && d.airJumps > 0 && !d.grounded && d.coyote === 0) {
+    } else if (pressed('jump') && d.abilities.doubleJump && d.airJumps > 0 && !d.grounded && d.coyote === 0) {
       d.vy = -DRONE.doubleJump;
       d.airJumps = 0;
       res.jumped = true;
@@ -231,7 +234,7 @@ export function stepDrone(d: Drone, c: Controls, w: World, energy: number, froze
     }
 
     // wall latch: falling, pushing into a wall, for up to wallSlideMax steps per latch
-    const pushing = d.wall !== 0 && dir === d.wall;
+    const pushing = d.abilities.wallLatch && d.wall !== 0 && dir === d.wall;
     if (!d.grounded && pushing && d.vy >= 0 && (d.wallTime < DRONE.wallSlideMax || d.lastLatch !== d.wall)) {
       if (d.lastLatch !== d.wall) d.wallTime = 0;
       d.latched = d.wall;

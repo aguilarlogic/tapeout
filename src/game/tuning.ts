@@ -81,6 +81,28 @@ export const TUNING = {
   spark: { size: 26, hp: 40, period: 1.6, orbSpeed: 260, orbDamage: 10, range: 700, bob: 6, leash: 80, mass: 2 },
   latch: { size: 44, hp: 120, armor: 0.2, walk: 60, sight: 500, turnMs: 600, biteRange: 70, biteReach: 60, bite: 20, biteCooldownMs: 1200, touch: 10, mass: 8 },
   enemy: { telegraphMs: 400, respawnS: 5, stunMs: 150, knockDrone: 300 },
+  /** Level 1, Bit Zero (Phase 2 Level 1 Build Spec). Distances in px, times in ms unless named S. */
+  story: {
+    glow: 60, headlamp: 160, // light radius in a dark room before and after the Headlamp
+    lightUpMs: 800, // a room's lights coming on
+    fadeMs: 300, // room-to-room fade, each way
+    lineMs: 3500, lineCps: 40, // TAPEOUT's bubble: how long a line stays, typing speed
+    reach: 48, // E reaches a terminal, lever, port or station this close
+    leash: 520, // a carried wire end snaps back past this
+    rowMs: 120, // the safety strip tests one truth-table row
+    sparkMs: 1000, // a wrong loop sparks this long before the wire snaps back
+    hintS: 45, // TAPEOUT offers the next hint after this long without a pass
+    plateHoldMs: 400, // both Gate Hall plates held this long latch the door
+    nudgeS: 60, // "Try the block." if the Gate Hall door is still shut
+    doorMs: 600, liftS: 2.4, bridgeMs: 1200, shutterMs: 900,
+    crustHp: 40,
+    exitLiftS: 12,
+    carryMs: 500, carryBonus: 4, // Carry Shot
+    grip: 5, // grab limit with Grip Servos
+    bossIntegrity: 120, // max integrity after the boss
+    boss: { hp: 400, storyHp: 0.75, enrageMs: 10000, enrageSpeed: 1.25, bandaidShieldMs: 10000, readCooldownMs: 600 },
+    storyDamage: 0.5, // damage taken on Story difficulty
+  },
   /** Drone body art and animation (plan C and D). */
   anim: {
     chassisW: 34, chassisH: 26, eye: 9, pupil: 4, blinkMin: 4, blinkMax: 7, barrel: 18, emitter: 14, leg: 16,

@@ -39,13 +39,18 @@ export interface World {
   statics: Rect[];
   props: Prop[];
   door: { body: Matter.Body; rect: Rect; home: Rect } | null;
+  /** Story fixtures that move or vanish: doors, crusts, bridge segments, the lift (see addMover). */
+  movers: Mover[];
 }
+
+/** A solid the story moves: its rect is shared with `statics` while present, so the drone and shots see it. */
+export interface Mover { id: string; body: Matter.Body; rect: Rect; home: Rect; present: boolean }
 
 export function createWorld(room: Room): World {
   const engine = Matter.Engine.create({ gravity: { x: 0, y: GRAVITY_Y, scale: 0.001 }, positionIterations: 8, velocityIterations: 6 });
   const statics = [...room.solids];
   Matter.Composite.add(engine.world, room.solids.map((s) => staticBody(s)));
-  const w: World = { engine, statics, props: [], door: null };
+  const w: World = { engine, statics, props: [], door: null, movers: [] };
   for (const p of room.props) addProp(w, p);
   if (room.door) {
     const rect = { ...room.door.rect };
@@ -101,4 +106,28 @@ export function stepWorld(w: World) {
 export function boundsRect(b: Matter.Body): Rect {
   const { min, max } = b.bounds;
   return { x: min.x, y: min.y, w: max.x - min.x, h: max.y - min.y };
+}
+
+/** Add a story solid (a door, crust, lift or bridge segment). `present` false keeps it out of the world until shown. */
+export function addMover(w: World, id: string, rect: Rect, present = true): Mover {
+  const r = { ...rect };
+  const m: Mover = { id, body: staticBody(r), rect: r, home: { ...rect }, present: false };
+  w.movers.push(m);
+  if (present) setPresent(w, m, true);
+  return m;
+}
+
+/** Put a mover into the world or take it out. */
+export function setPresent(w: World, m: Mover, on: boolean) {
+  if (m.present === on) return;
+  m.present = on;
+  if (on) { Matter.Composite.add(w.engine.world, m.body); w.statics.push(m.rect); }
+  else { Matter.Composite.remove(w.engine.world, m.body); w.statics = w.statics.filter((s) => s !== m.rect); }
+}
+
+/** Move a mover's top-left to (x, y); its size never changes. */
+export function moveMover(m: Mover, x: number, y: number) {
+  m.rect.x = x;
+  m.rect.y = y;
+  Matter.Body.setPosition(m.body, { x: x + m.rect.w / 2, y: y + m.rect.h / 2 });
 }

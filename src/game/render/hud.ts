@@ -21,7 +21,14 @@ export class Hud {
     else this.ghost = Math.max(h, this.ghost - Math.max(0.2, (this.drainFrom - h) / 24)); // gone in 400 ms
     if (sim.fx.some((f) => f.t === 'swap')) this.swapT = 0;
     this.swapT = Math.min(1, this.swapT + 1 / 12);
+    // the story brings the energy bar and the weapon icon in as the Field Coil and the probe come online
+    this.coilA += ((sim.kit.coil ? 1 : 0) - this.coilA) * 0.08;
+    this.gunA += ((sim.kit.gun ? 1 : 0) - this.gunA) * 0.08;
   }
+  private coilA = 1;
+  private gunA = 1;
+  /** Snap the story fades to the kit (on a room load), so nothing eases in that was already there. */
+  syncKit(sim: Sim) { this.coilA = sim.kit.coil ? 1 : 0; this.gunA = sim.kit.gun ? 1 : 0; }
 
   /** `slide` 0..1 brings the HUD in from the top-left during the boot (P2). */
   draw(c: CanvasRenderingContext2D, sim: Sim, slide: number, t: number) {
@@ -49,6 +56,7 @@ export class Hud {
     // energy
     const ey = y + 20, ef = Math.max(0, v.energy / v.maxEnergy);
     const pulse = ef < 0.25 ? 0.55 + 0.45 * Math.sin(t * 0.25) : 1;
+    c.globalAlpha = s * this.coilA;
     frame(c, x, ey, W, 8);
     c.fillStyle = rgba(PAL.neon, pulse);
     c.fillRect(x + 3, ey + 3, (W - 6) * ef, 2);
@@ -60,7 +68,7 @@ export class Hud {
     }
     // the selected weapon, next to the energy bar
     const wx = x + W + 12, wy = ey + 4, k = easeOut(this.swapT);
-    c.globalAlpha = s * (0.4 + 0.6 * k);
+    c.globalAlpha = s * (0.4 + 0.6 * k) * this.gunA;
     c.strokeStyle = sim.weapon === 'charged' ? PAL.neon : PAL.trace;
     c.lineWidth = 1.5;
     c.beginPath();
