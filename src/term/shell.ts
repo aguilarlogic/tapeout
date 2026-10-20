@@ -68,7 +68,12 @@ export class Shell {
   /** The shell is idle, waiting at its prompt. */
   private atPrompt = false;
 
-  constructor(public term: Terminal, private go: (route: string) => void) {
+  /**
+   * `embedded`: the shell runs inside the story game (a port in the wall), one lesson at a time: no prerequisite prompt,
+   * no "continue" menu at the end, and minigames open through `launch` instead of a desktop window. `onAnswer` hears
+   * every lesson question's outcome (the Bit Wall lights a lamp per correct answer).
+   */
+  constructor(public term: Terminal, private go: (route: string) => void, private hooks: { embedded?: boolean; onAnswer?: (ok: boolean) => void; launch?: typeof launchGame } = {}) {
     // The chapter can end in another window (the Verilog lab) while the shell waits at its prompt: wake it, so the wrap
     // shows up right away. Only at the prompt: never cut a lesson or practice run short.
     // Clear the flag at once: one save often follows another (the level, then the rank), and a second interrupt would
@@ -687,7 +692,7 @@ export class Shell {
     if (!lesson) return this.term.print(`unknown lesson ${id}`, 'err');
     if (this.busy) return;
     // The map stays open, but a jump past an unfinished prerequisite is a choice, not an accident.
-    if (!exam && !bossDef && !levelRecord(id)) {
+    if (!exam && !bossDef && !levelRecord(id) && !this.hooks.embedded) {
       const miss = missingNeeds(id, (n) => !!levelRecord(n)).map((n) => findModule(n)?.module).filter((m): m is Module => !!m);
       if (miss.length) {
         await this.term.say(`**${lesson.title}** builds on ${miss.map((m) => `**${m.title}**`).join(', ')}, which you have not done yet.`, 'thinking');
@@ -737,7 +742,7 @@ export class Shell {
       } else if (s.t === 'app') {
         await t.say(s.text, 'excited');
         t.print(`▣ opening ${s.game}.app ...`, 'dim');
-        const res = await launchGame(s.game, { rounds: s.rounds, fromLesson: true });
+        const res = await (this.hooks.launch ?? launchGame)(s.game, { rounds: s.rounds, fromLesson: true });
         await t.say(res ? `Back to it. (${res.score}/${res.max} in the game.)` : 'Skipped the game? No problem, you can play it later with `play`.', res ? 'happy' : 'neutral');
       } else {
         const q = s.t === 'gen' ? s.make(rnd) : s;
@@ -750,6 +755,7 @@ export class Shell {
         const ok = await this.question(q, exam);
         this.sibling = undefined;
         if (mode === 'lesson') recordStep(l.id, i, q.q, { firstTry: ok && this.rung === 0, hints: this.rung, secs: (Date.now() - t0) / 1000, skipped: this.skipped });
+        this.hooks.onAnswer?.(ok);
         if (ok) firstTry++;
         else if (this.skipped) skippedQs.push({ n: asked, q });
         if (!ok && !this.skipped) missed.push(q);
@@ -802,7 +808,7 @@ export class Shell {
     else if (mode === 'final') await t.say('That is it. Every block signed off, every question answered. Your chip is ready for tapeout. For real next steps: put a design on silicon with Tiny Tapeout, and bring these answers to your interviews. I am proud of you, {name}.', 'proud');
     else await t.say(st === 3 ? pickOne(['Flawless. Onward.', 'Perfect run. You make this look easy.', 'Every question first try. Nice.']) : st === 2 ? 'Good work. A couple of stumbles, which is exactly how learning is supposed to feel.' : 'Done. This one was tough; come back and replay it for more stars later.', mood);
     const nx = neighbours(l.id).next;
-    if (nx && mode !== 'final') {
+    if (nx && mode !== 'final' && !this.hooks.embedded) {
       const pick = await t.choose([`Continue: **${nx.title}** (${KIND_LABEL[nx.kind].toLowerCase()})`, 'Back to the shell'], 'next>', (v) => this.queue.push(v));
       if (pick === 0) this.queue.push(`learn ${nx.id}`);
     }
@@ -816,6 +822,7 @@ export class Shell {
       h('div', { class: 'dim' }, `${firstTry}/${asked} first try${recovered ? `, ${recovered} more on the second go` : ''}. A lesson signs off at ${Math.round(LESSON_PASS * 100)}% (a second-go answer counts half). Your best result so far is kept.`),
       l.recap.length ? h('ul', { class: 'recap' }, ...l.recap.map((r) => h('li', null, ...rich(r)))) : null), 'type', 1.6);
     await t.say(`Close. ${missed.length === 1 ? 'One idea' : 'A few ideas'} did not land yet, which is normal the first time. Read the points above, then run it again: the numbers will be new.`, 'thinking');
+    if (this.hooks.embedded) return;
     const pick = await t.choose(['Try this lesson again', 'Back to the shell'], 'next>', (v) => this.queue.push(v));
     if (pick === 0) this.queue.push(`learn ${l.id}`);
   }

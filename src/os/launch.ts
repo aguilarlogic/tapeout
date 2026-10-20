@@ -10,7 +10,11 @@ export const MINI_XP = 40;
 
 export interface GameResult { score: number; max: number }
 
-export function launchGame(id: string, opts: { rounds?: number; fromLesson?: boolean } = {}): Promise<GameResult | null> {
+/** Where a minigame shows: a desktop window by default; the story game passes its own frame (`mount`). */
+export interface GameFrame { close(): void }
+export type Mount = (o: { title: string; icon: string; content: HTMLElement; onClose: () => void }) => GameFrame;
+
+export function launchGame(id: string, opts: { rounds?: number; fromLesson?: boolean; mount?: Mount } = {}): Promise<GameResult | null> {
   const game = findGame(id);
   if (!game) return Promise.resolve(null);
   return new Promise((resolve) => {
@@ -21,10 +25,9 @@ export function launchGame(id: string, opts: { rounds?: number; fromLesson?: boo
     const content = h('div', { class: 'mg-window' },
       h('div', { class: 'mg-intro' }, h('span', { class: 'mg-icon' }, game.icon), h('div', null, h('b', null, game.title), h('p', { class: 'dim' }, game.blurb))),
       host);
-    const win = openWindow({
-      id: 'mini', title: `${game.title}.app`, icon: game.icon, content, w: 620, h: 600, loading: `${game.title}.app`,
-      onClose: () => settle(last),
-    });
+    const win: GameFrame = opts.mount
+      ? opts.mount({ title: `${game.title}.app`, icon: game.icon, content, onClose: () => settle(last) })
+      : openWindow({ id: 'mini', title: `${game.title}.app`, icon: game.icon, content, w: 620, h: 600, loading: `${game.title}.app`, onClose: () => settle(last) });
     const run = () => game.play({
       host,
       r: Math.random,
