@@ -1,6 +1,7 @@
 // The story game screen: a full-window canvas over the desktop, the loop, input, camera, effects, sound, pause menu,
 // the F3 tuning panel and (dev builds only) the F9 debug overlay. Entry fades to black in 300 ms and boots the drone
 // (polish bar P2); quitting fades out the same way.
+import { award } from '../mastery/promotion';
 import { prefs } from '../state';
 import { prefersReducedMotion } from '../term/typewriter';
 import { h } from '../ui/dom';
@@ -124,6 +125,9 @@ export class GameScreen {
     this.canvas.focus();
     this.loop.start();
     (window as unknown as { __tapeoutGame?: GameScreen }).__tapeoutGame = this;
+    // the Level 1 recorder (scripts/record-level1.mjs, `?record` in the URL) signs off the lessons it shows but cannot
+    // answer; it never runs for a player
+    if (new URLSearchParams(location.search).has('record')) (window as unknown as { __tapeoutAward?: (id: string) => void }).__tapeoutAward = (id) => award(id, 50, 3);
   }
 
   private onKey(code: string) {

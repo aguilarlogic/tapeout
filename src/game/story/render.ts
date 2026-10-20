@@ -353,7 +353,7 @@ function drawBoard(c: C, d: Director, x: number, y: number, w: number, h: number
     c.stroke();
     label(c, name, lx, ly + 34, rgba(PAL.text, 0.6));
   }
-  label(c, 'DEMO BOARD · HALF ADDER', x, y0 - 12, rgba(PAL.text, 0.55), 12);
+  if (!d.bossBar) label(c, 'DEMO BOARD · HALF ADDER', x, y0 - 12, rgba(PAL.text, 0.55), 12); // the boss bar names it during the fight
   // the shield: a hex lattice, flickering; gone once the right fix is in
   if (b && b.shielded && b.phase !== 'done') {
     c.save();
@@ -610,7 +610,7 @@ function drawLoftStation(c: C, d: Director, st: Station, t: number) {
       if (d.room.id === 'workbench' && !d.kitDone('half-adder-v')) label(c, 'NO POWER', x, y - 110, rgba(PAL.hostile, 0.8), 11);
       break;
   }
-  label(c, st.label, x, y - (st.kind === 'board' ? 264 : st.kind === 'archive' || st.kind === 'interview' || st.kind === 'arcade' || st.kind === 'lift' ? 236 : 186), rgba(PAL.text, 0.55));
+  label(c, st.label, x, y - (st.kind === 'board' ? 264 : st.kind === 'map' ? 216 : st.kind === 'archive' || st.kind === 'interview' || st.kind === 'arcade' || st.kind === 'lift' ? 236 : 186), rgba(PAL.text, 0.55));
 }
 
 /** The Chip Map table: the 8-bit chip's floorplan, blocks lit by progress (read from records, never stored). */
@@ -803,7 +803,7 @@ export function drawDark(c: C, d: Director, cam: Pt, drone: Pt, scratch: { canva
   m.setTransform(1, 0, 0, 1, 0, 0);
   m.globalCompositeOperation = 'source-over';
   m.clearRect(0, 0, VIEW_W, VIEW_H);
-  m.fillStyle = `rgba(3,2,10,${0.95 * a})`;
+  m.fillStyle = `rgba(3,2,10,${0.9 * a})`;
   m.fillRect(0, 0, VIEW_W, VIEW_H);
   m.globalCompositeOperation = 'destination-out';
   const hole = (x: number, y: number, r: number, k = 1) => {
@@ -814,7 +814,7 @@ export function drawDark(c: C, d: Director, cam: Pt, drone: Pt, scratch: { canva
     m.fillRect(x - cam.x - r, y - cam.y - r, r * 2, r * 2);
   };
   hole(drone.x, drone.y, d.kit.headlamp ? S.headlamp : S.glow);
-  for (const tm of d.room.wire?.terminals ?? []) hole(tm.x, tm.y - 36, 46, 0.8);
+  for (const tm of d.room.wire?.terminals ?? []) hole(tm.x, tm.y - 36, 64, 0.9);
   for (const st of d.room.stations) hole(st.x, st.y - 120, 90, 0.7);
   if (d.room.id === 'bit0-chamber') hole(800, 300, 120, 0.25);
   c.drawImage(scratch.canvas, 0, 0, VIEW_W, VIEW_H);
@@ -892,6 +892,10 @@ export function drawBossHud(c: C, d: Director, t: number, showLog: boolean) {
   if (!b) return;
   const W = 460, x = (VIEW_W - W) / 2, y = 26;
   c.save();
+  // a dark backing plate, so world labels behind the bar never show through its text
+  chamfer(c, x - 40, 4, W + 80, y + 40, 6);
+  c.fillStyle = rgba(PAL.bgDeep, 0.82);
+  c.fill();
   c.font = `12px ${FONT}`;
   c.textAlign = 'center';
   c.fillStyle = b.enraged > 0 ? PAL.hostile : PAL.neon;
@@ -919,12 +923,12 @@ export function drawBossHud(c: C, d: Director, t: number, showLog: boolean) {
     const lines = [`${r.arg.toUpperCase()}${r.repeat ? ' (from your notes)' : ''}`, ...r.text.split('\n')];
     if (r.ruledOut.length) lines.push(`Rules out: ${r.ruledOut.join('; ')}`);
     lines.push(r.left === 1 ? 'One cause fits. Go to the debug port.' : `${r.left} causes still fit.`);
-    panel(c, VIEW_W / 2 - 330, 78, 660, lines, Math.min(1, r.age / 8) * Math.min(1, (6 * HZ - r.age) / 20), PAL.trace);
+    panel(c, VIEW_W / 2 - 330, 152, 660, lines, Math.min(1, r.age / 8) * Math.min(1, (6 * HZ - r.age) / 20), PAL.trace);
   }
   if (showLog) {
     const causes = b.causes().map((k) => `${k.out ? '✗' : k.struck ? '–' : '•'} ${k.name}${k.out ? ' (wrong call)' : k.struck ? ' (crossed off)' : ''}`);
     const notes = b.log.map((n) => `${n.key}: ${n.text.split('\n').slice(-1)[0]}`);
-    panel(c, VIEW_W - 560, 90, 540, ['CAUSES', ...causes, '', 'READINGS', ...(notes.length ? notes : ['none yet'])], 1, PAL.amber);
+    panel(c, VIEW_W - 560, 152, 540, ['CAUSES', ...causes, '', 'READINGS', ...(notes.length ? notes : ['none yet'])], 1, PAL.amber);
   }
   void t;
 }

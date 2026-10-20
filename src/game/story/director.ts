@@ -74,6 +74,11 @@ export interface Prompt { x: number; y: number; text: string }
 
 type Cut = { kind: 'boot'; lines: string[]; t: number; then: string[] } | { kind: 'exitLift'; t: number } | null;
 
+/** Height of each station's name label above its foot, in px (as drawn in render.ts). */
+const STATION_TOP: Record<string, number> = {
+  port: 184, panel: 224, bench: 130, lever: 120, node: 84, debug: 102, board: 264, map: 216, archive: 236, interview: 236, arcade: 236, lift: 236,
+};
+
 export class Director {
   place: Place = 'bit-zero';
   index = 0;
@@ -312,7 +317,6 @@ export class Director {
    * screen calls sim.step and then `after()`.
    */
   before(input: { held: Set<Action>; pressed: Set<Action> }): { held: Set<Action>; pressed: Set<Action> } {
-    this.out = this.out.filter((o) => o.t === 'enter' || o.t === 'music' || o.t === 'card' || o.t === 'profile' || o.t === 'choose');
     const blank = { held: new Set<Action>(), pressed: new Set<Action>() };
     if (this.fade) {
       this.fade.t++;
@@ -424,7 +428,8 @@ export class Director {
       debug: 'Open the debug port', node: 'Take the reading', archive: 'Open the archive', review: 'Review', board: 'Study',
       map: 'Look at the chip map', crt: 'Use the old desktop', arcade: 'Play', interview: 'Try the door', lift: 'Ride the lift',
     };
-    this.prompt = { x: st.x, y: st.y - 110, text: `E  ${verb[st.kind] ?? 'Use'}` };
+    // above the station's name label (render.ts draws each label at these heights), never over its art
+    this.prompt = { x: st.x, y: st.y - (STATION_TOP[st.kind] ?? 186) - 24, text: `E  ${verb[st.kind] ?? 'Use'}` };
   }
 
   // --- wire runs ---
@@ -622,7 +627,9 @@ export class Director {
       }
       case 'first-fight': {
         if (rs.cleared) break;
-        if (this.sim.enemies.length && this.sim.enemies.every((e) => !e.alive)) {
+        // the Glitches are the fight; floaters and spikes are the room's hazards
+        const glitches = this.sim.enemies.filter((e) => e.kind === 'glitch');
+        if (glitches.length && glitches.every((e) => !e.alive)) {
           rs.cleared = true;
           this.clear('first-fight');
           this.openGate('door');

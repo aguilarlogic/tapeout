@@ -232,7 +232,7 @@ const F10 = 820;
 const NODES: [string, string, number, number][] = [
   ['flip', '00', 150, F10], ['flip', '01', 300, F10 - 140], ['flip', '10', 150, F10 - 280], ['flip', '11', 300, F10 - 420],
   ['probe', 'a', 1770, F10], ['probe', 'b', 1620, F10 - 140], ['probe', 'and-out', 1770, F10 - 280], ['probe', 'led-pin', 1620, F10 - 420],
-  ['meter', 'led', 640, F10 - 200], ['look', '', 1280, F10 - 200],
+  ['meter', 'led', 640, F10 - 140], ['look', '', 1280, F10 - 140],
 ];
 export const ARENA: StoryRoom = {
   ...none,
@@ -244,7 +244,7 @@ export const ARENA: StoryRoom = {
     // the node platforms up each side
     r(240, F10 - 140, 140, 20), r(90, F10 - 280, 140, 20), r(240, F10 - 420, 140, 20),
     r(1540, F10 - 140, 140, 20), r(1690, F10 - 280, 140, 20), r(1540, F10 - 420, 140, 20),
-    r(560, F10 - 200, 160, 20), r(1200, F10 - 200, 160, 20),
+    r(560, F10 - 140, 160, 20), r(1200, F10 - 140, 160, 20),
   ],
   stations: [
     ...NODES.map(([cmd, arg, x, y]) => ({ id: `node:${cmd}${arg ? ` ${arg}` : ''}`, kind: 'node' as const, x, y, label: `${cmd.toUpperCase()}${arg ? ` ${arg.toUpperCase()}` : ''}`, arg: `${cmd}${arg ? ` ${arg}` : ''}` })),
@@ -294,7 +294,7 @@ export const LOFT: StoryRoom = {
     { id: 'interview', kind: 'interview', x: 1980, y: FL, label: 'INTERVIEW ROOM' },
     { id: 'lift', kind: 'lift', x: 2260, y: FL, label: 'LIFT' },
   ],
-  props2: [{ kind: 'window', x: 1200, y: 250, w: 760, h: 300 }],
+  props2: [{ kind: 'window', x: 1200, y: 236, w: 760, h: 300 }],
   triggers: [],
   traces: [trace(0, 600, 560, 20), trace(1600, 2400, 560, 20)],
   exit: { x: 99999 },

@@ -208,6 +208,29 @@ describe('saves and migration', () => {
 });
 
 describe('playing Level 1 headless', () => {
+  it('climbs the Floater Shaft ledge by ledge with a running jump', () => {
+    const d = director();
+    d.warp('bit-zero', 4);
+    run(d, 30);
+    const ledges = [...d.room.oneWay].sort((a, b) => b.y - a.y);
+    const exitFloor = d.room.solids.find((s) => s.y === 220)!;
+    let cur = { x: 0, w: d.room.w };
+    for (const to of [...ledges, exitFloor]) {
+      // walk to the take-off edge of this ledge, stop, then a held jump toward the middle of the next one
+      const mid = to.x + to.w / 2;
+      walkTo(d, Math.min(Math.max(mid, cur.x + 30), cur.x + cur.w - 30));
+      let landed = false;
+      for (let i = 0; i < 120 && !landed; i++) {
+        const held: Action[] = [d.sim.drone.x < mid - 6 ? 'right' : d.sim.drone.x > mid + 6 ? 'left' : 'jump'];
+        if (i < 26) held.push('jump');
+        step(d, held, i === 0 ? ['jump'] : []);
+        landed = i > 10 && d.sim.drone.grounded && d.sim.drone.y < to.y;
+      }
+      expect(landed, `onto the ledge at y ${to.y}`).toBe(true);
+      cur = to;
+    }
+  });
+
   /** Carry a wire from one terminal to another. */
   function wire(d: Director, [a, b]: Wire) {
     const t = (pin: string) => d.room.wire!.terminals.find((x) => x.pin === pin)!;

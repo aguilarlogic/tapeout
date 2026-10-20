@@ -100,7 +100,8 @@ export class DroneRig {
         this.ghostT = 0;
         this.thrust = 1;
       } else if (f.t === 'respawn') {
-        this.feet = [];
+        // re-plant the feet under the respawned body
+        this.feet = HIPS.map((hx) => ({ x: cx + hx * face, y: d.y + d.h / 2, planted: true, lift: 0 }));
       }
     }
 

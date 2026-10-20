@@ -83,7 +83,7 @@ export const TUNING = {
   enemy: { telegraphMs: 400, respawnS: 5, stunMs: 150, knockDrone: 300 },
   /** Level 1, Bit Zero (Phase 2 Level 1 Build Spec). Distances in px, times in ms unless named S. */
   story: {
-    glow: 60, headlamp: 160, // light radius in a dark room before and after the Headlamp
+    glow: 90, headlamp: 170, // light radius in a dark room before and after the Headlamp
     lightUpMs: 800, // a room's lights coming on
     fadeMs: 300, // room-to-room fade, each way
     lineMs: 3500, lineCps: 40, // TAPEOUT's bubble: how long a line stays, typing speed

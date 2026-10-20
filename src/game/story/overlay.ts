@@ -116,7 +116,7 @@ export function openLab(host: OverlayHost, kind: 'panel' | 'bench', module: stri
   let done: () => void = () => {};
   let off = () => {};
   const close = () => { done(); off(); onClose(recordKey(module) !== before && !!levelRecord(module)); };
-  const node = frame(`${kind === 'panel' ? 'PATCH PANEL' : 'WORKBENCH'} · ${title.toUpperCase()}`, kind === 'panel' ? 'Logic Lab' : 'Verilog lab', h('div', { class: `st-lab ${kind}` }, page), close, 'Close · Esc');
+  const node = frame(`${kind === 'panel' ? 'PATCH PANEL' : 'WORKBENCH'} · ${title.toUpperCase()}`, kind === 'panel' ? 'Logic Lab' : 'Verilog lab', h('div', { class: `st-lab lab-${kind}` }, page), close, 'Close · Esc');
   node.dataset.testid = kind;
   done = mount(host, node, close);
   off = onChange(() => {
@@ -128,7 +128,7 @@ export function openLab(host: OverlayHost, kind: 'panel' | 'bench', module: stri
 export function openCard(host: OverlayHost, c: { kind: 'pager' | 'upgrade' | 'debrief' | 'info'; title: string; lines: string[]; stars?: number; button?: string }, onClose: () => void) {
   let done: () => void = () => {};
   const close = () => { done(); onClose(); };
-  const ok = button(c.button ?? (c.kind === 'upgrade' ? 'Online' : 'Continue'), close, 'primary');
+  const ok = button(c.button ?? (c.kind === 'upgrade' ? 'Got it' : 'Continue'), close, 'primary');
   const node = h('div', { class: `gm-panel wide st-card ${c.kind} gm-enter`, role: 'dialog', 'aria-label': c.title, 'data-testid': 'story-card' },
     h('h2', null, c.title),
     c.stars !== undefined ? starRow(c.stars) : null,
