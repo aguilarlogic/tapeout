@@ -4,6 +4,7 @@
 import Matter from 'matter-js';
 import { Glitch, Latch, Spark } from './enemies/bugs';
 import { Floater } from './enemies/floater';
+import { ENEMY } from './enemies/registry';
 import { GlitchSpike } from './enemies/spike';
 import type { Enemy, EnemyCtx } from './enemies/types';
 import type { EnemyKind, Rect, Room } from './level/room';
@@ -147,7 +148,15 @@ export class Sim {
   /** Carry Shot: the step each enemy was last hit by a bolt. */
   private lastBoltHit = new Map<Enemy, number>();
 
-  constructor(public room: Room, seed = 1) {
+  /** The act and difficulty enemies are made for (registry kinds scale their HP by both). */
+  make: { act: number; story: boolean } = { act: 1, story: false };
+  /** Beam Toggle's cone, when the headlamp is in cone mode (the story sets it each step). */
+  lampCone: EnemyCtx['lamp']['cone'] = null;
+  /** Enemies added during a step (X-Blob children); they join after it. */
+  private spawned: Enemy[] = [];
+
+  constructor(public room: Room, seed = 1, make?: { act: number; story: boolean }) {
+    if (make) this.make = make;
     this.rand = rng(seed);
     this.world = createWorld(room);
     this.drone = createDrone(this.world, room.spawn.x, room.spawn.y);
@@ -163,7 +172,7 @@ export class Sim {
     for (const e of this.enemies) if (e.body) Matter.Composite.remove(this.world.engine.world, e.body);
     this.respawns = [];
     this.enemies = [
-      ...this.room.enemies.map((s) => this.makeEnemy(s.kind, s.x, s.y)),
+      ...this.room.enemies.flatMap((s) => this.makeEnemies(s.kind, s.x, s.y)),
       ...this.room.floaters.map((f) => new Floater(f.x, f.y, { x: f.x, y: f.y }, this.rand)),
       ...this.room.spikes.map((s) => new GlitchSpike(s.x, s.y, s.dir, s.offset)),
     ];
@@ -172,10 +181,25 @@ export class Sim {
   private gravity = () => { const g = this.world.engine.gravity; return g.y * (g.scale ?? 0.001); };
 
   makeEnemy(kind: EnemyKind, x: number, y: number): Enemy {
-    const e = kind === 'glitch' ? new Glitch(x, y) : kind === 'spark' ? new Spark(x, y, this.gravity) : new Latch(x, y);
-    Matter.Composite.add(this.world.engine.world, e.body);
-    (e as unknown as { spawn: Vec }).spawn = { x, y };
-    return e;
+    return this.makeEnemies(kind, x, y)[0];
+  }
+
+  /** The enemies one anchor makes: the test enemies directly, every other kind through the registry. */
+  makeEnemies(kind: EnemyKind, x: number, y: number, opts?: { gen?: number; vx?: number; vy?: number }): Enemy[] {
+    let made: Enemy[];
+    if (kind === 'glitch' || kind === 'spark' || kind === 'latch') made = [kind === 'glitch' ? new Glitch(x, y) : kind === 'spark' ? new Spark(x, y, this.gravity) : new Latch(x, y)];
+    else if (kind === 'floater') made = [new Floater(x, y, { x, y }, this.rand)];
+    else {
+      const entry = ENEMY[kind];
+      if (!entry) throw new Error(`no enemy registered for ${kind}`);
+      const m = entry.make(x, y, { gravity: this.gravity(), rand: this.rand, ...this.make }, opts);
+      made = Array.isArray(m) ? m : [m];
+    }
+    for (const e of made) {
+      if (e.body) Matter.Composite.add(this.world.engine.world, e.body);
+      (e as unknown as { spawn: Vec }).spawn = { x, y };
+    }
+    return made;
   }
 
   get invulnerable() {
@@ -226,6 +250,7 @@ export class Sim {
     this.stepField(ctl, frozen);
     const ctx = this.ctx();
     for (const e of this.enemies) e.step(ctx);
+    if (this.spawned.length) { this.enemies.push(...this.spawned); this.spawned = []; }
     stepWorld(this.world);
     settleDrone(d, this.world, this.room);
     if (!wasGrounded && d.grounded && !frozen) { this.events.push('land'); this.fx.push({ t: 'land', x: d.x, y: d.y + d.h / 2, speed: Math.max(0, fallSpeed) }); }
@@ -455,6 +480,9 @@ export class Sim {
         this.fx.push({ t: 'orb', x, y });
       },
       hurtDrone: (n, from) => { if (this.dying === 0) this.hurtDrone(n, from); },
+      spawn: (kind, x, y, opts) => { this.spawned.push(...this.makeEnemies(kind, x, y, opts)); },
+      others: () => this.enemies.filter((e) => e.alive),
+      lamp: { cone: this.lampCone },
     };
   }
 

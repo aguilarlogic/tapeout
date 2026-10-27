@@ -2,12 +2,16 @@
 // orbs and the field are lights drawn additively with a soft halo (polish bar P4).
 import type { Floater } from '../enemies/floater';
 import type { GlitchSpike } from '../enemies/spike';
+import { ENEMY } from '../enemies/registry';
 import type { Enemy } from '../enemies/types';
+import type { EnemyKind } from '../level/room';
 import type { Sim } from '../sim';
 import { TUNING } from '../tuning';
 import { PAL, rgba } from './palette';
 
 type C = CanvasRenderingContext2D;
+/** Kinds drawn here; every other kind draws itself through the registry. */
+const BUILT_IN = new Set(['glitch', 'spark', 'latch', 'floater', 'spike']);
 const deg = Math.PI / 180;
 
 function poly(c: C, pts: { x: number; y: number }[]) {
@@ -21,6 +25,8 @@ export function drawEnemies(c: C, sim: Sim, t: number, reducedFlash: boolean) {
   for (const e of sim.enemies) {
     if (!e.alive) continue;
     if (e.kind === 'spike') { drawSpike(c, e as GlitchSpike); continue; }
+    const reg = BUILT_IN.has(e.kind) ? undefined : ENEMY[e.kind as EnemyKind];
+    if (reg) { reg.draw(c, e, t); continue; }
     const out = idle(e, t);
     const tele = e.telegraph;
     // telegraph halo: grows and brightens through the 0.4 s wind-up
