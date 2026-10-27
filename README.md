@@ -19,6 +19,26 @@ tapeout› How do you want to start?
 Start from zero and your first step is lighting a lamp. If you already know the basics, four quick questions decide
 where you start, not a self-rating.
 
+## Coming next: the story game (preview)
+
+Tapeout is becoming a side-on 2D physics shooter in the spirit of [n-gon](https://landgreen.github.io/n-gon/). You
+are a failing repair drone inside a chip that is breaking down before tapeout. Every circuit you learn repairs part of
+the drone and part of the chip: two switches make an AND door, a capacitor becomes a charged shot. Levels are real
+regions of the chip, bugs and glitches are the enemies, and incidents are the bosses. There are no quizzes between
+fights: the lessons are the puzzles and the workbenches inside each level.
+
+The first level, **Bit Zero**, is built: eleven rooms from a cold boot to the Loft, the drone's probe gun and Field
+Coil (grab, carry and throw things), the half adder on a patch panel, two Verilog workbenches and the Dark Demo Board
+boss. A run takes about 35 to 50 minutes. It opens from **Play the new story (preview)** on the desktop, and it ships
+with a Windows app (an installer and a portable exe) that runs offline. The browser and the app keep separate saves,
+so **Settings.app** can export your save to a file and import it on the other side.
+
+Controls: A/D or the arrows to move, W or Space to jump, Shift to dash, left click to fire, right click for the Field
+Coil, Q to switch weapons, E to use things, Esc to pause. Every key can be changed.
+
+The preview is still under review and is not in a release yet. Until it is, the rest of this page describes the game
+as you download it today, and the levels after Bit Zero are still to come.
+
 ## Play it
 
 **No install needed.** Download `Tapeout.html` from the [latest release](https://github.com/aguilarlogic/tapeout/releases/latest)
@@ -31,6 +51,9 @@ and double-click it. It opens in your browser, works offline, and saves your pro
   counter and a tiny CPU.
 - **Beginner first.** You start with lamps and switches, meet gates in plain words, and learn hex late, as a nickname
   for four lamps. Lessons come in small steps, one new idea at a time.
+- **Show it, then move on.** A lesson counts as done at 80% correct, and a right answer on the second try counts half.
+  After a chapter boss, a review card explains each miss, and TAPEOUT brings every lesson back for spaced review, so
+  what you learned in week one is still there in week ten.
 - **Never stuck.** A wrong answer climbs a hint ladder: a nudge, a bigger hint, then a worked example. Type
   `teach me how` (or pick the lifebuoy option) and TAPEOUT walks you through the method, then gives you a fresh problem.
 - **Warm-ups that stick.** When you come back, TAPEOUT offers three quick questions from things you already did.
@@ -40,6 +63,10 @@ and double-click it. It opens in your browser, works offline, and saves your pro
   and you drag wires that route themselves cleanly. Flip a switch to watch the signal travel, press **Test it** to run
   every row, and the lamp tells you what went wrong. Works with a mouse or a finger, on a phone too.
 - **Ranks come from skills.** You rise from Intern to Fellow by showing skills, not by grinding XP.
+- **Take your work with you.** The Verilog and RISC-V labs export your design as a `.zip` with a testbench, a Makefile
+  and a README, ready for a real simulator.
+- **Built for everyone.** Keyboard play, screen readers, contrast and reduced motion meet WCAG 2.2 AA (an automated
+  axe scan finds no issues).
 
 TAPEOUT types everything it says, so you can read along. Press any key or click to finish a line early. Pick slow,
 normal, fast or instant in **Settings.app** (or type `speed fast`); instant, and your system's reduced-motion setting,
@@ -69,9 +96,11 @@ The theory before the transistor chapter runs in this order: DC circuits, comple
 energy storage, multivariable calculus and linear algebra, differential equations, AC circuits, Fourier series, fields,
 semiconductor devices, op-amps, transistor amplifiers. Only then does ADA-3 build CMOS gates.
 
-In all: about 620 modules, including 102 lessons, 42 incidents, logic and transistor labs, Verilog labs on a built-in
-simulator, timing closure, layout, PCB routing, verification labs (testbenches, coverage, UVM, assertions) and an
-interview gauntlet.
+In all: 647 modules across 62 chapters. That is 104 lessons, 83 practice sets, 103 chapter bosses and 42 incidents,
+plus 17 logic labs, 29 circuit labs (among them mesh currents, relay kickback and a DAC you build), 22 Verilog labs on
+a built-in simulator, timing closure, layout, physical design, design for test, PCB routing, verification labs
+(testbenches, coverage, UVM, assertions), RISC-V and architecture labs, 48 coding labs, 25 shell labs and an interview
+gauntlet.
 
 How deep does it go? [docs/CURRICULUM-AUDIT.md](docs/CURRICULUM-AUDIT.md) compares the curriculum with what the industry
 expects, topic by topic.
@@ -102,20 +131,20 @@ first-try rates, hints, time spent, skips, where players quit, and stats for eac
 ```bash
 npm install
 npm run dev      # http://localhost:5173
-npm test         # engines, lessons, levels, minigames, incidents
+npm test         # about 3,100 tests: engines, lessons, levels, minigames, incidents, prerequisites, readability
 npm run build    # dist/index.html: the whole game in one file (host it anywhere, or double-click it)
 ```
 
 No backend, no accounts: progress is saved in your browser's localStorage.
 
-**Releasing:** open the **Actions** tab, pick **Release**, and run it from `main` with a tag such as `v0.15.0` (pushing
+**Releasing:** open the **Actions** tab, pick **Release**, and run it from `main` with a tag such as `v0.17.0` (pushing
 a `v*` tag works too). It attaches `Tapeout.html` and a zip to the release. Every CI run also uploads the playable file as an
 artifact named `tapeout-game`.
 
 ## What's inside
 
 - **The terminal mentor** (`src/term/`): an async terminal (`await term.say(...)`, `await term.ask(...)`), the shell,
-  onboarding, the lesson runner with its hint ladder, and the incident runner. A glossary of 200+ terms lets TAPEOUT
+  onboarding, the lesson runner with its hint ladder, and the incident runner. A glossary of 300+ terms lets TAPEOUT
   define words on request.
 - **TAPE-OS** (`src/os/`): a window manager (drag, resize, minimize, taskbar), the TAPEOUT avatar with moods, the chip
   floorplan map and a URL router (`#/learn/cache`, `#/rtl/fifo`, `#/play/mesi`...).
