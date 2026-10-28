@@ -46,11 +46,34 @@ function keyPrompt(key: string, kind: DeviceKind, bindings: Bindings): string {
   return actionLabel(action, kind, bindings);
 }
 
+/** Whole sentences about the mouse that read wrong word by word on a pad or a touch screen. */
+const SENTENCE: Record<string, Record<'pad' | 'touch', string>> = {
+  'Switch weapons with Q, the mouse wheel, or the number keys.': { pad: 'Switch weapons with Y and LB.', touch: 'Switch weapons with SWAP.' },
+  'Your gun folds away in quiet rooms, so a click never fires by mistake.': {
+    pad: 'Your gun folds away in quiet rooms, so a trigger never fires by mistake.',
+    touch: 'Your gun folds away in quiet rooms, so a tap never fires by mistake.',
+  },
+};
+
+/** Mouse phrases in game text and what fire and the field are on each device. Longest first. */
+const MOUSE = /\b(the right mouse button|right mouse|[Rr]ight click|[Ll]eft click)\b/g;
+const MOUSE_NAME: Record<'pad' | 'touch', { fire: string; field: string }> = {
+  pad: { fire: 'RT', field: 'LT' },
+  touch: { fire: 'a finger on the right side', field: 'two fingers on the right' },
+};
+
 /** Rewrites default key names in game text for the device (see spec section 6). Patterns, word-bounded:
  * "press K" / "Press K" (K a default key letter of an action, or Shift, Space, Tab), "K switches", "K again", and a
- * leading prompt prefix "K  " (two spaces). Replaces K with actionLabel(that action, kind, bindings). With kind 'keys'
- * and default bindings, text is unchanged. */
+ * leading prompt prefix "K  " (two spaces). Replaces K with actionLabel(that action, kind, bindings). On a pad or touch,
+ * mouse phrases ("left click", "right click", "right mouse") become that device's fire and field, and a few whole
+ * sentences about the mouse are swapped. With kind 'keys' and default bindings, text is unchanged. */
 export function deviceText(text: string, kind: DeviceKind, bindings: Bindings): string {
+  if (kind !== 'keys') {
+    const whole = SENTENCE[text]?.[kind];
+    if (whole) return whole;
+    const names = MOUSE_NAME[kind];
+    text = text.replace(MOUSE, (m: string) => (/left/i.test(m) ? names.fire : names.field));
+  }
   return text.replace(KEY_IN_TEXT, (match: string, pre: string, press: string | undefined, key: string,
     tail: string | undefined, offset: number) => {
     // A bare key only counts before " switches" or " again", or as the two-space prompt prefix at the very start.

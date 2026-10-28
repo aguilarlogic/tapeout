@@ -12,6 +12,7 @@ import { ASSIST, assistOn, snapAim } from './input/assist';
 import { GamepadSource, pickPad, readPads } from './input/gamepad';
 import { deviceText } from './input/labels';
 import type { DeviceKind } from './input/padmap';
+import { PadCursor } from './input/padcursor';
 import { PadNav } from './input/padnav';
 import { type TouchButton, type TouchFrame, TouchSource, touchLayout } from './input/touch';
 import { drawTouch } from './render/touch';
@@ -112,6 +113,7 @@ export class GameScreen {
   private pad = new GamepadSource();
   private touch = new TouchSource();
   private padNav = new PadNav();
+  private padCursor = new PadCursor();
   /** The device used last: it picks the aim, the prompts and whether the touch controls show. */
   kind: DeviceKind = 'keys';
   /** The right stick's last direction past its deadzone (pad aim). */
@@ -372,9 +374,11 @@ export class GameScreen {
   private navStep() {
     if (this.quitting) return;
     const start = !!pickPad(readPads())?.buttons[START]?.pressed;
-    if (this.input.active && !this.paused) { this.startHeld = start; return; }
-    const dialogs = [...this.el.querySelectorAll<HTMLElement>('[role="dialog"]')];
-    this.padNav.step(performance.now(), dialogs[dialogs.length - 1] ?? this.el);
+    if (this.input.active && !this.paused) { this.startHeld = start; this.padCursor.step(performance.now(), null, null); return; }
+    // a lab's own hidden dialogs (its win card) are not the top one until they show
+    const dialogs = [...this.el.querySelectorAll<HTMLElement>('[role="dialog"]')].filter((d) => !d.closest('[hidden]')), top = dialogs[dialogs.length - 1] ?? null;
+    this.padNav.step(performance.now(), top ?? this.el);
+    this.padCursor.step(performance.now(), top, pickPad(readPads()));
     // Start closes the pause menu too, on a fresh press (the press that opened it is still held at first)
     if (this.paused && start && !this.startHeld && !this.input.capture) this.resume();
     this.startHeld = start;
@@ -409,10 +413,11 @@ export class GameScreen {
       return;
     }
     this.prev = { x: this.sim.drone.x, y: this.sim.drone.y };
+    // the drive hook runs first: a recorder that plays through the fake pad or fingers sets them for this very step
+    const auto = this.ready && !this.paused ? this.drive?.(this.sim) ?? null : null;
     let input = this.readDevices(this.input.sample());
     if (this.paused) return;
     const prevHeld = this.driven?.held ?? new Set<Action>();
-    const auto = this.ready ? this.drive?.(this.sim) ?? null : null;
     this.driven = auto ? { held: new Set(auto.held), aim: auto.aim } : null;
     if (this.driven) input = { held: this.driven.held, pressed: new Set([...this.driven.held].filter((a) => !prevHeld.has(a))) };
     if (!this.ready) input = { held: new Set(), pressed: new Set() };
@@ -683,7 +688,7 @@ export class GameScreen {
     if (st) { drawBossHud(c, st, t, this.showLog); drawCompass(c, st, cam, t, this.reduced); drawBubble(c, st, t); drawExitLift(c, st.exitLift); }
     if (st?.ending) drawEnding(c, VIEW_W, VIEW_H, st.ending.step, st.ending.t, profile()?.name ?? '');
     if (!this.ready || this.age < bt.control + 1) this.drawBoot(c, bt);
-    if (this.ready && !this.paused && !st?.ending && (sim.kit.gun || sim.kit.coil)) { const m = this.mouseView(); this.hud.crosshair(c, sim, m.x, m.y); }
+    if (this.ready && !this.paused && !st?.ending && (sim.kit.gun || sim.kit.coil) && (this.kind !== 'touch' || this.touchNow?.aim)) { const m = this.mouseView(); this.hud.crosshair(c, sim, m.x, m.y); }
     if (this.touchAlpha > 0 && this.touchNow) {
       drawTouch(c, { buttons: this.touchButtons(), held: this.touchNow.heldButtons, stick: this.touchNow.stick, alpha: easeOut(this.touchAlpha), t });
     }

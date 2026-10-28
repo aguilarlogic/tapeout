@@ -170,3 +170,19 @@ describe('deviceText rules', () => {
     expect(deviceText('A gadget: press F to lay a mine.', 'keys', g)).toBe('A gadget: press H to lay a mine.');
   });
 });
+
+describe('deviceText: mouse words', () => {
+  it('names the triggers on a pad and the screen on touch', () => {
+    expect(deviceText('Hold left click to fire.', 'pad', DEFAULTS)).toBe('Hold RT to fire.');
+    expect(deviceText('Hold left click to fire.', 'touch', DEFAULTS)).toBe('Hold a finger on the right side to fire.');
+    expect(deviceText('Hold right click to grab a crate.', 'pad', DEFAULTS)).toBe('Hold LT to grab a crate.');
+    expect(deviceText('Aim at a copper pad and press the right mouse button to pull yourself to it.', 'touch', DEFAULTS))
+      .toBe('Aim at a copper pad and press two fingers on the right to pull yourself to it.');
+    expect(deviceText('Aim at a pad with right mouse to be pulled in.', 'pad', DEFAULTS)).toBe('Aim at a pad with LT to be pulled in.');
+  });
+  it('swaps whole mouse sentences and leaves keyboard text alone', () => {
+    expect(deviceText('Switch weapons with Q, the mouse wheel, or the number keys.', 'pad', DEFAULTS)).toBe('Switch weapons with Y and LB.');
+    expect(deviceText('Switch weapons with Q, the mouse wheel, or the number keys.', 'touch', DEFAULTS)).toBe('Switch weapons with SWAP.');
+    expect(deviceText('Hold left click to fire.', 'keys', DEFAULTS)).toBe('Hold left click to fire.');
+  });
+});

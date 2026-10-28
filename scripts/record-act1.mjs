@@ -421,7 +421,7 @@ try {
       await page.getByTestId('story-choice').waitFor();
       await page.waitForTimeout(1800);
       const name = NAMES[place].replace(/[()]/g, '\\$&');
-      await page.getByTestId('story-choice').getByRole('button', { name: new RegExp(`^(Continue: )?${name}$`) }).first().click();
+      await page.getByTestId('story-choice').getByRole('button', { name: new RegExp(`^(Continue: )?${name}( \\([^)]*\\))?$`) }).first().click();
       await page.waitForFunction((p) => window.__tapeoutGame.story.place === p && !window.__tapeoutGame.story.fade, place, { timeout: 20000 });
     }
     for (let guard = 0; guard < 40; guard++) {

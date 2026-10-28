@@ -93,8 +93,8 @@ export class Terminal {
     this.el.classList.toggle('typing', busy);
     if (busy && !this.accepting) {
       if (document.activeElement === this.input) this.el.focus({ preventScroll: true });
-      if (!this.input.value) this.input.placeholder = 'any key or click finishes the line';
-    } else if (!busy && !this.accepting && this.input.placeholder === 'any key or click finishes the line') this.input.placeholder = '';
+      if (!this.input.value) this.input.placeholder = 'any key, click or tap finishes the line';
+    } else if (!busy && !this.accepting && this.input.placeholder === 'any key, click or tap finishes the line') this.input.placeholder = '';
   }
 
   private onKey(e: KeyboardEvent) {

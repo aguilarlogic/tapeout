@@ -6,6 +6,7 @@
 // bubble, the E prompt, and the boss's bar, log and readings.
 import { chipProgress, CHIPS, slotProgress } from '../../chip';
 import { findModule, KIND_APP } from '../../curriculum';
+import { actionLabel } from '../input/labels';
 import { easeOut, FONT, PAL, rgba } from '../render/palette';
 import { drawHiringPanel, drawOfficeFloor } from '../render/hall';
 import { drawRail } from '../render/rails';
@@ -1299,7 +1300,8 @@ export function drawBossHud(c: C, d: Director, t: number, showLog: boolean) {
   c.fillStyle = rgba(PAL.text, 0.75);
   c.font = `11px ${FONT}`;
   const phase = b.phase === 'investigate' ? (b.tempDown > 0 ? 'SHIELD DOWN · HIT IT' : 'TAKE READINGS · THEN THE DEBUG PORT') : b.phase === 'fix' ? 'PICK THE FIX' : 'SHIELD DOWN · FINISH IT';
-  c.fillText(`${phase}  ·  lab time ${Math.max(0, left)} min  ·  TAB: notes`, VIEW_W / 2, y + 36);
+  const notes = d.device.kind === 'touch' ? 'NOTES button' : `${actionLabel('map', d.device.kind, d.device.bindings).toUpperCase()}: notes`;
+  c.fillText(`${phase}  ·  lab time ${Math.max(0, left)} min  ·  ${notes}`, VIEW_W / 2, y + 36);
   c.restore();
   // the latest reading, for a few seconds
   const r = d.lastReading;
