@@ -31,7 +31,7 @@ export interface Gate { id: string; kind: GateKind; rect: Rect }
 /** Lines TAPEOUT says when the drone first passes x (and y, when given: the drone must be above it). */
 export interface Trigger { id: string; x: number; y?: number; lines: string[] }
 
-export type Music = 'keeper' | 'boss' | 'loft' | 'bench' | 'core' | 'under' | 'silicon';
+export type Music = 'keeper' | 'boss' | 'loft' | 'bench' | 'core' | 'under' | 'silicon' | 'cluster' | 'x' | 'ending';
 
 export interface StoryRoom extends Room {
   id: string;
@@ -66,6 +66,8 @@ export interface StoryRoom extends Room {
   targets?: { id: string; rect: Rect }[];
   /** The arena's boss body and incident. */
   boss?: { incident: string; rect: Rect };
+  /** Level 27's X arenas: which form (Phase 7 Spec, section 7). The incident is picked per player when the fight starts. */
+  xform?: 1 | 2 | 3 | 4;
   /** The upgrade a capstone bench grants (drawn on the rig). */
   upgrade?: string;
   /** The modules in this room that never lock its exit (annex panels). */

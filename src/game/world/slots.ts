@@ -20,6 +20,8 @@ export interface PlanRoom {
   mechanic?: MechanicKind;
   /** The elite gauntlet that ends a place with no boss: three waves. */
   gauntlet?: boolean;
+  /** Level 27's X arenas: which of the four forms (Phase 7 Spec, section 7). */
+  xform?: 1 | 2 | 3 | 4;
 }
 
 /** Labs that open on a workbench. */
@@ -53,6 +55,15 @@ function split<T>(xs: T[], max: number): T[][] {
 /** The rooms of a place in order. Study places live at the Loft's chalkboard and have no rooms. */
 export function planPlace(place: PlaceDef, theme: Pick<PlaceTheme, 'fights' | 'discovery'>): PlanRoom[] {
   if (place.kind === 'study') return [];
+  // Level 27 has its own plan (Phase 7 Spec, section 2): the Interview, a run, the Tapeout Review, X four times, the end
+  if (place.id === 'tapeout') {
+    return [
+      { role: 'landing', modules: [] }, { role: 'port', modules: ['drills'] }, { role: 'traverse', modules: [] },
+      { role: 'fight', modules: [] }, { role: 'gate', modules: ['final'] },
+      ...([1, 2, 3, 4] as const).map((n): PlanRoom => ({ role: 'xarena', modules: [], xform: n })),
+      { role: 'ending', modules: [] },
+    ];
+  }
   const mods = chapterOf(place).modules.filter((m) => m.kind !== 'practice');
   const cap = capstoneOf(mods);
   const body: PlanRoom[] = [];

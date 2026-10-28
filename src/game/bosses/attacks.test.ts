@@ -50,6 +50,9 @@ function play<R>(a: Attack<R>, o: Opts, onStep?: (i: number, run: R) => void) {
     hurt: (area, n) => log.hurts.push({ area, n, at: log.at }),
     hazard: (r, ms, damage) => log.hazards.push({ r, ms, damage, at: log.at }),
     platform: () => undefined,
+    lens: 0,
+    spawn: () => undefined,
+    soak: () => 0,
     sfx: (n) => log.sfx.push(n),
   };
   const run = a.start(c);

@@ -23,6 +23,8 @@ export interface EnemyCtx {
   /** The room's other live enemies (an X-Blob marks the ones it touches). */
   others(): Enemy[];
   /** The drone's headlamp: on, and when Beam Toggle has it in cone mode, the cone (apex, aim angle, half-angle, reach). */
+  /** Model Lens: steps added to wind-ups and warning lines (0 or absent without the upgrade). */
+  lens?: number;
   lamp: { cone: { x: number; y: number; a: number; half: number; reach: number } | null; scan?: { x: number; y: number; r: number } | null };
 }
 
@@ -54,6 +56,8 @@ export interface Enemy {
   field?: number;
   /** Metastable: the Synchronizer holds it resolved and hittable for this many steps. */
   resolve?(steps: number): void;
+  /** A thrown prop struck it or the Field Coil grabbed it, whether or not it is hittable (the Deadlock Pair's lock). */
+  jolt?(): void;
   /** Can shots and thrown objects hit it right now? */
   hittable(): boolean;
   /** Does touching it hurt right now, and for how much? 0 means harmless. */

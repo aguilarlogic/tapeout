@@ -10,7 +10,9 @@ export type UpgradeId =
   | 'matrix-throw' | 'damped-landing' | 'resonant-hover' | 'spectrum-visor' | 'gauss-field' | 'diode-plating'
   | 'gain-stage' | 'bias-plates'
   | 'cmos-mirror' | 'sized-drivers' | 'slack-parry' | 'via-phase' | 'buffer-turret' | 'power-gate' | 'scan-visor'
-  | 'trace-tether' | 'scripted-loop' | 'make-repair' | 'noise-filter' | 'pid-stabilizer';
+  | 'trace-tether' | 'scripted-loop' | 'make-repair' | 'noise-filter' | 'pid-stabilizer'
+  | 'templates' | 'rewind' | 'monte-carlo-crit' | 'newton-aim' | 'coverage-map' | 'agent-pair' | 'assertion-mine'
+  | 'speculative-shot' | 'scheduler' | 'cache-pockets' | 'noc-warp' | 'model-lens';
 
 export interface Upgrade {
   id: UpgradeId;
@@ -74,6 +76,19 @@ export const UPGRADES: Upgrade[] = [
   { id: 'make-repair', name: 'Make Repair', type: 'minor', source: ['sh-boss-make'], effect: 'Your hull starts to repair sooner after a hit.' },
   { id: 'noise-filter', name: 'Noise Filter', type: 'minor', source: ['sig-boss'], effect: 'Copied shots from crosstalk bugs can no longer hurt you.' },
   { id: 'pid-stabilizer', name: 'PID Stabilizer', type: 'minor', source: ['sig-pid'], effect: 'The ALU Cannon no longer kicks you back, and your hover holds its height.' },
+  // --- act 4, the Cluster (Phase 7 Spec, section 8) ---
+  { id: 'templates', name: 'Templates', type: 'minor', source: ['cpp'], effect: 'Every gadget gets one more charge: four turrets, four mines.' },
+  { id: 'rewind', name: 'Rewind', type: 'major', source: ['tb-boss-env'], effect: 'Press R to go back to where you were 3 seconds ago, with the hull you had then.', mk2: { banks: ['practice-dv'], effect: 'It recharges sooner.' } },
+  { id: 'monte-carlo-crit', name: 'Monte Carlo Crit', type: 'minor', source: ['code-py-mc'], effect: 'Each hit has a one in ten chance to deal double.' },
+  { id: 'newton-aim', name: 'Newton Aim', type: 'minor', source: ['code-boss-py-root'], effect: 'Charged shots aim where a moving bug is going to be.' },
+  { id: 'coverage-map', name: 'Coverage Map', type: 'major', source: ['cov-cache'], effect: 'A strip at the top shows every room of a place, and which ones you have seen.' },
+  { id: 'agent-pair', name: 'Agent Pair', type: 'major', source: ['tbu-boss'], effect: 'Two helper drones fly with you. One shoots, and one marks a bug so it takes more damage.', mk2: { banks: ['practice-uvm'], effect: 'Marked bugs take even more.' } },
+  { id: 'assertion-mine', name: 'Assertion Mine', type: 'major', source: ['formal-boss-wrap'], effect: 'A gadget: press F to lay a mine. A bug that comes close sets it off. G switches gadgets.', mk2: { banks: ['practice-formal'], effect: 'Bigger blasts.' } },
+  { id: 'speculative-shot', name: 'Speculative Shot', type: 'major', weapon: true, source: ['ooo-boss'], effect: 'A new weapon: slow shots that turn to chase the nearest bug.', mk2: { banks: ['practice-ooo'], effect: 'They hit harder.' } },
+  { id: 'scheduler', name: 'Scheduler', type: 'minor', source: ['code-os-boss-sched'], effect: 'Every cooldown is a fifth shorter.' },
+  { id: 'cache-pockets', name: 'Cache Pockets', type: 'major', source: ['cache-boss'], effect: 'Press C to pocket the block your field holds, up to three. Press C again to take one out.', mk2: { banks: ['practice-cache'], effect: 'A fourth pocket.' } },
+  { id: 'noc-warp', name: 'NoC Warp', type: 'major', source: ['serdes'], effect: 'Press E on a router pad to warp to the other pad in the room.' },
+  { id: 'model-lens', name: 'Model Lens', type: 'major', source: ['perf'], effect: 'Boss attacks and bug wind-ups show their warning sooner.', mk2: { banks: ['practice-perf'], effect: 'Sooner still.' } },
 ];
 
 /** The numbers each upgrade changes. */
@@ -144,6 +159,25 @@ export const UP = {
   scriptedLoop: { damage: 6, range: 560 },
   /** Make Repair: hull repair delay after a hit, ms. */
   repairDelayMs: 2000,
+  // --- act 4, the Cluster (Phase 7 Spec, section 8) ---
+  /** Rewind: how far back, s; cooldown s (Mk II). */
+  rewind: { backS: 3, cooldownS: 20, cooldownSMk2: 16 },
+  /** Monte Carlo Crit: chance a hit deals × mul. */
+  crit: { chance: 0.1, mul: 2 },
+  /** Agent Pair: driver damage, shots a second, reach px, bolt speed px/s; the monitor's mark bonus (Mk II); orbit px. */
+  agents: { damage: 6, rate: 2, range: 480, speed: 900, mark: 0.15, markMk2: 0.18, orbit: 60 },
+  /** Assertion Mine: count, trigger px, blast px, damage (Mk II), energy, arming s. */
+  mine: { max: 3, trigger: 60, radius: 120, damage: 40, damageMk2: 48, energy: 20, armS: 0.5 },
+  /** Speculative Shot: damage (Mk II), homing deg/s, shots a second, speed px/s, reach px. */
+  spec: { damage: 12, damageMk2: 14, turnDegS: 360, rate: 2, speed: 600, range: 900 },
+  /** Scheduler: every cooldown × this. */
+  scheduler: 0.8,
+  /** Cache Pockets: blocks held (Mk II). */
+  pockets: { n: 3, nMk2: 4 },
+  /** NoC Warp: fade out and fade in, s each. */
+  warp: { fadeS: 0.25 },
+  /** Model Lens: warnings this much sooner, s (Mk II). */
+  lens: { s: 0.3, sMk2: 0.36 },
 } as const;
 
 /** The upgrade a module grants, if any. */
@@ -168,7 +202,7 @@ export interface ActKit {
   jump2: number;
   wallLatch: boolean;
   /** Weapons the Selector cycles; just the Pulse Probe before it. */
-  weapons: ('pulse' | 'charged' | 'fan' | 'cannon' | 'burst')[];
+  weapons: ('pulse' | 'charged' | 'fan' | 'cannon' | 'burst' | 'spec')[];
   /** Weapon slots the HUD shows: 2, or 3 after the Firmware Pit (Phase 4 Spec, section 7: Q still cycles them all). */
   slots: 2 | 3;
   /** Pipeline Burst bolts a burst (0: not owned). */
@@ -247,6 +281,31 @@ export interface ActKit {
   noiseFilter: boolean;
   /** PID Stabilizer: no cannon recoil, and the hover holds height. */
   pid: boolean;
+  // --- act 4, the Cluster (Phase 7 Spec, section 8); 0 or false when not owned ---
+  /** Templates: one more turret and mine. */
+  templates: boolean;
+  /** Rewind cooldown, s (0: not owned). */
+  rewind: number;
+  /** Monte Carlo Crit: chance of a double hit. */
+  crit: number;
+  /** Newton Aim: charged shots lead moving targets. */
+  newton: boolean;
+  /** Coverage Map strip on. */
+  coverageMap: boolean;
+  /** Agent Pair: the monitor's mark bonus (0: not owned). */
+  agents: number;
+  /** Assertion Mine damage (0: not owned). */
+  mine: number;
+  /** Speculative Shot damage. */
+  specDamage: number;
+  /** Scheduler: gadget and ability cooldowns × this (weapons get it through cooldownScale). */
+  sched: number;
+  /** Cache Pockets held (0: not owned). */
+  pockets: number;
+  /** NoC Warp on. */
+  warp: boolean;
+  /** Model Lens, s sooner (0: off). */
+  lens: number;
 }
 
 /**
@@ -257,6 +316,7 @@ export function actKit(done: (id: string) => boolean, bosses: readonly string[])
   const has = (id: UpgradeId) => owned(id, done);
   const mk = (id: UpgradeId) => !!mk2(id, done)?.online;
   const plates = upgradeById('nand-plating')!.source.filter(done).length;
+  const sched = has('scheduler') ? UP.scheduler : 1;
   return {
     doubleJump: has('overflow-jump'),
     jump2: mk('overflow-jump') ? UP.doubleJumpMk2 : UP.doubleJump,
@@ -264,7 +324,7 @@ export function actKit(done: (id: string) => boolean, bosses: readonly string[])
     // the Charged Probe is in the list as soon as it is owned (Level 1's Q swap); the rest need the Selector
     weapons: [
       'pulse', ...(has('charged-probe') ? ['charged' as const] : []),
-      ...(has('selector') ? [...(has('fan-decoder') ? ['fan' as const] : []), ...(has('alu-cannon') ? ['cannon' as const] : []), ...(has('pipeline-burst') ? ['burst' as const] : [])] : []),
+      ...(has('selector') ? [...(has('fan-decoder') ? ['fan' as const] : []), ...(has('alu-cannon') ? ['cannon' as const] : []), ...(has('pipeline-burst') ? ['burst' as const] : []), ...(has('speculative-shot') ? ['spec' as const] : [])] : []),
     ],
     slots: has('third-slot') ? 3 : 2,
     burstBolts: has('pipeline-burst') ? (mk('pipeline-burst') ? UP.burst.boltsMk2 : UP.burst.bolts) : 0,
@@ -286,7 +346,7 @@ export function actKit(done: (id: string) => boolean, bosses: readonly string[])
     phasor: has('phasor-curve') ? UP.phasor.turnDegS : 0,
     stillRegen: has('integrator') ? UP.integrator.regen : 1,
     dashHit: has('kickback-dash') ? UP.kickback.damage : 0,
-    dashCooldownMs: has('kickback-dash') ? UP.kickback.cooldownMs : 1000,
+    dashCooldownMs: (has('kickback-dash') ? UP.kickback.cooldownMs : 1000) * sched,
     compass: has('gradient-compass'),
     throwChargeS: has('matrix-throw') ? UP.matrixThrow.chargeS : 0.8,
     throwDamage: has('matrix-throw') ? UP.matrixThrow.damage : 1,
@@ -296,7 +356,7 @@ export function actKit(done: (id: string) => boolean, bosses: readonly string[])
     grabBonus: has('gauss-field') ? UP.gauss.grab : 0,
     chargedDamage: has('gain-stage') ? UP.gainStageDamage : UP.chargedDamage,
     mirror: has('cmos-mirror') ? (mk('cmos-mirror') ? UP.mirror.damageMk2 : UP.mirror.damage) : 0,
-    cooldownScale: has('sized-drivers') ? (mk('sized-drivers') ? UP.drivers.cooldownMk2 : UP.drivers.cooldown) : 1,
+    cooldownScale: (has('sized-drivers') ? (mk('sized-drivers') ? UP.drivers.cooldownMk2 : UP.drivers.cooldown) : 1) * sched,
     parryMs: has('slack-parry') ? (mk('slack-parry') ? UP.parry.windowMsMk2 : UP.parry.windowMs) : 0,
     viaThick: has('via-phase') ? (mk('via-phase') ? UP.via.thickMk2 : UP.via.thick) : 0,
     turret: has('buffer-turret') ? (mk('buffer-turret') ? UP.turret.lifeSMk2 : UP.turret.lifeS) : 0,
@@ -307,5 +367,17 @@ export function actKit(done: (id: string) => boolean, bosses: readonly string[])
     repairDelayMs: has('make-repair') ? UP.repairDelayMs : 4000,
     noiseFilter: has('noise-filter'),
     pid: has('pid-stabilizer'),
+    templates: has('templates'),
+    rewind: has('rewind') ? (mk('rewind') ? UP.rewind.cooldownSMk2 : UP.rewind.cooldownS) * sched : 0,
+    crit: has('monte-carlo-crit') ? UP.crit.chance : 0,
+    newton: has('newton-aim'),
+    coverageMap: has('coverage-map'),
+    agents: has('agent-pair') ? (mk('agent-pair') ? UP.agents.markMk2 : UP.agents.mark) : 0,
+    mine: has('assertion-mine') ? (mk('assertion-mine') ? UP.mine.damageMk2 : UP.mine.damage) : 0,
+    specDamage: mk('speculative-shot') ? UP.spec.damageMk2 : UP.spec.damage,
+    sched,
+    pockets: has('cache-pockets') ? (mk('cache-pockets') ? UP.pockets.nMk2 : UP.pockets.n) : 0,
+    warp: has('noc-warp'),
+    lens: has('model-lens') ? (mk('model-lens') ? UP.lens.sMk2 : UP.lens.s) : 0,
   };
 }

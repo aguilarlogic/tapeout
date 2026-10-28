@@ -121,6 +121,13 @@ export function openLab(host: OverlayHost, kind: 'panel' | 'bench', module: stri
   const close = () => { done(); off(); onClose(recordKey(module) !== before && !!levelRecord(module)); };
   const node = frame(`${o.label ?? (kind === 'panel' ? 'PATCH PANEL' : 'WORKBENCH')} · ${title.toUpperCase()}`, o.sub ?? (kind === 'panel' ? 'Logic Lab' : 'Verilog lab'), h('div', { class: `st-lab lab-${kind}` }, page), close, 'Close · Esc');
   node.dataset.testid = kind;
+  // a desktop page's own links (its "Map /" crumbs) would leave the game: inside the overlay they close it instead
+  node.addEventListener('click', (e) => {
+    const a = (e.target as HTMLElement).closest('a');
+    if (!a || !a.getAttribute('href')?.startsWith('#/')) return;
+    e.preventDefault();
+    close();
+  });
   done = mount(host, node, close);
   off = onChange(() => {
     if (recordKey(module) !== before && !node.querySelector('.st-unplug')) node.querySelector('.st-frame-head')!.append(button('It works · back to the room', close, 'primary mini st-unplug'));

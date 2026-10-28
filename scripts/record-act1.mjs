@@ -26,7 +26,7 @@ page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') 
 await page.goto(`${pathToFileURL(resolve('dist/index.html')).href}?record`);
 await page.locator('#os').waitFor();
 await page.waitForTimeout(800);
-await page.getByTestId('story-preview').click();
+await page.getByTestId('game').waitFor();
 await page.getByTestId('story-profile').waitFor();
 await page.waitForTimeout(900);
 await page.locator('.st-input').pressSequentially('Sam', { delay: 120 });

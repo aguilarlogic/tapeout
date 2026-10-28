@@ -32,7 +32,7 @@ export interface PlaceDef {
 
 // --- rooms ----------------------------------------------------------------------------------------------------------
 
-export type RoomRole = 'landing' | 'discovery' | 'port' | 'panel' | 'annex' | 'bench' | 'gate' | 'fight' | 'traverse' | 'bossdoor' | 'arena' | 'exit';
+export type RoomRole = 'landing' | 'discovery' | 'port' | 'panel' | 'annex' | 'bench' | 'gate' | 'fight' | 'traverse' | 'bossdoor' | 'arena' | 'xarena' | 'ending' | 'exit';
 
 /** What a room template returns: geometry plus the anchors compose.ts hangs stations, gates and enemies on. World px,
  * y down, floor 80 px above the bottom edge, entry on the left. */
@@ -90,7 +90,7 @@ export type Template = (rng: () => number, opts: TemplateOpts) => Shell;
 
 // --- themes ---------------------------------------------------------------------------------------------------------
 
-export type MechanicKind = 'lamps' | 'inverted' | 'select' | 'clocked' | 'pattern' | 'loop' | 'bus' | 'clocks' | 'stages' | 'pullnet' | 'repeater' | 'slack' | 'vias' | 'placement' | 'gating' | 'scan' | 'return';
+export type MechanicKind = 'lamps' | 'inverted' | 'select' | 'clocked' | 'pattern' | 'loop' | 'bus' | 'clocks' | 'stages' | 'pullnet' | 'repeater' | 'slack' | 'vias' | 'placement' | 'gating' | 'scan' | 'return' | 'scoreboard' | 'bins' | 'agents' | 'formal' | 'reorder' | 'cache' | 'routing' | 'model';
 export interface MechanicSpec { kind: MechanicKind; /** The module whose port follows the discovery room. */ before: string }
 
 export type BackdropKind = 'lamps' | 'gates' | 'carry' | 'clock' | 'rom' | 'core' | 'under' | 'grid' | 'silicon' | 'cluster' | 'fab' | 'loft';

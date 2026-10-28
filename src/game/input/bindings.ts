@@ -4,7 +4,7 @@
 
 export type Action =
   | 'left' | 'right' | 'jump' | 'down' | 'fire' | 'field' | 'dash' | 'interact' | 'weapon'
-  | 'slot1' | 'slot2' | 'slot3' | 'beam' | 'gadget' | 'gadgetNext' | 'scan' | 'rewind' | 'sync' | 'map' | 'pause';
+  | 'slot1' | 'slot2' | 'slot3' | 'beam' | 'gadget' | 'gadgetNext' | 'scan' | 'rewind' | 'pocket' | 'map' | 'pause';
 
 export type Pair = [string | null, string | null];
 export type Bindings = Record<Action, Pair>;
@@ -27,8 +27,8 @@ export const ACTIONS: { id: Action; label: string; later?: boolean }[] = [
   { id: 'gadget', label: 'Gadget' },
   { id: 'gadgetNext', label: 'Switch gadget' },
   { id: 'scan', label: 'Scan Visor' },
-  { id: 'rewind', label: 'Rewind', later: true },
-  { id: 'sync', label: 'Sync', later: true },
+  { id: 'rewind', label: 'Rewind' },
+  { id: 'pocket', label: 'Cache Pockets' },
   { id: 'map', label: 'Notes (hold)' },
   { id: 'pause', label: 'Pause' },
 ];
@@ -51,7 +51,7 @@ export const DEFAULTS: Bindings = {
   gadgetNext: ['KeyG', null],
   scan: ['KeyV', null],
   rewind: ['KeyR', null],
-  sync: ['KeyC', null],
+  pocket: ['KeyC', null],
   map: ['Tab', 'KeyM'],
   pause: ['Escape', 'KeyP'],
 };

@@ -2,6 +2,7 @@
 // checkpoints and the final run at the port terminal; practice banks run there too, framed as calibration; logic and
 // transistor labs open the patch panel; every other lab kind opens its desktop page on a bench.
 import { findModule, KIND_APP, type ModKind } from '../../curriculum';
+import { drillsPage } from '../../games/drills/page';
 import { LABS } from '../../os/labs';
 import { openLab, openPort, type OverlayHost } from './overlay';
 
@@ -14,13 +15,14 @@ export function stationLabel(kind: ModKind): string {
   if (TERMINAL.has(kind)) return 'PORT';
   if (kind === 'logic' || kind === 'cmos') return 'PATCH PANEL';
   if (kind === 'clab') return 'CIRCUIT BENCH';
+  if (kind === 'drills') return 'INTERVIEW DESK';
   return 'WORKBENCH';
 }
 
-/** Whether openModule can open this module (incidents are boss fights; drills stay on the desktop). */
+/** Whether openModule can open this module (incidents are boss fights; the Interview flashcards open on a desk). */
 export const opens = (id: string): boolean => {
   const m = findModule(id)?.module;
-  return !!m && (TERMINAL.has(m.kind) || !!LABS[m.route.split('/')[1]]);
+  return !!m && (TERMINAL.has(m.kind) || m.kind === 'drills' || !!LABS[m.route.split('/')[1]]);
 };
 
 /**
@@ -32,6 +34,8 @@ export function openModule(host: OverlayHost, id: string, onAnswer: (ok: boolean
   if (!m) return onClose(false);
   const label = stationLabel(m.kind);
   if (TERMINAL.has(m.kind)) return openPort(host, id, onAnswer, onClose, { label, practice: m.kind === 'practice' });
+  // Level 27's Interview Room (Phase 7 Spec, section 2): the desktop's Interview flashcards, inside the game
+  if (m.kind === 'drills') return openLab(host, 'bench', id, onClose, { page: () => drillsPage(), label, sub: KIND_APP[m.kind] });
   const page = LABS[m.route.split('/')[1]];
   if (!page) return onClose(false);
   const panel = m.kind === 'logic' || m.kind === 'cmos';

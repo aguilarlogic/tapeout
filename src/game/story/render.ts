@@ -9,6 +9,7 @@ import { findModule, KIND_APP } from '../../curriculum';
 import { easeOut, FONT, PAL, rgba } from '../render/palette';
 import { drawRail } from '../render/rails';
 import { HZ, TUNING, VIEW_H, VIEW_W } from '../tuning';
+import type { Rect } from '../level/room';
 import type { Director } from './director';
 import type { Station, StationKind, Terminal } from './types';
 
@@ -147,7 +148,61 @@ export function drawStoryBack(c: C, d: Director, t: number) {
   // a discovery puzzle, a composed arena's boss body, and the powered pulse of a module that just passed
   if (rs.mech) rs.mech.def.draw(c, rs.mech.state, t);
   if (d.form && d.boss) d.form.draw(c, d.form.state(d.boss.hp / d.boss.maxHp, d.boss.shielded, d.boss.enraged > 0), t);
+  if (d.xn && d.form && room.boss) drawXMark(c, room.boss.rect, t);
+  if (d.bit) drawBit(c, d.bit.x, d.bit.y, d.bit.t);
   if (room.role) drawPowered(c, d);
+}
+
+/** A jagged line from a to b: the X-state rule (Phase 7 Spec, section 9), its kinks shifting a little each few steps. */
+function jag(c: C, ax: number, ay: number, bx: number, by: number, t: number) {
+  const n = 9, nx = -(by - ay), ny = bx - ax, len = Math.hypot(nx, ny) || 1, seed = Math.floor(t / 6);
+  c.moveTo(ax, ay);
+  for (let i = 1; i < n; i++) {
+    const k = i / n, o = (((i * 7919 + seed * 104729) % 13) - 6) * 1.4;
+    c.lineTo(ax + (bx - ax) * k + (nx / len) * o, ay + (by - ay) * k + (ny / len) * o);
+  }
+  c.lineTo(bx, by);
+}
+
+/** X's mark over the boss body it wears: two jagged red strokes corner to corner, with a glow pass. */
+function drawXMark(c: C, r: Rect, t: number) {
+  const m = 14, x0 = r.x + m, y0 = r.y + m, x1 = r.x + r.w - m, y1 = r.y + r.h - m;
+  c.save();
+  c.lineCap = 'round';
+  for (const [w, a] of [[10, 0.18], [3, 0.95]] as const) {
+    if (w > 3) c.globalCompositeOperation = 'lighter';
+    c.strokeStyle = rgba(PAL.hostile, a);
+    c.lineWidth = w;
+    c.beginPath();
+    jag(c, x0, y0, x1, y1, t);
+    jag(c, x1, y0, x0, y1, t + 3);
+    c.stroke();
+    c.globalCompositeOperation = 'source-over';
+  }
+  c.restore();
+}
+
+/** The bit X leaves: a 20 px glowing square marked 1. */
+function drawBit(c: C, x: number, y: number, t: number) {
+  c.save();
+  const g = c.createRadialGradient(x, y, 0, x, y, 46);
+  g.addColorStop(0, rgba(PAL.gold, 0.45 + 0.15 * Math.sin(t * 0.1)));
+  g.addColorStop(1, rgba(PAL.gold, 0));
+  c.globalCompositeOperation = 'lighter';
+  c.fillStyle = g;
+  c.fillRect(x - 46, y - 46, 92, 92);
+  c.globalCompositeOperation = 'source-over';
+  c.fillStyle = PAL.fill;
+  c.fillRect(x - 10, y - 10, 20, 20);
+  c.strokeStyle = PAL.gold;
+  c.lineWidth = 2;
+  c.strokeRect(x - 10, y - 10, 20, 20);
+  c.font = `bold 14px ${FONT}`;
+  c.textAlign = 'center';
+  c.textBaseline = 'middle';
+  c.fillStyle = PAL.gold;
+  c.fillText('1', x, y + 1);
+  c.restore();
 }
 
 /** Steps the powered pulse takes to run its trace. */
@@ -1195,6 +1250,14 @@ export function drawBossHud(c: C, d: Director, t: number, showLog: boolean) {
     c.fillRect(x, y + 16, W, 3);
     c.fillStyle = visor.starting ? rgba(PAL.amber, 1) : rgba(PAL.trace, 0.7);
     c.fillRect(x, y + 16, visor.starting ? W : W * visor.progress, 3);
+  }
+  if (d.xn) {
+    // X has no investigation and no lab clock: a straight fight
+    c.fillStyle = rgba(PAL.text, 0.75);
+    c.font = `11px ${FONT}`;
+    c.fillText(`FORM ${d.xn} OF 4  ·  MAKE IT A 1 OR A 0`, VIEW_W / 2, y + 30);
+    c.restore();
+    return;
   }
   const left = b.inv.left, frac = Math.max(0, left / b.inv.inc.budget);
   c.fillStyle = rgba(frac < 0.3 ? PAL.hostile : PAL.amber, 0.9);

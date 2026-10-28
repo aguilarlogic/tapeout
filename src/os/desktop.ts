@@ -5,7 +5,7 @@ import { closeGame, openGame } from '../game/screen';
 import { drillsPage } from '../games/drills/page';
 import { skillsApp } from '../mastery/app';
 import { MINIGAMES } from '../minigames/apps';
-import { onChange, profile, rank, resetAll, totalXp } from '../state';
+import { onChange, prefs, profile, rank, resetAll, totalXp } from '../state';
 import { Shell } from '../term/shell';
 import { Terminal } from '../term/terminal';
 import { h } from '../ui/dom';
@@ -43,6 +43,14 @@ function home() {
   if (location.hash && location.hash !== '#/') location.hash = '#/';
 }
 
+/** TAPEOUT's shell starts the first time the desktop shows, so its onboarding never runs hidden under the game. */
+let shellStarted = false;
+function startShell() {
+  if (shellStarted) return;
+  shellStarted = true;
+  void shell.start();
+}
+
 function route() {
   const [section, id] = location.hash.replace(/^#\/?/, '').split('/').filter(Boolean);
   document.querySelectorAll('.modal-bg').forEach((m) => m.remove());
@@ -51,6 +59,7 @@ function route() {
     return;
   }
   closeGame();
+  startShell();
   if (!section) {
     (getWindow('term') ?? openTerminal()).focus();
     term.focus();
@@ -122,7 +131,7 @@ function taskbar(): HTMLElement {
     item('◉', 'Skills & job readiness', () => (location.hash = '#/skills')),
     item('?!', 'Interview flashcards', () => (location.hash = '#/drills')),
     item('⚙', 'Settings', () => (location.hash = '#/settings')),
-    item('▶', 'Play the new story (preview)', () => (location.hash = '#/story')),
+    item('▶', 'Play the story', () => (location.hash = '#/story')),
     h('div', { class: 'start-sep' }, 'Arcade'),
     ...MINIGAMES.map((g) => item(g.icon, g.title, () => void launchGame(g.id))),
     h('div', { class: 'start-sep' }),
@@ -175,8 +184,8 @@ export async function bootDesktop() {
   const os = document.getElementById('os')!;
   // The mentor column (left) and the workspace (right). The wallpaper and icons belong to the workspace.
   const { desktop, workspace } = buildRegions();
-  // Until the story game is complete (phase 7) the desktop stays the first screen, and the game opens from here.
-  workspace.append(wallpaper(), icons(), h('button', { class: 'story-preview', 'data-testid': 'story-preview', onclick: () => (location.hash = '#/story') }, '▶ Play the new story (preview)'));
+  // The story game is the first screen (Phase 7 Spec, section 3); the desktop keeps a button back into it.
+  workspace.append(wallpaper(), icons(), h('button', { class: 'story-preview', 'data-testid': 'story-preview', onclick: () => (location.hash = '#/story') }, '▶ Play the story'));
   const bar = taskbar();
   os.replaceChildren(desktop, bar);
   initWM(bar.querySelector('.tasks') as HTMLElement);
@@ -192,9 +201,12 @@ export async function bootDesktop() {
     if (!term.el.isConnected) return;
     term.print(`${text}`, 'ai-aside');
   });
-  await bootScreen(!profile());
+  // with no hash, a fresh load opens the game unless the player chose to start on the desktop
+  const toGame = (!location.hash || location.hash === '#/') && (prefs().startIn ?? 'game') === 'game';
+  if (!toGame) await bootScreen(!profile());
   openTerminal();
-  void shell.start();
   window.addEventListener('hashchange', route);
-  if (location.hash && location.hash !== '#/') route();
+  if (toGame) location.hash = '#/story';
+  else if (location.hash && location.hash !== '#/') route();
+  else startShell();
 }
