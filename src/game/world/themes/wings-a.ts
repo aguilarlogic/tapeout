@@ -105,8 +105,8 @@ export const WINGS_A_THEMES: PlaceTheme[] = [
         'Good. The shunt is down, and its shield with it.',
       ],
       bossIntro: [
-        'In the RF bay, The Deaf Radio sends static bands. Find the clear SIGNAL gap.',
-        'In the power bay, The Rail That Rings sends ground waves. Jump each one.',
+        'In the RF bay, the Deaf Radio sends static bands. Find the clear SIGNAL gap.',
+        'In the power bay, the Rail That Rings sends ground waves. Jump each one.',
       ],
       bossBeaten: [
         'The RF bay is quiet, and the earbud link holds at full range.',
@@ -188,9 +188,9 @@ export const WINGS_A_THEMES: PlaceTheme[] = [
         'Good. The last brute is down, so stay clear of its spikes.',
       ],
       bossIntro: [
-        'In the server rack, The Flipping Bits fall. A bit that lands as a 1 sparks.',
-        'On the fab floor, The Wafer Map glows in patterns. Step off the lit cells.',
-        'In the package lab, The Field Returns sends cracks. Avoid the strips they leave.',
+        'In the server rack, the Flipping Bits fall. A bit that lands as a 1 sparks.',
+        'On the fab floor, the Wafer Map glows in patterns. Step off the lit cells.',
+        'In the package lab, the Field Returns sends cracks. Avoid the strips they leave.',
       ],
       bossBeaten: [
         'The server rack is quiet. Memory errors stop, and no virtual machines crash.',
@@ -261,8 +261,8 @@ export const WINGS_A_THEMES: PlaceTheme[] = [
         'Good. The race is over, and both runners are down.',
       ],
       bossIntro: [
-        'In the data centre, The 3 A.M. Hang freezes eight bolts, then fires them all.',
-        'On the test floor, The Final-Test Yield Drop stabs down with five needles.',
+        'In the data centre, the 3 A.M. Hang freezes eight bolts, then fires them all.',
+        'On the test floor, the Final-Test Yield Drop stabs down with five needles.',
       ],
       bossBeaten: [
         'The data centre runs clean. The rare hang has a root cause at last.',
@@ -356,9 +356,9 @@ export const WINGS_A_THEMES: PlaceTheme[] = [
         'Good. The deadlock is broken, and the glitch is asleep again.',
       ],
       bossIntro: [
-        'In the vault, The Leaking Key sweeps a wave that passes through platforms.',
-        'In the garage, The Limp-Mode Storm slams shutters. Stay in the lit section.',
-        'In the photonics bay, The Dark Channel flares. Stand clear of the bright lines.',
+        'In the vault, the Leaking Key sweeps a wave that passes through platforms.',
+        'In the garage, the Limp-Mode Storm slams shutters. Stay in the lit section.',
+        'In the photonics bay, the Dark Channel flares. Stand clear of the bright lines.',
       ],
       bossBeaten: [
         'The vault is sealed. The leak is closed, and the device key is safe.',

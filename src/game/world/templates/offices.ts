@@ -8,8 +8,8 @@ import { floorY, r, shell, spawnAt } from './kit';
 import { assemble } from './traverse';
 
 const W = 2560, H = 720, F = floorY(H);
-/** A desk is 160 x 24 px, and its top is 90 px above the floor: one beginner jump (kit.ts REACH.rise is 150). */
-const DESK_W = 160, DESK_H = 24, DESK_RISE = 90;
+/** A desk is 140 x 24 px, and its top is 90 px above the floor: one beginner jump (kit.ts REACH.rise is 150). */
+const DESK_W = 140, DESK_H = 24, DESK_RISE = 90;
 
 /** The eight panel spots: centres evenly spaced from x 280 to x 2280, rounded to whole px. */
 export const OFFICE_PANELS: readonly number[] = Array.from({ length: 8 }, (_, i) => Math.round(280 + (i * 2000) / 7));

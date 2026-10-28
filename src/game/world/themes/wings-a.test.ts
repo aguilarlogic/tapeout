@@ -206,7 +206,7 @@ describe('Act 6 wings (first half) places', () => {
       expect(t.lines.bossIntro, t.place).toHaveLength(incidents.length);
       expect(t.lines.bossBeaten, t.place).toHaveLength(incidents.length);
       incidents.forEach((inc, i) => {
-        expect(t.lines.bossIntro[i], inc.incident).toContain(inc.form);
+        expect(t.lines.bossIntro[i], inc.incident).toContain(inc.form.replace(/^The /, 'the '));
         expect(t.lines.bossIntro[i], inc.incident).toContain(inc.region);
         expect(t.lines.bossBeaten[i], inc.incident).toContain(inc.region);
       });

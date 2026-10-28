@@ -173,7 +173,7 @@ describe('Act 6 (second half of the wings) places', () => {
         expect(t.lines.bossBeaten).toHaveLength(incidents.length);
         incidents.forEach((inc, i) => {
           const { form, region } = INCIDENT[inc];
-          expect(t.lines.bossIntro[i], inc).toContain(form);
+          expect(t.lines.bossIntro[i], inc).toContain(form.replace(/^The /, 'the '));
           expect(t.lines.bossIntro[i], inc).toContain(region);
           expect(t.lines.bossBeaten[i], inc).toContain(region);
         });

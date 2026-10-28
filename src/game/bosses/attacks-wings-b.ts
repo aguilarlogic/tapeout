@@ -290,10 +290,13 @@ interface HangRun extends Timed {
 /** Starts round run.round: the ring round the drone's spot, and its 1.5 s telegraph. */
 function beginHangRound(c: AttackCtx, run: HangRun) {
   const d = mid(c.drone), a0 = c.rand() * (Math.PI / 4);
+  // a bolt the ring puts under the floor the drone stands on sits just above it instead, so all eight are seen and fly
+  // (Phase 8 self-review)
+  const floor = landingFloor(c, d.x - 1, d.x + 1, d.y).y - 16;
   run.ctr = d;
   run.bolts = Array.from({ length: BOLTS }, (_, k): Pt => {
     const a = a0 + (k * Math.PI * 2) / BOLTS;
-    return { x: d.x + RING * Math.cos(a), y: d.y + RING * Math.sin(a) };
+    return { x: d.x + RING * Math.cos(a), y: Math.min(floor, d.y + RING * Math.sin(a)) };
   });
   run.age = 0;
   run.t = 0;

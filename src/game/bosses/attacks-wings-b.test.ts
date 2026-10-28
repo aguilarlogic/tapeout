@@ -99,6 +99,12 @@ const WING_B: Attack<unknown>[] = [dies, cracks, hang];
 const SPEEDS = [1, 1.4];
 const teleOf = (r: unknown) => (r as Timed).tele;
 const droneMid = { x: DRONE.x + DRONE.w / 2, y: DRONE.y + DRONE.h / 2 };
+/** A hang bolt sits on the 170 px ring round (cx, cy), or, where the ring dips under the drone's floor, 16 px above it. */
+function onRing(p: { x: number; y: number }, cx: number, cy: number) {
+  const floor = Math.min(...FLOORS.filter((f) => f.x < cx + 1 && f.x + f.w > cx - 1 && f.y >= cy).map((f) => f.y), ARENA.y + ARENA.h) - 16;
+  if (p.y === floor) expect(cy + Math.sqrt(170 ** 2 - (p.x - cx) ** 2)).toBeGreaterThanOrEqual(floor - 1e-6);
+  else expect(Math.hypot(p.x - cx, p.y - cy)).toBeCloseTo(170, 6);
+}
 
 describe('every wing attack, part B', () => {
   for (const a of WING_B) {
@@ -264,7 +270,7 @@ describe('hang', () => {
     const cx = droneMid.x, cy = droneMid.y;
     const bolts: Pt[] = plain.run.bolts;
     expect(bolts).toHaveLength(8);
-    for (const p of bolts) expect(Math.hypot(p.x - cx, p.y - cy)).toBeCloseTo(170, 6);
+    for (const p of bolts) onRing(p, cx, cy);
   });
 
   it('fires all 8 bolts inward at once at 380 px/s, 10 each, at the end of each telegraph', () => {
@@ -289,7 +295,7 @@ describe('hang', () => {
     });
     expect(rings).toHaveLength(2);
     for (const r of rings) {
-      for (const p of r) expect(Math.hypot(p.x - droneMid.x, p.y - droneMid.y)).toBeCloseTo(170, 6);
+      for (const p of r) onRing(p, droneMid.x, droneMid.y);
     }
   });
 

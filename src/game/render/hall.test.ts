@@ -63,6 +63,12 @@ describe('drawHiringPanel', () => {
     drawHiringPanel(c, 280, 640, { icon: 'FW', name: 'firmware', open: true, passed: false, t: 0 });
     expect(texts(calls)).toEqual(['FW', 'HIRING PANEL', 'FIRMWARE']);
   });
+
+  it('wraps a long role name into at most three short lines', () => {
+    const { c, calls } = spyCanvas();
+    drawHiringPanel(c, 280, 640, { icon: 'PD', name: 'Physical Design & Timing Engineer', open: true, passed: false, t: 0 });
+    expect(texts(calls)).toEqual(['PD', 'HIRING PANEL', 'PHYSICAL DESIGN', '& TIMING', 'ENGINEER']);
+  });
 });
 
 describe('drawBadges', () => {

@@ -7,8 +7,10 @@ import { FONT, LINE, PAL, rgba } from './palette';
 
 type C = CanvasRenderingContext2D;
 
-/** Panel size, px: 70 wide and 150 tall, standing on the floor. */
-const PANEL_W = 70, PANEL_H = 150;
+/** Panel size, px: 112 wide (room for a role name in two or three short lines) and 150 tall, standing on the floor. */
+const PANEL_W = 112, PANEL_H = 150;
+/** The role name wraps at this many characters a line, at most three lines. */
+const NAME_CHARS = 16, NAME_LINES = 3;
 /** Corner chamfer of the panel, px. */
 const CHAMFER = 10;
 /** Alpha of a locked panel (not open, no record). */
@@ -112,10 +114,23 @@ export function drawHiringPanel(c: C, x: number, floorY: number, p: HiringPanelP
   c.font = `26px ${FONT}`;
   c.fillText(p.icon, x, floorY - 80, PANEL_W - 12);
   c.font = `9px ${FONT}`;
-  c.fillStyle = rgba(PAL.text, 0.85);
-  c.fillText('HIRING PANEL', x, floorY - 44, PANEL_W - 8);
-  c.fillText(p.name.toUpperCase(), x, floorY - 30, PANEL_W - 8);
+  c.fillStyle = rgba(PAL.trace, 0.85);
+  c.fillText('HIRING PANEL', x, floorY - 54, PANEL_W - 8);
+  c.font = `10px ${FONT}`;
+  c.fillStyle = rgba(PAL.text, 0.9);
+  wrapName(p.name.toUpperCase()).forEach((line, i) => c.fillText(line, x, floorY - 38 + i * 12, PANEL_W - 10));
   c.restore();
+}
+
+/** Splits a role name into lines of at most NAME_CHARS characters at spaces; the last line takes any overflow. */
+function wrapName(name: string): string[] {
+  const lines: string[] = [];
+  for (const word of name.split(' ')) {
+    const cur = lines.at(-1);
+    if (cur !== undefined && (cur.length + 1 + word.length <= NAME_CHARS || lines.length === NAME_LINES)) lines[lines.length - 1] = `${cur} ${word}`;
+    else lines.push(word);
+  }
+  return lines;
 }
 
 /** Role badges on the drone's back plate: a row of chevrons, centred on the plate at (x, y) and running away from the

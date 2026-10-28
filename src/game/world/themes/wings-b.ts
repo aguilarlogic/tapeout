@@ -61,7 +61,7 @@ export const WINGS_B_THEMES: PlaceTheme[] = [
         'Good. The qubit keeps its state a little longer.',
       ],
       bossIntro: [
-        'In the cryostat, The Qubit That Will Not Behave splits. Only one ghost fires.',
+        'In the cryostat, the Qubit That Will Not Behave splits. Only one ghost fires.',
       ],
       bossBeaten: [
         'The cryostat settles, and Q7 holds its gate fidelity at 99.9 percent again.',
@@ -207,9 +207,9 @@ export const WINGS_B_THEMES: PlaceTheme[] = [
         'Good. That block now talks to the rest of the chip.',
       ],
       bossIntro: [
-        'In the I/O bay, The Dead USB Ports charges four nodes. Watch the circles first.',
-        'In the SoC bay, The Silent Peripheral has four windows. Some soak up shots.',
-        'In the customer lab, The Board That Will Not Boot aims left, then fires right.',
+        'In the I/O bay, the Dead USB Ports boss charges four nodes. Watch the circles.',
+        'In the SoC bay, the Silent Peripheral has four windows. Some soak up shots.',
+        'In the customer lab, the Board That Will Not Boot aims left, then fires right.',
       ],
       bossBeaten: [
         'The I/O bay resizes the clamp, and the dock ports stay alive in dry air.',
@@ -284,7 +284,7 @@ export const WINGS_B_THEMES: PlaceTheme[] = [
         'Good. The sensor sees clean light now.',
       ],
       bossIntro: [
-        'In the sensor bay, The Banded Image sends stripes across. Find the gap.',
+        'In the sensor bay, the Banded Image sends stripes across. Find the gap.',
       ],
       bossBeaten: [
         'The sensor bay fixes the readout, and the banding fades from the image.',

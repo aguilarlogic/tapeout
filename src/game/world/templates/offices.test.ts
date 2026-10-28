@@ -7,8 +7,8 @@ import { TILE } from '../../tuning';
 import { gapFor, REACH } from './kit';
 import { OFFICE_PANELS, offices } from './offices';
 
-/** A hiring panel is 70 px wide (render/hall.ts), so a desk must stay clear of x +/- 35 around each panel centre. */
-const PANEL_HALF = 35;
+/** A hiring panel is 112 px wide (render/hall.ts), so a desk must stay clear of x +/- 56 around each panel centre, with a 10 px margin. */
+const PANEL_HALF = 66;
 const room = offices();
 const F = room.h - 80;
 const desks = room.solids.filter((q) => q.h === 24 && q.y < F);
@@ -48,9 +48,9 @@ describe('panel spots', () => {
 });
 
 describe('desks', () => {
-  it('has four desks of 160 x 24 px', () => {
+  it('has four desks of 140 x 24 px', () => {
     expect(desks).toHaveLength(4);
-    for (const d of desks) expect(d.w).toBe(160);
+    for (const d of desks) expect(d.w).toBe(140);
   });
 
   it('keeps every desk clear of every panel', () => {

@@ -173,4 +173,17 @@ describe('the Hiring Hall', () => {
     run(d, 30, ['right']);
     expect(d.world.heard.some((l) => l.startsWith('2 of 32 panels passed.'))).toBe(true);
   });
+
+  it('opens the Loft\'s Interview Room onto the Hall after the ending, and keeps it shut before', () => {
+    const d = director();
+    d.warp('loft', 0);
+    d.waiting = false;
+    const door = d.room.stations.find((s) => s.kind === 'interview')!;
+    const press = () => { placeDrone(d.sim.drone, door.x, d.sim.drone.y); run(d, 30); step(d, [], ['interact']); run(d, 60); };
+    press();
+    expect(d.place).toBe('loft');
+    d.world.cutscenes.push('ending');
+    press();
+    expect(d.place).toBe('hiring-hall');
+  });
 });

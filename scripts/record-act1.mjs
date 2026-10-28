@@ -69,7 +69,7 @@ await page.evaluate(() => {
       case 'jumpTo': { // a jump toward x, holding the direction until above it
         const dx = c.x - d.x;
         if (c.t < 4) { /* settle */ } else if (c.t < 30) held.push('jump');
-        if (Math.abs(dx) > 6 && c.t > 3) held.push(dx > 0 ? 'right' : 'left');
+        if (Math.abs(dx) > 6 && c.t > (c.late ?? 3)) held.push(dx > 0 ? 'right' : 'left');
         if (c.t > 34 && d.grounded) c.done = true;
         if (c.t > 200) c.done = true;
         break;
@@ -229,7 +229,12 @@ const traverse = async (exit) => {
     else if (n.one) off = Math.min(Math.max(cur.x, n.x + 30), n.x + n.w - 30);
     else off = right ? n.x - 50 : n.x + n.w + 50;
     const land = right ? Math.min(n.x + 70, n.x + n.w / 2) : Math.max(n.x + n.w - 70, n.x + n.w / 2);
-    if (!overlap && P) {
+    if (!overlap && P && rising && cur.y - n.y > 90) {
+      // a tall step up beside a solid ledge: from the edge, straight up first, then steer over it
+      await walk(off, { tol: 8 });
+      await wait(6);
+      await run({ type: 'jumpTo', x: land, late: 14 });
+    } else if (!overlap && P) {
       // a running start from well back on this platform
       await walk(right ? Math.max(P.x + 20, off - 120) : Math.min(P.x + P.w - 20, off + 120), { tol: 12 });
       await run({ type: 'leap', x0: off, land });
@@ -360,6 +365,8 @@ try {
   await story((ids) => { for (const id of ids) window.__tapeoutAward(id); }, ORDER.slice(0, first).flatMap((p) => MODULES[p]));
   await story(() => window.__tapeoutGame.story.warp('loft', 0));
   await wait(90);
+  // ENDED=1: the ending has been seen, so the Loft lift lists the wings and the Hiring Hall (Phase 8)
+  if (process.env.ENDED) await story(() => { const w = window.__tapeoutGame.story.world; if (!w.cutscenes.includes('ending')) w.cutscenes.push('ending'); });
   for (const place of places) {
     if (process.env.WARP) {
       // for working on one room: straight there (WARP=<room index>)
@@ -387,12 +394,13 @@ try {
       const rail = r.role === 'traverse' && r.stations.some((x) => x.kind === 'rail') && (await story(() => !!window.__tapeoutGame.sim.kit.rail));
       // a Deep Layer shows its landing and its first room with bugs in it
       const bugs = r.role === 'traverse' && r.enemies > 0 && !seen.has('bugs');
-      const keep = (place === places[0] && process.env.HIGHLIGHTS !== 'all') || ['xarena', 'ending'].includes(r.role) || (place === 'tapeout' && r.role === 'port') || (['discovery', 'arena', 'exit', 'landing'].includes(r.role) || (['fight', 'bench'].includes(r.role) && !seen.has(r.role))) || (rail && !seen.has('rail')) || bugs;
+      const keep = (place === places[0] && process.env.HIGHLIGHTS !== 'all') || ['xarena', 'ending'].includes(r.role) || (place === 'tapeout' && r.role === 'port') || (['discovery', 'arena', 'exit', 'landing'].includes(r.role) || (['fight', 'bench'].includes(r.role) && !seen.has(r.role))) || (rail && !seen.has('rail')) || bugs || (r.role === 'offices' && !seen.has('offices'));
       seen.add(r.role);
       if (bugs) seen.add('bugs');
       if (rail && keep) seen.add('rail');
       if (!keep) {
-        const mods = (await story(() => window.__tapeoutGame.story.room.modules));
+        // a skipped Hiring Hall office is walked past, not passed: its panels keep their state
+        const mods = r.role === 'offices' ? [] : (await story(() => window.__tapeoutGame.story.room.modules));
         await story((ids) => { for (const id of ids) window.__tapeoutAward(id); }, mods);
         await story((i) => { const s = window.__tapeoutGame.story; s.warp(s.place, i); }, r.index + 1);
         await wait(20);
@@ -437,6 +445,11 @@ try {
           if (await story((id) => window.__tapeoutGame.story.kitDone(id), st.module)) continue;
           await moduleAt(st, r.role === 'bench' ? 4500 : 3500);
         }
+      }
+      if (r.role === 'offices') {
+        // the first office: walk to a hiring panel and take it, then on along the row
+        const st = r.stations.find((x) => x.kind === 'hire');
+        try { await moduleAt(st, 3500); } catch { log(`${place}: the panel stayed shut`); await wait(120); }
       }
       if (r.role === 'bossdoor') await wait(90);
       // a room the bot cannot cross (a moving-platform pit, a programmed lift) is cut, not failed: on to the next room

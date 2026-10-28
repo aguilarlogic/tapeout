@@ -359,13 +359,20 @@ function drawBenchRig(c: C, x: number, y: number, w: number, h: number, d: Direc
     const mod = findModule(m)?.module;
     // the idea it teaches, wrapped to the monitor, then where it opens
     const words = (mod?.concept ?? '').split(/\s+/).filter(Boolean), lines: string[] = [];
+    let cut = false;
     for (const wd of words) {
       const last = lines[lines.length - 1];
       if (last !== undefined && c.measureText(`//   ${last} ${wd}`).width <= mw - 28) lines[lines.length - 1] = `${last} ${wd}`;
       else if (lines.length < 3) lines.push(wd);
-      else break;
+      else { cut = true; break; }
     }
     const rows = Math.min(lines.length, Math.max(0, Math.floor((h - 70) / 16)));
+    // the idea runs past the monitor: end the last shown line at a word, with an ellipsis
+    if (rows > 0 && (cut || rows < lines.length)) {
+      const ws = lines[rows - 1].split(' ');
+      while (ws.length > 1 && c.measureText(`//   ${ws.join(' ')}…`).width > mw - 28) ws.pop();
+      lines[rows - 1] = `${ws.join(' ').replace(/[,;:]$/, '')}…`;
+    }
     c.save();
     c.beginPath();
     c.rect(mx + 2, y0 + 2, mw - 4, h - 4);
@@ -836,11 +843,15 @@ function drawLoftStation(c: C, d: Director, st: Station, t: number) {
       label(c, 'PLAY', x, y - 168, PAL.neon, 12);
       dot(c, x - 10, y - 120, 5, PAL.gold); dot(c, x + 12, y - 120, 5, PAL.trace);
       break;
-    case 'interview':
-      chamfer(c, x - 46, y - 210, 92, 210, 6); c.fillStyle = PAL.fill; c.fill(); c.strokeStyle = rgba(PAL.idle, 0.8); c.stroke();
-      dot(c, x + 30, y - 100, 4, PAL.hostile, 0.9);
-      label(c, 'LOCKED', x, y - 220, rgba(PAL.hostile, 0.8), 11);
+    case 'interview': {
+      // after the ending the door stands open onto the Hiring Hall (Phase 8 self-review)
+      const open = d.world.cutscenes.includes('ending');
+      chamfer(c, x - 46, y - 210, 92, 210, 6); c.fillStyle = open ? '#0E0C22' : PAL.fill; c.fill(); c.strokeStyle = open ? PAL.ok : rgba(PAL.idle, 0.8); c.stroke();
+      if (open) halo(c, x, y - 105, 70, PAL.ok, 0.14 + 0.05 * Math.sin(t * 0.05));
+      dot(c, x + 30, y - 100, 4, open ? PAL.ok : PAL.hostile, 0.9);
+      label(c, open ? 'OPEN · HIRING HALL' : 'LOCKED', x, y - 220, rgba(open ? PAL.ok : PAL.hostile, 0.8), 11);
       break;
+    }
     case 'gate': {
       // the gate terminal: a tall frame on the floor, its padlock springing open once the module passes
       const done = !!st.module && d.kitDone(st.module), k = done ? PAL.ok : PAL.amber;

@@ -150,7 +150,7 @@ export function composePlace(place: PlaceDef, theme: PlaceTheme = themeOf(place)
     const copper = traverse && at >= PLACES.findIndex((p) => p.id === 'board') ? copperFor(s) : [];
     // act 4 (Phase 7 Spec, section 3): two router pads in traverse rooms from The Mesh, for the NoC Warp
     const routers = traverse && at >= PLACES.findIndex((p) => p.id === 'mesh') ? routersFor(s) : [];
-    const signs = room.role === 'landing' ? [{ x: 640, y: 200, text: `${place.name.toUpperCase()} · ${place.region.toUpperCase()} · T-${clockAt(place)}` }] : s.signs;
+    const signs = room.role === 'landing' ? [{ x: 640, y: 200, text: `${place.name.toUpperCase()} · ${place.region.toUpperCase()}${place.act === 6 ? '' : ` · T-${clockAt(place)}`}` }] : s.signs;
     return {
       ...base,
       name: `${place.name} ${index}`,

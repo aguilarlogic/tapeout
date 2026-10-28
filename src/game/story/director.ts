@@ -723,7 +723,7 @@ export class Director {
     const verb: Partial<Record<StationKind, string>> = {
       port: 'Plug in', panel: 'Open the patch panel', bench: 'Use the bench', lever: this.rs.levers[st.id] ? 'Switch off' : 'Switch on',
       debug: 'Open the debug port', node: 'Take the reading', archive: 'Open the archive', review: 'Review', board: 'Study',
-      map: 'Look at the chip map', crt: 'Use the old desktop', arcade: 'Play', interview: 'Try the door', lift: 'Ride the lift', hire: 'Meet the panel',
+      map: 'Look at the chip map', crt: 'Use the old desktop', arcade: 'Play', interview: this.world.cutscenes.includes('ending') ? 'Go to the Hiring Hall' : 'Try the door', lift: 'Ride the lift', hire: 'Meet the panel',
     };
     // above the station's name label (render.ts draws each label at these heights), never over its art
     this.prompt = { x: st.x, y: st.y - (STATION_TOP[st.kind] ?? 186) - 24, text: `E  ${verb[st.kind] ?? 'Use'}` };
@@ -1139,6 +1139,16 @@ export class Director {
         this.go(to.id as Place, to.kind === 'deep' && this.place !== to.id && this.room.role === 'exit' ? 0 : roomsOf(to.id).length - 1);
         break;
       }
+      case 'interview':
+        // after the ending the Loft's Interview Room is the way to the Hiring Hall (Phase 8 self-review)
+        if (this.world.cutscenes.includes('ending')) {
+          this.out.push({ t: 'sfx', name: 'door', gain: 0.6 });
+          this.go('hiring-hall', 0);
+          break;
+        }
+        this.say(LINES.interview);
+        this.out.push({ t: 'loft', station: st.kind });
+        break;
       case 'rail':
         if (this.room.rails?.[Number(st.arg ?? 0)]) this.sim.ride(this.room.rails[Number(st.arg ?? 0)]);
         else this.say(STORY.railLocked);
@@ -1156,7 +1166,7 @@ export class Director {
         const line = LOFT_LINES[st.kind];
         if (line) this.say(line);
         this.out.push({ t: 'loft', station: st.kind });
-        if (st.kind !== 'interview' && st.kind !== 'crt') this.waiting = true;
+        if (st.kind !== 'crt') this.waiting = true;
       }
     }
   }
