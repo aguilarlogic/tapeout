@@ -41,6 +41,8 @@ export class PadCursor {
   private target: Element | null = null;
   private surface: Element | null = null;
   private last = 0;
+  /** Each element's parent when the press began, so a press survives its element being redrawn. */
+  private parents = new WeakMap<Element, Element>();
 
   /** One animation frame at time now (ms): root is the topmost dialog; pad is null when there is none. */
   step(now: number, root: HTMLElement | null, pad: PadState | null): void {
@@ -65,8 +67,11 @@ export class PadCursor {
     this.y = s.y;
     this.el.style.transform = `translate(${this.x}px, ${this.y}px)`;
     this.el.classList.toggle('down', s.down);
+    this.el.classList.toggle('flip', this.x > window.innerWidth - 220);
     if (s.down && !this.down) {
       this.target = document.elementFromPoint(this.x, this.y);
+      this.parents = new WeakMap();
+      for (let n = this.target; n?.parentElement; n = n.parentElement) this.parents.set(n, n.parentElement);
       this.send(this.target, 'pointerdown', 1);
     } else if (s.down && s.moved) this.send(this.target, 'pointermove', 1);
     else if (!s.down && this.down) this.release();
@@ -78,12 +83,15 @@ export class PadCursor {
     if (!this.down || !this.target) { this.down = false; return; }
     const t = this.target, under = document.elementFromPoint(this.x, this.y);
     this.send(t, 'pointerup', 0);
-    if (under && (under === t || t.contains(under))) (t as HTMLElement).click?.();
+    if (t.isConnected && under && (under === t || t.contains(under))) (t as HTMLElement).click?.();
     this.down = false;
     this.target = null;
   }
 
+  /** Sends a pointer event. A lab can redraw under the pointer and drop the element it went down on, so the event goes to
+   * the nearest ancestor still in the page, where a captured pointer's events would land. */
   private send(t: Element | null, type: string, buttons: number) {
+    while (t && !t.isConnected) t = this.parents.get(t) ?? null;
     t?.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, composed: true, clientX: this.x, clientY: this.y,
       pointerId: POINTER_ID, pointerType: 'mouse', isPrimary: true, button: 0, buttons }));
   }

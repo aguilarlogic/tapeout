@@ -147,3 +147,4 @@
 .gm-padcursor.down::before { border-color: #FF3EC8; box-shadow: 0 0 10px rgba(255, 62, 200, 0.7); transform: scale(0.8); }
 .gm-padcursor span { position: absolute; left: 16px; top: 12px; white-space: nowrap; font: 11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: rgba(244, 243, 255, 0.75); background: rgba(20, 18, 43, 0.8); padding: 1px 5px; }
 .gm-padnote { margin: 6px 12px 0; padding: 4px 10px; font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: #FF8A3D; border: 1px solid rgba(255, 138, 61, 0.6); }
+.gm-padcursor.flip span { left: auto; right: 16px; }
