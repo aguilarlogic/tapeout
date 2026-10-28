@@ -45,6 +45,8 @@ export interface Shot {
   owner: Enemy | null;
   /** A Crosstalk victim's copy of its aggressor's shot (Noise Filter). */
   copied: boolean;
+  /** Neuro Reflex let this shot through the drone: it can no longer hit it. */
+  reflexed?: boolean;
   /** CMOS Mirror: a reflected shot homes on this enemy at UP.mirror.turnDegS. */
   homeOn: Enemy | null;
 }
@@ -105,7 +107,16 @@ export type Fx =
   /** Cache Pockets: a block goes in or comes out. */
   | { t: 'pocket'; x: number; y: number; out: boolean }
   /** NoC Warp: the drone leaves one router pad and arrives at the other. */
-  | { t: 'warp'; x: number; y: number };
+  | { t: 'warp'; x: number; y: number }
+  // --- the wings (Phase 8 Spec, sections 6 and 7) ---
+  /** Overclock: three quick kills. */
+  | { t: 'overclock'; x: number; y: number }
+  /** ESD Clamp: a lethal hit held at 1 integrity. */
+  | { t: 'clamp'; x: number; y: number }
+  /** Neuro Reflex: a shot passes through, along (vx, vy). */
+  | { t: 'reflex'; x: number; y: number; vx: number; vy: number }
+  /** Superposition Decoy: set down, or gone. */
+  | { t: 'decoy'; x: number; y: number; out: boolean };
 
 /** Deterministic random numbers (mulberry32), so a test run is the same every time. */
 export function rng(seed: number) {
@@ -232,10 +243,27 @@ export interface Kit {
   warp?: boolean;
   /** Model Lens: warnings this many seconds sooner. */
   lens?: number;
+  // --- the wings (Phase 8 Spec, section 6); left out, the drone works as before ---
+  /** Buck Converter: energy regen × this. */
+  regen?: number;
+  /** Thermal Spreader: Charged Probe charge time, s. */
+  chargeS?: number;
+  /** Overclock: fire rates × (1 + this) for a while after three quick kills. */
+  overclock?: number;
+  /** Wavelength Splitter: the Pulse Probe fires two bolts, each at this × the damage. */
+  split?: number;
+  /** Superposition Decoy: how long a decoy lives, s (a fourth gadget). */
+  decoy?: number;
+  /** Phase Lock: in a boss fight, aim within this many degrees of the body snaps to it. */
+  phaseLock?: number;
+  /** ESD Clamp: once per room a lethal hit leaves 1 integrity; then this many seconds safe (Mk II, else 0). */
+  clamp?: number;
+  /** Neuro Reflex: one hostile shot passes through, then this many seconds to ready again. */
+  reflex?: number;
 }
 
 /** The gadgets F uses; G switches between those owned. */
-export type Gadget = 'sync' | 'turret' | 'mine';
+export type Gadget = 'sync' | 'turret' | 'mine' | 'decoy';
 /** A Buffer Turret: where it stands (its post's foot), steps of life left, ms to its next shot. */
 export interface Turret { x: number; y: number; life: number; cd: number }
 /** An Assertion Mine: where it lies (its foot), and steps since it was laid. */
@@ -367,7 +395,24 @@ export class Sim {
   /** Metal barriers, as movers that leave the world while a Via Phase dash passes. */
   barriers: Mover[] = [];
   /** The gadgets owned, in the order G cycles them. */
-  get gadgets(): Gadget[] { return [...(this.kit.sync ? ['sync' as const] : []), ...(this.kit.turret ? ['turret' as const] : []), ...(this.kit.mine ? ['mine' as const] : [])]; }
+  get gadgets(): Gadget[] { return [...(this.kit.sync ? ['sync' as const] : []), ...(this.kit.turret ? ['turret' as const] : []), ...(this.kit.mine ? ['mine' as const] : []), ...(this.kit.decoy ? ['decoy' as const] : [])]; }
+  // --- the wings (Phase 8 Spec, section 6) ---
+  /** Overclock: the steps of recent kills, and steps of overclock left. */
+  private kills: number[] = [];
+  ocT = 0;
+  /** Superposition Decoy: where it stands (its centre), steps lived and to live; steps until F sets another. */
+  decoy: { x: number; y: number; t: number; life: number } | null = null;
+  decoyCd = 0;
+  /** Phase Lock: the boss body's centre while a fight is on (the Director sets it each step). */
+  lockAt: Vec | null = null;
+  /** ESD Clamp: used in this room. */
+  clampUsed = false;
+  /** Neuro Reflex: steps until it is ready again. */
+  reflexCd = 0;
+  /** Hiring panels passed: the drone wears a badge for each (the Director sets it from records). */
+  badges = 0;
+  /** Weapon cooldowns × this: Sized Drivers and the Scheduler, and Overclock while it runs. */
+  private get cdScale() { return (this.kit.cooldownScale ?? 1) / (this.ocT > 0 ? 1 + (this.kit.overclock ?? 0) : 1); }
   // --- act 4, the Cluster (Phase 7 Spec, sections 3 and 8) ---
   /** Rewind: where the drone was each step (newest last, the last 3 s), and steps until R works again. */
   private history: { x: number; y: number; integrity: number }[] = [];
@@ -475,7 +520,7 @@ export class Sim {
     this.aimAt = aimAt;
     if (!frozen) d.facing = aimAt.x >= d.x ? 1 : -1; // decision 3: facing follows the cursor's side
     const pv = this.pivot();
-    this.aim = norm({ x: aimAt.x - pv.x, y: aimAt.y - pv.y });
+    this.aim = this.lockAim(norm({ x: aimAt.x - pv.x, y: aimAt.y - pv.y }), pv);
     const ctl: Controls = { ...c, aim: this.aim };
     const wasGrounded = d.grounded, fallSpeed = d.vy * HZ;
 
@@ -560,7 +605,7 @@ export class Sim {
     // (hanging still from a copper pad counts too: the Trace Tether holds the drone in place)
     this.stillSteps = (still || (!!this.tethered && Math.hypot(d.vx, d.vy) * HZ < UP.integrator.stillSpeed)) && !frozen && !this.events.some((e) => e === 'shot' || e === 'dash' || e === 'throw') ? this.stillSteps + 1 : 0;
     this.gated = !!this.kit.gateS && this.stillSteps >= Math.round(this.kit.gateS * HZ);
-    tickVitals(v, (still ? (this.kit.stillRegen ?? 1) : 1) * (this.gated ? UP.gate.regen : 1), this.kit.repairDelayMs === undefined ? undefined : frames(this.kit.repairDelayMs));
+    tickVitals(v, (still ? (this.kit.stillRegen ?? 1) : 1) * (this.gated ? UP.gate.regen : 1) * (this.kit.regen ?? 1), this.kit.repairDelayMs === undefined ? undefined : frames(this.kit.repairDelayMs));
     if (this.assist.infiniteEnergy) v.energy = v.maxEnergy;
     for (let i = 0; i < 6; i++) this.panelAge[i]++;
     this.booting = Math.max(0, this.booting - 1);
@@ -575,7 +620,15 @@ export class Sim {
     if (from && (from.x - this.drone.x) * this.drone.facing < 0) n *= this.kit.behindScale ?? 1;
     if (this.kit.damageScale !== undefined && this.kit.damageScale < 1 && n > 0) n = Math.max(1, Math.round(n * this.kit.damageScale));
     if (n <= 0) return;
-    if (!hurt(this.vitals, n, this.invulnerable)) return;
+    // ESD Clamp: once a room, a hit that would end the drone leaves it 1 integrity
+    const v = this.vitals, clamp = this.kit.clamp !== undefined && !this.clampUsed && !this.invulnerable && v.iFrames <= 0 && n >= v.integrity && v.integrity > 1;
+    if (clamp) n = v.integrity - 1;
+    if (!hurt(v, n, this.invulnerable)) return;
+    if (clamp) {
+      this.clampUsed = true;
+      v.iFrames = Math.max(v.iFrames, Math.round((this.kit.clamp ?? 0) * HZ));
+      this.fx.push({ t: 'clamp', x: this.drone.x, y: this.drone.y });
+    }
     this.events.push('hit');
     this.hurtAge = 0;
     const d = this.drone;
@@ -768,6 +821,7 @@ export class Sim {
     const s = this.pool.pop() ?? blankShot();
     s.owner = null;
     s.copied = false;
+    s.reflexed = false;
     s.homeOn = null;
     return s;
   }
@@ -775,7 +829,13 @@ export class Sim {
     if (this.pool.length < SHOT_POOL) this.pool.push(s);
   }
   private fire(kind: 'bolt' | 'charged') {
-    if (kind === 'bolt') this.shoot('bolt', (this.rand() * 2 - 1) * T.probe.spread * deg, T.probe.speed, T.probe.life * T.probe.speed, this.kit.probeDamage ?? T.probe.damage, 1, 1, 'pulse');
+    const dmg = this.kit.probeDamage ?? T.probe.damage, split = this.kit.split;
+    // Wavelength Splitter: the Pulse Probe's bolt leaves as two, splitDeg apart, each at split × the damage
+    if (kind === 'bolt' && split) {
+      const off = (this.rand() * 2 - 1) * T.probe.spread * deg, half = (UP.splitter.splitDeg / 2) * deg;
+      this.shoot('bolt', off - half, T.probe.speed, T.probe.life * T.probe.speed, dmg * split, 1, 1, 'pulse');
+      this.shoot('bolt', off + half, T.probe.speed, T.probe.life * T.probe.speed, dmg * split, 1, 1, 'pulse', false);
+    } else if (kind === 'bolt') this.shoot('bolt', (this.rand() * 2 - 1) * T.probe.spread * deg, T.probe.speed, T.probe.life * T.probe.speed, dmg, 1, 1, 'pulse');
     else {
       // Newton Aim: lead the bug nearest the aim point
       const lead = this.kit.newton ? this.leadAngle(T.charged.speed) : null;
@@ -812,7 +872,7 @@ export class Sim {
       if ((held || this.fireBuf > 0) && this.fireCd <= 0 && this.burstLeft === 0) {
         if (spend(this.vitals, UP.burst.energy)) { this.burstLeft = this.kit.burstBolts ?? UP.burst.bolts; this.burstT = STEP_MS; }
         else { const m = this.muzzle(); this.fx.push({ t: 'fizzle', x: m.x, y: m.y }); }
-        this.fireCd = UP.burst.cooldownS * 1000 * (this.kit.cooldownScale ?? 1);
+        this.fireCd = UP.burst.cooldownS * 1000 * this.cdScale;
         this.fireBuf = 0;
       }
       if (this.fireCd < 0) this.fireCd = 0;
@@ -825,21 +885,21 @@ export class Sim {
         else if (this.weapon === 'fan') for (let i = 0; i < UP.fan.bolts; i++) this.shoot('bolt', (i - 1) * (UP.fan.spreadDeg / 2) * deg, UP.fan.speed, UP.fan.range, UP.fan.damage, 1, 1, 'fan', i === 1);
         else if (spend(this.vitals, UP.cannon.energy)) { this.shoot('charged', 0, UP.cannon.speed, UP.cannon.range, this.kit.cannonDamage ?? UP.cannon.damage, 1, UP.cannon.knock / T.probe.knock, 'cannon'); this.cannonKick(); }
         else { const m = this.muzzle(); this.fx.push({ t: 'fizzle', x: m.x, y: m.y }); }
-        this.fireCd += (1000 / rate) * (this.kit.cooldownScale ?? 1);
+        this.fireCd += (1000 / rate) * this.cdScale;
         this.fireBuf = 0;
       }
       if (!held && this.fireCd < 0) this.fireCd = 0;
     } else {
       // Charged Probe: hold to charge over 0.8 s, release to fire; a release before full charge fires one Pulse bolt
       // (Sized Drivers shortens the charge, as it does every weapon's cooldown)
-      if (held) this.charge = Math.min(1, this.charge + 1 / (T.charged.chargeS * (this.kit.cooldownScale ?? 1) * HZ));
+      if (held) this.charge = Math.min(1, this.charge + 1 / ((this.kit.chargeS ?? T.charged.chargeS) * this.cdScale * HZ));
       else if (this.fireWasHeld) {
         if (this.charge >= 1) {
           if (spend(this.vitals, T.charged.energy)) this.fire('charged');
           else { const m = this.muzzle(); this.fx.push({ t: 'fizzle', x: m.x, y: m.y }); }
         } else if (this.fireCd <= 0) {
           this.fire('bolt');
-          this.fireCd = (1000 / T.probe.rate) * (this.kit.cooldownScale ?? 1);
+          this.fireCd = (1000 / T.probe.rate) * this.cdScale;
         }
         this.charge = 0;
       }
@@ -881,6 +941,46 @@ export class Sim {
     this.stepSync(c, frozen || this.gadget !== 'sync');
     if (!frozen && this.gadget === 'turret' && c.pressed.has('gadget')) this.placeTurret();
     if (!frozen && this.gadget === 'mine' && c.pressed.has('gadget')) this.layMine();
+    this.stepDecoy(c, frozen || this.gadget !== 'decoy');
+  }
+
+  /** Superposition Decoy (F): a ghost drone where the drone stands that bugs aim at instead, for kit.decoy s. */
+  private stepDecoy(c: Controls, idle: boolean) {
+    if (this.decoyCd > 0) this.decoyCd--;
+    const dc = this.decoy;
+    if (dc && ++dc.t >= dc.life) { this.decoy = null; this.fx.push({ t: 'decoy', x: dc.x, y: dc.y, out: false }); }
+    if (idle || !this.kit.decoy || !c.pressed.has('gadget')) return;
+    const d = this.drone;
+    if (this.decoyCd > 0 || !spend(this.vitals, UP.decoy.energy)) { this.fx.push({ t: 'fizzle', x: d.x, y: d.y }); return; }
+    this.decoy = { x: d.x, y: d.y - d.h / 2, t: 0, life: Math.round(this.kit.decoy * HZ) };
+    this.decoyCd = Math.round(UP.decoy.cooldownS * (this.kit.sched ?? 1) * HZ);
+    this.fx.push({ t: 'decoy', x: d.x, y: d.y - d.h / 2, out: true });
+  }
+
+  /** Overclock: a kill counts toward three within UP.overclock.windowS; the third sets it running. */
+  private overclockKill() {
+    if (!this.kit.overclock) return;
+    const w = Math.round(UP.overclock.windowS * HZ);
+    this.kills = [...this.kills.filter((k) => this.steps - k < w), this.steps];
+    if (this.kills.length < UP.overclock.kills) return;
+    this.kills = [];
+    this.ocT = Math.round(UP.overclock.s * HZ);
+    this.fx.push({ t: 'overclock', x: this.drone.x, y: this.drone.y });
+  }
+
+  /** The decoy's box (the drone's size, where the decoy stands), or null with none out. */
+  decoyRect(): Rect | null {
+    const dc = this.decoy, r = droneRect(this.drone);
+    return dc ? { x: dc.x - r.w / 2, y: dc.y - r.h / 2, w: r.w, h: r.h } : null;
+  }
+
+  /** Phase Lock: an aim within kit.phaseLock degrees of the boss body's centre snaps onto it. */
+  private lockAim(aim: Vec, pv: Vec): Vec {
+    const at = this.lockAt, lim = this.kit.phaseLock;
+    if (!at || !lim) return aim;
+    const to = norm({ x: at.x - pv.x, y: at.y - pv.y });
+    const off = Math.acos(Math.max(-1, Math.min(1, aim.x * to.x + aim.y * to.y)));
+    return off <= lim * deg ? to : aim;
   }
 
   /** Assertion Mine (F): a mine at the drone's feet; the oldest goes when one more than the limit is laid. */
@@ -920,6 +1020,8 @@ export class Sim {
   private stepRewind(c: Controls, frozen: boolean) {
     const d = this.drone, v = this.vitals;
     if (this.rewindCd > 0) this.rewindCd--;
+    if (this.ocT > 0) this.ocT--;
+    if (this.reflexCd > 0) this.reflexCd--;
     if (frozen) { this.history = []; return; }
     this.history.push({ x: d.x, y: d.y, integrity: v.integrity });
     if (this.history.length > Math.round(UP.rewind.backS * HZ)) this.history.shift();
@@ -1257,7 +1359,8 @@ export class Sim {
       rand: this.rand,
       drone: droneRect(d),
       // Power Gate: a gated drone is nowhere a bug can sense
-      target: this.gated ? { x: d.x + 100000, y: d.y + 100000 } : { x: d.x, y: d.y },
+      // Superposition Decoy: bugs chase and aim at the decoy while it lives (they still touch the real drone)
+      target: this.gated ? { x: d.x + 100000, y: d.y + 100000 } : this.decoy ? { x: this.decoy.x, y: this.decoy.y } : { x: d.x, y: d.y },
       solids: this.world.statics,
       plates: this.room.plates,
       sight: (a, b) => this.sight(a, b),
@@ -1377,8 +1480,14 @@ export class Sim {
       s.y += s.vy * t;
       const dir = norm(dv);
       if (hit === 'drone') {
-        if (this.invulnerable) end = false; // a dash passes through
-        else if (s.copied && this.kit.noiseFilter) this.fx.push({ t: 'fizzle', x: s.x, y: s.y }); // Noise Filter
+        if (this.invulnerable || s.reflexed) end = false; // a dash passes through, and so does a shot the reflex slipped
+        else if (this.kit.reflex && this.reflexCd <= 0) {
+          // Neuro Reflex: the drone slips this one shot, and the reflex waits kit.reflex s to be ready again
+          end = false;
+          s.reflexed = true;
+          this.reflexCd = Math.round(this.kit.reflex * HZ);
+          this.fx.push({ t: 'reflex', x: s.x, y: s.y, vx: s.vx * HZ, vy: s.vy * HZ });
+        } else if (s.copied && this.kit.noiseFilter) this.fx.push({ t: 'fizzle', x: s.x, y: s.y }); // Noise Filter
         else this.hurtDrone(s.damage, { x: s.x - dir.x * 20, y: s.y - dir.y * 20 }, s.owner);
       } else if (hit === 'dummy') {
         this.dummyHits.push([this.steps, s.damage]);
@@ -1471,6 +1580,7 @@ export class Sim {
   private onEnemyDamaged(e: Enemy, dir: Vec) {
     if (e.alive) return;
     this.events.push('kill');
+    this.overclockKill();
     // a Racer whose partner can still revive it keeps its body where it fell
     if (racerPending(e)) { this.fx.push({ t: 'kill', x: e.x, y: e.y, outline: e.outline(), vx: dir.x * 60, vy: dir.y * 60, kind: e.kind }); return; }
     const vel = e.body ? { x: e.body.velocity.x * HZ + dir.x * 120, y: e.body.velocity.y * HZ + dir.y * 120 } : { x: dir.x * 120, y: dir.y * 120 };

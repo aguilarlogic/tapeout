@@ -19,7 +19,7 @@ export interface WireRun {
 
 export type StationKind =
   | 'port' | 'panel' | 'bench' | 'lever' | 'debug' | 'node' | 'gate'
-  | 'archive' | 'review' | 'board' | 'map' | 'crt' | 'arcade' | 'interview' | 'lift' | 'calib' | 'patrol' | 'hatch' | 'rail';
+  | 'archive' | 'review' | 'board' | 'map' | 'crt' | 'arcade' | 'interview' | 'lift' | 'calib' | 'patrol' | 'hatch' | 'rail' | 'hire';
 
 /** Something the drone presses E at. `module` is the module it scores, `arg` an instrument reading or a lesson. */
 export interface Station { id: string; kind: StationKind; x: number; y: number; label: string; module?: string; arg?: string }
@@ -31,7 +31,7 @@ export interface Gate { id: string; kind: GateKind; rect: Rect }
 /** Lines TAPEOUT says when the drone first passes x (and y, when given: the drone must be above it). */
 export interface Trigger { id: string; x: number; y?: number; lines: string[] }
 
-export type Music = 'keeper' | 'boss' | 'loft' | 'bench' | 'core' | 'under' | 'silicon' | 'cluster' | 'x' | 'ending';
+export type Music = 'keeper' | 'boss' | 'loft' | 'bench' | 'core' | 'under' | 'silicon' | 'cluster' | 'x' | 'ending' | 'wings';
 
 export interface StoryRoom extends Room {
   id: string;

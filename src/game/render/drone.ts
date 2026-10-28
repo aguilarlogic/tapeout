@@ -5,6 +5,7 @@
 // Local frame: the chassis centre is the origin, +x is the side the drone faces. The 36 × 48 collision box holds the
 // 34 × 26 chassis at its top and the legs in the 22 px below (decision 2).
 import { warpAlpha } from './act4';
+import { drawBadges } from './hall';
 import type { Rect } from '../level/room';
 import type { Sim } from '../sim';
 import { HZ, TUNING, VITALS } from '../tuning';
@@ -372,6 +373,15 @@ export class DroneRig {
           c.setLineDash([]);
         }
       });
+    }
+
+    // role badges (Phase 8 Spec, section 3, item 7): gold rank stripes along the hull's top edge, one per hiring panel
+    // passed; drawn un-mirrored so the "+k" count reads the right way round
+    if (sim.badges > 0 && !dying) {
+      c.save();
+      c.scale(face, 1);
+      drawBadges(c, face * 8, -17, sim.badges, face < 0 ? -1 : 1);
+      c.restore();
     }
 
     // field emitter ring on the back

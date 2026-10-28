@@ -268,3 +268,30 @@ test('Silicon: the arrival card on the first act 3 landing, a metal barrier room
   await page.waitForTimeout(6000);
   expect(errors).toEqual([]);
 });
+
+test('The Fab: the arrival card on the first wing landing, a Hiring Hall office and a wing arena run clean', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(String(e)));
+  page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') errors.push(`${m.type()}: ${m.text()}`); });
+  await page.goto(`${pathToFileURL(resolve('dist/index.html')).href}?record`);
+  await expect(page.locator('#os')).not.toBeEmpty();
+  await page.getByTestId('game').waitFor();
+  await page.getByRole('textbox', { name: 'Your name' }).fill('Sam');
+  await page.getByRole('button', { name: 'I am new to this' }).click();
+  await page.waitForFunction(() => window.__tapeoutGame?.ready && !window.__tapeoutGame.story!.waiting, null, { timeout: 15000 });
+  await page.evaluate(() => window.__tapeoutGame!.story!.warp('analog-wing', 0));
+  await expect(page.getByTestId('story-card')).toContainText('THE FAB');
+  await page.getByTestId('story-card').getByRole('button', { name: 'Go on' }).click();
+  await page.waitForTimeout(1000);
+  const panels = await page.evaluate(() => {
+    const s = window.__tapeoutGame!.story!;
+    s.warp('hiring-hall', 1);
+    return s.room.stations.filter((st) => st.kind === 'hire').length;
+  });
+  expect(panels).toBe(8);
+  await page.waitForTimeout(1500);
+  const arena = await page.evaluate(() => window.__tapeoutGame!.story!.roomsFor('fab-floor').findIndex((r) => r.role === 'arena'));
+  await page.evaluate((i) => window.__tapeoutGame!.story!.warp('fab-floor', i), arena);
+  await page.waitForTimeout(6000);
+  expect(errors).toEqual([]);
+});

@@ -3,6 +3,7 @@
 import { FORMS_ACT2 } from './forms-act2';
 import { FORMS_ACT3 } from './forms-act3';
 import { FORMS_ACT4 } from './forms-act4';
+import { FORMS_WINGS } from './forms-wings';
 import type { BossForm } from './types';
 
 export const FORMS_ACT1: BossForm[] = [
@@ -17,6 +18,6 @@ export const FORMS_ACT1: BossForm[] = [
 /** The form an incident fights in (acts 1 to 3). A later act's incident with no form of its own wears the lamps and
  *  fires bolts. */
 export const formFor = (incident: string): BossForm =>
-  [...FORMS_ACT1, ...FORMS_ACT2, ...FORMS_ACT3, ...FORMS_ACT4].find((f) => f.incident === incident) ?? {
+  [...FORMS_ACT1, ...FORMS_ACT2, ...FORMS_ACT3, ...FORMS_ACT4, ...FORMS_WINGS].find((f) => f.incident === incident) ?? {
     incident, name: incident, body: 'lamps', attacks: ['bolts', 'drop'],
   };

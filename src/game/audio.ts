@@ -121,13 +121,15 @@ const V: Record<Sfx, Voice[]> = {
 
 // --- the music: loops of 24 bars in three 8-bar sections that add voices. The test room's ambient loop is 96 BPM
 // Am F C G; the story adds the Keeper's room theme, the boss, the Loft and the workbench (Level 1 spec, "Sound"). ---
-export type Track = 'test' | 'keeper' | 'boss' | 'loft' | 'bench' | 'core' | 'under' | 'silicon' | 'cluster' | 'x' | 'ending';
+export type Track = 'test' | 'keeper' | 'boss' | 'loft' | 'bench' | 'core' | 'under' | 'silicon' | 'cluster' | 'x' | 'ending' | 'wings';
 export interface TrackDef {
   bpm: number; chords: number[][]; from: number; arp: OscillatorType | null; drums: boolean; bass: 0 | 1 | 2;
   /** Optional 16-step gate for the pad: a chord stab plays on each 1 step, so the pad is chopped in 16ths (Silicon). */
   gate?: number[];
   /** Optional 16-step kick pattern, 1 where a kick plays. Without it the kick is on steps 0 and 8 of each bar. */
   kick?: number[];
+  /** Optional 16-step snare pattern, 1 where a snare plays (second section on, like the hats). Without it there is none. */
+  snare?: number[];
   /** Optional four-entry order into the chord for the arp. Without it the arp goes 0, 1, 2, 1. */
   arpOrder?: number[];
   /** Optional frequency ratio for a second lead voice, so the lead is detuned (X). */
@@ -137,8 +139,13 @@ export interface TrackDef {
 const SILICON_GATE = [1, 0, 1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 0];
 /** The Cluster pad gate, the same idea as Silicon's: 10 of 16 open, the first step of the bar always open. */
 const CLUSTER_GATE = [1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 0, 1];
+/** The Wings pluck gate: a stab only on each beat, the shortest pad notes the gate can make (one sixteenth each). */
+const WINGS_GATE = [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0];
 /** Four on the floor: a kick on every beat. */
 const FLOOR_KICK = [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0];
+/** The Wings half-time groove: a kick on beat 1 and its off-beat before beat 3, and the snare alone on beat 3. */
+const WINGS_KICK = [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0];
+const HALF_TIME_SNARE = [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0];
 /** X's broken beat: kicks on steps 0, 3, 6, 10 and 13, syncopated and never two in a row. */
 const X_KICK = [1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 0];
 const ARP_ORDER = [0, 1, 2, 1];
@@ -153,6 +160,8 @@ export const TRACKS: Record<Track, TrackDef> = {
   silicon: { bpm: 132, chords: [[64, 67, 71], [60, 64, 67], [62, 66, 69], [59, 62, 66]], from: 0, arp: 'square', drums: true, bass: 1, gate: SILICON_GATE }, // Em C D Bm
   // Phase 7 Spec, section 9: the Cluster, the same form as Silicon, with four on the floor and a gated pad
   cluster: { bpm: 138, chords: [[66, 69, 73], [62, 66, 69], [64, 68, 71], [61, 64, 68]], from: 0, arp: 'square', drums: true, bass: 1, gate: CLUSTER_GATE, kick: FLOOR_KICK }, // F#m D E C#m
+  // Phase 8 Spec, section 7: the Wings, a plucked square arp over a gated saw pad, with a half-time snare on beat 3
+  wings: { bpm: 124, chords: [[52, 55, 59], [48, 52, 55], [55, 59, 62], [50, 54, 57]], from: 0, arp: 'square', drums: true, bass: 1, gate: WINGS_GATE, kick: WINGS_KICK, snare: HALF_TIME_SNARE }, // Em C G D
   // Phase 7 Spec, section 9: X, a broken beat with a detuned square lead that falls through its four notes
   x: { bpm: 160, chords: [[50, 53, 57, 62], [46, 50, 53, 58], [43, 46, 50, 55], [45, 48, 52, 57]], from: 0, arp: 'square', drums: true, bass: 1, kick: X_KICK, arpOrder: [3, 2, 1, 0], detune: 1.007 }, // Dm Bb Gm Am
   // Phase 7 Spec, section 9: the ending, no beat and no bass, just the Loft's pad over a slow tempo
@@ -390,6 +399,7 @@ export class GameAudio {
       if (s16 % 2 === 1) this.voice(c, out, { wave: 'noise', f: 1, len: 0.03, level: 0.012, filter: { type: 'highpass', f: 7000 } }, t, 1, 1);
       const kick = tr.kick ? tr.kick[s16] === 1 : s16 % 8 === 0;
       if (kick) this.voice(c, out, { wave: 'sine', f: 110, to: 45, len: 0.14, level: 0.07 }, t, 1, 1);
+      if (tr.snare && tr.snare[s16] === 1) this.voice(c, out, { wave: 'noise', f: 1, len: 0.12, level: 0.03, filter: { type: 'bandpass', f: 1800 } }, t, 1, 1);
     }
   }
 

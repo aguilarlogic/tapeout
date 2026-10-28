@@ -12,7 +12,9 @@ export type UpgradeId =
   | 'cmos-mirror' | 'sized-drivers' | 'slack-parry' | 'via-phase' | 'buffer-turret' | 'power-gate' | 'scan-visor'
   | 'trace-tether' | 'scripted-loop' | 'make-repair' | 'noise-filter' | 'pid-stabilizer'
   | 'templates' | 'rewind' | 'monte-carlo-crit' | 'newton-aim' | 'coverage-map' | 'agent-pair' | 'assertion-mine'
-  | 'speculative-shot' | 'scheduler' | 'cache-pockets' | 'noc-warp' | 'model-lens';
+  | 'speculative-shot' | 'scheduler' | 'cache-pockets' | 'noc-warp' | 'model-lens'
+  | 'buck-converter' | 'thermal-spreader' | 'overclock' | 'wavelength-splitter' | 'superposition-decoy' | 'phase-lock'
+  | 'esd-clamp' | 'neuro-reflex';
 
 export interface Upgrade {
   id: UpgradeId;
@@ -89,6 +91,15 @@ export const UPGRADES: Upgrade[] = [
   { id: 'cache-pockets', name: 'Cache Pockets', type: 'major', source: ['cache-boss'], effect: 'Press C to pocket the block your field holds, up to three. Press C again to take one out.', mk2: { banks: ['practice-cache'], effect: 'A fourth pocket.' } },
   { id: 'noc-warp', name: 'NoC Warp', type: 'major', source: ['serdes'], effect: 'Press E on a router pad to warp to the other pad in the room.' },
   { id: 'model-lens', name: 'Model Lens', type: 'major', source: ['perf'], effect: 'Boss attacks and bug wind-ups show their warning sooner.', mk2: { banks: ['practice-perf'], effect: 'Sooner still.' } },
+  // --- the wings (Phase 8 Spec, section 6) ---
+  { id: 'buck-converter', name: 'Buck Converter', type: 'major', source: ['clab-boss-buck'], effect: 'Energy refills half again as fast.', mk2: { banks: ['practice-pmic'], effect: 'Faster still.' } },
+  { id: 'thermal-spreader', name: 'Thermal Spreader', type: 'major', source: ['pkg-thermal'], effect: 'The Charged Probe charges in half a second.', mk2: { banks: ['practice-pkg'], effect: 'A little quicker still.' } },
+  { id: 'overclock', name: 'Overclock', type: 'major', source: ['fpga-fmax'], effect: 'Three kills within 4 seconds overclock you: every weapon fires faster for 8 seconds.', mk2: { banks: ['practice-emu'], effect: 'A bigger boost.' } },
+  { id: 'wavelength-splitter', name: 'Wavelength Splitter', type: 'major', source: ['ph-wdm'], effect: 'The Pulse Probe fires two bolts side by side, each a little weaker.', mk2: { banks: ['practice-photonics'], effect: 'Each bolt hits harder.' } },
+  { id: 'superposition-decoy', name: 'Superposition Decoy', type: 'major', source: ['qc-pulse'], effect: 'A gadget: press F to leave a ghost drone. Bugs shoot at it for 4 seconds. G switches gadgets.', mk2: { banks: ['practice-qctrl'], effect: 'The ghost lasts longer.' } },
+  { id: 'phase-lock', name: 'Phase Lock', type: 'major', source: ['pll-jitter'], effect: 'In a boss fight, aim close to the boss and your aim locks onto it.', mk2: { banks: ['practice-clocking'], effect: 'It locks from further off.' } },
+  { id: 'esd-clamp', name: 'ESD Clamp', type: 'major', source: ['ae-tpm'], effect: 'Once in each room, a hit that would break you leaves you with 1 point of hull.', mk2: { banks: ['practice-ae-tpm'], effect: 'Then a second with no damage.' } },
+  { id: 'neuro-reflex', name: 'Neuro Reflex', type: 'major', source: ['emerging'], effect: 'Once every 10 seconds, the first shot that would hit you passes through.', mk2: { banks: ['practice-neuro'], effect: 'It is ready again sooner.' } },
 ];
 
 /** The numbers each upgrade changes. */
@@ -178,6 +189,23 @@ export const UP = {
   warp: { fadeS: 0.25 },
   /** Model Lens: warnings this much sooner, s (Mk II). */
   lens: { s: 0.3, sMk2: 0.36 },
+  // --- the wings (Phase 8 Spec, section 6) ---
+  /** Buck Converter: energy regen × this (Mk II). */
+  buck: { regen: 1.5, regenMk2: 1.7 },
+  /** Thermal Spreader: Charged Probe charge time, s (Mk II). */
+  spreader: { chargeS: 0.5, chargeSMk2: 0.45 },
+  /** Overclock: kills within windowS start it; fire rates × (1 + boost) (Mk II) for s seconds. */
+  overclock: { kills: 3, windowS: 4, boost: 0.15, boostMk2: 0.2, s: 8 },
+  /** Wavelength Splitter: degrees between the two bolts, and each bolt's damage × this (Mk II). */
+  splitter: { splitDeg: 4, damage: 0.6, damageMk2: 0.7 },
+  /** Superposition Decoy: life s (Mk II), cooldown s, energy. */
+  decoy: { s: 4, sMk2: 5, cooldownS: 15, energy: 25 },
+  /** Phase Lock: snap angle, degrees (Mk II). */
+  phaseLock: { deg: 12, degMk2: 15 },
+  /** ESD Clamp: seconds with no damage after it saves the drone (Mk II only). */
+  clamp: { graceSMk2: 1 },
+  /** Neuro Reflex: seconds until it is ready again (Mk II). */
+  reflex: { cooldownS: 10, cooldownSMk2: 8 },
 } as const;
 
 /** The upgrade a module grants, if any. */
@@ -306,6 +334,23 @@ export interface ActKit {
   warp: boolean;
   /** Model Lens, s sooner (0: off). */
   lens: number;
+  // --- the wings (Phase 8 Spec, section 6); 0 or 1 when not owned ---
+  /** Buck Converter: energy regen × this. */
+  regen: number;
+  /** Thermal Spreader: Charged Probe charge time, s. */
+  chargeS: number;
+  /** Overclock boost (0: not owned). */
+  overclock: number;
+  /** Wavelength Splitter: each bolt's damage × this (0: not owned). */
+  split: number;
+  /** Superposition Decoy life, s (0: not owned). */
+  decoy: number;
+  /** Phase Lock snap angle, degrees (0: not owned). */
+  phaseLock: number;
+  /** ESD Clamp: grace s after a save, or undefined when not owned. */
+  clamp: number | undefined;
+  /** Neuro Reflex cooldown, s (0: not owned). */
+  reflex: number;
 }
 
 /**
@@ -379,5 +424,13 @@ export function actKit(done: (id: string) => boolean, bosses: readonly string[])
     pockets: has('cache-pockets') ? (mk('cache-pockets') ? UP.pockets.nMk2 : UP.pockets.n) : 0,
     warp: has('noc-warp'),
     lens: has('model-lens') ? (mk('model-lens') ? UP.lens.sMk2 : UP.lens.s) : 0,
+    regen: has('buck-converter') ? (mk('buck-converter') ? UP.buck.regenMk2 : UP.buck.regen) : 1,
+    chargeS: has('thermal-spreader') ? (mk('thermal-spreader') ? UP.spreader.chargeSMk2 : UP.spreader.chargeS) : 0.8,
+    overclock: has('overclock') ? (mk('overclock') ? UP.overclock.boostMk2 : UP.overclock.boost) : 0,
+    split: has('wavelength-splitter') ? (mk('wavelength-splitter') ? UP.splitter.damageMk2 : UP.splitter.damage) : 0,
+    decoy: has('superposition-decoy') ? (mk('superposition-decoy') ? UP.decoy.sMk2 : UP.decoy.s) : 0,
+    phaseLock: has('phase-lock') ? (mk('phase-lock') ? UP.phaseLock.degMk2 : UP.phaseLock.deg) : 0,
+    clamp: has('esd-clamp') ? (mk('esd-clamp') ? UP.clamp.graceSMk2 : 0) : undefined,
+    reflex: has('neuro-reflex') ? (mk('neuro-reflex') ? UP.reflex.cooldownSMk2 : UP.reflex.cooldownS) : 0,
   };
 }

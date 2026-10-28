@@ -1,0 +1,117 @@
+// Phase 8 body tests, part D (Phase 8 Spec, section 5): the optical engine, the qubit sphere and the golem draw in palette
+// colours and line widths only, for every state the form can give them. The optical channels are numbered 1 to 8, and the
+// golem has four pin teeth.
+import { describe, expect, it } from 'vitest';
+import type { Rect } from '../level/room';
+import { LINE, PAL, rgba } from '../render/palette';
+import { golem, optical, qubit } from './bodies-wings-d';
+import type { BodyDrawer, BodyState } from './types';
+
+const BOX: Rect = { x: 0, y: 0, w: 520, h: 260 };
+const BASE: BodyState = { t: 0, hp: 1, shielded: false, enraged: false, flash: 0, attack: null, telegraph: 0, lit: [false, false, false, false], away: 0 };
+const STATES: [string, Partial<BodyState>][] = [
+  ['hp 1', { hp: 1 }],
+  ['hp 0.5', { hp: 0.5 }],
+  ['hp 0.1', { hp: 0.1 }],
+  ['shielded', { shielded: true }],
+  ['enraged', { enraged: true }],
+  ['t 600', { t: 600 }],
+  ['flash 6', { flash: 6 }],
+  ['flare at full telegraph (channels glow)', { attack: 'flare', telegraph: 1 }],
+  ['phase at 0.5 telegraph (ball glows)', { attack: 'phase', telegraph: 0.5 }],
+  ['zap at 0.7 telegraph (teeth glow)', { attack: 'zap', telegraph: 0.7 }],
+  ['segments away 2 (golem body)', { attack: 'segments', away: 2, telegraph: 0.9 }],
+  ['everything at once', { t: 600, hp: 0.1, shielded: true, enraged: true, flash: 6, attack: 'zap', telegraph: 0.5, lit: [false, true, false, false] }],
+];
+const DRAWERS: [string, BodyDrawer][] = [['optical', optical], ['qubit', qubit], ['golem', golem]];
+
+interface Seen { strokeStyle: unknown[]; fillStyle: unknown[]; shadowColor: unknown[]; lineWidth: unknown[] }
+
+/** A canvas context whose methods do nothing and whose style properties are recorded when assigned. */
+function recorder(): { g: CanvasRenderingContext2D; seen: Seen } {
+  const seen: Seen = { strokeStyle: [], fillStyle: [], shadowColor: [], lineWidth: [] };
+  const props: Record<string, unknown> = {};
+  const g = new Proxy(props, {
+    get: (t, k) => (typeof k === 'string' && k in t ? t[k] : () => undefined),
+    set: (t, k, v: unknown) => {
+      if (typeof k === 'string') {
+        t[k] = v;
+        if (k in seen) seen[k as keyof Seen].push(v);
+      }
+      return true;
+    },
+  });
+  return { g: g as unknown as CanvasRenderingContext2D, seen };
+}
+
+/** A canvas context that records each method called with a string argument: the texts drawn, and the rects. */
+function calls(name: string, out: unknown[][]): CanvasRenderingContext2D {
+  const props: Record<string, unknown> = {};
+  const g = new Proxy(props, {
+    get: (t, k) => {
+      if (k === name) return (...args: unknown[]) => { out.push(args); };
+      return typeof k === 'string' && k in t ? t[k] : () => undefined;
+    },
+    set: (t, k, v: unknown) => {
+      if (typeof k === 'string') t[k] = v;
+      return true;
+    },
+  });
+  return g as unknown as CanvasRenderingContext2D;
+}
+
+const hexRgb = (hex: string) => {
+  const n = parseInt(hex.slice(1), 16);
+  return `${n >> 16},${(n >> 8) & 255},${n & 255}`;
+};
+const PAL_HEX: string[] = Object.values(PAL);
+const PAL_RGB = new Set(PAL_HEX.map(hexRgb));
+
+/** A PAL colour, or rgba() of one. */
+function isPalColour(v: unknown): boolean {
+  if (typeof v !== 'string') return false;
+  if (PAL_HEX.includes(v)) return true;
+  const m = /^rgba\((\d+),(\d+),(\d+),([\d.eE+-]+)\)$/.exec(v);
+  if (!m) return false;
+  const a = Number(m[4]);
+  return PAL_RGB.has(`${m[1]},${m[2]},${m[3]}`) && a >= 0 && a <= 1;
+}
+
+describe('wing bodies, part D', () => {
+  for (const [kind, draw] of DRAWERS) {
+    for (const [name, over] of STATES) {
+      it(`${kind}: ${name} draws without throwing, in PAL colours and LINE widths only`, () => {
+        const { g, seen } = recorder();
+        expect(() => draw(g, BOX, { ...BASE, ...over })).not.toThrow();
+        expect(seen.strokeStyle.length + seen.fillStyle.length).toBeGreaterThan(0);
+        for (const k of ['strokeStyle', 'fillStyle', 'shadowColor'] as const) {
+          for (const v of seen[k]) expect(isPalColour(v), `${k} = ${String(v)}`).toBe(true);
+        }
+        for (const w of seen.lineWidth) expect(Object.values(LINE), `lineWidth = ${String(w)}`).toContain(w);
+      });
+    }
+  }
+
+  it('recognises palette colours and their rgba() forms only', () => {
+    expect(isPalColour(PAL.trace)).toBe(true);
+    expect(isPalColour(rgba(PAL.neon, 0.5))).toBe(true);
+    expect(isPalColour('#FFFFFF')).toBe(false);
+  });
+});
+
+describe('optical', () => {
+  it('labels its eight channels 1 to 8', () => {
+    const texts: unknown[][] = [];
+    optical(calls('fillText', texts), BOX, BASE);
+    expect(texts.map((args) => args[0])).toEqual(['1', '2', '3', '4', '5', '6', '7', '8']);
+  });
+});
+
+describe('golem', () => {
+  it('has four pin teeth under its body', () => {
+    const rects: unknown[][] = [];
+    golem(calls('rect', rects), BOX, BASE);
+    expect(rects).toHaveLength(4);
+    for (const args of rects) expect(args[2]).toBe(22);
+  });
+});

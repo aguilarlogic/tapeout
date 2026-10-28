@@ -2,11 +2,12 @@
 // energy bar (decision 29) and a small crosshair. Damage drops the health bar at once and a white "recent damage"
 // segment drains over 400 ms; the energy bar pulses below 25%. Drawn in view coordinates (1280 × 720 logical px).
 import type { Gadget, Sim, Weapon } from '../sim';
-import { frames } from '../tuning';
+import { frames, HZ } from '../tuning';
+import { UP } from '../world/upgrades';
 import { easeOut, FONT, PAL, rgba } from './palette';
 
 /** The gadget on F, by id. */
-const GADGET_NAME: Record<Gadget, string> = { sync: 'SYNC', turret: 'TURRET', mine: 'MINE' };
+const GADGET_NAME: Record<Gadget, string> = { sync: 'SYNC', turret: 'TURRET', mine: 'MINE', decoy: 'DECOY' };
 
 /** The weapon's name, shown under its readout for 1.2 s after a swap and faded over the last 0.3 s. */
 const SHORT: Record<Weapon, string> = { pulse: 'PULSE', charged: 'CHARGED', fan: 'FAN', cannon: 'CANNON', burst: 'BURST', spec: 'SPEC' };
@@ -120,6 +121,29 @@ export class Hud {
       c.globalAlpha = s * this.gunA;
       c.fillStyle = rgba(PAL.text, 0.6);
       c.fillText(`F ${GADGET_NAME[sim.gadget]}${gadgets.length > 1 ? '   G switch' : ''}`, x, many ? ey + 42 : ey + 24);
+    }
+    // the wings (Phase 8 Spec, section 6): Overclock's tag and draining bar, and Neuro Reflex's ready pip
+    const ry = (many ? ey + 42 : ey + 24) + (gadgets.length ? 18 : 0);
+    let rx = x;
+    if (sim.ocT > 0) {
+      const k = sim.ocT / Math.round(UP.overclock.s * HZ);
+      c.globalAlpha = s * this.gunA;
+      c.fillStyle = rgba(PAL.gold, 0.9);
+      c.fillText('OC', rx, ry);
+      c.fillRect(rx + 22, ry - 4, 40 * k, 3);
+      c.strokeStyle = rgba(PAL.gold, 0.5);
+      c.lineWidth = 1;
+      c.strokeRect(rx + 22, ry - 4, 40, 3);
+      rx += 74;
+    }
+    if (sim.kit.reflex) {
+      const ready = sim.reflexCd <= 0;
+      c.globalAlpha = s * this.gunA;
+      c.fillStyle = rgba(ready ? PAL.ok : PAL.text, ready ? 0.85 : 0.35);
+      c.fillText('REFLEX', rx + 10, ry);
+      c.beginPath();
+      c.arc(rx + 3, ry - 3, 3, 0, Math.PI * 2);
+      if (ready) c.fill(); else { c.strokeStyle = rgba(PAL.text, 0.35); c.lineWidth = 1; c.stroke(); }
     }
     c.restore();
   }

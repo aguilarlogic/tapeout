@@ -7,10 +7,12 @@
 import { chipProgress, CHIPS, slotProgress } from '../../chip';
 import { findModule, KIND_APP } from '../../curriculum';
 import { easeOut, FONT, PAL, rgba } from '../render/palette';
+import { drawHiringPanel, drawOfficeFloor } from '../render/hall';
 import { drawRail } from '../render/rails';
 import { HZ, TUNING, VIEW_H, VIEW_W } from '../tuning';
 import type { Rect } from '../level/room';
 import type { Director } from './director';
+import { panelOf, type Panel } from './hall';
 import type { Station, StationKind, Terminal } from './types';
 
 type C = CanvasRenderingContext2D;
@@ -114,6 +116,8 @@ export function drawStoryBack(c: C, d: Director, t: number) {
   const run = room.wire;
   if (run?.gate) drawWallGate(c, run.gate.kind, run.gate.x, run.gate.y, run.terminals, rs.passed, t);
   if (run) drawStrip(c, d, t);
+  // the Hiring Hall's offices (Phase 8 Spec, section 4): carpet lines along the floor under the panels
+  if (room.role === 'offices' && room.stations.length) drawOfficeFloor(c, 0, room.w, room.stations[0].y);
   for (const st of room.stations) {
     // room for the label: up to halfway to the nearest station on either side, less a gap
     const near = Math.min(...room.stations.filter((o) => o !== st).map((o) => Math.abs(o.x - st.x)));
@@ -648,9 +652,24 @@ function drawStrip(c: C, d: Director, t: number) {
   void t;
 }
 
+/** Hiring panels' state, read from records once a second (roleReadiness walks every skill). */
+const panels = new Map<string, { at: number; p: Panel | undefined }>();
+function panelAt(module: string, t: number): Panel | undefined {
+  const hit = panels.get(module);
+  if (hit && t - hit.at < HZ && t >= hit.at) return hit.p;
+  const p = panelOf(module);
+  panels.set(module, { at: t, p });
+  return p;
+}
+
 function drawStation(c: C, d: Director, st: Station, t: number) {
   const x = st.x, y = st.y;
   switch (st.kind) {
+    case 'hire': {
+      const p = st.module ? panelAt(st.module, t) : undefined;
+      if (p) drawHiringPanel(c, x, y, { icon: p.role.icon, name: p.role.name, open: p.open, passed: p.passed || d.kitDone(st.module!), t });
+      break;
+    }
     case 'port': {
       const done = !!st.module && d.kitDone(st.module);
       chamfer(c, x - 34, y - 170, 68, 90, 6);
