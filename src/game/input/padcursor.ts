@@ -73,6 +73,8 @@ export class PadCursor {
       this.parents = new WeakMap();
       for (let n = this.target; n?.parentElement; n = n.parentElement) this.parents.set(n, n.parentElement);
       this.send(this.target, 'pointerdown', 1);
+      // the hint has done its job once RT is used: the rest of this lab stays clear
+      this.el.querySelector('span')?.remove();
     } else if (s.down && s.moved) this.send(this.target, 'pointermove', 1);
     else if (!s.down && this.down) this.release();
     this.down = s.down;

@@ -145,6 +145,9 @@ export class PadNav {
     const r = navInput(this.memory, this.readPad(), now);
     this.memory = r.memory;
     if (!r.click && !r.back && r.move === 0 && r.side === 0) return;
+    // the pad is driving the menu: a mouse resting over another item stops lighting it up (game.css)
+    const doc = document.documentElement as HTMLElement | undefined;
+    if (doc?.dataset) doc.dataset.nav = 'pad';
 
     const items = focusables(root);
     const active = document.activeElement;

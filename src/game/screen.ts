@@ -162,10 +162,12 @@ export class GameScreen {
     // F3 is the browser's find shortcut: take it before the browser does
     const f3 = (e: KeyboardEvent) => { if (e.code === 'F3') { e.preventDefault(); if (!this.paused) this.tuner.toggle(); } };
     window.addEventListener('resize', resize);
+    const mouseNav = () => { delete document.documentElement.dataset.nav; };
+    window.addEventListener('mousemove', mouseNav);
     window.addEventListener('keydown', f3, true);
     document.addEventListener('visibilitychange', vis);
     mq?.addEventListener('change', rm);
-    this.offs.push(() => window.removeEventListener('resize', resize), () => window.removeEventListener('keydown', f3, true), () => document.removeEventListener('visibilitychange', vis), () => mq?.removeEventListener('change', rm));
+    this.offs.push(() => window.removeEventListener('resize', resize), () => window.removeEventListener('mousemove', mouseNav), () => window.removeEventListener('keydown', f3, true), () => document.removeEventListener('visibilitychange', vis), () => mq?.removeEventListener('change', rm));
     this.resize();
     this.canvas.focus();
     this.loop.start();
