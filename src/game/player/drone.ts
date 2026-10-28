@@ -49,7 +49,8 @@ export interface Drone {
   prevX: number; // body position before the world step
   prevBottom: number;
   /** Upgrades that switch moves on (Level 1 spec): double jump comes in Level 2, wall latch in Level 5. */
-  abilities: { doubleJump: boolean; wallLatch: boolean };
+  /** `jump2`: the double jump's speed in px/step (Overflow Jump Mk II raises it); default DRONE.doubleJump. */
+  abilities: { doubleJump: boolean; wallLatch: boolean; jump2?: number };
 }
 
 const cancelGravity = (b: Matter.Body, w: World) => {
@@ -215,7 +216,7 @@ export function stepDrone(d: Drone, c: Controls, w: World, energy: number, froze
       d.airJumps = 1;
       res.jumped = true;
     } else if (pressed('jump') && d.abilities.doubleJump && d.airJumps > 0 && !d.grounded && d.coyote === 0) {
-      d.vy = -DRONE.doubleJump;
+      d.vy = -(d.abilities.jump2 ?? DRONE.doubleJump);
       d.airJumps = 0;
       res.jumped = true;
     }

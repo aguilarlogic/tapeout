@@ -66,3 +66,53 @@ export function mk2(id: UpgradeId, done: (id: string) => boolean): { done: numbe
   const n = m.banks.filter(done).length;
   return { done: n, total: m.banks.length, online: n === m.banks.length };
 }
+
+/** What act 1's upgrades add to the drone, from records (the Director lays it over Level 1's kit). */
+export interface ActKit {
+  doubleJump: boolean;
+  /** Double jump speed, px/s. */
+  jump2: number;
+  wallLatch: boolean;
+  /** Weapons the Selector cycles; just the Pulse Probe before it. */
+  weapons: ('pulse' | 'fan' | 'cannon')[];
+  probeDamage: number;
+  cannonDamage: number;
+  /** Counter Fire's top rate, 0 when not owned. */
+  counterTo: number;
+  /** Comparator Sight's weak-point multiplier, 0 when not owned. */
+  weak: number;
+  /** Enable Lock: the gun folds away in quiet rooms. */
+  holster: boolean;
+  gripEnemies: boolean;
+  fieldRadius: number | undefined;
+  beam: boolean;
+  energyMax: number;
+  /** Integrity on top of Level 1's: +5 per later main-path boss, +2 per NAND plate. */
+  integrityBonus: number;
+}
+
+/**
+ * The act 1 kit for a player with these records. `bosses` are the main-path incidents after the Dark Demo Board
+ * (places.ts knows them; passed in to keep this module free of the curriculum).
+ */
+export function actKit(done: (id: string) => boolean, bosses: readonly string[]): ActKit {
+  const has = (id: UpgradeId) => owned(id, done);
+  const mk = (id: UpgradeId) => !!mk2(id, done)?.online;
+  const plates = upgradeById('nand-plating')!.source.filter(done).length;
+  return {
+    doubleJump: has('overflow-jump'),
+    jump2: mk('overflow-jump') ? UP.doubleJumpMk2 : UP.doubleJump,
+    wallLatch: has('wall-latch'),
+    weapons: has('selector') ? ['pulse', ...(has('fan-decoder') ? ['fan' as const] : []), ...(has('alu-cannon') ? ['cannon' as const] : [])] : ['pulse'],
+    probeDamage: has('full-adder') ? UP.fullAdderDamage : 10,
+    cannonDamage: mk('alu-cannon') ? UP.cannon.damageMk2 : UP.cannon.damage,
+    counterTo: has('counter-fire') ? (mk('counter-fire') ? UP.counter.toMk2 : UP.counter.to) : 0,
+    weak: has('comparator-sight') ? (mk('comparator-sight') ? UP.weakPointMk2 : UP.weakPoint) : 0,
+    holster: has('enable-lock'),
+    gripEnemies: has('inverted-grip'),
+    fieldRadius: mk('inverted-grip') ? UP.fieldRadiusMk2 : undefined,
+    beam: has('beam-toggle'),
+    energyMax: has('power-cell') ? UP.energyMax : 100,
+    integrityBonus: bosses.filter(done).length * UP.bossIntegrity + plates * UP.plating,
+  };
+}

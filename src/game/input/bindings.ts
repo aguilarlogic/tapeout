@@ -4,7 +4,7 @@
 
 export type Action =
   | 'left' | 'right' | 'jump' | 'down' | 'fire' | 'field' | 'dash' | 'interact' | 'weapon'
-  | 'slot1' | 'slot2' | 'slot3' | 'gadget' | 'scan' | 'rewind' | 'sync' | 'map' | 'pause';
+  | 'slot1' | 'slot2' | 'slot3' | 'beam' | 'gadget' | 'scan' | 'rewind' | 'sync' | 'map' | 'pause';
 
 export type Pair = [string | null, string | null];
 export type Bindings = Record<Action, Pair>;
@@ -20,9 +20,10 @@ export const ACTIONS: { id: Action; label: string; later?: boolean }[] = [
   { id: 'dash', label: 'Dash' },
   { id: 'interact', label: 'Interact' },
   { id: 'weapon', label: 'Next weapon' },
-  { id: 'slot1', label: 'Weapon slot 1', later: true },
-  { id: 'slot2', label: 'Weapon slot 2', later: true },
-  { id: 'slot3', label: 'Weapon slot 3', later: true },
+  { id: 'slot1', label: 'Weapon slot 1' },
+  { id: 'slot2', label: 'Weapon slot 2' },
+  { id: 'slot3', label: 'Weapon slot 3' },
+  { id: 'beam', label: 'Beam Toggle' },
   { id: 'gadget', label: 'Gadget', later: true },
   { id: 'scan', label: 'Scan', later: true },
   { id: 'rewind', label: 'Rewind', later: true },
@@ -44,6 +45,7 @@ export const DEFAULTS: Bindings = {
   slot1: ['Digit1', null],
   slot2: ['Digit2', null],
   slot3: ['Digit3', null],
+  beam: ['KeyB', null],
   gadget: ['KeyF', 'KeyG'],
   scan: ['KeyV', null],
   rewind: ['KeyR', null],
