@@ -242,7 +242,8 @@ const moduleAt = async (st, show) => {
   await story((id) => window.__tapeoutAward(id), st.module);
   await page.waitForTimeout(900);
   if (await page.locator('.st-unplug').count()) await page.locator('.st-unplug').click();
-  else if (await win.count()) await page.getByTestId('overlay-close').click();
+  else if (await page.getByTestId('overlay-close').count()) await page.getByTestId('overlay-close').click();
+  else await page.keyboard.press('Escape');
   await page.waitForTimeout(500);
   if (await page.getByTestId('story-card').count()) await card(3200);
 };
