@@ -70,10 +70,11 @@ export const twoTiers: Template = (_rng, opts) => {
 };
 
 // --- 3. Pit bridges -----------------------------------------------------------------------------------------------
-/** A 600 px pit in the middle, bridged by three one-way platforms 120 px wide, 40 px below the floor's top. */
+/** A 600 px trench in the middle, 70 px deep so a fall costs a hop and never a life, bridged by three one-way platforms
+ * 120 px wide, 40 px below the floor's top. */
 export const pitBridges: Template = (_rng, opts) => {
   const w = 2600, h = 720, F = floorY(h);
-  const left = r(0, F, 1000, 80), right = r(1600, F, 1000, 80);
+  const left = r(0, F, 1000, 80), right = r(1600, F, 1000, 80), trench = r(1000, F + 70, 600, h - F - 70);
   const b1 = r(1060, F - 40, 120, 16), b2 = r(1240, F - 40, 120, 16), b3 = r(1420, F - 40, 120, 16);
   const { gate, wall } = gateAt(w, F);
   const cands: Vec[] = [
@@ -83,7 +84,7 @@ export const pitBridges: Template = (_rng, opts) => {
   return assemble({
     w, h, spawn: spawnAt(140, F), exit: { x: w - 40 },
     oneWay: [b1, b2, b3],
-    solids: [...shell(w, h, { floor: false }), left, right, wall],
+    solids: [...shell(w, h, { floor: false }), left, trench, right, wall],
     footholds: [left, b1, b2, b3, right],
     anchors: {
       enemies: spread(cands, fightEnemies(opts)),

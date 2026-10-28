@@ -959,7 +959,7 @@ export class Director {
         break;
       case 'lift':
         if (this.room.id === 'workbench') this.startExitLift(1140);
-        else if (this.room.role === 'exit') this.startExitLift(st.x);
+        else if (this.room.role === 'exit' || this.room.role === 'landing') this.startExitLift(st.x);
         else {
           this.liftOpts = liftChoices(this.done);
           this.out.push({ t: 'choose', kind: 'loftLift', title: 'THE LIFT', options: [...this.liftOpts.map((o) => ({ text: o.text, dim: o.dim })), { text: 'Stay in the Loft' }] });

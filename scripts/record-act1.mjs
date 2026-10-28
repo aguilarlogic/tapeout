@@ -174,6 +174,7 @@ const station = async (testid, id, show) => {
 /** Each act 1 place's scored modules, in order (from world/places.ts), and the names the lift shows. */
 const MODULES = {"bit-zero": ["first-wire", "bits", "bool", "first-not", "first-and", "logic-half", "inc-demo-board", "gates", "half-adder-v"], "volts-and-amps": ["electricity", "resistance"], "lamp-board": ["bitadd", "twos", "inc-lamp-board"], "inverted-hall": ["demorgan", "inc-logic"], "carry-chain": ["mux", "logic-enable", "logic-mux", "decoder", "logic-dec", "adder", "logic-full", "compare", "logic-cmp", "inc-adder"], "clockwork": ["seq", "logic-dff", "logic-toggle", "logic-counter", "fsm", "boss-logic", "inc-controller"], "boot-rom": ["verilog", "full-adder-v", "mux2", "adder4", "verilog-seq", "mux4", "prio", "hex", "seg7", "reg8", "bcd", "shift", "edge", "seqdet", "popcount", "gray", "fifo", "adder8", "alu8", "regfile4", "pc8", "cpu-decode", "cpu-tiny", "boss-numbers", "inc-numbers", "boss-hdl", "inc-rtl"]};
 const ORDER = Object.keys(MODULES);
+const seenRoles = {};
 const NAMES = {"lamp-board": "The Lamp Board", "inverted-hall": "The Inverted Hall", "carry-chain": "Carry Chain", "clockwork": "Clockwork", "boot-rom": "Boot ROM"};
 
 
@@ -248,8 +249,12 @@ const moduleAt = async (st, show) => {
 const leave = async () => {
   const before = await story(() => window.__tapeoutGame.story.index);
   const exit = await story(() => window.__tapeoutGame.story.room.exit);
-  await traverse(exit);
-  await walk(exit.x + 30);
+  // most rooms are walked out of; climb only when the exit is up high or the walk got stuck
+  if (exit.y === undefined) await walk(exit.x + 30);
+  if ((await story(() => window.__tapeoutGame.story.index)) === before && !(await story(() => window.__tapeoutGame.story.fade))) {
+    await traverse(exit);
+    await walk(exit.x + 30);
+  }
   await page.waitForFunction((i) => window.__tapeoutGame.story.index !== i && !window.__tapeoutGame.story.fade, before, { timeout: 20000 });
   await page.waitForTimeout(500);
 };
@@ -324,6 +329,18 @@ try {
     for (let guard = 0; guard < 40; guard++) {
       const r = await roomNow();
       if (r.place !== place) break;
+      // highlights (every place after the first): the puzzle, the first fight, a bench, the boss and the way out are
+      // played; the other rooms are signed off and skipped
+      const seen = (seenRoles[place] ??= new Set());
+      const keep = place === places[0] || (['discovery', 'arena', 'exit'].includes(r.role) || (['fight', 'bench'].includes(r.role) && !seen.has(r.role)));
+      seen.add(r.role);
+      if (!keep) {
+        const mods = (await story(() => window.__tapeoutGame.story.room.modules));
+        await story((ids) => { for (const id of ids) window.__tapeoutAward(id); }, mods);
+        await story((i) => { const s = window.__tapeoutGame.story; s.warp(s.place, i); }, r.index + 1);
+        await wait(20);
+        continue;
+      }
       log(`${place} room ${r.index} ${r.role}`);
       await wait(60);
       await still(`${place}-${String(r.index + 1).padStart(2, '0')}-${r.role}`);

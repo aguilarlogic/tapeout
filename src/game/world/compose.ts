@@ -113,7 +113,7 @@ export function composePlace(place: PlaceDef, theme: PlaceTheme = themeOf(place)
     } else {
       s = ROOMS[room.role as keyof typeof ROOMS](rng, { ...opts, stations: Math.max(1, room.modules.length) });
     }
-    const stations = room.role === 'arena' ? arenaStations(room, s) : room.role === 'exit' || room.role === 'landing' ? liftStation(room, s) : stationsFor(room, s);
+    const stations = room.role === 'arena' ? arenaStations(room, s) : room.role === 'exit' || room.role === 'landing' ? liftStation(s) : stationsFor(room, s);
     const signs = room.role === 'landing' ? [{ x: 640, y: 200, text: `${place.name.toUpperCase()} · ${place.region.toUpperCase()} · T-${clockAt(place)}` }] : s.signs;
     return {
       ...base,
@@ -144,9 +144,10 @@ function arenaStations(room: PlanRoom, s: Shell): Station[] {
   return d ? [...nodes, { id: 'debug', kind: 'debug', x: d.x, y: d.y, label: 'DEBUG PORT', module: room.incident }] : nodes;
 }
 
-function liftStation(room: PlanRoom, s: Shell): Station[] {
+function liftStation(s: Shell): Station[] {
   const l = s.anchors.lift;
-  return room.role === 'exit' && l ? [{ id: 'lift', kind: 'lift', x: l.x, y: l.y, label: 'LIFT TO THE LOFT' }] : [];
+  // the landing's lift is the one the drone came down on: it goes home too
+  return l ? [{ id: 'lift', kind: 'lift', x: l.x, y: l.y, label: 'LIFT TO THE LOFT' }] : [];
 }
 
 /** TAPEOUT's lines for a room: the arrive lines at the landing, the leave lines at the exit, else the room's own. */
