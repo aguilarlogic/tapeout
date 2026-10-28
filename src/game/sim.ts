@@ -114,6 +114,32 @@ export interface Kit {
   // --- act 2 upgrades (Phase 4 Spec, section 7) ---
   /** Weapon slots the HUD lists and the number keys pick (left out: every owned weapon). Q still cycles them all. */
   slots?: number;
+  // --- the Underlayers (Phase 5 Spec, section 7); left out, the drone works as before ---
+  /** Current Limiter: damage taken × this. */
+  damageScale?: number;
+  /** Diode Plating: damage from behind × this. */
+  behindScale?: number;
+  /** Phasor Curve: charged shots turn toward an enemy in a 30° cone at this many degrees/s. */
+  phasor?: number;
+  /** Integrator: energy regen × this while grounded and still. */
+  stillRegen?: number;
+  /** Kickback Dash: damage to each enemy the dash crosses. */
+  dashHit?: number;
+  /** Dash cooldown, ms (Kickback Dash 700). */
+  dashCooldownMs?: number;
+  /** Gradient Compass: the HUD points to the next station. */
+  compass?: boolean;
+  /** Matrix Throw: throw charge seconds, and thrown-prop damage × throwDamage. */
+  throwChargeS?: number;
+  throwDamage?: number;
+  /** Damped Landing: hold down in the air to drop, and land with a ring. */
+  drop?: boolean;
+  /** Resonant Hover: seconds of hover a airtime. */
+  hover?: number;
+  /** Spectrum Visor: the boss's next-attack bar. */
+  visor?: boolean;
+  /** Charged Probe damage (Gain Stage 60). */
+  chargedDamage?: number;
   /** Pipeline Burst: bolts a burst. */
   burstBolts?: number;
   /** Loop Drone: damage a bolt (left out: no companion). */

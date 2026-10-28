@@ -5,7 +5,10 @@
 export type UpgradeId =
   | 'overflow-jump' | 'inverted-grip' | 'nand-plating' | 'enable-lock' | 'selector' | 'fan-decoder' | 'full-adder'
   | 'comparator-sight' | 'wall-latch' | 'beam-toggle' | 'counter-fire' | 'alu-cannon' | 'power-cell'
-  | 'loop-drone' | 'datapath-rail' | 'synchronizer' | 'pipeline-burst' | 'third-slot';
+  | 'loop-drone' | 'datapath-rail' | 'synchronizer' | 'pipeline-burst' | 'third-slot'
+  | 'current-limiter' | 'phasor-curve' | 'integrator' | 'kickback-dash' | 'charged-probe' | 'gradient-compass'
+  | 'matrix-throw' | 'damped-landing' | 'resonant-hover' | 'spectrum-visor' | 'gauss-field' | 'diode-plating'
+  | 'gain-stage' | 'bias-plates';
 
 export interface Upgrade {
   id: UpgradeId;
@@ -41,6 +44,21 @@ export const UPGRADES: Upgrade[] = [
   { id: 'synchronizer', name: 'Synchronizer', type: 'major', source: ['cdc-fifo'], effect: 'Press F to slow every bug to half speed for 3 seconds.', mk2: { banks: ['practice-clk'], effect: 'The slow lasts longer.' } },
   { id: 'pipeline-burst', name: 'Pipeline Burst', type: 'major', weapon: true, source: ['pipe-boss'], effect: 'A new weapon: four quick bolts in a row.', mk2: { banks: ['practice-pipe'], effect: 'Five bolts instead of four.' } },
   { id: 'third-slot', name: 'Third Slot', type: 'minor', source: ['code-boss-c-crc'], effect: 'Room for a third weapon on the Selector.' },
+  // The Underlayers (Phase 5 Spec, section 7)
+  { id: 'current-limiter', name: 'Current Limiter', type: 'minor', source: ['clab-mesh'], effect: 'You take a little less damage from every hit.' },
+  { id: 'phasor-curve', name: 'Phasor Curve', type: 'minor', source: ['phasor'], effect: 'Charged shots curve toward a bug just off your aim.' },
+  { id: 'integrator', name: 'Integrator', type: 'minor', source: ['integral'], effect: 'Energy refills faster while you stand still.' },
+  { id: 'kickback-dash', name: 'Kickback Dash', type: 'major', source: ['clab-kickback'], effect: 'Your dash hits every bug it passes through, and recharges faster.' },
+  { id: 'charged-probe', name: 'Charged Probe', type: 'major', weapon: true, source: ['clab-debounce'], effect: 'A new weapon: hold to charge a heavy shot that goes through bugs.' },
+  { id: 'gradient-compass', name: 'Gradient Compass', type: 'minor', source: ['calc'], effect: 'An arrow at the edge of the screen points to the next thing to do.' },
+  { id: 'matrix-throw', name: 'Matrix Throw', type: 'minor', source: ['linalg'], effect: 'Throws charge twice as fast and hit harder.' },
+  { id: 'damped-landing', name: 'Damped Landing', type: 'major', source: ['clab-boss-ode'], effect: 'Hold down in the air to drop fast. You land with a ring that hits nearby bugs.' },
+  { id: 'resonant-hover', name: 'Resonant Hover', type: 'major', source: ['clab-boss-ac'], effect: 'Hold jump while falling to float for a moment.' },
+  { id: 'spectrum-visor', name: 'Spectrum Visor', type: 'minor', source: ['fourier'], effect: 'In a boss fight, a bar shows when the next attack comes.' },
+  { id: 'gauss-field', name: 'Gauss Field', type: 'minor', source: ['em'], effect: 'The Field Coil reaches further and lifts heavier things.' },
+  { id: 'diode-plating', name: 'Diode Plating', type: 'minor', source: ['clab-boss-ohm'], effect: 'Hits from behind do half damage.' },
+  { id: 'gain-stage', name: 'Gain Stage', type: 'minor', source: ['clab-dac'], effect: 'Charged shots hit for 60 instead of 40.' },
+  { id: 'bias-plates', name: 'Bias Plates', type: 'minor', source: ['clab-boss-bjt'], effect: 'Ten more points of hull.' },
 ];
 
 /** The numbers each upgrade changes. */
@@ -66,6 +84,29 @@ export const UP = {
   sync: { scale: 0.5, s: 3, sMk2: 3.6, energy: 40, cooldownS: 12 },
   /** Pipeline Burst: bolts (Mk II) 80 ms apart, a 1.2 s cooldown, 10 damage each at 1000 px/s over 640 px, 12 energy. */
   burst: { bolts: 4, boltsMk2: 5, gapMs: 80, cooldownS: 1.2, damage: 10, speed: 1000, range: 640, energy: 12 },
+  // --- the Underlayers (Phase 5 Spec, section 7) ---
+  /** Current Limiter: damage taken × this, rounded, at least 1. */
+  limiter: 0.9,
+  /** Phasor Curve: cone half-angle (degrees) and turn rate (degrees/s) for charged shots. */
+  phasor: { coneDeg: 30, turnDegS: 90 },
+  /** Integrator: energy regen × this while grounded and under stillSpeed px/s. */
+  integrator: { regen: 1.5, stillSpeed: 20 },
+  /** Kickback Dash: damage to each enemy crossed, and the dash cooldown. */
+  kickback: { damage: 12, cooldownMs: 700 },
+  /** Matrix Throw: throw charge time (s) and thrown-prop damage multiplier. */
+  matrixThrow: { chargeS: 0.4, damage: 1.5 },
+  /** Damped Landing: drop speed px/s, ring radius px, damage, push px/s. */
+  drop: { speed: 900, radius: 100, damage: 10, push: 300 },
+  /** Resonant Hover: fall speed cap px/s, and seconds a hover lasts (once per airtime). */
+  hover: { fall: 60, s: 1.2 },
+  /** Gauss Field: Field Coil radius px and grab limit added. */
+  gauss: { radius: 135, grab: 2 },
+  /** Diode Plating: damage from behind × this. */
+  diode: 0.5,
+  /** Gain Stage: Charged Probe damage. */
+  chargedDamage: 40, gainStageDamage: 60,
+  /** Bias Plates: integrity added. */
+  biasPlates: 10,
 } as const;
 
 /** The upgrade a module grants, if any. */
@@ -90,7 +131,7 @@ export interface ActKit {
   jump2: number;
   wallLatch: boolean;
   /** Weapons the Selector cycles; just the Pulse Probe before it. */
-  weapons: ('pulse' | 'fan' | 'cannon' | 'burst')[];
+  weapons: ('pulse' | 'charged' | 'fan' | 'cannon' | 'burst')[];
   /** Weapon slots the HUD shows: 2, or 3 after the Firmware Pit (Phase 4 Spec, section 7: Q still cycles them all). */
   slots: 2 | 3;
   /** Pipeline Burst bolts a burst (0: not owned). */
@@ -113,8 +154,37 @@ export interface ActKit {
   fieldRadius: number | undefined;
   beam: boolean;
   energyMax: number;
-  /** Integrity on top of Level 1's: +5 per later main-path boss, +2 per NAND plate. */
+  /** Integrity on top of Level 1's: +5 per later main-path boss, +2 per NAND plate, +10 Bias Plates. */
   integrityBonus: number;
+  // --- the Underlayers (Phase 5 Spec, section 7); 0, 1 or false when not owned ---
+  /** Damage taken × this (Current Limiter 0.9). */
+  damageScale: number;
+  /** Damage from behind × this (Diode Plating 0.5). */
+  behindScale: number;
+  /** Phasor Curve turn rate, degrees/s (0: off). */
+  phasor: number;
+  /** Energy regen × this when still (Integrator 1.5). */
+  stillRegen: number;
+  /** Kickback Dash damage to each enemy crossed (0: off). */
+  dashHit: number;
+  /** Dash cooldown, ms. */
+  dashCooldownMs: number;
+  /** Gradient Compass on. */
+  compass: boolean;
+  /** Throw charge seconds (0.8 before Matrix Throw). */
+  throwChargeS: number;
+  /** Thrown-prop damage × this (Matrix Throw 1.5). */
+  throwDamage: number;
+  /** Damped Landing on. */
+  drop: boolean;
+  /** Resonant Hover seconds (0: off). */
+  hover: number;
+  /** Spectrum Visor on. */
+  visor: boolean;
+  /** Grab limit added (Gauss Field 2). */
+  grabBonus: number;
+  /** Charged Probe damage (Gain Stage 60). */
+  chargedDamage: number;
 }
 
 /**
@@ -129,9 +199,11 @@ export function actKit(done: (id: string) => boolean, bosses: readonly string[])
     doubleJump: has('overflow-jump'),
     jump2: mk('overflow-jump') ? UP.doubleJumpMk2 : UP.doubleJump,
     wallLatch: has('wall-latch'),
-    weapons: has('selector')
-      ? ['pulse', ...(has('fan-decoder') ? ['fan' as const] : []), ...(has('alu-cannon') ? ['cannon' as const] : []), ...(has('pipeline-burst') ? ['burst' as const] : [])]
-      : ['pulse'],
+    // the Charged Probe is in the list as soon as it is owned (Level 1's Q swap); the rest need the Selector
+    weapons: [
+      'pulse', ...(has('charged-probe') ? ['charged' as const] : []),
+      ...(has('selector') ? [...(has('fan-decoder') ? ['fan' as const] : []), ...(has('alu-cannon') ? ['cannon' as const] : []), ...(has('pipeline-burst') ? ['burst' as const] : [])] : []),
+    ],
     slots: has('third-slot') ? 3 : 2,
     burstBolts: has('pipeline-burst') ? (mk('pipeline-burst') ? UP.burst.boltsMk2 : UP.burst.bolts) : 0,
     loopDrone: has('loop-drone') ? (mk('loop-drone') ? UP.loopDrone.damageMk2 : UP.loopDrone.damage) : 0,
@@ -143,9 +215,23 @@ export function actKit(done: (id: string) => boolean, bosses: readonly string[])
     weak: has('comparator-sight') ? (mk('comparator-sight') ? UP.weakPointMk2 : UP.weakPoint) : 0,
     holster: has('enable-lock'),
     gripEnemies: has('inverted-grip'),
-    fieldRadius: mk('inverted-grip') ? UP.fieldRadiusMk2 : undefined,
+    fieldRadius: has('gauss-field') ? UP.gauss.radius : mk('inverted-grip') ? UP.fieldRadiusMk2 : undefined,
     beam: has('beam-toggle'),
     energyMax: has('power-cell') ? UP.energyMax : 100,
-    integrityBonus: bosses.filter(done).length * UP.bossIntegrity + plates * UP.plating,
+    integrityBonus: bosses.filter(done).length * UP.bossIntegrity + plates * UP.plating + (has('bias-plates') ? UP.biasPlates : 0),
+    damageScale: has('current-limiter') ? UP.limiter : 1,
+    behindScale: has('diode-plating') ? UP.diode : 1,
+    phasor: has('phasor-curve') ? UP.phasor.turnDegS : 0,
+    stillRegen: has('integrator') ? UP.integrator.regen : 1,
+    dashHit: has('kickback-dash') ? UP.kickback.damage : 0,
+    dashCooldownMs: has('kickback-dash') ? UP.kickback.cooldownMs : 1000,
+    compass: has('gradient-compass'),
+    throwChargeS: has('matrix-throw') ? UP.matrixThrow.chargeS : 0.8,
+    throwDamage: has('matrix-throw') ? UP.matrixThrow.damage : 1,
+    drop: has('damped-landing'),
+    hover: has('resonant-hover') ? UP.hover.s : 0,
+    visor: has('spectrum-visor'),
+    grabBonus: has('gauss-field') ? UP.gauss.grab : 0,
+    chargedDamage: has('gain-stage') ? UP.gainStageDamage : UP.chargedDamage,
   };
 }

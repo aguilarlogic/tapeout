@@ -3,7 +3,7 @@ export interface Rect { x: number; y: number; w: number; h: number }
 export type Dir = 'left' | 'right' | 'up' | 'down';
 /** Body enemies placed by rooms. The first three are the feel-pass test enemies; the rest arrive with the places
  * (phase 3 spec section 6) and are made through enemies/registry.ts. */
-export type EnemyKind = 'glitch' | 'spark' | 'latch' | 'stuckat' | 'stuckat0' | 'racer' | 'crawler' | 'xblob' | 'floater' | 'metastable' | 'swarm' | 'bubble';
+export type EnemyKind = 'glitch' | 'spark' | 'latch' | 'stuckat' | 'stuckat0' | 'racer' | 'crawler' | 'xblob' | 'floater' | 'metastable' | 'swarm' | 'bubble' | 'ringer' | 'shunt';
 
 export interface PropSpec {
   kind: 'crate' | 'logic';

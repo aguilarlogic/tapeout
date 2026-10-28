@@ -291,9 +291,13 @@ export class Director {
     this.act = a;
     const s = this.sim;
     s.kit = {
-      gun: k.gun, coil: k.coil, charged: false, grabLimit: k.grabLimit, carryShot: k.carryShot,
+      gun: k.gun, coil: k.coil, charged: a.weapons.includes('charged'), grabLimit: k.grabLimit + a.grabBonus, carryShot: k.carryShot,
       weapons: a.weapons, probeDamage: a.probeDamage, cannonDamage: a.cannonDamage, counterTo: a.counterTo, weak: a.weak || undefined,
       holster: a.holster && QUIET.has(this.room.role ?? ''), gripEnemies: a.gripEnemies, fieldRadius: a.fieldRadius,
+      damageScale: a.damageScale, behindScale: a.behindScale, phasor: a.phasor || undefined, stillRegen: a.stillRegen,
+      dashHit: a.dashHit || undefined, dashCooldownMs: a.dashCooldownMs, compass: a.compass || undefined,
+      throwChargeS: a.throwChargeS, throwDamage: a.throwDamage, drop: a.drop || undefined, hover: a.hover || undefined,
+      visor: a.visor || undefined, chargedDamage: a.chargedDamage,
       slots: a.slots, burstBolts: a.burstBolts || undefined, loopDrone: a.loopDrone || undefined, rail: a.rail || undefined, sync: a.sync || undefined,
     };
     s.drone.abilities = { doubleJump: a.doubleJump, wallLatch: a.wallLatch, ...(a.doubleJump ? { jump2: a.jump2 / HZ } : {}) };
