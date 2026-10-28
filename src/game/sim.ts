@@ -498,7 +498,8 @@ export class Sim {
     // Integrator: this step's energy regen × stillRegen while grounded and under stillSpeed px/s (delay unchanged)
     const still = d.grounded && Math.hypot(d.vx, d.vy) * HZ < UP.integrator.stillSpeed;
     // Power Gate: still, not shooting and not dashing for gateS seconds, and bugs lose track (bosses do not)
-    this.stillSteps = still && !frozen && !this.events.some((e) => e === 'shot' || e === 'dash' || e === 'throw') ? this.stillSteps + 1 : 0;
+    // (hanging still from a copper pad counts too: the Trace Tether holds the drone in place)
+    this.stillSteps = (still || (!!this.tethered && Math.hypot(d.vx, d.vy) * HZ < UP.integrator.stillSpeed)) && !frozen && !this.events.some((e) => e === 'shot' || e === 'dash' || e === 'throw') ? this.stillSteps + 1 : 0;
     this.gated = !!this.kit.gateS && this.stillSteps >= Math.round(this.kit.gateS * HZ);
     tickVitals(v, (still ? (this.kit.stillRegen ?? 1) : 1) * (this.gated ? UP.gate.regen : 1), this.kit.repairDelayMs === undefined ? undefined : frames(this.kit.repairDelayMs));
     if (this.assist.infiniteEnergy) v.energy = v.maxEnergy;
@@ -762,7 +763,8 @@ export class Sim {
       if (!held && this.fireCd < 0) this.fireCd = 0;
     } else {
       // Charged Probe: hold to charge over 0.8 s, release to fire; a release before full charge fires one Pulse bolt
-      if (held) this.charge = Math.min(1, this.charge + 1 / (T.charged.chargeS * HZ));
+      // (Sized Drivers shortens the charge, as it does every weapon's cooldown)
+      if (held) this.charge = Math.min(1, this.charge + 1 / (T.charged.chargeS * (this.kit.cooldownScale ?? 1) * HZ));
       else if (this.fireWasHeld) {
         if (this.charge >= 1) {
           if (spend(this.vitals, T.charged.energy)) this.fire('charged');
@@ -1023,7 +1025,8 @@ export class Sim {
     if (this.dying) return;
     const r = droneRect(this.drone);
     for (const e of this.enemies) {
-      const dmg = e === this.heldEnemy ? 0 : e.touchDamage();
+      // a held bug and one Slack Parry has stunned do no contact damage
+      const dmg = e === this.heldEnemy || this.isStunned(e) ? 0 : e.touchDamage();
       if (dmg && polyRect(e.outline(), r)) this.hurtDrone(dmg, { x: e.x, y: e.y }, e);
     }
   }
