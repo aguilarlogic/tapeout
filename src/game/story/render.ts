@@ -166,7 +166,8 @@ function jag(c: C, ax: number, ay: number, bx: number, by: number, t: number) {
 
 /** X's mark over the boss body it wears: two jagged red strokes corner to corner, with a glow pass. */
 function drawXMark(c: C, r: Rect, t: number) {
-  const m = 14, x0 = r.x + m, y0 = r.y + m, x1 = r.x + r.w - m, y1 = r.y + r.h - m;
+  // inset so the strokes cross the body itself, not the corners of its box
+  const mx = r.w * 0.2, my = r.h * 0.16, x0 = r.x + mx, y0 = r.y + my, x1 = r.x + r.w - mx, y1 = r.y + r.h - my;
   c.save();
   c.lineCap = 'round';
   for (const [w, a] of [[10, 0.18], [3, 0.95]] as const) {

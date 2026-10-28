@@ -225,6 +225,8 @@ function routersFor(s: Shell): { x: number; y: number }[] {
     const top = s.solids.filter((b) => b.x <= x - ROUTER.half && b.x + b.w >= x + ROUTER.half && b.y >= ROUTER.clear).map((b) => b.y).sort((a, b) => a - b)[0];
     if (top === undefined) return null;
     const air = { x: x - ROUTER.half, y: top - ROUTER.clear, w: ROUTER.half * 2, h: ROUTER.clear - 1 };
+    // never under a crate the room starts with: a pad hidden under a block reads as no pad
+    if (s.anchors.props.some((p) => Math.abs(p.x - x) < ROUTER.half + 40 && p.y < top && p.y > top - ROUTER.clear * 2)) return null;
     return s.solids.some((b) => overlaps(b, air)) ? null : { x, y: top };
   };
   let a: { x: number; y: number } | null = null, b: { x: number; y: number } | null = null;

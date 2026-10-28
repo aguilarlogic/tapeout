@@ -321,6 +321,39 @@ const arena = async (place) => {
   await card(5000);
 };
 
+/** An X arena (Phase 7): a straight fight, cut short once it has been on screen a while; after the fourth form the
+ * bot walks into the bit. The recording is a showcase, so the drone takes no damage here. */
+const xfight = async (place) => {
+  const rect = await story(() => window.__tapeoutGame.story.room.boss.rect);
+  const n = await story(() => window.__tapeoutGame.story.xn);
+  await story(() => { window.__tapeoutGame.sim.assist.damageScale = 0; });
+  for (let k = 0; k < 40; k++) {
+    if (!(await story(() => window.__tapeoutGame.story.xn))) break;
+    await fireAt({ x: rect.x + rect.w / 2, y: rect.y + rect.h / 2 }, 30);
+    if (k === 3) await still(`${place}-x${n}`);
+    if (k === 7) await story(() => { const b = window.__tapeoutGame.story.boss; b.hp = Math.min(b.hp, 30); });
+  }
+  await wait(90);
+  if (n === 4) {
+    await page.waitForFunction(() => window.__tapeoutGame.story.bit && window.__tapeoutGame.story.bit.vy === 0, null, { timeout: 10000 });
+    await still(`${place}-bit`);
+    const b = await story(() => window.__tapeoutGame.story.bit);
+    await walk(b.x, { tol: 6 });
+    await page.waitForFunction(() => window.__tapeoutGame.story.room.role === 'ending', null, { timeout: 20000 });
+  }
+};
+/** The ending (Phase 7): watched to the end, with a still per step, then the card back to the Loft. */
+const ending = async () => {
+  for (const k of [0, 2, 3, 4, 5]) {
+    await page.waitForFunction((i) => (window.__tapeoutGame.story.ending?.step ?? 9) >= i && window.__tapeoutGame.story.ending.t > 80, k, { timeout: 40000 });
+    await still(`tapeout-ending-${k}`);
+  }
+  await page.getByTestId('story-card').waitFor({ timeout: 40000 });
+  await card(4000);
+  await page.waitForFunction(() => window.__tapeoutGame.story.place === 'loft' && !window.__tapeoutGame.story.fade, null, { timeout: 20000 });
+  await wait(90);
+};
+
 try {
   // the run so far: every place before the first one recorded is signed off, so the lift offers it
   const first = ORDER.indexOf(places[0]);
@@ -354,7 +387,7 @@ try {
       const rail = r.role === 'traverse' && r.stations.some((x) => x.kind === 'rail') && (await story(() => !!window.__tapeoutGame.sim.kit.rail));
       // a Deep Layer shows its landing and its first room with bugs in it
       const bugs = r.role === 'traverse' && r.enemies > 0 && !seen.has('bugs');
-      const keep = (place === places[0] && process.env.HIGHLIGHTS !== 'all') || (['discovery', 'arena', 'exit', 'landing'].includes(r.role) || (['fight', 'bench'].includes(r.role) && !seen.has(r.role))) || (rail && !seen.has('rail')) || bugs;
+      const keep = (place === places[0] && process.env.HIGHLIGHTS !== 'all') || ['xarena', 'ending'].includes(r.role) || (place === 'tapeout' && r.role === 'port') || (['discovery', 'arena', 'exit', 'landing'].includes(r.role) || (['fight', 'bench'].includes(r.role) && !seen.has(r.role))) || (rail && !seen.has('rail')) || bugs;
       seen.add(r.role);
       if (bugs) seen.add('bugs');
       if (rail && keep) seen.add('rail');
@@ -370,6 +403,7 @@ try {
       // a card on arrival (the Underlayers): read it, then close it
       if (r.role !== 'arena' && (await page.getByTestId('story-card').count())) await card(3500);
       await still(`${place}-${String(r.index + 1).padStart(2, '0')}-${r.role}`);
+      if (r.role === 'ending') { await ending(); break; }
       if (r.role === 'exit') {
         const l = r.stations.find((x) => x.kind === 'lift');
         await walk(l.x, { tol: 14 });
@@ -397,6 +431,7 @@ try {
       }
       if (r.role === 'fight' || bugs) await run({ type: 'fight' }, 90000);
       if (r.role === 'arena') await arena(place);
+      if (r.role === 'xarena') { await xfight(place); if (r.index === (await story(() => window.__tapeoutGame.story.roomsFor('tapeout').length)) - 2) continue; }
       if (['port', 'panel', 'bench', 'gate', 'bossdoor'].includes(r.role)) {
         for (const st of r.stations.filter((x) => x.module)) {
           if (await story((id) => window.__tapeoutGame.story.kitDone(id), st.module)) continue;

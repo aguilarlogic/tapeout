@@ -540,7 +540,7 @@ export class GameScreen {
     if (st) { drawBossHud(c, st, t, this.showLog); drawCompass(c, st, cam, t, this.reduced); drawBubble(c, st, t); drawExitLift(c, st.exitLift); }
     if (st?.ending) drawEnding(c, VIEW_W, VIEW_H, st.ending.step, st.ending.t, profile()?.name ?? '');
     if (!this.ready || this.age < bt.control + 1) this.drawBoot(c, bt);
-    if (this.ready && !this.paused && (sim.kit.gun || sim.kit.coil)) { const m = this.mouseView(); this.hud.crosshair(c, sim, m.x, m.y); }
+    if (this.ready && !this.paused && !st?.ending && (sim.kit.gun || sim.kit.coil)) { const m = this.mouseView(); this.hud.crosshair(c, sim, m.x, m.y); }
     let black = 0;
     if (this.age < BOOT.fadeIn + BOOT.eye) black = 1 - easeOut((this.age - BOOT.fadeIn) / BOOT.eye);
     if (sim.dying > 0) black = Math.max(black, Math.max(0, (1 - sim.dying / VITALS.deathSteps - 0.6) / 0.4));

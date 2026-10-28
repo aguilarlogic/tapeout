@@ -76,8 +76,9 @@ export function drawEnding(c: C, w: number, h: number, i: number, t: number, nam
   }
   if (step.id === 'credits') {
     c.globalAlpha = Math.min(1, t / edge, (len - t) / edge);
-    const lines = creditLines(name), total = h + lines.length * 36;
-    drawCredits(c, w, h, lines, (t / len) * total * 0.85);
+    // the roll starts with its first lines already on screen and ends with the last one just above the middle
+    const lines = creditLines(name), from = h * 0.3, to = h * 0.6 + (lines.length - 1) * 36;
+    drawCredits(c, w, h, lines, from + (t / len) * (to - from));
   }
   c.restore();
 }
