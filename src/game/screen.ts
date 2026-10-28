@@ -2,12 +2,20 @@
 // the F3 tuning panel and (dev builds only) the F9 debug overlay. Entry fades to black in 300 ms and boots the drone
 // (polish bar P2); quitting fades out the same way.
 import { award } from '../mastery/promotion';
-import { prefs, profile } from '../state';
+import { prefs, profile, setPrefs } from '../state';
 import { prefersReducedMotion } from '../term/typewriter';
 import { h } from '../ui/dom';
 import { GameAudio, type Sfx, type Track } from './audio';
 import { type Action, type Bindings, resolve } from './input/bindings';
 import { InputDevice } from './input/device';
+import { ASSIST, assistOn, snapAim } from './input/assist';
+import { GamepadSource, pickPad, readPads } from './input/gamepad';
+import { deviceText } from './input/labels';
+import type { DeviceKind } from './input/padmap';
+import { PadNav } from './input/padnav';
+import { type TouchButton, type TouchFrame, TouchSource, touchLayout } from './input/touch';
+import { drawTouch } from './render/touch';
+import type { Vec } from './physics/geom';
 import { TEST_ROOM } from './level/testroom';
 import { Director } from './story/director';
 import { gameMount, openCard, openChoice, openLab, openLoft, openPort, openProfile, type OverlayHost } from './story/overlay';
@@ -57,6 +65,8 @@ export function closeGame() {
 
 const TEST_BOOT = ['PROBE-7 FIRMWARE 7.0.3 . . . . . . . OK', 'LEGS / PULSE PROBE / FIELD COIL . . ONLINE', 'HULL PANELS 4 OF 6 . . . . SELF-REPAIR STANDBY'];
 const BOOT = { fadeIn: 0.3, eye: 0.6, cps: 40, hold: 0.35, hud: 0.25 };
+/** The Start button's standard index. */
+const START = 9;
 
 export class GameScreen {
   el: HTMLElement;
@@ -98,6 +108,25 @@ export class GameScreen {
   private respawnFade = 0;
   private quitting = false;
   private bootLen: number;
+  // Phase 9 Spec, sections 2 to 5: the pad and touch sources, the active device and its aim
+  private pad = new GamepadSource();
+  private touch = new TouchSource();
+  private padNav = new PadNav();
+  /** The device used last: it picks the aim, the prompts and whether the touch controls show. */
+  kind: DeviceKind = 'keys';
+  /** The right stick's last direction past its deadzone (pad aim). */
+  private padDir: Vec | null = null;
+  /** The aim finger's last point, view px (touch aim; it moves with the camera). */
+  private touchView: Vec | null = null;
+  /** Steps since the mouse last moved (keyboard-only aim starts after 2 s). */
+  private mouseStill = 0;
+  /** This step's aim point, world px, after aim assist. */
+  private aimNow: Vec = { x: 0, y: 0 };
+  private touchNow: TouchFrame | null = null;
+  /** The touch controls' fade, 0..1 (150 ms in and out). */
+  private touchAlpha = 0;
+  private navRaf = 0;
+  private startHeld = false;
 
   constructor(private onQuit: () => void, opts: { test?: boolean } = {}) {
     if (opts.test) {
@@ -115,6 +144,11 @@ export class GameScreen {
     requestAnimationFrame(() => requestAnimationFrame(() => this.el.classList.remove('gm-fading')));
     this.ctx = this.canvas.getContext('2d')!;
     this.input = new InputDevice(this.canvas, resolve(prefs().keys), (code) => this.onKey(code));
+    this.offs.push(this.touch.attach(this.canvas, (cx, cy) => this.toView(cx, cy)));
+    this.pad.onConnect = (on) => this.padConnected(on);
+    const nav = () => { this.navStep(); this.navRaf = requestAnimationFrame(nav); };
+    this.navRaf = requestAnimationFrame(nav);
+    this.offs.push(() => cancelAnimationFrame(this.navRaf));
     this.tuner = new Tuner(this.el, { repair: () => this.sim.repairPanel(), breakPanels: () => this.sim.breakPanels(), stress: () => this.stress() });
     this.loop = new Loop(() => this.step(), (a) => this.render(a));
     this.cam.snap(this.sim.drone, this.sim.room);
@@ -239,17 +273,111 @@ export class GameScreen {
   zoom = 1;
   private driven: { held: Set<Action>; aim: { x: number; y: number } } | null = null;
 
-  /** The mouse in view px (0..1280, 0..720). */
+  /** The aim in view px (0..1280, 0..720): where the crosshair draws. */
   private mouseView() {
-    if (this.driven) return { x: this.driven.aim.x - this.cam.x, y: this.driven.aim.y - this.cam.y };
-    const m = this.input.mouse, k = this.mouseScale;
-    return { x: Math.max(0, Math.min(VIEW_W, (m.x - k.ox) / k.s)), y: Math.max(0, Math.min(VIEW_H, (m.y - k.oy) / k.s)) };
+    return { x: Math.max(0, Math.min(VIEW_W, this.aimNow.x - this.cam.x)), y: Math.max(0, Math.min(VIEW_H, this.aimNow.y - this.cam.y)) };
   }
-  /** The mouse in world px. */
+  /** The aim in world px, as this step worked it out. */
   private aimPoint() {
+    return this.aimNow;
+  }
+  /** Client px to view px, through the letterbox scale (the mouse and touch share it). */
+  private toView(cx: number, cy: number): Vec {
+    const r = this.canvas.getBoundingClientRect(), k = this.mouseScale;
+    return { x: (cx - r.left - k.ox) / k.s, y: (cy - r.top - k.oy) / k.s };
+  }
+
+  /** The aim for this step (Phase 9 Spec, sections 2 and 5): the device's raw aim, then aim assist. */
+  private computeAim(field: boolean): Vec {
     if (this.driven) return this.driven.aim;
-    const m = this.mouseView();
-    return { x: m.x + this.cam.x, y: m.y + this.cam.y };
+    const sim = this.sim, pv = sim.pivot(), facing = sim.drone.facing;
+    const AIM_REACH = 260, KEY_AIM_STILL = 2 * HZ;
+    const keyOnly = this.kind === 'keys' && this.mouseStill > KEY_AIM_STILL && assistOn(prefs().aimAssist, 'keys');
+    let p: Vec;
+    if (this.kind === 'pad' || keyOnly) {
+      const d = (this.kind === 'pad' && this.padDir) || { x: facing, y: 0 };
+      p = { x: pv.x + d.x * AIM_REACH, y: pv.y + d.y * AIM_REACH };
+    } else if (this.kind === 'touch') {
+      const v = this.touchView ?? { x: pv.x - this.cam.x + facing * AIM_REACH, y: pv.y - this.cam.y };
+      p = { x: v.x + this.cam.x, y: v.y + this.cam.y };
+    } else {
+      const m = this.input.mouse, k = this.mouseScale;
+      p = { x: Math.max(0, Math.min(VIEW_W, (m.x - k.ox) / k.s)) + this.cam.x, y: Math.max(0, Math.min(VIEW_H, (m.y - k.oy) / k.s)) + this.cam.y };
+    }
+    // the Field Coil grabs props, not bugs: no snapping while it is on
+    if (field || (this.kind === 'keys' && !keyOnly) || !assistOn(prefs().aimAssist, this.kind)) return p;
+    const dx = p.x - pv.x, dy = p.y - pv.y, dist = Math.hypot(dx, dy);
+    if (dist < 1) return p;
+    const targets: Vec[] = sim.enemies.filter((e) => e.alive).map((e) => ({ x: e.x, y: e.y }));
+    if (sim.lockAt) targets.push(sim.lockAt);
+    for (const tg of sim.targets) if (tg.active) targets.push({ x: tg.rect.x + tg.rect.w / 2, y: tg.rect.y + tg.rect.h / 2 });
+    const { cone, range } = ASSIST[this.kind];
+    const dir = snapAim(pv, { x: dx / dist, y: dy / dist }, targets, cone, range, (a, b) => sim.sight(a, b));
+    return { x: pv.x + dir.x * dist, y: pv.y + dir.y * dist };
+  }
+
+  /** The touch buttons for the drone's kit: the fixed ones, plus one per ability it has. */
+  touchButtons(): TouchButton[] {
+    const sim = this.sim, k = sim.kit, has = new Set<Action>();
+    if (sim.gadgets.length) has.add('gadget');
+    if (k.scan) has.add('scan');
+    if (k.rewind) has.add('rewind');
+    if (k.pockets) has.add('pocket');
+    if (this.story?.act?.beam) has.add('beam');
+    return touchLayout(has, sim.gadgets.length);
+  }
+
+  /** Read the pad and the fingers, pick the active device and merge their actions into the keyboard's. */
+  private readDevices(input: { held: Set<Action>; pressed: Set<Action> }) {
+    const pf = this.pad.poll();
+    const fake = (window as Window).__tapeoutTouch;
+    if (fake) this.touch.setPoints(fake);
+    const tf = this.touch.frame(this.touchButtons());
+    this.touchNow = tf;
+    const was = this.kind;
+    if (this.input.used) this.kind = 'keys';
+    if (pf.moved) this.kind = 'pad';
+    if (tf.moved) this.kind = 'touch';
+    this.input.used = false;
+    this.mouseStill = this.input.mouseMoved ? 0 : this.mouseStill + 1;
+    this.input.mouseMoved = false;
+    if (pf.aim) this.padDir = pf.aim;
+    if (tf.aim) this.touchView = tf.aim;
+    if (this.kind === 'touch' && was !== 'touch') this.touchHint();
+    if (!this.input.active) return input;
+    if (pf.pressed.has('pause') || tf.pressed.has('pause')) { this.pause(); return { held: new Set<Action>(), pressed: new Set<Action>() }; }
+    return { held: new Set([...input.held, ...pf.held, ...tf.held]), pressed: new Set([...input.pressed, ...pf.pressed, ...tf.pressed]) };
+  }
+
+  /** The first touch play (Phase 9 Spec, section 4): offer game speed 75%, once. */
+  private touchHint() {
+    if (!this.story || prefs().touchHintSeen || !this.ready || !this.input.active) return;
+    setPrefs({ touchHintSeen: true });
+    openChoice(this.host, {
+      title: 'PLAYING BY TOUCH?',
+      lines: ['Game speed 75% makes fights easier. You can change it in the pause menu.'],
+      options: [{ text: 'Use 75%' }, { text: 'Keep 100%' }],
+    }, (i) => { if (i === 0) setPrefs({ gameSpeed: 75 }); });
+  }
+
+  /** A pad came or went: a short note, and a pause if it went mid-play. */
+  private padConnected(on: boolean) {
+    const note = h('div', { class: 'gm-toast', role: 'status' }, on ? 'Gamepad connected' : 'Gamepad disconnected');
+    this.el.append(note);
+    setTimeout(() => note.remove(), 2000);
+    if (!on && this.kind === 'pad' && this.ready) this.pause();
+  }
+
+  /** Menus by pad (Phase 9 Spec, section 7): runs every animation frame while a menu, card or overlay is up. */
+  private navStep() {
+    if (this.quitting) return;
+    const start = !!pickPad(readPads())?.buttons[START]?.pressed;
+    if (this.input.active && !this.paused) { this.startHeld = start; return; }
+    const dialogs = [...this.el.querySelectorAll<HTMLElement>('[role="dialog"]')];
+    this.padNav.step(performance.now(), dialogs[dialogs.length - 1] ?? this.el);
+    // Start closes the pause menu too, on a fresh press (the press that opened it is still held at first)
+    if (this.paused && start && !this.startHeld && !this.input.capture) this.resume();
+    this.startHeld = start;
   }
 
   /** The boot sequence's timeline (P2), in seconds since the screen opened. */
@@ -281,14 +409,19 @@ export class GameScreen {
       return;
     }
     this.prev = { x: this.sim.drone.x, y: this.sim.drone.y };
-    let input = this.input.sample();
+    let input = this.readDevices(this.input.sample());
+    if (this.paused) return;
     const prevHeld = this.driven?.held ?? new Set<Action>();
     const auto = this.ready ? this.drive?.(this.sim) ?? null : null;
     this.driven = auto ? { held: new Set(auto.held), aim: auto.aim } : null;
     if (this.driven) input = { held: this.driven.held, pressed: new Set([...this.driven.held].filter((a) => !prevHeld.has(a))) };
     if (!this.ready) input = { held: new Set(), pressed: new Set() };
     this.showLog = input.held.has('map');
-    if (this.story) input = this.story.before(input);
+    if (this.story) {
+      this.story.device = { kind: this.kind, bindings: this.input.bindings };
+      input = this.story.before(input);
+    }
+    this.aimNow = this.computeAim(input.held.has('field'));
     this.sim.step(input, this.aimPoint());
     this.handleFx();
     if (this.story) { this.story.after(); this.handleStory(); }
@@ -300,6 +433,8 @@ export class GameScreen {
     this.fieldPower += ((this.sim.field.on ? 1 : 0) - this.fieldPower) * 0.3;
     this.audio.fieldHum(this.sim.field.on);
     this.respawnFade = Math.max(0, this.respawnFade - 1);
+    const showTouch = this.kind === 'touch' && this.ready && this.input.active && !this.story?.ending;
+    this.touchAlpha = Math.max(0, Math.min(1, this.touchAlpha + (showTouch ? 1 : -1) / frames(150)));
     this.stepMs.push(performance.now() - t0);
     if (this.stepMs.length > 240) this.stepMs.shift();
   }
@@ -406,6 +541,7 @@ export class GameScreen {
       this.audio.fieldHum(false);
       if (!on) this.canvas.focus();
     },
+    text: (s) => deviceText(s, this.kind, this.input.bindings),
   };
 
   /** Turn the director's out records into sound, shake, overlays and room loads. */
@@ -548,6 +684,9 @@ export class GameScreen {
     if (st?.ending) drawEnding(c, VIEW_W, VIEW_H, st.ending.step, st.ending.t, profile()?.name ?? '');
     if (!this.ready || this.age < bt.control + 1) this.drawBoot(c, bt);
     if (this.ready && !this.paused && !st?.ending && (sim.kit.gun || sim.kit.coil)) { const m = this.mouseView(); this.hud.crosshair(c, sim, m.x, m.y); }
+    if (this.touchAlpha > 0 && this.touchNow) {
+      drawTouch(c, { buttons: this.touchButtons(), held: this.touchNow.heldButtons, stick: this.touchNow.stick, alpha: easeOut(this.touchAlpha), t });
+    }
     let black = 0;
     if (this.age < BOOT.fadeIn + BOOT.eye) black = 1 - easeOut((this.age - BOOT.fadeIn) / BOOT.eye);
     if (sim.dying > 0) black = Math.max(black, Math.max(0, (1 - sim.dying / VITALS.deathSteps - 0.6) / 0.4));

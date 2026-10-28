@@ -295,3 +295,62 @@ test('The Fab: the arrival card on the first wing landing, a Hiring Hall office 
   await page.waitForTimeout(6000);
   expect(errors).toEqual([]);
 });
+
+test('Gamepad and touch: a pad moves, pauses and works the menu; touch moves, offers 75% speed and draws its controls', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(String(e)));
+  page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') errors.push(`${m.type()}: ${m.text()}`); });
+  await page.goto(pathToFileURL(resolve('dist/index.html')).href);
+  await page.getByTestId('game').waitFor();
+  await page.getByRole('textbox', { name: 'Your name' }).fill('Sam');
+  await page.getByRole('button', { name: 'I am new to this' }).click();
+  await page.waitForFunction(() => window.__tapeoutGame?.ready && !window.__tapeoutGame.story!.waiting, null, { timeout: 15000 });
+  type Dev = { kind: string; isPaused: boolean; sim: { drone: { x: number } }; story: { keyed(s: string): string } };
+  const dev = () => page.evaluate(() => {
+    const g = window.__tapeoutGame as unknown as Dev;
+    return { kind: g.kind, paused: g.isPaused, x: g.sim.drone.x, prompt: g.story.keyed('E  Ride the lift') };
+  });
+  const pad = (b: number[] = [], axes = [0, 0, 0, 0]) => page.evaluate(([b, axes]) => {
+    const buttons = Array.from({ length: 17 }, (_, i) => ({ pressed: b.includes(i), value: b.includes(i) ? 1 : 0 }));
+    (window as unknown as { __tapeoutPad: unknown }).__tapeoutPad = { connected: true, mapping: 'standard', axes, buttons };
+  }, [b, axes] as const);
+
+  // the left stick walks the drone right, and prompts name the pad's buttons
+  const x0 = (await dev()).x;
+  await pad([], [1, 0, 0, 0]);
+  await page.waitForTimeout(700);
+  await pad();
+  let d = await dev();
+  expect(d.kind).toBe('pad');
+  expect(d.x).toBeGreaterThan(x0 + 60);
+  expect(d.prompt).toBe('X  Ride the lift');
+  await expect(page.getByText('Gamepad connected')).toBeVisible();
+
+  // Start pauses; the D-pad moves focus; B goes back to the game
+  await pad([9]); await page.waitForTimeout(150); await pad(); await page.waitForTimeout(250);
+  expect((await dev()).paused).toBe(true);
+  await pad([13]); await page.waitForTimeout(100); await pad(); await page.waitForTimeout(150);
+  expect(await page.evaluate(() => document.activeElement?.textContent)).toContain('Resume');
+  await pad([1]); await page.waitForTimeout(100); await pad(); await page.waitForTimeout(400);
+  expect((await dev()).paused).toBe(false);
+
+  // a finger takes over: the first touch play offers 75% game speed, then the stick walks the drone
+  const touch = (pts: { id: number; x: number; y: number }[]) => page.evaluate((pts) => { (window as unknown as { __tapeoutTouch: unknown }).__tapeoutTouch = pts; }, pts);
+  await touch([{ id: 1, x: 200, y: 560 }]);
+  await page.waitForTimeout(150);
+  await page.evaluate(() => { delete (window as unknown as { __tapeoutPad?: unknown }).__tapeoutPad; });
+  await expect(page.getByTestId('story-choice')).toContainText('PLAYING BY TOUCH?');
+  await page.getByTestId('story-choice').getByRole('button', { name: 'Keep 100%' }).click();
+  const x1 = (await dev()).x;
+  await touch([{ id: 2, x: 200, y: 560 }]);
+  await page.waitForTimeout(100);
+  await touch([{ id: 2, x: 260, y: 560 }]);
+  await page.waitForTimeout(700);
+  await touch([]);
+  d = await dev();
+  expect(d.kind).toBe('touch');
+  expect(d.paused).toBe(false);
+  expect(d.x).toBeGreaterThan(x1 + 60);
+  expect(d.prompt).toBe('USE  Ride the lift');
+  expect(errors).toEqual([]);
+});

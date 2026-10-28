@@ -23,6 +23,8 @@ export interface OverlayHost {
   sound(name: 'uiOpen' | 'uiClose' | 'uiPress'): void;
   /** Called when an overlay opens or the last one closes (the screen mutes game input and ducks the music). */
   busy(on: boolean): void;
+  /** Rewrites key names in card text for the device in use (Phase 9 Spec, section 6). */
+  text?: (s: string) => string;
 }
 
 let open = 0;
@@ -142,19 +144,19 @@ export function openCard(host: OverlayHost, c: { kind: 'pager' | 'upgrade' | 'de
   const node = h('div', { class: `gm-panel wide st-card ${c.kind} gm-enter`, role: 'dialog', 'aria-label': c.title, 'data-testid': 'story-card' },
     h('h2', null, c.title),
     c.stars !== undefined ? starRow(c.stars) : null,
-    ...c.lines.map((l) => h('p', { class: 'st-line' }, l)),
+    ...c.lines.map((l) => h('p', { class: 'st-line' }, host.text?.(l) ?? l)),
     h('div', { class: 'gm-row' }, h('span'), ok));
   done = mount(host, node, close);
   setTimeout(() => ok.focus(), 30);
 }
 
 /** A choice card: pick one option (or back out, where `back` is given). */
-export function openChoice(host: OverlayHost, c: { title: string; options: { text: string; dim?: boolean }[]; back?: string }, onPick: (i: number) => void) {
+export function openChoice(host: OverlayHost, c: { title: string; lines?: string[]; options: { text: string; dim?: boolean }[]; back?: string }, onPick: (i: number) => void) {
   let done: () => void = () => {};
   const pick = (i: number) => { done(); onPick(i); };
   const btns = c.options.map((o, i) => button(o.text, () => pick(i), o.dim ? 'dim' : ''));
   const node = h('div', { class: 'gm-panel wide st-choice gm-enter', role: 'dialog', 'aria-label': c.title, 'data-testid': 'story-choice' },
-    h('h2', null, c.title), ...btns, c.back ? h('div', { class: 'gm-row' }, h('span'), button(c.back, () => pick(-1), 'mini')) : null);
+    h('h2', null, c.title), ...(c.lines ?? []).map((l) => h('p', { class: 'st-line' }, host.text?.(l) ?? l)), ...btns, c.back ? h('div', { class: 'gm-row' }, h('span'), button(c.back, () => pick(-1), 'mini')) : null);
   done = mount(host, node, c.back ? () => pick(-1) : null);
   setTimeout(() => btns.find((b) => !b.classList.contains('dim'))?.focus(), 30);
 }

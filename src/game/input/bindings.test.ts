@@ -23,7 +23,7 @@ describe('key bindings', () => {
   });
 
   it('stores only changes, and reads them back over the defaults', () => {
-    const b = assign(DEFAULTS, 'dash', 0, 'KeyZ').bindings;
+    const b = assign(DEFAULTS, 'dash', 0, 'KeyY').bindings;
     const o = overrides(b);
     expect(Object.keys(o)).toEqual(['dash']);
     expect(resolve(o)).toEqual(b);

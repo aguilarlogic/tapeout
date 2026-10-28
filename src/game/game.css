@@ -2,7 +2,7 @@
    Nothing pops (polish bar P1): panels and buttons ease over 150-250 ms. */
 .gm-screen { position: fixed; inset: 0; z-index: 9000; background: #0B0A1A; transition: opacity 300ms ease-out; }
 .gm-screen.gm-fading { opacity: 0; }
-.gm-canvas { display: block; width: 100%; height: 100%; cursor: none; outline: none; }
+.gm-canvas { display: block; width: 100%; height: 100%; cursor: none; outline: none; touch-action: none; }
 .gm-pause { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(11, 10, 26, 0.6); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: #F4F3FF; cursor: default; animation: gm-in 200ms ease-out; transition: opacity 150ms ease-out; }
 .gm-pause.gm-leave { opacity: 0; }
 @keyframes gm-in { from { opacity: 0; } to { opacity: 1; } }
@@ -42,6 +42,12 @@
 .gm-key:hover { border-color: #2EF2FF; }
 .gm-key.on { border-color: #FF3EC8; color: #FF3EC8; }
 .gm-key:focus-visible { outline: 2px solid #2EF2FF; }
+.gm-sub { margin: 14px 0 2px; font-size: 13px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: #2EF2FF; }
+.gm-list { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.5; color: #B9B6CF; }
+.gm-select { font: inherit; font-size: 13px; padding: 4px 8px; color: #F4F3FF; background: #1B1838; border: 1px solid #8A87A3; cursor: pointer; }
+.gm-select:hover { border-color: #2EF2FF; }
+.gm-select:focus-visible { outline: 2px solid #2EF2FF; }
+.gm-slider .gm-select { width: 100%; }
 .gm-row { display: flex; gap: 10px; justify-content: space-between; margin-top: 6px; }
 .gm-row.wrap { flex-wrap: wrap; justify-content: flex-start; gap: 6px; }
 .gm-tuner { position: absolute; top: 12px; right: 12px; bottom: 12px; width: 340px; overflow: auto; padding: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: #F4F3FF; background: rgba(20, 18, 43, 0.92); border: 1.5px solid rgba(255, 210, 63, 0.7); cursor: default; animation: gm-in 150ms ease-out; }
@@ -133,3 +139,5 @@
 @media (prefers-reduced-motion: reduce) {
   .gm-screen, .gm-pause, .gm-panel, .gm-btn, .gm-btn::before, .gm-tuner, .st-overlay, .st-frame { transition: none; animation: none; }
 }
+/* Phase 9: the gamepad connect note, top centre, gone after 2 s */
+.gm-toast { position: absolute; top: 16px; left: 50%; transform: translateX(-50%); padding: 6px 14px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; color: #F4F3FF; background: rgba(20, 18, 43, 0.92); border: 1.5px solid rgba(46, 242, 255, 0.7); pointer-events: none; animation: gm-in 150ms ease-out; }
