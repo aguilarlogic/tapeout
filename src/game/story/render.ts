@@ -35,12 +35,21 @@ function chamfer(c: C, x: number, y: number, w: number, h: number, k = 4) {
   c.closePath();
 }
 
+/** The widest a station label may run before it would reach its neighbour's (set per station by drawStations). */
+let labelRoom = Infinity;
+
 function label(c: C, text: string, x: number, y: number, col: string = rgba(PAL.text, 0.6), size = 11) {
   c.font = `${size}px ${FONT}`;
   c.textAlign = 'center';
   c.textBaseline = 'alphabetic';
   c.fillStyle = col;
-  c.fillText(text, x, y);
+  // a label that would run into the next station's is cut short with an ellipsis
+  let s = text;
+  if (c.measureText(s).width > labelRoom) {
+    while (s.length > 4 && c.measureText(`${s}…`).width > labelRoom) s = s.slice(0, -1);
+    s = `${s.trimEnd()}…`;
+  }
+  c.fillText(s, x, y);
   c.textAlign = 'start';
 }
 
@@ -104,7 +113,13 @@ export function drawStoryBack(c: C, d: Director, t: number) {
   const run = room.wire;
   if (run?.gate) drawWallGate(c, run.gate.kind, run.gate.x, run.gate.y, run.terminals, rs.passed, t);
   if (run) drawStrip(c, d, t);
-  for (const st of room.stations) drawStation(c, d, st, t);
+  for (const st of room.stations) {
+    // room for the label: up to halfway to the nearest station on either side, less a gap
+    const near = Math.min(...room.stations.filter((o) => o !== st).map((o) => Math.abs(o.x - st.x)));
+    labelRoom = Number.isFinite(near) ? Math.max(60, near - 16) : Infinity;
+    drawStation(c, d, st, t);
+  }
+  labelRoom = Infinity;
   if (room.dplates) room.dplates.forEach((p, i) => {
     const on = rs.latched || d.plates[i];
     c.save();
@@ -269,10 +284,17 @@ function drawBenchRig(c: C, x: number, y: number, w: number, h: number, d: Direc
     c.strokeStyle = done ? PAL.ok : rgba(PAL.trace, 0.6);
     c.lineWidth = 2;
     c.stroke();
-    // the title shrinks to fit the monitor, and anything past its edge is cut
+    // the title shrinks to fit the monitor
     let size = 12;
     c.font = `${size}px ${FONT}`;
     while (size > 9 && c.measureText(title).width > mw - 28) { size--; c.font = `${size}px ${FONT}`; }
+    // still too long at the smallest size: cut at a word with an ellipsis, never mid-word at the edge
+    let shown = title;
+    if (c.measureText(shown).width > mw - 28) {
+      const ws = title.split(' ');
+      while (ws.length > 2 && c.measureText(`${ws.join(' ')}…`).width > mw - 28) ws.pop();
+      shown = `${ws.join(' ')}…`;
+    }
     const verdict = done ? '// PASS' : '// write me';
     const mod = findModule(m)?.module;
     // the idea it teaches, wrapped to the monitor, then where it opens
@@ -289,7 +311,7 @@ function drawBenchRig(c: C, x: number, y: number, w: number, h: number, d: Direc
     c.rect(mx + 2, y0 + 2, mw - 4, h - 4);
     c.clip();
     c.fillStyle = rgba(PAL.trace, 0.85);
-    c.fillText(title, mx + 14, y0 + 24);
+    c.fillText(shown, mx + 14, y0 + 24);
     c.fillStyle = rgba(PAL.text, 0.45);
     for (let k = 0; k < rows; k++) c.fillText(`//   ${lines[k]}`, mx + 14, y0 + 44 + k * 16);
     const vy = y0 + h - 18;
