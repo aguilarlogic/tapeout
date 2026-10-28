@@ -20,7 +20,7 @@ import { drawBossHud, drawBubble, drawDark, drawExitLift, drawPrompt, drawStoryB
 import { Loop } from './loop';
 import { pauseMenu } from './pause';
 import { Camera } from './render/camera';
-import { drawAimLine, drawEnemies, drawField, drawShots } from './render/combat';
+import { drawAimLine, drawBeam, drawEnemies, drawField, drawShots } from './render/combat';
 import { DroneRig } from './render/drone';
 import { Fx } from './render/fx';
 import { Hud } from './render/hud';
@@ -478,6 +478,7 @@ export class GameScreen {
     this.art.drawProps(c, sim, t);
     if (st) drawStoryFront(c, st, t, { x: dx + sim.drone.facing * 12, y: dy - 4 });
     drawEnemies(c, sim, t, reducedFlash);
+    drawBeam(c, sim, t);
     const core = { x: dx, y: dy - sim.drone.h / 2 + 13 };
     const emitter = { x: dx - sim.drone.facing * 9, y: core.y - 1 };
     drawField(c, sim, core.x, core.y, emitter.x, emitter.y, t, this.fieldPower);

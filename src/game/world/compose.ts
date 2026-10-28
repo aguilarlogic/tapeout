@@ -127,7 +127,7 @@ export function composePlace(place: PlaceDef, theme: PlaceTheme = themeOf(place)
       triggers: lines(theme, room, 0),
       ...(room.optional ? { optional: room.modules } : {}),
       ...(room.capstone && major ? { upgrade: major.id } : {}),
-      ...(room.role === 'bench' && s.anchors.rig ? { props2: [{ kind: 'rig' as const, x: s.anchors.rig.x, y: s.anchors.rig.y }] } : {}),
+      ...(room.role === 'bench' && s.anchors.rig ? { props2: [{ kind: 'rig' as const, x: s.anchors.rig.x, y: s.anchors.rig.y, w: 520, h: 140 }] } : {}),
       ...(room.role === 'arena' && s.anchors.boss ? { boss: { incident: room.incident!, rect: s.anchors.boss } } : {}),
     };
   });

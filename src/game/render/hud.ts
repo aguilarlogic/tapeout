@@ -1,8 +1,13 @@
 // The HUD (plan K, polish bar P5): line-art health and energy bars top-left, the selected weapon's icon beside the
 // energy bar (decision 29) and a small crosshair. Damage drops the health bar at once and a white "recent damage"
 // segment drains over 400 ms; the energy bar pulses below 25%. Drawn in view coordinates (1280 × 720 logical px).
-import type { Sim } from '../sim';
+import type { Sim, Weapon } from '../sim';
+import { frames } from '../tuning';
 import { easeOut, FONT, PAL, rgba } from './palette';
+
+/** The weapon's name, shown under its readout for 1.2 s after a swap and faded over the last 0.3 s. */
+const WEAPON_NAME: Record<Weapon, string> = { pulse: 'PULSE PROBE', charged: 'CHARGED PROBE', fan: 'FAN DECODER', cannon: 'ALU CANNON' };
+const NAME_STEPS = frames(1200), NAME_FADE = frames(300);
 
 export class Hud {
   /** Health shown by the white recent-damage segment; drains toward the real value. */
@@ -11,6 +16,9 @@ export class Hud {
   private drainFrom = 100;
   private lastHealth = 100;
   private swapT = 1;
+  /** The weapon the last step saw (null before the first), and the steps since it last changed. */
+  private lastWeapon: Weapon | null = null;
+  private nameT = NAME_STEPS;
 
   step(sim: Sim) {
     const h = sim.vitals.integrity;
@@ -21,6 +29,9 @@ export class Hud {
     else this.ghost = Math.max(h, this.ghost - Math.max(0.2, (this.drainFrom - h) / 24)); // gone in 400 ms
     if (sim.fx.some((f) => f.t === 'swap')) this.swapT = 0;
     this.swapT = Math.min(1, this.swapT + 1 / 12);
+    if (this.lastWeapon !== null && sim.weapon !== this.lastWeapon) this.nameT = 0;
+    else this.nameT = Math.min(NAME_STEPS, this.nameT + 1);
+    this.lastWeapon = sim.weapon;
     // the story brings the energy bar and the weapon icon in as the Field Coil and the probe come online
     this.coilA += ((sim.kit.coil ? 1 : 0) - this.coilA) * 0.08;
     this.gunA += ((sim.kit.gun ? 1 : 0) - this.gunA) * 0.08;
@@ -81,7 +92,13 @@ export class Hud {
     }
     c.stroke();
     c.fillStyle = rgba(PAL.text, 0.7);
-    c.fillText(sim.weapon === 'pulse' ? 'PULSE' : 'CHARGED', wx + 30, wy);
+    c.fillText(({ pulse: 'PULSE', charged: 'CHARGED', fan: 'FAN', cannon: 'CANNON' } as const)[sim.weapon], wx + 30, wy);
+    // the weapon's name, under the readout, after a swap
+    if (this.nameT < NAME_STEPS) {
+      c.globalAlpha = s * this.gunA * Math.min(1, (NAME_STEPS - this.nameT) / NAME_FADE);
+      c.fillStyle = rgba(sim.weapon === 'charged' ? PAL.neon : PAL.trace, 0.9);
+      c.fillText(WEAPON_NAME[sim.weapon], wx + 30, wy + 16);
+    }
     c.restore();
   }
 

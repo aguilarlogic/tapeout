@@ -1,8 +1,9 @@
-// Enemies, shots, the aim line and the Field Coil. Enemies are magenta line art with idle motion; telegraphs, bolts,
-// orbs and the field are lights drawn additively with a soft halo (polish bar P4).
+// Enemies, shots, the aim line, the Field Coil and Beam Toggle's headlamp cone. Enemies are magenta line art with idle
+// motion; telegraphs, bolts, orbs, the field and the beam are lights drawn additively with a soft halo (polish bar P4).
 import type { Floater } from '../enemies/floater';
 import type { GlitchSpike } from '../enemies/spike';
 import { ENEMY } from '../enemies/registry';
+import { drawXedMark } from '../enemies/xblob';
 import type { Enemy } from '../enemies/types';
 import type { EnemyKind } from '../level/room';
 import type { Sim } from '../sim';
@@ -26,7 +27,7 @@ export function drawEnemies(c: C, sim: Sim, t: number, reducedFlash: boolean) {
     if (!e.alive) continue;
     if (e.kind === 'spike') { drawSpike(c, e as GlitchSpike); continue; }
     const reg = BUILT_IN.has(e.kind) ? undefined : ENEMY[e.kind as EnemyKind];
-    if (reg) { reg.draw(c, e, t); continue; }
+    if (reg) { reg.draw(c, e, t); decorate(c, sim, e, t); continue; }
     const out = idle(e, t);
     const tele = e.telegraph;
     // telegraph halo: grows and brightens through the 0.4 s wind-up
@@ -119,7 +120,37 @@ export function drawEnemies(c: C, sim: Sim, t: number, reducedFlash: boolean) {
       c.fillStyle = PAL.neon;
       c.fillRect(e.x - w / 2, top + 6, w * k, 2);
     }
+    decorate(c, sim, e, t);
   }
+}
+
+/** What every living enemy gets on top of its body: Comparator Sight's health bar, then the X-Blob's mark. */
+function decorate(c: C, sim: Sim, e: Enemy, t: number) {
+  if (sim.kit.weak && e.hp < e.maxHp) weakBar(c, e);
+  if (e.xed) drawXedMark(c, e, t);
+}
+
+/** Comparator Sight: a thin bar 14 px above a hurt enemy, green above half, amber above a quarter, else red. */
+function weakBar(c: C, e: Enemy) {
+  const top = Math.min(...e.outline().map((p) => p.y));
+  const w = 36, h = 4, k = Math.max(0, e.hp / e.maxHp), y = top - 14 - h / 2;
+  const x0 = e.x - w / 2 + h / 2, x1 = e.x + w / 2 - h / 2;
+  c.save();
+  c.lineCap = 'round';
+  c.lineWidth = h;
+  c.strokeStyle = rgba(PAL.line, 0.3);
+  c.beginPath();
+  c.moveTo(x0, y);
+  c.lineTo(x1, y);
+  c.stroke();
+  if (k > 0) {
+    c.strokeStyle = k > 0.5 ? PAL.ok : k > 0.25 ? PAL.amber : PAL.hostile;
+    c.beginPath();
+    c.moveTo(x0, y);
+    c.lineTo(x0 + (x1 - x0) * k, y);
+    c.stroke();
+  }
+  c.restore();
 }
 
 /** Idle motion on top of physics: a little jitter for Glitch, a breathing scale for Latch. */
@@ -257,5 +288,33 @@ export function drawField(c: C, sim: Sim, ox: number, oy: number, ex: number, ey
       c.stroke();
     }
   }
+  c.restore();
+}
+
+/** Beam Toggle's headlamp cone: an additive wedge from the lamp out to its reach, warm at the apex and fading to
+ * nothing, with two faint edge lines that breathe. Nothing when the lamp is not in cone mode. */
+export function drawBeam(c: C, sim: Sim, t: number) {
+  const L = sim.lampCone;
+  if (!L) return;
+  const a0 = L.a - L.half, a1 = L.a + L.half;
+  c.save();
+  c.globalCompositeOperation = 'lighter';
+  const g = c.createRadialGradient(L.x, L.y, 0, L.x, L.y, L.reach);
+  g.addColorStop(0, rgba('#FFF3D1', 0.16));
+  g.addColorStop(1, rgba('#FFF3D1', 0));
+  c.fillStyle = g;
+  c.beginPath();
+  c.moveTo(L.x, L.y);
+  c.arc(L.x, L.y, L.reach, a0, a1);
+  c.closePath();
+  c.fill();
+  c.strokeStyle = rgba(PAL.gold, 0.1 + 0.03 * Math.sin(t * 0.1));
+  c.lineWidth = 1;
+  c.beginPath();
+  for (const a of [a0, a1]) {
+    c.moveTo(L.x, L.y);
+    c.lineTo(L.x + Math.cos(a) * L.reach, L.y + Math.sin(a) * L.reach);
+  }
+  c.stroke();
   c.restore();
 }

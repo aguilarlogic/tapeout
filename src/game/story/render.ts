@@ -1,13 +1,15 @@
 // Drawing the story on top of the room art (polish bar P3/P4: clean line art, glowing traces, amber for things you
 // use, cyan for the player's power, magenta for the hostile): terminals, wires and the safety strip, the wall gates,
 // ports, panels, benches, levers, plates, doors, the crust, the lift and the bridge, the room's set pieces (the lamp,
-// the ALU, the demo board, the Loft's sunset window), the darkness of an unlit room, TAPEOUT's speech bubble, the E
-// prompt, and the boss's bar, log and readings.
+// the ALU, the demo board, the Loft's sunset window), the composed places' bench rigs, capstone part, gates, calibration
+// ranges, patrol boards and powered traces, the darkness of an unlit room (and the headlamp's cone), TAPEOUT's speech
+// bubble, the E prompt, and the boss's bar, log and readings.
 import { chipProgress, CHIPS, slotProgress } from '../../chip';
+import { findModule } from '../../curriculum';
 import { easeOut, FONT, PAL, rgba } from '../render/palette';
 import { HZ, TUNING, VIEW_H, VIEW_W } from '../tuning';
 import type { Director } from './director';
-import type { Station, Terminal } from './types';
+import type { Station, StationKind, Terminal } from './types';
 
 type C = CanvasRenderingContext2D;
 type Pt = { x: number; y: number };
@@ -122,6 +124,35 @@ export function drawStoryBack(c: C, d: Director, t: number) {
     c.stroke();
     c.setLineDash([]);
   });
+  // a discovery puzzle, a composed arena's boss body, and the powered pulse of a module that just passed
+  if (rs.mech) rs.mech.def.draw(c, rs.mech.state, t);
+  if (d.form && d.boss) d.form.draw(c, d.form.state(d.boss.hp / d.boss.maxHp, d.boss.shielded, d.boss.enraged > 0), t);
+  if (room.role) drawPowered(c, d);
+}
+
+/** Steps the powered pulse takes to run its trace. */
+const PULSE_STEPS = 50;
+
+/** The powered pulse: a module passed here, so a bright pulse runs from its station up and across to the door, and the
+ * trace it leaves stays lit for the rest of the room. */
+function drawPowered(c: C, d: Director) {
+  const rs = d.rs, st = d.room.stations.find((s) => s.module), door = d.room.gates.find((g) => g.id === 'door')?.rect;
+  if (rs.powered < 0 || !st || !door) return;
+  const rise = 30, run = Math.abs(door.x - st.x), dir = Math.sign(door.x - st.x) || 1;
+  c.save();
+  c.setLineDash([6, 5]);
+  c.strokeStyle = rgba(PAL.ok, 0.5);
+  c.lineWidth = 1.5;
+  c.beginPath();
+  c.moveTo(st.x, st.y); c.lineTo(st.x, st.y - rise); c.lineTo(door.x, st.y - rise);
+  c.stroke();
+  c.restore();
+  const age = rs.t - rs.powered;
+  if (age < 0 || age >= PULSE_STEPS) return;
+  const dist = (age / PULSE_STEPS) * (rise + run);
+  const px = dist <= rise ? st.x : st.x + dir * (dist - rise), py = dist <= rise ? st.y - dist : st.y - rise;
+  halo(c, px, py, 24, PAL.ok, 0.8);
+  dot(c, px, py, 4, PAL.ok);
 }
 
 function drawCeilingLamp(c: C, x: number, y: number, on: boolean) {
@@ -220,7 +251,80 @@ function drawAlu(c: C, x: number, y: number, w: number, h: number, lit: boolean,
   }
 }
 
+/** A composed bench's rig: one monitor per module (three at most, side by side), each showing its title and its verdict. */
+function drawBenchRig(c: C, x: number, y: number, w: number, h: number, d: Director, t: number) {
+  const x0 = x - w / 2, y0 = y - h / 2;
+  const mods = d.room.modules.slice(0, 3), slot = w / mods.length;
+  mods.forEach((m, i) => {
+    const mx = x0 + i * slot + 10, mw = slot - 20, done = d.kitDone(m);
+    const title = `// ${findModule(m)?.module.title ?? m}`;
+    chamfer(c, mx, y0, mw, h, 6);
+    c.fillStyle = rgba('#0E0C22', 0.95);
+    c.fill();
+    c.strokeStyle = done ? PAL.ok : rgba(PAL.trace, 0.6);
+    c.lineWidth = 2;
+    c.stroke();
+    // the title shrinks to fit the monitor, and anything past its edge is cut
+    let size = 12;
+    c.font = `${size}px ${FONT}`;
+    while (size > 9 && c.measureText(title).width > mw - 28) { size--; c.font = `${size}px ${FONT}`; }
+    const verdict = done ? '// PASS' : '// write me';
+    c.save();
+    c.beginPath();
+    c.rect(mx + 2, y0 + 2, mw - 4, h - 4);
+    c.clip();
+    c.fillStyle = rgba(PAL.trace, 0.85);
+    c.fillText(title, mx + 14, y0 + 24);
+    c.fillStyle = done ? PAL.ok : rgba(PAL.trace, 0.85);
+    c.fillText(verdict, mx + 14, y0 + 42);
+    if (!done && Math.floor(t / 30) % 2) c.fillRect(mx + 14 + c.measureText(verdict).width + 4, y0 + 42 - 11, 7, 13);
+    c.restore();
+  });
+  if (d.room.role === 'bench' && d.room.upgrade) drawCapstone(c, d, x, y0, t);
+}
+
+/** The capstone's part: a chip the bench fits. It hovers over the rig until its module passes, then flies into the drone. */
+function drawCapstone(c: C, d: Director, x: number, top: number, t: number) {
+  const rs = d.rs;
+  if (rs.partFly < 0 && d.room.modules.every((m) => d.kitDone(m))) return; // already fitted
+  let px = x, py = top - 40, s = 1;
+  if (rs.partFly >= 0) {
+    const k = (rs.t - rs.partFly) / 60;
+    if (k >= 1) return;
+    const e = easeOut(k), dr = d.sim.drone;
+    px += (dr.x - px) * e;
+    py += (dr.y - py) * e;
+    s = 1 - 0.7 * e;
+  }
+  c.save();
+  c.translate(px, py);
+  c.scale(s, s);
+  halo(c, 0, 0, 46 + 6 * Math.sin(t * 0.1), PAL.gold, 0.2 + 0.12 * Math.sin(t * 0.1));
+  chamfer(c, -26, -18, 52, 36, 5);
+  c.fillStyle = PAL.fill;
+  c.fill();
+  c.strokeStyle = PAL.gold;
+  c.lineWidth = 2;
+  c.stroke();
+  // four pins a side
+  c.beginPath();
+  for (let i = 0; i < 4; i++) {
+    const u = -18 + i * 12, v = -12 + i * 8;
+    c.moveTo(u, -18); c.lineTo(u, -26); c.moveTo(u, 18); c.lineTo(u, 26);
+    c.moveTo(-26, v); c.lineTo(-34, v); c.moveTo(26, v); c.lineTo(34, v);
+  }
+  c.strokeStyle = rgba(PAL.gold, 0.8);
+  c.lineWidth = 2;
+  c.stroke();
+  chamfer(c, -9, -8, 18, 16, 2);
+  c.strokeStyle = rgba(PAL.trace, 0.8);
+  c.lineWidth = 1.5;
+  c.stroke();
+  c.restore();
+}
+
 function drawRig(c: C, x: number, y: number, w: number, h: number, d: Director, t: number) {
+  if (d.room.role) { drawBenchRig(c, x, y, w, h, d, t); return; }
   const x0 = x - w / 2, y0 = y - h / 2;
   // two monitors over the benches, showing each module's state
   const mods = ['gates', 'half-adder-v'];
@@ -565,6 +669,9 @@ function drawNode(c: C, d: Director, st: Station, t: number) {
   label(c, st.label, x, y - 84, rgba(col, 0.85), 10);
 }
 
+/** Name-label heights above a Loft or composed station's foot (the rest sit at 186); director.ts's STATION_TOP matches. */
+const LOFT_TOP: Partial<Record<StationKind, number>> = { board: 264, map: 216, archive: 236, interview: 236, arcade: 236, lift: 236, gate: 184, calib: 236, patrol: 236 };
+
 function drawLoftStation(c: C, d: Director, st: Station, t: number) {
   const x = st.x, y = st.y, col = PAL.amber;
   c.lineWidth = 2;
@@ -602,6 +709,77 @@ function drawLoftStation(c: C, d: Director, st: Station, t: number) {
       dot(c, x + 30, y - 100, 4, PAL.hostile, 0.9);
       label(c, 'LOCKED', x, y - 220, rgba(PAL.hostile, 0.8), 11);
       break;
+    case 'gate': {
+      // the gate terminal: a tall frame on the floor, its padlock springing open once the module passes
+      const done = !!st.module && d.kitDone(st.module), k = done ? PAL.ok : PAL.amber;
+      if (done) halo(c, x, y - 60, 70, PAL.ok, 0.18);
+      chamfer(c, x - 38, y - 110, 76, 110, 6);
+      c.fillStyle = PAL.fill;
+      c.fill();
+      c.strokeStyle = k;
+      c.stroke();
+      c.beginPath();
+      if (done) { c.arc(x - 2, y - 74, 10, Math.PI, 0); c.moveTo(x + 8, y - 74); c.lineTo(x + 8, y - 54); c.moveTo(x - 12, y - 74); c.lineTo(x - 12, y - 68); }
+      else { c.arc(x, y - 66, 10, Math.PI, 0); c.moveTo(x - 10, y - 66); c.lineTo(x - 10, y - 54); c.moveTo(x + 10, y - 66); c.lineTo(x + 10, y - 54); }
+      c.stroke();
+      chamfer(c, x - 16, y - 54, 32, 26, 3);
+      c.fillStyle = '#0E0C22';
+      c.fill();
+      c.stroke();
+      dot(c, x, y - 44, 3, k);
+      break;
+    }
+    case 'calib': {
+      // the calibration range: a small bench with three ring targets above it, lit once the module passes
+      const done = !!st.module && d.kitDone(st.module), k = done ? PAL.ok : PAL.amber;
+      c.beginPath();
+      c.moveTo(x - 90, y - 60); c.lineTo(x + 90, y - 60); c.moveTo(x - 80, y - 60); c.lineTo(x - 80, y); c.moveTo(x + 80, y - 60); c.lineTo(x + 80, y);
+      glowLine(c, k, 2, 0.12);
+      if (done) halo(c, x, y - 110, 60, PAL.ok, 0.2);
+      for (const dx of [-50, 0, 50]) {
+        const tx = x + dx, ty = y - 110;
+        c.beginPath();
+        c.moveTo(tx, ty + 22); c.lineTo(tx, y - 60);
+        c.strokeStyle = rgba(PAL.line, 0.35);
+        c.lineWidth = 2;
+        c.stroke();
+        for (const r of [22, 14, 6]) {
+          c.beginPath();
+          c.arc(tx, ty, r, 0, Math.PI * 2);
+          c.strokeStyle = rgba(k, r === 6 ? 0.95 : 0.6);
+          c.lineWidth = 1.5;
+          c.stroke();
+        }
+        dot(c, tx, ty, 2, k);
+      }
+      break;
+    }
+    case 'patrol': {
+      // the patrol board: a corkboard in a chamfered frame, five pins joined by a dashed route
+      const done = !!st.module && d.kitDone(st.module), k = done ? PAL.ok : PAL.amber;
+      c.beginPath();
+      c.moveTo(x - 40, y - 84); c.lineTo(x - 40, y); c.moveTo(x + 40, y - 84); c.lineTo(x + 40, y);
+      c.strokeStyle = rgba(PAL.line, 0.4);
+      c.lineWidth = 3;
+      c.stroke();
+      chamfer(c, x - 72, y - 212, 144, 128, 8);
+      c.fillStyle = PAL.fill;
+      c.fill();
+      c.strokeStyle = k;
+      c.lineWidth = 2;
+      c.stroke();
+      for (let i = 0; i < 9; i++) for (let j = 0; j < 6; j++) dot(c, x - 60 + i * 15 + (j % 2) * 7, y - 196 + j * 18, 1.2, PAL.amber, 0.14);
+      const pins: [number, number][] = [[-48, -184], [-18, -150], [16, -190], [46, -146], [-6, -106]];
+      c.beginPath();
+      pins.forEach(([px, py], i) => { if (i) c.lineTo(x + px, y + py); else c.moveTo(x + px, y + py); });
+      c.setLineDash([5, 4]);
+      c.strokeStyle = rgba(k, 0.8);
+      c.lineWidth = 1.5;
+      c.stroke();
+      c.setLineDash([]);
+      for (const [px, py] of pins) { halo(c, x + px, y + py, 12, k, 0.3); dot(c, x + px, y + py, 4, k); }
+      break;
+    }
     case 'lift':
       c.beginPath(); c.moveTo(x - 60, y); c.lineTo(x - 60, y - 220); c.lineTo(x + 60, y - 220); c.lineTo(x + 60, y);
       glowLine(c, PAL.trace, 2, 0.1);
@@ -610,7 +788,7 @@ function drawLoftStation(c: C, d: Director, st: Station, t: number) {
       if (d.room.id === 'workbench' && !d.kitDone('half-adder-v')) label(c, 'NO POWER', x, y - 110, rgba(PAL.hostile, 0.8), 11);
       break;
   }
-  label(c, st.label, x, y - (st.kind === 'board' ? 264 : st.kind === 'map' ? 216 : st.kind === 'archive' || st.kind === 'interview' || st.kind === 'arcade' || st.kind === 'lift' ? 236 : 186), rgba(PAL.text, 0.55));
+  label(c, st.label, x, y - (LOFT_TOP[st.kind] ?? 186), rgba(PAL.text, 0.55));
 }
 
 /** The Chip Map table: the 8-bit chip's floorplan, blocks lit by progress (read from records, never stored). */
@@ -817,6 +995,25 @@ export function drawDark(c: C, d: Director, cam: Pt, drone: Pt, scratch: { canva
   for (const tm of d.room.wire?.terminals ?? []) hole(tm.x, tm.y - 36, 64, 0.9);
   for (const st of d.room.stations) hole(st.x, st.y - 120, 90, 0.7);
   if (d.room.id === 'bit0-chamber') hole(800, 300, 120, 0.25);
+  const lc = d.sim.lampCone;
+  if (lc) {
+    // the beam's cone: the circle's soft radial falloff, cut to a wedge, its edge feathered by two wider wedges
+    const cx = lc.x - cam.x, cy = lc.y - cam.y;
+    const wedge = (k: number, spread: number) => {
+      const g = m.createRadialGradient(cx, cy, lc.reach * 0.35, cx, cy, lc.reach);
+      g.addColorStop(0, `rgba(0,0,0,${k})`);
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+      m.fillStyle = g;
+      m.beginPath();
+      m.moveTo(cx, cy);
+      m.arc(cx, cy, lc.reach, lc.a - lc.half * spread, lc.a + lc.half * spread);
+      m.closePath();
+      m.fill();
+    };
+    wedge(1, 1);
+    wedge(0.5, 1.12);
+    wedge(0.2, 1.25);
+  }
   c.drawImage(scratch.canvas, 0, 0, VIEW_W, VIEW_H);
 }
 

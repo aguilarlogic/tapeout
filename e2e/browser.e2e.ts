@@ -5,7 +5,8 @@ import { expect, test } from '@playwright/test';
 import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 
-type Story = { room: { id: string }; rs: { passed: boolean; carrying: string | null }; waiting: boolean; warp(place: string, i: number): void; place: string };
+type Station = { kind: string; module?: string };
+type Story = { room: { id: string; role?: string; stations: Station[] }; rs: { passed: boolean; carrying: string | null }; waiting: boolean; warp(place: string, i: number): void; place: string; roomsFor(place: string): { role?: string }[]; boss: { phase: string } | null; useStation(st: Station): void };
 type G = { story: Story | null; drive: unknown; ready: boolean; sim: { drone: { x: number; y: number; grounded: boolean }; steps: number }; isPaused: boolean; resetStats(): void; stressTest(): void; frameStats(): { fps: number; workAvg: number; workP95: number; stepP95: number; frames: number; particles: number; enemies: number; props: number } };
 declare global { interface Window { __tapeoutGame?: G } }
 
@@ -135,5 +136,47 @@ test('Level 1: the first wire, a wall port, and the Loft', async ({ page }) => {
   await page.getByRole('button', { name: 'Back', exact: true }).click();
   await page.getByRole('button', { name: 'Quit to title' }).click();
   await expect(page.getByTestId('game')).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
+test('Act 1 places: a port, a fight, an arena that fights back, and the chip map', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(String(e)));
+  page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') errors.push(`${m.type()}: ${m.text()}`); });
+  await page.goto(pathToFileURL(resolve('dist/index.html')).href);
+  await expect(page.locator('#os')).not.toBeEmpty();
+  await page.getByTestId('story-preview').click();
+  await page.getByRole('textbox', { name: 'Your name' }).fill('Sam');
+  await page.getByRole('button', { name: 'I am new to this' }).click();
+  await page.waitForFunction(() => window.__tapeoutGame?.ready && !window.__tapeoutGame.story!.waiting, null, { timeout: 15000 });
+  const roomOf = (role: string) => page.evaluate((r) => window.__tapeoutGame!.story!.roomsFor('lamp-board').findIndex((x) => x.role === r), role);
+
+  // a port room: its station opens the module's terminal
+  const port = await roomOf('port');
+  await page.evaluate((i) => window.__tapeoutGame!.story!.warp('lamp-board', i), port);
+  await page.waitForTimeout(600);
+  await page.evaluate(() => { const s = window.__tapeoutGame!.story!; s.useStation(s.room.stations.find((x) => x.module)!); });
+  await expect(page.getByTestId('port')).toBeVisible();
+  await page.getByTestId('overlay-close').click();
+  await expect(page.getByTestId('port')).toHaveCount(0);
+
+  // a fight room runs
+  await page.evaluate((i) => window.__tapeoutGame!.story!.warp('lamp-board', i), await roomOf('fight'));
+  await page.waitForTimeout(1500);
+
+  // the arena: the pager, then the body attacks
+  await page.evaluate((i) => window.__tapeoutGame!.story!.warp('lamp-board', i), await roomOf('arena'));
+  await expect(page.getByTestId('story-card')).toContainText('PAGER');
+  await page.getByTestId('story-card').getByRole('button').click();
+  expect(await page.evaluate(() => window.__tapeoutGame!.story!.boss!.phase)).toBe('investigate');
+  await page.waitForTimeout(4000);
+
+  // the Loft's chip map
+  await page.evaluate(() => window.__tapeoutGame!.story!.warp('loft', 0));
+  await page.waitForTimeout(600);
+  await page.evaluate(() => { const s = window.__tapeoutGame!.story!; s.useStation(s.room.stations.find((x) => x.kind === 'map')!); });
+  await expect(page.getByTestId('story-loft')).toContainText('THE CHIP MAP');
+  await page.getByTestId('story-loft').getByRole('button', { name: 'Back to the Loft' }).click();
+  await expect(page.getByTestId('story-loft')).toHaveCount(0);
   expect(errors).toEqual([]);
 });
