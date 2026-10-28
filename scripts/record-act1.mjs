@@ -357,7 +357,7 @@ try {
         // the puzzle on screen for a while, then solved through the test hook (the bot cannot read a puzzle)
         await walk(r.exit / 2);
         await wait(240);
-        await story(() => { const s = window.__tapeoutGame.story; s.discover(`${s.place}:${s.room.mechanic}`); s.rs.mech.solved = true; s.openGate('exit'); });
+        await story(() => { const s = window.__tapeoutGame.story; s.discover(`${s.place}:${s.room.mechanic}`); s.rs.mech.solved = true; for (const id of s.rs.gates.keys()) s.openGate(id); });
         await wait(60);
       }
       if (r.role === 'fight') await run({ type: 'fight' }, 90000);
