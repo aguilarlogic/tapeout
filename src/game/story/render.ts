@@ -7,6 +7,7 @@
 import { chipProgress, CHIPS, slotProgress } from '../../chip';
 import { findModule, KIND_APP } from '../../curriculum';
 import { easeOut, FONT, PAL, rgba } from '../render/palette';
+import { drawRail } from '../render/rails';
 import { HZ, TUNING, VIEW_H, VIEW_W } from '../tuning';
 import type { Director } from './director';
 import type { Station, StationKind, Terminal } from './types';
@@ -79,6 +80,10 @@ export function drawStoryBack(c: C, d: Director, t: number) {
       case 'rig': drawRig(c, p.x, p.y, p.w!, p.h!, d, t); break;
       case 'window': drawSunset(c, p.x, p.y, p.w!, p.h!, t); break;
     }
+  }
+  for (const r of room.rails ?? []) {
+    const ride = d.sim.riding?.rail === r ? (d.sim.riding.x - r.x1) / (r.x2 - r.x1 || 1) : undefined;
+    drawRail(c, r, t, d.act.rail > 0, ride);
   }
   if (room.lamps) {
     const L = room.lamps;
@@ -700,7 +705,7 @@ function drawNode(c: C, d: Director, st: Station, t: number) {
 }
 
 /** Name-label heights above a Loft or composed station's foot (the rest sit at 186); director.ts's STATION_TOP matches. */
-const LOFT_TOP: Partial<Record<StationKind, number>> = { board: 264, map: 216, archive: 236, interview: 236, arcade: 236, lift: 236, gate: 184, calib: 236, patrol: 236 };
+const LOFT_TOP: Partial<Record<StationKind, number>> = { hatch: 96, rail: 112, board: 264, map: 216, archive: 236, interview: 236, arcade: 236, lift: 236, gate: 184, calib: 236, patrol: 236 };
 
 function drawLoftStation(c: C, d: Director, st: Station, t: number) {
   const x = st.x, y = st.y, col = PAL.amber;
@@ -810,6 +815,28 @@ function drawLoftStation(c: C, d: Director, st: Station, t: number) {
       for (const [px, py] of pins) { halo(c, x + px, y + py, 12, k, 0.3); dot(c, x + px, y + py, 4, k); }
       break;
     }
+    case 'hatch': { // a floor hatch with chevrons pointing the way it goes
+      const down = st.arg ? !d.room.id.startsWith(st.arg) : true;
+      chamfer(c, x - 46, y - 10, 92, 10, 3);
+      c.fillStyle = PAL.fill;
+      c.fill();
+      c.strokeStyle = PAL.amber;
+      c.lineWidth = 2;
+      c.stroke();
+      const bob = Math.sin(t * 0.08) * 4;
+      c.beginPath();
+      for (let i = 0; i < 2; i++) {
+        const cy = y - 46 - i * 16 + (down ? bob : -bob), dir = down ? 1 : -1;
+        c.moveTo(x - 12, cy - 6 * dir); c.lineTo(x, cy + 6 * dir); c.lineTo(x + 12, cy - 6 * dir);
+      }
+      glowLine(c, PAL.amber, 2, 0.25);
+      break;
+    }
+    case 'rail': // the post the drone clips onto the rail from
+      c.beginPath(); c.moveTo(x, y); c.lineTo(x, y - 84); c.moveTo(x - 14, y); c.lineTo(x + 14, y);
+      glowLine(c, d.act.rail > 0 ? PAL.trace : PAL.idle, 2, 0.2);
+      dot(c, x, y - 84, 4, d.act.rail > 0 ? PAL.trace : PAL.idle);
+      break;
     case 'lift':
       c.beginPath(); c.moveTo(x - 60, y); c.lineTo(x - 60, y - 220); c.lineTo(x + 60, y - 220); c.lineTo(x + 60, y);
       glowLine(c, PAL.trace, 2, 0.1);

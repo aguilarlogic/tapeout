@@ -66,6 +66,8 @@ export class WorldArt {
   private vignette: CanvasGradient | null = null;
   /** The room's backdrop motif, when it has one (composed rooms carry it; Level 1's rooms do not). */
   private backdrop: BackdropKind | undefined;
+  /** Seconds of animation so far (held still under reduced motion), for the backdrop's slow pulses. */
+  private clock = 0;
 
   constructor(private room: Room, seed = 3) {
     this.rand = rng(seed);
@@ -92,6 +94,7 @@ export class WorldArt {
   /** Advance pulses and motes one 60 Hz step. Pulses start along a trace every 2-4 s (P3). */
   step(reduced: boolean) {
     const dt = 1 / 60;
+    if (!reduced) this.clock += dt;
     for (const t of [...this.layers.flatMap((l) => l.traces), ...this.roomTraces]) {
       if (t.pulse >= 0) {
         t.pulse += dt * 420;
@@ -203,6 +206,37 @@ export class WorldArt {
           }
         }
         c.fill();
+        break;
+      }
+      case 'core': { // the datapath: five stage boxes (IF, ID, EX, MEM, WB) joined by arrows, repeated every 1400 px
+        const P = 1400, BW = 110, BH = 64, GAP = 50, ROW = 5 * BW + 4 * GAP, y = H * 0.4, cy = y + BH / 2;
+        const stages = ['IF', 'ID', 'EX', 'MEM', 'WB'];
+        // one dot rides the arrows: a 4 s loop, one arrow a second, each block offset so the blocks never beat together
+        const T = this.clock;
+        c.font = `11px ${FONT}`;
+        c.textAlign = 'center';
+        c.textBaseline = 'middle';
+        for (let sx = Math.max(0, Math.floor((x0 - ROW) / P)) * P + 200; sx < x1; sx += P) {
+          c.strokeStyle = rgba(PAL.trace, 0.07);
+          c.beginPath();
+          for (let i = 0; i < 5; i++) {
+            const bx = sx + i * (BW + GAP);
+            c.rect(bx, y, BW, BH);
+            if (i < 4) { // an arrow to the next stage
+              const ax = bx + BW + GAP;
+              c.moveTo(bx + BW, cy); c.lineTo(ax, cy);
+              c.moveTo(ax - 7, cy - 4); c.lineTo(ax, cy); c.lineTo(ax - 7, cy + 4);
+            }
+          }
+          c.stroke();
+          c.fillStyle = rgba(PAL.trace, 0.06);
+          stages.forEach((s, i) => c.fillText(s, sx + i * (BW + GAP) + BW / 2, cy));
+          const ph = (T / 4 + Math.floor(sx / P) * 0.25) % 1, seg = Math.floor(ph * 4), f = ph * 4 - seg;
+          c.fillStyle = rgba(PAL.trace, 0.12);
+          c.beginPath();
+          c.arc(sx + seg * (BW + GAP) + BW + f * GAP, cy, 2.5, 0, Math.PI * 2);
+          c.fill();
+        }
         break;
       }
     }

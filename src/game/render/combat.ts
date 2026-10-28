@@ -293,6 +293,60 @@ export function drawField(c: C, sim: Sim, ox: number, oy: number, ex: number, ey
 
 /** Beam Toggle's headlamp cone: an additive wedge from the lamp out to its reach, warm at the apex and fading to
  * nothing, with two faint edge lines that breathe. Nothing when the lamp is not in cone mode. */
+/** Loop Drone (Phase 4 Spec, section 7): a small hexagon on its orbit, with a short fading trail behind it. */
+const loopTrail: { x: number; y: number }[] = [];
+export function drawLoopDrone(c: C, sim: Sim, t: number) {
+  const p = sim.loopPos;
+  if (!p) { loopTrail.length = 0; return; }
+  loopTrail.push({ x: p.x, y: p.y });
+  if (loopTrail.length > 10) loopTrail.shift();
+  c.save();
+  c.globalCompositeOperation = 'lighter';
+  loopTrail.forEach((q, i) => {
+    c.fillStyle = rgba(PAL.trace, 0.05 + 0.03 * i);
+    c.beginPath();
+    c.arc(q.x, q.y, 2 + i * 0.25, 0, Math.PI * 2);
+    c.fill();
+  });
+  c.restore();
+  c.save();
+  c.translate(p.x, p.y);
+  c.rotate(t * 0.05);
+  c.beginPath();
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2;
+    if (i) c.lineTo(Math.cos(a) * 7, Math.sin(a) * 7); else c.moveTo(7, 0);
+  }
+  c.closePath();
+  c.fillStyle = PAL.fill;
+  c.fill();
+  c.shadowColor = PAL.trace;
+  c.shadowBlur = 8;
+  c.strokeStyle = PAL.trace;
+  c.lineWidth = 1.5;
+  c.stroke();
+  c.shadowBlur = 0;
+  c.fillStyle = PAL.trace;
+  c.beginPath();
+  c.arc(0, 0, 1.8, 0, Math.PI * 2);
+  c.fill();
+  c.restore();
+}
+
+/** Synchronizer (Phase 4 Spec, section 7): while time is slow, a cool tint at the edges and a clock tick ring around
+ * the drone that counts the slow time down. Drawn in screen px. */
+export function drawSyncTint(c: C, sim: Sim, w: number, h: number, reduced: boolean) {
+  if (sim.slowT <= 0) return;
+  const k = Math.min(1, sim.slowT / 20);
+  c.save();
+  const g = c.createRadialGradient(w / 2, h / 2, h * 0.35, w / 2, h / 2, h * 0.85);
+  g.addColorStop(0, rgba(PAL.trace, 0));
+  g.addColorStop(1, rgba(PAL.trace, (reduced ? 0.08 : 0.14) * k));
+  c.fillStyle = g;
+  c.fillRect(0, 0, w, h);
+  c.restore();
+}
+
 export function drawBeam(c: C, sim: Sim, t: number) {
   const L = sim.lampCone;
   if (!L) return;

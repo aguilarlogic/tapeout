@@ -149,6 +149,9 @@ const card = async (hold = 2200) => {
   const c = page.getByTestId('story-card');
   await c.waitFor({ timeout: 15000 });
   await page.waitForTimeout(hold);
+  // an arcade app a lesson launched can open over the card: close it first
+  const closes = page.getByTestId('overlay-close');
+  for (let i = 0; i < 3 && (await closes.count()); i++) { await closes.last().click(); await page.waitForTimeout(300); }
   await c.getByRole('button').last().click();
   await page.waitForTimeout(400);
 };
@@ -241,10 +244,15 @@ const moduleAt = async (st, show) => {
   await page.waitForTimeout(show);
   await story((id) => window.__tapeoutAward(id), st.module);
   await page.waitForTimeout(900);
+  // an arcade app opened from a station sits on top of it, with its own close button: close the top windows first
+  const closes = page.getByTestId('overlay-close');
+  while ((await closes.count()) > 1) { await closes.last().click(); await page.waitForTimeout(300); }
   if (await page.locator('.st-unplug').count()) await page.locator('.st-unplug').click();
   else if (await page.getByTestId('overlay-close').count()) await page.getByTestId('overlay-close').click();
   else await page.keyboard.press('Escape');
   await page.waitForTimeout(500);
+  // a lesson can launch its arcade app as it closes: close anything still open over the card
+  for (let i = 0; i < 3 && (await closes.count()); i++) { await closes.last().click(); await page.waitForTimeout(300); }
   if (await page.getByTestId('story-card').count()) await card(3200);
 };
 const leave = async () => {
@@ -383,7 +391,7 @@ try {
   await page.getByRole('button', { name: 'Back to the Loft' }).click();
   await wait(90);
 } catch (e) {
-  log(`FAILED: ${e.message.split('\n')[0]}`);
+  log(`FAILED: ${e.message.split('\n')[0]}\n${(e.stack ?? '').split('\n').filter((l) => l.includes('record-act1')).join('\n')}`);
   await still('zz-failed');
   console.log(await story(() => ({ room: window.__tapeoutGame.story.room.id, cmd: window.__bot.cmd, x: window.__tapeoutGame.sim.drone.x, y: window.__tapeoutGame.sim.drone.y, waiting: window.__tapeoutGame.story.waiting })));
   process.exitCode = 1;

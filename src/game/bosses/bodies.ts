@@ -5,13 +5,14 @@
 import type { Rect } from '../level/room';
 import { FONT, LINE, PAL, rgba } from '../render/palette';
 import { HZ } from '../tuning';
-import type { BodyDrawer, BodyKind, BodyState } from './types';
+import type { BodyDrawer, BodyState } from './types';
 
-type C = CanvasRenderingContext2D;
+/** The canvas context the drawers take. */
+export type C = CanvasRenderingContext2D;
 type Pt = { x: number; y: number };
 type Trace = () => void;
 /** A body's extent: centre and size, before the bob. Cracks and the shield are measured from it. */
-interface Ext { cx: number; cy: number; w: number; h: number }
+export interface Ext { cx: number; cy: number; w: number; h: number }
 
 /** The lamps' 12 px glow: the drone's glow size, so it stays on the palette's scale. */
 const LAMP_GLOW = LINE.droneGlow;
@@ -29,17 +30,17 @@ const SEG = 'abcdefg';
 const DIGITS = ['abcdef', 'bc', 'abdeg', 'abcdg', 'bcfg', 'acdfg', 'acdefg', 'abc', 'abcdefg', 'abcdfg'];
 
 /** The box centre plus the idle bob: 4 px at 0.5 Hz (one cycle every 2 s). */
-function centre(box: Rect, s: BodyState) {
+export function centre(box: Rect, s: BodyState) {
   return { cx: box.x + box.w / 2, cy: box.y + box.h / 2 + Math.sin((s.t / HZ) * Math.PI) * 4 };
 }
 
-function circle(g: C, x: number, y: number, r: number) {
+export function circle(g: C, x: number, y: number, r: number) {
   g.moveTo(x + r, y);
   g.arc(x, y, r, 0, Math.PI * 2);
 }
 
 /** A rounded rectangle path (arcTo, so no roundRect call). */
-function rrect(g: C, x: number, y: number, w: number, h: number, r: number) {
+export function rrect(g: C, x: number, y: number, w: number, h: number, r: number) {
   g.moveTo(x + r, y);
   g.arcTo(x + w, y, x + w, y + h, r);
   g.arcTo(x + w, y + h, x, y + h, r);
@@ -68,7 +69,7 @@ function bar(g: C, ax: number, ay: number, bx: number, by: number, th: number) {
 }
 
 /** Neon line art: the current path stroked in `col` at `a` alpha, with the enemy glow under it. */
-function glow(g: C, col: string, a = 1, width: number = LINE.enemy) {
+export function glow(g: C, col: string, a = 1, width: number = LINE.enemy) {
   g.shadowColor = rgba(col, a);
   g.shadowBlur = LINE.enemyGlow;
   g.strokeStyle = rgba(col, a);
@@ -78,7 +79,7 @@ function glow(g: C, col: string, a = 1, width: number = LINE.enemy) {
 }
 
 /** The body's outline: a PAL.fill inside, the neon glow line round it, and a thin PAL.x line when enraged. */
-function silhouette(g: C, s: BodyState, trace: Trace) {
+export function silhouette(g: C, s: BodyState, trace: Trace) {
   g.beginPath();
   trace();
   g.fillStyle = PAL.fill;
@@ -88,7 +89,7 @@ function silhouette(g: C, s: BodyState, trace: Trace) {
 }
 
 /** The hit flash: the body washed in PAL.line, alpha up to 0.6, fading over the 6 steps of the flash. */
-function flash(g: C, s: BodyState, trace: Trace) {
+export function flash(g: C, s: BodyState, trace: Trace) {
   if (s.flash <= 0) return;
   g.beginPath();
   trace();
@@ -97,7 +98,7 @@ function flash(g: C, s: BodyState, trace: Trace) {
 }
 
 /** The part that will attack glows amber, as bright as the telegraph (0 to 1). */
-function telegraph(g: C, s: BodyState, trace: Trace) {
+export function telegraph(g: C, s: BodyState, trace: Trace) {
   if (s.telegraph <= 0) return;
   g.beginPath();
   trace();
@@ -105,7 +106,7 @@ function telegraph(g: C, s: BodyState, trace: Trace) {
 }
 
 /** Damage: one crack per 25% of HP lost, jagged PAL.hostile lines across the extent. */
-function cracks(g: C, e: Ext, s: BodyState) {
+export function cracks(g: C, e: Ext, s: BodyState) {
   const n = Math.min(CRACKS.length, Math.floor((1 - s.hp) / 0.25));
   if (n <= 0) return;
   g.beginPath();
@@ -121,7 +122,7 @@ function cracks(g: C, e: Ext, s: BodyState) {
 }
 
 /** The shield: a hex outline 12 px outside the body, dashed in PAL.trace at 0.7 alpha. */
-function shield(g: C, e: Ext, s: BodyState) {
+export function shield(g: C, e: Ext, s: BodyState) {
   if (!s.shielded) return;
   const x0 = e.cx - e.w / 2 - 12, x1 = e.cx + e.w / 2 + 12, y0 = e.cy - e.h / 2 - 12, y1 = e.cy + e.h / 2 + 12, k = 40;
   g.beginPath();
@@ -136,7 +137,7 @@ function shield(g: C, e: Ext, s: BodyState) {
 }
 
 /** Lamps: four 100 px lamps (bits 8, 4, 2, 1) in a rounded frame. A lit lamp fills amber and glows; the rest are dashed. */
-const lamps: BodyDrawer = (g, box, s) => {
+export const lamps: BodyDrawer = (g, box, s) => {
   const { cx, cy } = centre(box, s);
   const e: Ext = { cx, cy, w: 512, h: 140 };
   const frame = () => rrect(g, cx - 256, cy - 70, 512, 140, 18);
@@ -170,7 +171,7 @@ const lamps: BodyDrawer = (g, box, s) => {
 };
 
 /** The gate: an OR outline (curved back, pointed front), 300 x 200. Each HP lost adds the extra back curve, so it becomes XOR. */
-const gate: BodyDrawer = (g, box, s) => {
+export const gate: BodyDrawer = (g, box, s) => {
   const { cx, cy } = centre(box, s);
   const x0 = cx - 150, x1 = cx + 150, y0 = cy - 100, y1 = cy + 100;
   const or = () => {
@@ -201,7 +202,7 @@ const gate: BodyDrawer = (g, box, s) => {
 
 /** The chain: four 90 x 110 adder blocks with carry arrows between them, running right to left. The segments attack
  *  detaches the first `away` blocks, so only the arrows between the blocks that stay are drawn. */
-const chain: BodyDrawer = (g, box, s) => {
+export const chain: BodyDrawer = (g, box, s) => {
   const { cx, cy } = centre(box, s);
   const e: Ext = { cx, cy, w: 480, h: 110 };
   const left = (i: number) => cx - 240 + i * 130;
@@ -235,7 +236,7 @@ const chain: BodyDrawer = (g, box, s) => {
 
 /** The wheel: four state nodes (S0 to S3) on a ring of radius 100, turning 30 degrees a second. The current node
  *  (one every 2 s) is lit amber; arrows along the ring show the transitions S0 to S1 to S2 to S3 and back. */
-const wheel: BodyDrawer = (g, box, s) => {
+export const wheel: BodyDrawer = (g, box, s) => {
   const { cx, cy } = centre(box, s);
   const R = 100, NODE = 22, turn = (s.t / HZ) * 30 * (Math.PI / 180), cur = Math.floor(s.t / 120) % 4;
   const ang = (k: number) => turn - Math.PI / 2 + (k * Math.PI) / 2;
@@ -284,7 +285,7 @@ const wheel: BodyDrawer = (g, box, s) => {
 
 /** The digit: a 7-segment figure 240 px tall showing floor(HP x 9). While the segments attack, the first `away` bars
  *  are gone: they show as dashed outlines, amber while they telegraph. */
-const digit: BodyDrawer = (g, box, s) => {
+export const digit: BodyDrawer = (g, box, s) => {
   const { cx, cy } = centre(box, s);
   const W = 140, H = 240, th = 24, e: Ext = { cx, cy, w: W, h: H };
   const x0 = cx - W / 2 + th / 2, x1 = cx + W / 2 - th / 2, yT = cy - H / 2 + th / 2, yB = cy + H / 2 - th / 2;
@@ -323,7 +324,7 @@ const digit: BodyDrawer = (g, box, s) => {
 
 /** The twin: the player drone's silhouette at 3x (hull, eye, two legs), in neon instead of cyan. Its eye is the
  *  mirror attack's shot, so the eye rings amber as the attack telegraphs. */
-const twin: BodyDrawer = (g, box, s) => {
+export const twin: BodyDrawer = (g, box, s) => {
   const { cx, cy } = centre(box, s);
   const ox = cx, oy = cy - 26; // the drone's local origin, placed so the figure sits in the box
   const P = (x: number, y: number): Pt => ({ x: ox + x * 3, y: oy + y * 3 });
@@ -353,5 +354,3 @@ const twin: BodyDrawer = (g, box, s) => {
   flash(g, s, () => roundPoly(g, hull, 12));
   g.restore();
 };
-
-export const BODIES: Record<BodyKind, BodyDrawer> = { lamps, gate, chain, wheel, digit, twin };

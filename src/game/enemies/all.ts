@@ -4,3 +4,6 @@ import './crawler';
 import './racer';
 import './stuckat';
 import './xblob';
+import './metastable';
+import './swarm';
+import './bubble';

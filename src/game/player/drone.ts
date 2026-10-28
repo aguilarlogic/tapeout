@@ -51,6 +51,8 @@ export interface Drone {
   /** Upgrades that switch moves on (Level 1 spec): double jump comes in Level 2, wall latch in Level 5. */
   /** `jump2`: the double jump's speed in px/step (Overflow Jump Mk II raises it); default DRONE.doubleJump. */
   abilities: { doubleJump: boolean; wallLatch: boolean; jump2?: number };
+  /** Run speed multiplier: 0.5 inside a Stall Bubble's field (Phase 4 Spec, section 5). */
+  slow: number;
 }
 
 const cancelGravity = (b: Matter.Body, w: World) => {
@@ -71,6 +73,7 @@ export function createDrone(w: World, x: number, y: number): Drone {
     wall: 0, latched: 0, coyote: 0, buffer: 0, shortHop: false, airJumps: 1, wallTime: 0, lastLatch: 0, wallLock: 0,
     lockSide: 1, dash: null, dashCd: 0, dashUsed: false, drop: 0, prevX: x, prevBottom: y + DRONE.h / 2,
     abilities: { doubleJump: true, wallLatch: true },
+    slow: 1,
   };
 }
 
@@ -188,7 +191,7 @@ export function stepDrone(d: Drone, c: Controls, w: World, energy: number, froze
     let dir = (held('right') ? 1 : 0) - (held('left') ? 1 : 0);
     if (d.wallLock > 0 && dir === d.lockSide) dir = 0;
     if (dir) d.facing = dir as 1 | -1;
-    const top = d.crouched ? DRONE.crouchRun : DRONE.run;
+    const top = (d.crouched ? DRONE.crouchRun : DRONE.run) * d.slow;
     const accel = d.grounded ? DRONE.groundAccel : DRONE.airAccel;
     if (Math.abs(d.vx) > DRONE.run && Math.sign(d.vx) !== -dir) {
       d.vx = approach(d.vx, Math.sign(d.vx) * DRONE.run, DRONE.momentumDecay); // momentum: decays, never clamped

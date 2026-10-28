@@ -4,6 +4,7 @@
 import { findModule, type ModKind } from '../../curriculum';
 import { findIncident } from '../../incidents';
 import type { EnemyKind, PropSpec } from '../level/room';
+import { overlaps } from '../physics/geom';
 import type { Station, StoryRoom, Trigger } from '../story/types';
 import { MECHANICS } from './mechanics';
 import { PLACES, placeById } from './places';
@@ -12,7 +13,8 @@ import { arena } from './templates/arena';
 import { FIGHT_VARIANTS } from './templates/fight';
 import { ROOMS } from './templates/rooms';
 import { TRAVERSE_VARIANTS } from './templates/traverse';
-import { themeFor } from './themes/act1';
+import { themeFor as act1Theme } from './themes/act1';
+import { ACT2_THEMES } from './themes/act2';
 import type { BackdropKind, PlaceDef, PlaceTheme, Shell, Template, TemplateOpts } from './types';
 
 /** A small seeded rng (mulberry32). */
@@ -31,7 +33,7 @@ const BACKDROP: Record<PlaceDef['act'], BackdropKind> = { 1: 'lamps', 2: 'core',
 
 /** The theme a place without its own (phases 4 to 8 fill these in) is built with. */
 export function themeOf(place: PlaceDef): PlaceTheme {
-  return themeFor(place.id) ?? {
+  return act1Theme(place.id) ?? ACT2_THEMES.find((t) => t.place === place.id) ?? {
     place: place.id, music: 'keeper', enemies: ['glitch', 'spark', 'latch'], fights: 3, backdrop: BACKDROP[place.act],
     lines: { arrive: [`${place.name}.`], rooms: {}, clear: ['Clear.'], bossIntro: [], bossBeaten: [], leave: [] },
   };
@@ -113,7 +115,9 @@ export function composePlace(place: PlaceDef, theme: PlaceTheme = themeOf(place)
     } else {
       s = ROOMS[room.role as keyof typeof ROOMS](rng, { ...opts, stations: Math.max(1, room.modules.length) });
     }
-    const stations = room.role === 'arena' ? arenaStations(room, s) : room.role === 'exit' || room.role === 'landing' ? liftStation(s) : stationsFor(room, s);
+    const stations = room.role === 'arena' ? arenaStations(room, s) : room.role === 'exit' || room.role === 'landing' ? [...liftStation(s), ...hatchStation(place, room, s)] : stationsFor(room, s);
+    const rail = room.role === 'traverse' && place.act === 2 ? railFor(s) : null;
+    if (rail) stations.push({ id: 'rail0', kind: 'rail', x: rail.x1, y: rail.y1 + RAIL_LIFT, label: 'BUS RAIL', arg: '0' });
     const signs = room.role === 'landing' ? [{ x: 640, y: 200, text: `${place.name.toUpperCase()} · ${place.region.toUpperCase()} · T-${clockAt(place)}` }] : s.signs;
     return {
       ...base,
@@ -129,6 +133,7 @@ export function composePlace(place: PlaceDef, theme: PlaceTheme = themeOf(place)
       ...(room.capstone && major ? { upgrade: major.id } : {}),
       ...(room.role === 'bench' && s.anchors.rig ? { props2: [{ kind: 'rig' as const, x: s.anchors.rig.x, y: s.anchors.rig.y, w: 520, h: 140 }] } : {}),
       ...(room.role === 'arena' && s.anchors.boss ? { boss: { incident: room.incident!, rect: s.anchors.boss } } : {}),
+      ...(rail ? { rails: [rail] } : {}),
     };
   });
 }
@@ -149,6 +154,52 @@ function liftStation(s: Shell): Station[] {
   // the landing's lift is the one the drone came down on: it goes home too
   return l ? [{ id: 'lift', kind: 'lift', x: l.x, y: l.y, label: 'LIFT TO THE LOFT' }] : [];
 }
+
+/** A rail starts this far above the ground at its start station, so the drone barely rises as it clips on. */
+const RAIL_LIFT = 90;
+/** Room the drone needs along a rail: the rail line plus the drone hanging under it. */
+const RAIL_BAND = { above: 12, below: 64, side: 24 };
+
+/**
+ * A bus rail across an act 2 traverse room (Phase 4 Spec, section 7), from the ground near the spawn up to a clear
+ * height and across to 260 px short of the far wall. Every point along it has room for the hanging drone; a room with
+ * no clear line gets no rail. Only the Datapath Rail rides it; without it the rail is scenery that says so.
+ */
+function railFor(s: Shell): { x1: number; y1: number; x2: number; y2: number } | null {
+  const x1 = s.spawn.x + 80, ground = s.spawn.y + 24, x2 = s.w - 260;
+  if (x2 - x1 < 600 || !s.solids.some((b) => b.y === ground && b.x <= x1 && b.x + b.w >= x1)) return null;
+  const y1 = ground - RAIL_LIFT;
+  const clear = (y2: number) => {
+    for (let x = x1; x <= x2; x += 16) {
+      const y = y1 + ((y2 - y1) * (x - x1)) / (x2 - x1);
+      const band = { x: x - RAIL_BAND.side, y: y - RAIL_BAND.above, w: RAIL_BAND.side * 2, h: RAIL_BAND.above + RAIL_BAND.below };
+      if (s.solids.some((b) => overlaps(b, band))) return false;
+    }
+    return true;
+  };
+  for (let y2 = y1; y2 >= 120; y2 -= 20) if (clear(y2)) return { x1, y1, x2, y2 };
+  return null;
+}
+
+/** The places in play order without the chalkboard studies: the ones with rooms, as the drone walks them. */
+const WALKED = PLACES.filter((p) => p.kind !== 'study');
+
+/** Deep Layer hatches (Phase 4 Spec, section 3): the exit of the place before a Deep Layer drops into it, and a Deep
+ * Layer's landing climbs back up to that exit. `arg` names the place the hatch leads to. */
+function hatchStation(place: PlaceDef, room: PlanRoom, s: Shell): Station[] {
+  const l = s.anchors.lift, i = WALKED.indexOf(place);
+  if (!l || i < 0) return [];
+  const next = WALKED[i + 1], prev = WALKED[i - 1];
+  if (room.role === 'exit' && next?.kind === 'deep') {
+    return [{ id: 'hatch', kind: 'hatch', x: l.x - HATCH_OFF, y: l.y, label: `HATCH · ${next.name.toUpperCase()}`, arg: next.id }];
+  }
+  if (room.role === 'landing' && place.kind === 'deep' && prev) {
+    return [{ id: 'hatch', kind: 'hatch', x: l.x + HATCH_OFF, y: l.y, label: `HATCH · UP TO ${prev.name.toUpperCase()}`, arg: prev.id }];
+  }
+  return [];
+}
+/** A hatch sits this far from the lift, on the floor. */
+const HATCH_OFF = 300;
 
 /** TAPEOUT's lines for a room: the arrive lines at the landing, the leave lines at the exit, else the room's own. */
 function lines(theme: PlaceTheme, room: PlanRoom, x: number): Trigger[] {

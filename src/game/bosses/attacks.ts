@@ -6,42 +6,43 @@ import type { Rect } from '../level/room';
 import { norm, overlaps } from '../physics/geom';
 import { LINE, PAL, rgba, easeOut } from '../render/palette';
 import { HZ } from '../tuning';
-import type { Attack, AttackCtx, AttackId } from './types';
+import type { Attack, AttackCtx } from './types';
 
-type G = CanvasRenderingContext2D;
-interface Pt { x: number; y: number }
+export type G = CanvasRenderingContext2D;
+export interface Pt { x: number; y: number }
 
 const COL = 80; // drop column and block width, px
 const FALL = 900 / HZ; // a drop's fall, px per step
-const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
-const mid = (r: Rect): Pt => ({ x: r.x + r.w / 2, y: r.y + r.h / 2 });
+export const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+export const mid = (r: Rect): Pt => ({ x: r.x + r.w / 2, y: r.y + r.h / 2 });
 const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
 /** 0..1 at 2 Hz: a smooth pulse, never a hard flash. `t` is in steps. */
-const pulse = (t: number) => 0.5 + 0.5 * Math.sin((t / HZ) * 4 * Math.PI);
+export const pulse = (t: number) => 0.5 + 0.5 * Math.sin((t / HZ) * 4 * Math.PI);
 
 /** A velocity of `v` px/s from `from` toward `to`. */
-function toward(from: Pt, to: Pt, v: number): Pt {
+export function toward(from: Pt, to: Pt, v: number): Pt {
   const u = norm({ x: to.x - from.x, y: to.y - from.y });
   return { x: u.x * v, y: u.y * v };
 }
 
 /** The highest floor that spans [x0, x1] at or below y (where a falling thing lands), else the arena's bottom edge. */
-function landingFloor(c: AttackCtx, x0: number, x1: number, y: number): Rect {
+export function landingFloor(c: AttackCtx, x0: number, x1: number, y: number): Rect {
   let best: Rect = { x: c.arena.x, y: c.arena.y + c.arena.h, w: c.arena.w, h: 0 };
   for (const f of c.floors) if (f.x < x1 && f.x + f.w > x0 && f.y >= y && f.y < best.y) best = f;
   return best;
 }
 
 /** Timer state: `tele` real steps of warning, then the active clock `t` (steps × speed, from 0). */
-interface Timed { tele: number; age: number; t: number }
+export interface Timed { tele: number; age: number; t: number }
 type Phase = 'tele' | 'start' | 'on';
 
-function timed(c: AttackCtx, base: number): Timed {
+/** A run's timers: the telegraph length in real steps (1.5x on Story), the real age, and the active clock. */
+export function timed(c: AttackCtx, base: number): Timed {
   return { tele: c.story ? Math.round(base * 1.5) : base, age: 0, t: 0 };
 }
 
 /** One real step. 'start' is the first step after the telegraph; 'on' the ones after it. */
-function tick(r: Timed, speed: number): Phase {
+export function tick(r: Timed, speed: number): Phase {
   r.age += 1;
   if (r.age <= r.tele) return 'tele';
   const first = r.age === r.tele + 1;
@@ -50,7 +51,7 @@ function tick(r: Timed, speed: number): Phase {
 }
 
 /** A soft additive halo, the same light the combat renderer uses. */
-function light(g: G, x: number, y: number, r: number, col: string, a: number) {
+export function light(g: G, x: number, y: number, r: number, col: string, a: number) {
   g.save();
   g.globalCompositeOperation = 'lighter';
   const grad = g.createRadialGradient(x, y, 0, x, y, r);
@@ -63,7 +64,7 @@ function light(g: G, x: number, y: number, r: number, col: string, a: number) {
   g.restore();
 }
 
-function dashed(g: G, r: Rect, col: string, a: number) {
+export function dashed(g: G, r: Rect, col: string, a: number) {
   g.save();
   g.strokeStyle = col;
   g.globalAlpha = a;
@@ -587,6 +588,3 @@ export const mirror: Attack<MirrorRun> = {
     g.restore();
   },
 };
-
-/** Every attack by id. The Sim runs a boss's attacks from this table, one at a time. */
-export const ATTACKS: Record<AttackId, Attack<unknown>> = { bolts, drop, grid, chain, freeze, segments, mirror };

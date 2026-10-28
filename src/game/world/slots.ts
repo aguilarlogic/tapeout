@@ -86,7 +86,9 @@ export function planPlace(place: PlaceDef, theme: Pick<PlaceTheme, 'fights' | 'd
   let scored = 0, fillers = 0;
   const filler = () => {
     if (fillers >= theme.fights) return;
-    out.push({ role: fillers++ % 2 === 0 ? 'traverse' : 'fight', modules: [] });
+    const want = fillers++ % 2 === 0 ? 'traverse' : 'fight';
+    // no two fights in a row (Phase 4 Spec, section 3)
+    out.push({ role: want === 'fight' && out[out.length - 1].role === 'fight' ? 'traverse' : want, modules: [] });
   };
   const disc = theme.discovery;
   let discovered = false;
@@ -100,7 +102,8 @@ export function planPlace(place: PlaceDef, theme: Pick<PlaceTheme, 'fights' | 'd
     out.push(room);
     if (SCORED.has(room.role) && ++scored % 2 === 0) filler();
   }
-  if (!place.bosses.length) out.push({ role: 'fight', modules: [], gauntlet: true });
+  // Deep Layers are short: no closing gauntlet (Phase 4 Spec, section 3)
+  if (!place.bosses.length && place.kind !== 'deep') out.push({ role: 'fight', modules: [], gauntlet: true });
   out.push({ role: 'exit', modules: [] });
   return out;
 }

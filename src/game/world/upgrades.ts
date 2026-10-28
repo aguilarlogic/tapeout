@@ -4,7 +4,8 @@
 
 export type UpgradeId =
   | 'overflow-jump' | 'inverted-grip' | 'nand-plating' | 'enable-lock' | 'selector' | 'fan-decoder' | 'full-adder'
-  | 'comparator-sight' | 'wall-latch' | 'beam-toggle' | 'counter-fire' | 'alu-cannon' | 'power-cell';
+  | 'comparator-sight' | 'wall-latch' | 'beam-toggle' | 'counter-fire' | 'alu-cannon' | 'power-cell'
+  | 'loop-drone' | 'datapath-rail' | 'synchronizer' | 'pipeline-burst' | 'third-slot';
 
 export interface Upgrade {
   id: UpgradeId;
@@ -34,6 +35,12 @@ export const UPGRADES: Upgrade[] = [
   { id: 'counter-fire', name: 'Counter Fire', type: 'major', source: ['logic-counter'], effect: 'Hits in a row speed up the Pulse Probe. A miss resets it.', mk2: { banks: ['practice-seq', 'practice-fsm'], effect: 'A higher top speed.' } },
   { id: 'alu-cannon', name: 'ALU Cannon', type: 'major', weapon: true, source: ['cpu-tiny'], effect: 'A new weapon: one heavy shot a second that knocks bugs back.', mk2: { banks: ['practice-verilog'], effect: 'Heavier shots.' } },
   { id: 'power-cell', name: 'Power Cell', type: 'minor', source: ['resistance'], effect: 'More energy for the Field Coil and the cannon.' },
+  // Act 2, the Core (Phase 4 Spec, section 7)
+  { id: 'loop-drone', name: 'Loop Drone', type: 'major', source: ['isa-boss-rec'], effect: 'A small helper drone circles you and shoots the nearest bug.', mk2: { banks: ['practice-asm'], effect: 'Its shots hit harder.' } },
+  { id: 'datapath-rail', name: 'Datapath Rail', type: 'major', source: ['rv-boss'], effect: 'Press E at a bus rail to clip on and ride it fast.', mk2: { banks: ['practice-alu'], effect: 'Faster rides.' } },
+  { id: 'synchronizer', name: 'Synchronizer', type: 'major', source: ['cdc-fifo'], effect: 'Press F to slow every bug to half speed for 3 seconds.', mk2: { banks: ['practice-clk'], effect: 'The slow lasts longer.' } },
+  { id: 'pipeline-burst', name: 'Pipeline Burst', type: 'major', weapon: true, source: ['pipe-boss'], effect: 'A new weapon: four quick bolts in a row.', mk2: { banks: ['practice-pipe'], effect: 'Five bolts instead of four.' } },
+  { id: 'third-slot', name: 'Third Slot', type: 'minor', source: ['code-boss-c-crc'], effect: 'Room for a third weapon on the Selector.' },
 ];
 
 /** The numbers each upgrade changes. */
@@ -50,6 +57,15 @@ export const UP = {
   energyMax: 125,
   /** Integrity: +5 per main-path boss after the Dark Demo Board, capped. */
   bossIntegrity: 5, integrityCap: 200,
+  // --- act 2 (Phase 4 Spec, section 7) ---
+  /** Loop Drone: orbit radius px, damage (Mk II), shots a second, reach px, bolt speed px/s. */
+  loopDrone: { orbit: 60, damage: 4, damageMk2: 5, rate: 2, range: 400, speed: 900 },
+  /** Datapath Rail: ride speed px/s (Mk II). */
+  rail: { speed: 600, speedMk2: 720 },
+  /** Synchronizer: enemies at this fraction of speed for s seconds (Mk II), its energy and cooldown. */
+  sync: { scale: 0.5, s: 3, sMk2: 3.6, energy: 40, cooldownS: 12 },
+  /** Pipeline Burst: bolts (Mk II) 80 ms apart, a 1.2 s cooldown, 10 damage each at 1000 px/s over 640 px, 12 energy. */
+  burst: { bolts: 4, boltsMk2: 5, gapMs: 80, cooldownS: 1.2, damage: 10, speed: 1000, range: 640, energy: 12 },
 } as const;
 
 /** The upgrade a module grants, if any. */
@@ -67,14 +83,24 @@ export function mk2(id: UpgradeId, done: (id: string) => boolean): { done: numbe
   return { done: n, total: m.banks.length, online: n === m.banks.length };
 }
 
-/** What act 1's upgrades add to the drone, from records (the Director lays it over Level 1's kit). */
+/** What act 1 and act 2's upgrades add to the drone, from records (the Director lays it over Level 1's kit). */
 export interface ActKit {
   doubleJump: boolean;
   /** Double jump speed, px/s. */
   jump2: number;
   wallLatch: boolean;
   /** Weapons the Selector cycles; just the Pulse Probe before it. */
-  weapons: ('pulse' | 'fan' | 'cannon')[];
+  weapons: ('pulse' | 'fan' | 'cannon' | 'burst')[];
+  /** Weapon slots the HUD shows: 2, or 3 after the Firmware Pit (Phase 4 Spec, section 7: Q still cycles them all). */
+  slots: 2 | 3;
+  /** Pipeline Burst bolts a burst (0: not owned). */
+  burstBolts: number;
+  /** Loop Drone damage a bolt (0: not owned). */
+  loopDrone: number;
+  /** Datapath Rail ride speed, px/s (0: not owned). */
+  rail: number;
+  /** Synchronizer seconds (0: not owned). */
+  sync: number;
   probeDamage: number;
   cannonDamage: number;
   /** Counter Fire's top rate, 0 when not owned. */
@@ -103,7 +129,14 @@ export function actKit(done: (id: string) => boolean, bosses: readonly string[])
     doubleJump: has('overflow-jump'),
     jump2: mk('overflow-jump') ? UP.doubleJumpMk2 : UP.doubleJump,
     wallLatch: has('wall-latch'),
-    weapons: has('selector') ? ['pulse', ...(has('fan-decoder') ? ['fan' as const] : []), ...(has('alu-cannon') ? ['cannon' as const] : [])] : ['pulse'],
+    weapons: has('selector')
+      ? ['pulse', ...(has('fan-decoder') ? ['fan' as const] : []), ...(has('alu-cannon') ? ['cannon' as const] : []), ...(has('pipeline-burst') ? ['burst' as const] : [])]
+      : ['pulse'],
+    slots: has('third-slot') ? 3 : 2,
+    burstBolts: has('pipeline-burst') ? (mk('pipeline-burst') ? UP.burst.boltsMk2 : UP.burst.bolts) : 0,
+    loopDrone: has('loop-drone') ? (mk('loop-drone') ? UP.loopDrone.damageMk2 : UP.loopDrone.damage) : 0,
+    rail: has('datapath-rail') ? (mk('datapath-rail') ? UP.rail.speedMk2 : UP.rail.speed) : 0,
+    sync: has('synchronizer') ? (mk('synchronizer') ? UP.sync.sMk2 : UP.sync.s) : 0,
     probeDamage: has('full-adder') ? UP.fullAdderDamage : 10,
     cannonDamage: mk('alu-cannon') ? UP.cannon.damageMk2 : UP.cannon.damage,
     counterTo: has('counter-fire') ? (mk('counter-fire') ? UP.counter.toMk2 : UP.counter.to) : 0,

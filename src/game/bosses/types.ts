@@ -2,8 +2,8 @@
 // investigation); its form is a line-art body in the arena that runs attacks from a shared library, one at a time.
 import type { Rect } from '../level/room';
 
-export type AttackId = 'bolts' | 'drop' | 'grid' | 'chain' | 'freeze' | 'segments' | 'mirror';
-export type BodyKind = 'lamps' | 'gate' | 'chain' | 'wheel' | 'digit' | 'twin';
+export type AttackId = 'bolts' | 'drop' | 'grid' | 'chain' | 'freeze' | 'segments' | 'mirror' | 'push' | 'relay' | 'split' | 'stage';
+export type BodyKind = 'lamps' | 'gate' | 'chain' | 'wheel' | 'digit' | 'twin' | 'stack' | 'datapath' | 'clocks' | 'worm';
 
 export interface BossForm {
   incident: string;
@@ -31,6 +31,8 @@ export interface AttackCtx {
   hurt(area: Rect, n: number): void;
   /** A temporary hazard rect that hurts on touch for `ms`. */
   hazard(r: Rect, ms: number, damage: number): void;
+  /** A temporary platform the drone can stand on, for `ms` (the Bad Call's push). */
+  platform(r: Rect, ms: number): void;
   sfx(n: 'laser' | 'drop' | 'chain' | 'freeze' | 'mirror' | 'turret'): void;
 }
 

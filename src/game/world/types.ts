@@ -90,7 +90,7 @@ export type Template = (rng: () => number, opts: TemplateOpts) => Shell;
 
 // --- themes ---------------------------------------------------------------------------------------------------------
 
-export type MechanicKind = 'lamps' | 'inverted' | 'select' | 'clocked' | 'pattern';
+export type MechanicKind = 'lamps' | 'inverted' | 'select' | 'clocked' | 'pattern' | 'loop' | 'bus' | 'clocks' | 'stages';
 export interface MechanicSpec { kind: MechanicKind; /** The module whose port follows the discovery room. */ before: string }
 
 export type BackdropKind = 'lamps' | 'gates' | 'carry' | 'clock' | 'rom' | 'core' | 'grid' | 'silicon' | 'cluster' | 'fab' | 'loft';
@@ -141,6 +141,10 @@ export interface MechCtx {
   close(id: string): void;
   sfx(n: 'lever' | 'plate' | 'rowTick' | 'door' | 'liftHum' | 'pass'): void;
   say(line: string): void;
+  /** Put the drone's centre at x, y with velocity vx, vy in px/s (rails, pads, a reset to the start). */
+  warp(x: number, y: number, vx?: number, vy?: number): void;
+  /** Hurt the drone by n (it ignores this while invulnerable). */
+  hurt(n: number): void;
   /** The beat is done: opens the exit, records the discovery once, plays the pass chime. */
   solve(): void;
 }

@@ -6,7 +6,7 @@ import { frames } from '../tuning';
 import { easeOut, FONT, PAL, rgba } from './palette';
 
 /** The weapon's name, shown under its readout for 1.2 s after a swap and faded over the last 0.3 s. */
-const WEAPON_NAME: Record<Weapon, string> = { pulse: 'PULSE PROBE', charged: 'CHARGED PROBE', fan: 'FAN DECODER', cannon: 'ALU CANNON' };
+const WEAPON_NAME: Record<Weapon, string> = { pulse: 'PULSE PROBE', charged: 'CHARGED PROBE', fan: 'FAN DECODER', cannon: 'ALU CANNON', burst: 'PIPELINE BURST' };
 const NAME_STEPS = frames(1200), NAME_FADE = frames(300);
 
 export class Hud {
@@ -92,7 +92,7 @@ export class Hud {
     }
     c.stroke();
     c.fillStyle = rgba(PAL.text, 0.7);
-    c.fillText(({ pulse: 'PULSE', charged: 'CHARGED', fan: 'FAN', cannon: 'CANNON' } as const)[sim.weapon], wx + 30, wy);
+    c.fillText(({ pulse: 'PULSE', charged: 'CHARGED', fan: 'FAN', cannon: 'CANNON', burst: 'BURST' } as const)[sim.weapon], wx + 30, wy);
     // the weapon's name, under the readout, after a swap
     if (this.nameT < NAME_STEPS) {
       c.globalAlpha = s * this.gunA * Math.min(1, (NAME_STEPS - this.nameT) / NAME_FADE);

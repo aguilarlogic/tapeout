@@ -101,13 +101,14 @@ const V: Record<Sfx, Voice[]> = {
 
 // --- the music: loops of 24 bars in three 8-bar sections that add voices. The test room's ambient loop is 96 BPM
 // Am F C G; the story adds the Keeper's room theme, the boss, the Loft and the workbench (Level 1 spec, "Sound"). ---
-export type Track = 'test' | 'keeper' | 'boss' | 'loft' | 'bench';
+export type Track = 'test' | 'keeper' | 'boss' | 'loft' | 'bench' | 'core';
 interface TrackDef { bpm: number; chords: number[][]; from: number; arp: OscillatorType | null; drums: boolean; bass: 2 | 1 }
 const TRACKS: Record<Track, TrackDef> = {
   test: { bpm: 96, chords: [[57, 60, 64], [53, 57, 60], [48, 52, 55], [55, 59, 62]], from: 0, arp: 'square', drums: true, bass: 2 }, // Am F C G
   keeper: { bpm: 120, chords: [[52, 55, 59], [48, 52, 55], [55, 59, 62], [50, 54, 57]], from: 0, arp: 'square', drums: true, bass: 2 }, // Em C G D
   boss: { bpm: 150, chords: [[50, 53, 57], [46, 50, 53], [48, 52, 55], [45, 49, 52]], from: 2, arp: 'sawtooth', drums: true, bass: 1 }, // Dm Bb C A
   loft: { bpm: 84, chords: [[53, 57, 60, 64], [57, 60, 64, 67], [50, 53, 57, 60], [48, 52, 55, 59]], from: 0, arp: 'triangle', drums: false, bass: 2 }, // Fmaj7 Am7 Dm7 Cmaj7
+  core: { bpm: 128, chords: [[57, 60, 64], [53, 57, 60], [48, 52, 55], [55, 59, 62]], from: 0, arp: 'square', drums: true, bass: 2 }, // Am F C G
   bench: { bpm: 90, chords: [[48, 51, 55], [44, 48, 51], [51, 55, 58], [46, 50, 53]], from: 0, arp: null, drums: false, bass: 2 }, // Cm Ab Eb Bb
 };
 const BARS = 24;

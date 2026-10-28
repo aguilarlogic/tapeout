@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { Rect } from '../level/room';
 import { LINE, PAL, rgba } from '../render/palette';
-import { BODIES } from './bodies';
+import { BODIES } from './table';
+import { formFor } from './forms-act1';
+import { FORMS_ACT2 } from './forms-act2';
 import type { BodyKind, BodyState } from './types';
 
-const KINDS: BodyKind[] = ['lamps', 'gate', 'chain', 'wheel', 'digit', 'twin'];
+const KINDS: BodyKind[] = ['lamps', 'gate', 'chain', 'wheel', 'digit', 'twin', 'stack', 'datapath', 'clocks', 'worm'];
 const BOX: Rect = { x: 0, y: 0, w: 520, h: 260 };
 const BASE: BodyState = { t: 0, hp: 1, shielded: false, enraged: false, flash: 0, attack: null, telegraph: 0, lit: [false, false, false, false], away: 0 };
 const STATES: [string, Partial<BodyState>][] = [
@@ -22,6 +24,12 @@ const STATES: [string, Partial<BodyState>][] = [
   ['away 3 (segments)', { away: 3, attack: 'segments' }],
   ['attack null', { attack: null }],
   ['everything at once', { t: 600, hp: 0.1, shielded: true, enraged: true, flash: 6, attack: 'segments', telegraph: 0.5, lit: [true, false, true, false], away: 3 }],
+  ['relay at t 41 (datapath)', { t: 41, attack: 'relay', telegraph: 0.3 }],
+  ['push at full telegraph (stack)', { attack: 'push', telegraph: 1 }],
+  ['t 97 shielded (clocks)', { t: 97, shielded: true }],
+  ['stage at hp 0.25 (worm)', { hp: 0.25, shielded: true, attack: 'stage', telegraph: 0.2 }],
+  ['away 4 enraged (worm)', { away: 4, attack: 'segments', enraged: true, telegraph: 0.9 }],
+  ['split with flash 3 (clocks)', { attack: 'split', telegraph: 0.7, flash: 3 }],
 ];
 
 interface Seen { strokeStyle: unknown[]; fillStyle: unknown[]; shadowColor: unknown[]; lineWidth: unknown[] }
@@ -84,5 +92,31 @@ describe('boss bodies', () => {
     expect(isPalColour(rgba(PAL.amber, 0.4))).toBe(true);
     expect(isPalColour('#FFFFFF')).toBe(false);
     expect(isPalColour('rgba(0,0,0,0.5)')).toBe(false);
+  });
+});
+
+describe('act 2 forms', () => {
+  it('lists the four act 2 forms with their names, bodies and attacks', () => {
+    expect(FORMS_ACT2.map((f) => [f.incident, f.name, f.body, f.attacks])).toEqual([
+      ['inc-isa', 'The Bad Call', 'stack', ['push', 'bolts']],
+      ['inc-datapath', 'The Core That Failed Its Tests', 'datapath', ['relay']],
+      ['inc-crossing', 'The Bridge Between Clocks', 'clocks', ['split', 'bolts']],
+      ['inc-pipeline', 'The Red Integer Gate', 'worm', ['stage', 'segments']],
+    ]);
+  });
+
+  it('formFor returns each act 2 form for its incident', () => {
+    expect(formFor('inc-isa')).toEqual(FORMS_ACT2[0]);
+    expect(formFor('inc-datapath')).toEqual(FORMS_ACT2[1]);
+    expect(formFor('inc-crossing')).toEqual(FORMS_ACT2[2]);
+    expect(formFor('inc-pipeline')).toEqual(FORMS_ACT2[3]);
+  });
+
+  it('formFor still returns act 1 forms, and falls back to the lamps for an unknown incident', () => {
+    expect(formFor('inc-lamp-board').body).toBe('lamps');
+    expect(formFor('inc-rtl').name).toBe('The Regression That Lied');
+    expect(formFor('inc-unknown')).toEqual({
+      incident: 'inc-unknown', name: 'inc-unknown', body: 'lamps', attacks: ['bolts', 'drop'],
+    });
   });
 });

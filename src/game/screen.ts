@@ -20,7 +20,7 @@ import { drawBossHud, drawBubble, drawDark, drawExitLift, drawPrompt, drawStoryB
 import { Loop } from './loop';
 import { pauseMenu } from './pause';
 import { Camera } from './render/camera';
-import { drawAimLine, drawBeam, drawEnemies, drawField, drawShots } from './render/combat';
+import { drawAimLine, drawBeam, drawEnemies, drawField, drawLoopDrone, drawShots, drawSyncTint } from './render/combat';
 import { DroneRig } from './render/drone';
 import { Fx } from './render/fx';
 import { Hud } from './render/hud';
@@ -352,6 +352,8 @@ export class GameScreen {
         case 'fizzle': a.play('fizzle'); fx.sparks(f.x, f.y, sim.aim.x, sim.aim.y, 4, PAL.idle, 2); break;
         case 'repair': a.play('repair'); break;
         case 'enemyBoot': fx.ring(f.x, f.y, 30, PAL.neon, 20); break;
+        case 'sync': a.play('freeze'); fx.ring(f.x, f.y, 80, PAL.trace, 24); fx.ring(f.x, f.y, 140, PAL.trace, 30); break;
+        case 'rail': a.play('grab'); fx.sparks(f.x, f.y - 30, 0, -1, 6, PAL.trace, 3, Math.PI); break;
       }
     }
     if (sim.weapon === 'charged' && sim.charge > 0 && sim.charge < 1 && sim.steps % 6 === 0) a.play('charge', 0.4 + sim.charge * 0.6);
@@ -479,6 +481,7 @@ export class GameScreen {
     if (st) drawStoryFront(c, st, t, { x: dx + sim.drone.facing * 12, y: dy - 4 });
     drawEnemies(c, sim, t, reducedFlash);
     drawBeam(c, sim, t);
+    drawLoopDrone(c, sim, t);
     const core = { x: dx, y: dy - sim.drone.h / 2 + 13 };
     const emitter = { x: dx - sim.drone.facing * 9, y: core.y - 1 };
     drawField(c, sim, core.x, core.y, emitter.x, emitter.y, t, this.fieldPower);
@@ -496,6 +499,7 @@ export class GameScreen {
     // view space: the dark, vignette, HUD, TAPEOUT, boot text, crosshair, fades
     if (st) drawDark(c, st, cam, { x: dx, y: dy - sim.drone.h / 2 + 13 }, this.dark);
     this.art.drawVignette(c);
+    drawSyncTint(c, sim, VIEW_W, VIEW_H, this.reduced);
     const bt = this.bootTimes();
     this.hud.draw(c, sim, Math.max(0, Math.min(1, (this.age - bt.hud) / BOOT.hud)), t);
     if (st) { drawBossHud(c, st, t, this.showLog); drawBubble(c, st, t); drawExitLift(c, st.exitLift); }

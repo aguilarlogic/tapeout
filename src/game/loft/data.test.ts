@@ -48,9 +48,10 @@ describe('the lift choices', () => {
     expect(rows).toContainEqual({ place: 'volts-and-amps', text: 'Volts and Amps (Chalkboard) · Needs: Bit Zero', dim: true });
   });
 
-  it('lists only main and study places', () => {
-    const ids = liftChoices(done).map((r) => r.place);
-    expect(ids).not.toContain('firmware-pit');
+  it('lists main, study and deep places, not wings or side areas', () => {
+    const rows = liftChoices(done), ids = rows.map((r) => r.place);
+    expect(ids).toContain('firmware-pit');
+    expect(rows.find((r) => r.place === 'firmware-pit')?.text).toMatch(/^Firmware Pit \(Deep Layer\)/);
     expect(ids).not.toContain('analog-wing');
     expect(ids).not.toContain('hiring-hall');
   });

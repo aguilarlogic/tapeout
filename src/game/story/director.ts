@@ -60,6 +60,8 @@ export type Choice = 'cause' | 'fix' | 'loftLift' | 'guard' | 'node';
 /** Rooms where Enable Lock folds the gun away. */
 const QUIET = new Set(['port', 'panel', 'annex', 'bench', 'gate']);
 /** The main-path bosses after the Dark Demo Board: each one beaten adds integrity. */
+/** Boss health by act from act 2 on (Phase 4 Spec, section 3; the Design Doc's table). Act 1 ramps instead. */
+const BOSS_HP: Partial<Record<number, number>> = { 2: 900, 3: 1500, 4: 2200 };
 const ACT_BOSSES = PLACES.filter((p) => p.kind === 'main' && p.id !== 'bit-zero').flatMap((p) => p.bosses);
 /** Steps a boss door with no checkpoint waits before it opens. */
 const DOOR_WAIT_MS = 1200;
@@ -246,6 +248,7 @@ export class Director {
     this.queue = [];
     this.bubble = null;
     this.form = null;
+    this.formPlatforms.clear();
     this.sim = new Sim(room, (this.seed = (this.seed * 1664525 + 1013904223) >>> 0), { act: placeById(place)?.act ?? 1, story: Director.difficulty() === 'story' });
     this.sim.respawnEnemies = room.id === 'arena';
     this.sim.panels = [false, false, false, false, false, false];
@@ -288,6 +291,7 @@ export class Director {
       gun: k.gun, coil: k.coil, charged: false, grabLimit: k.grabLimit, carryShot: k.carryShot,
       weapons: a.weapons, probeDamage: a.probeDamage, cannonDamage: a.cannonDamage, counterTo: a.counterTo, weak: a.weak || undefined,
       holster: a.holster && QUIET.has(this.room.role ?? ''), gripEnemies: a.gripEnemies, fieldRadius: a.fieldRadius,
+      burstBolts: a.burstBolts || undefined, loopDrone: a.loopDrone || undefined, rail: a.rail || undefined, sync: a.sync || undefined,
     };
     s.drone.abilities = { doubleJump: a.doubleJump, wallLatch: a.wallLatch, ...(a.doubleJump ? { jump2: a.jump2 / HZ } : {}) };
     if (!a.beam) this.beamOn = false;
@@ -372,9 +376,10 @@ export class Director {
     if (this.done(inc?.id ?? 'inc-demo-board')) { this.openGate('door', true); this.sim.enemies = []; return; }
     const story = Director.difficulty() === 'story';
     if (spec && inc) {
-      // a composed arena: health grows 50 a level after the board's 400; the body fights back
+      // a composed arena: act 1 grows 50 a level after the board's 400, later acts use BOSS_HP; the body fights back
       const n = PLACES.filter((p) => p.kind === 'main').findIndex((p) => p.id === this.place) + 1;
-      this.boss = new BossFight(story, this.seed, undefined, inc, 400 + 50 * (Math.max(1, n) - 1));
+      const act = PLACES.find((p) => p.id === this.place)?.act ?? 1;
+      this.boss = new BossFight(story, this.seed, undefined, inc, BOSS_HP[act] ?? 400 + 50 * (Math.max(1, n) - 1));
       this.form = new FormRun(formFor(inc.id), spec.rect, story);
       this.rng = rngFor(this.seed);
     } else this.boss = new BossFight(story, this.seed);
@@ -482,9 +487,26 @@ export class Director {
       shoot: (x, y, vx, vy, n) => s.hostileShot(x, y, vx, vy, n),
       hurt: (r, n) => s.hurtIn(r, n),
       hazard: (r, ms, n) => f.hazard(r, ms, n),
+      platform: (r, ms) => f.platform(r, ms),
       sfx: (n) => this.out.push({ t: 'sfx', name: n === 'drop' ? 'bossDrop' : n, gain: 0.8 }),
     };
+    // the Synchronizer halves the boss's clock too: its body and attacks step every other step
+    if (s.slowT > 0 && s.steps % 2) return;
     f.step(c, b.phase === 'finish' ? 'finish' : b.enraged > 0 ? 'enraged' : 'calm', this.waiting || b.phase === 'pager' || b.phase === 'done');
+    this.syncPlatforms(f);
+  }
+
+  /** The Bad Call's pushed frames are solid while they last: one mover for each live platform. */
+  private formPlatforms = new Map<{ r: Rect; until: number }, Mover>();
+  private syncPlatforms(f: FormRun) {
+    const w = this.sim.world;
+    for (const p of f.platforms) if (!this.formPlatforms.has(p)) this.formPlatforms.set(p, addMover(w, 'boss-frame', p.r));
+    for (const [p, m] of this.formPlatforms) {
+      if (f.platforms.includes(p)) continue;
+      setPresent(w, m, false);
+      w.movers = w.movers.filter((x) => x !== m);
+      this.formPlatforms.delete(p);
+    }
   }
 
   /** Beam Toggle: the headlamp's long cone follows the aim. */
@@ -858,6 +880,13 @@ export class Director {
       close: (id: string) => this.closeGate(id),
       sfx: (n: 'lever' | 'plate' | 'rowTick' | 'door' | 'liftHum' | 'pass') => this.out.push({ t: 'sfx', name: n, gain: n === 'liftHum' ? 0.4 : 1 }),
       say: (line: string) => this.say(line),
+      warp: (x: number, y: number, vx = 0, vy = 0) => {
+        Matter.Body.setPosition(d.body, { x, y });
+        Matter.Body.setVelocity(d.body, { x: vx / HZ, y: vy / HZ });
+        d.x = x;
+        d.y = y;
+      },
+      hurt: (n: number) => this.sim.hurtIn(droneRect(d), n),
       solve: () => {
         if (m.solved) return;
         m.solved = true;
@@ -956,6 +985,18 @@ export class Director {
         break;
       case 'debug':
         this.openCauses();
+        break;
+      case 'hatch': {
+        // a Deep Layer hatch (Phase 4 Spec, section 3): down to its landing, or back up to the exit above it
+        const to = st.arg && placeById(st.arg);
+        if (!to) break;
+        this.out.push({ t: 'sfx', name: 'door', gain: 0.6 });
+        this.go(to.id as Place, to.kind === 'deep' && this.place !== to.id && this.room.role === 'exit' ? 0 : roomsOf(to.id).length - 1);
+        break;
+      }
+      case 'rail':
+        if (this.room.rails?.[Number(st.arg ?? 0)]) this.sim.ride(this.room.rails[Number(st.arg ?? 0)]);
+        else this.say(STORY.railLocked);
         break;
       case 'lift':
         if (this.room.id === 'workbench') this.startExitLift(1140);

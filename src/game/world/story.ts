@@ -54,6 +54,8 @@ export interface StoryLines {
   liftNext: string;
   /** The lift back home. */
   liftHome: string;
+  /** E at a bus rail without the Datapath Rail. */
+  railLocked: string;
 }
 
 export const STORY: StoryLines = {
@@ -82,4 +84,5 @@ export const STORY: StoryLines = {
   upgradeGeneric: 'Something new is online. Try it out.',
   liftNext: 'Next stop: {place}.',
   liftHome: 'Lift is on. Home, for now.',
+  railLocked: 'A bus rail. The Datapath has the clip you need to ride it.',
 };

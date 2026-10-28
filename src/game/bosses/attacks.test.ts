@@ -1,7 +1,8 @@
 // Attack library tests (Phase 3 Spec, section 6): every attack on a fake context, at speeds 1 and 1.4, Story on and off.
 import { describe, expect, it } from 'vitest';
 import type { Rect } from '../level/room';
-import { ATTACKS, bolts, chain, drop, freeze, grid, mirror, segments } from './attacks';
+import { bolts, chain, drop, freeze, grid, mirror, segments } from './attacks';
+import { ATTACKS } from './table';
 import type { Attack, AttackCtx } from './types';
 
 const ARENA: Rect = { x: 0, y: 0, w: 1920, h: 900 };
@@ -48,6 +49,7 @@ function play<R>(a: Attack<R>, o: Opts, onStep?: (i: number, run: R) => void) {
     shoot: (x, y, vx, vy, damage) => log.shots.push({ x, y, vx, vy, damage, at: log.at }),
     hurt: (area, n) => log.hurts.push({ area, n, at: log.at }),
     hazard: (r, ms, damage) => log.hazards.push({ r, ms, damage, at: log.at }),
+    platform: () => undefined,
     sfx: (n) => log.sfx.push(n),
   };
   const run = a.start(c);
