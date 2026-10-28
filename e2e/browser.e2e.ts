@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 
 type Station = { kind: string; module?: string };
-type Story = { room: { id: string; role?: string; stations: Station[] }; rs: { passed: boolean; carrying: string | null }; waiting: boolean; warp(place: string, i: number): void; place: string; roomsFor(place: string): { role?: string }[]; boss: { phase: string } | null; useStation(st: Station): void };
+type Story = { room: { id: string; role?: string; stations: Station[] }; rs: { passed: boolean; carrying: string | null }; waiting: boolean; warp(place: string, i: number): void; place: string; index: number; fade: unknown; roomsFor(place: string): { role?: string }[]; boss: { phase: string } | null; useStation(st: Station): void };
 type G = { story: Story | null; drive: unknown; ready: boolean; sim: { drone: { x: number; y: number; grounded: boolean }; steps: number }; isPaused: boolean; resetStats(): void; stressTest(): void; frameStats(): { fps: number; workAvg: number; workP95: number; stepP95: number; frames: number; particles: number; enemies: number; props: number } };
 declare global { interface Window { __tapeoutGame?: G } }
 
@@ -178,5 +178,39 @@ test('Act 1 places: a port, a fight, an arena that fights back, and the chip map
   await expect(page.getByTestId('story-loft')).toContainText('THE CHIP MAP');
   await page.getByTestId('story-loft').getByRole('button', { name: 'Back to the Loft' }).click();
   await expect(page.getByTestId('story-loft')).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
+test('Act 2: down a Deep Layer hatch and back, and an act 2 arena that fights back', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(String(e)));
+  page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') errors.push(`${m.type()}: ${m.text()}`); });
+  await page.goto(pathToFileURL(resolve('dist/index.html')).href);
+  await expect(page.locator('#os')).not.toBeEmpty();
+  await page.getByTestId('story-preview').click();
+  await page.getByRole('textbox', { name: 'Your name' }).fill('Sam');
+  await page.getByRole('button', { name: 'I am new to this' }).click();
+  await page.waitForFunction(() => window.__tapeoutGame?.ready && !window.__tapeoutGame.story!.waiting, null, { timeout: 15000 });
+  const where = () => page.evaluate(() => [window.__tapeoutGame!.story!.place, window.__tapeoutGame!.story!.index]);
+
+  // the Boot ROM's exit has a hatch down to the Firmware Pit; its landing has one back up
+  const exit = await page.evaluate(() => window.__tapeoutGame!.story!.roomsFor('boot-rom').length - 1);
+  await page.evaluate((i) => window.__tapeoutGame!.story!.warp('boot-rom', i), exit);
+  await page.waitForTimeout(600);
+  await page.evaluate(() => { const s = window.__tapeoutGame!.story!; s.useStation(s.room.stations.find((x) => x.kind === 'hatch')!); });
+  await page.waitForFunction(() => window.__tapeoutGame!.story!.place === 'firmware-pit' && !window.__tapeoutGame!.story!.fade, null, { timeout: 10000 });
+  expect(await where()).toEqual(['firmware-pit', 0]);
+  await page.waitForTimeout(1200);
+  await page.evaluate(() => { const s = window.__tapeoutGame!.story!; s.useStation(s.room.stations.find((x) => x.kind === 'hatch')!); });
+  await page.waitForFunction(() => window.__tapeoutGame!.story!.place === 'boot-rom' && !window.__tapeoutGame!.story!.fade, null, { timeout: 10000 });
+  expect(await where()).toEqual(['boot-rom', exit]);
+
+  // the Bridge Between Clocks: the pager, then its two halves fire on their own clocks
+  const arena = await page.evaluate(() => window.__tapeoutGame!.story!.roomsFor('clock-bridge').findIndex((x) => x.role === 'arena'));
+  await page.evaluate((i) => window.__tapeoutGame!.story!.warp('clock-bridge', i), arena);
+  await expect(page.getByTestId('story-card')).toContainText('PAGER');
+  await page.getByTestId('story-card').getByRole('button').click();
+  expect(await page.evaluate(() => window.__tapeoutGame!.story!.boss!.phase)).toBe('investigate');
+  await page.waitForTimeout(6000);
   expect(errors).toEqual([]);
 });
