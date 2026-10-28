@@ -31,7 +31,7 @@ export interface Gate { id: string; kind: GateKind; rect: Rect }
 /** Lines TAPEOUT says when the drone first passes x (and y, when given: the drone must be above it). */
 export interface Trigger { id: string; x: number; y?: number; lines: string[] }
 
-export type Music = 'keeper' | 'boss' | 'loft' | 'bench' | 'core' | 'under';
+export type Music = 'keeper' | 'boss' | 'loft' | 'bench' | 'core' | 'under' | 'silicon';
 
 export interface StoryRoom extends Room {
   id: string;

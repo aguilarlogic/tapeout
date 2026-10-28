@@ -280,11 +280,12 @@ export class Director {
     this.boss = null;
     if (room.id === 'arena' || room.role === 'arena') this.startBoss();
     this.out.push({ t: 'enter' }, { t: 'music', track: room.music });
-    // the first landing in the Underlayers (Phase 5 Spec, section 3)
-    if (placeById(place)?.act === 5 && !this.world.cutscenes.includes('underlayers')) {
-      this.world.cutscenes.push('underlayers');
+    // the first landing in the Underlayers (Phase 5 Spec, section 3) and in act 3, Silicon (Phase 6 Spec, section 3)
+    const act = placeById(place)?.act, card = act === 5 ? 'underlayers' : act === 3 ? 'silicon' : null;
+    if (card && !this.world.cutscenes.includes(card)) {
+      this.world.cutscenes.push(card);
       this.save();
-      const u = STORY.underlayers;
+      const u = STORY[card];
       this.out.push({ t: 'card', kind: 'info', title: u.title, lines: [...u.lines], button: u.button });
       this.waiting = true;
     }
@@ -307,6 +308,9 @@ export class Director {
       throwChargeS: a.throwChargeS, throwDamage: a.throwDamage, drop: a.drop || undefined, hover: a.hover || undefined,
       visor: a.visor || undefined, chargedDamage: a.chargedDamage,
       slots: a.slots, burstBolts: a.burstBolts || undefined, loopDrone: a.loopDrone || undefined, rail: a.rail || undefined, sync: a.sync || undefined,
+      mirror: a.mirror || undefined, cooldownScale: a.cooldownScale, parryMs: a.parryMs || undefined, viaThick: a.viaThick || undefined,
+      turret: a.turret || undefined, gateS: a.gateS || undefined, scan: a.scan || undefined, tether: a.tether || undefined,
+      loopRange: a.loopRange, repairDelayMs: a.repairDelayMs, noiseFilter: a.noiseFilter || undefined, pid: a.pid || undefined,
     };
     s.drone.abilities = { doubleJump: a.doubleJump, wallLatch: a.wallLatch, ...(a.doubleJump ? { jump2: a.jump2 / HZ } : {}) };
     if (!a.beam) this.beamOn = false;

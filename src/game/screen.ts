@@ -20,6 +20,7 @@ import { drawBossHud, drawBubble, drawCompass, drawDark, drawExitLift, drawPromp
 import { Loop } from './loop';
 import { pauseMenu } from './pause';
 import { Camera } from './render/camera';
+import { drawAct3Back, drawAct3Front } from './render/act3';
 import { drawAimLine, drawBeam, drawEnemies, drawField, drawLoopDrone, drawShots, drawSyncTint } from './render/combat';
 import { DroneRig } from './render/drone';
 import { Fx } from './render/fx';
@@ -357,6 +358,17 @@ export class GameScreen {
         case 'hover': a.play('hover'); break;
         case 'sync': a.play('freeze'); fx.ring(f.x, f.y, 80, PAL.trace, 24); fx.ring(f.x, f.y, 140, PAL.trace, 30); break;
         case 'rail': a.play('grab'); fx.sparks(f.x, f.y - 30, 0, -1, 6, PAL.trace, 3, Math.PI); break;
+        case 'parry':
+          a.play('parry');
+          fx.ring(f.x, f.y, 56, '#FFFFFF', 16);
+          fx.flash(f.x, f.y, 30, '#FFFFFF', 4);
+          this.hitStop = frames(UP.parry.hitStopMs);
+          break;
+        // the ring grows to 1.2 of its size, so the visor's edge is where the ring ends
+        case 'scan': a.play('scan'); fx.ring(f.x, f.y, f.r / 1.2, PAL.gold, frames(400)); break;
+        case 'turret': a.play('turret'); fx.ring(f.x, f.y - 30, 26, PAL.trace, 14); fx.dust(f.x, f.y, 3, 1); break;
+        case 'tether': a.play('tether'); fx.sparks(f.tx, f.ty, f.x - f.tx, f.y - f.ty, 5, PAL.amber, 3); break;
+        case 'phase': a.play('phase'); fx.ring(f.x, f.y, 34, PAL.neon, 12); break;
       }
     }
     if (sim.weapon === 'charged' && sim.charge > 0 && sim.charge < 1 && sim.steps % 6 === 0) a.play('charge', 0.4 + sim.charge * 0.6);
@@ -481,6 +493,7 @@ export class GameScreen {
     if (st) drawStoryBack(c, st, t);
     this.art.drawSolids(c, sim, cam);
     this.art.drawProps(c, sim, t);
+    drawAct3Back(c, sim, t);
     if (st) drawStoryFront(c, st, t, { x: dx + sim.drone.facing * 12, y: dy - 4 });
     drawEnemies(c, sim, t, reducedFlash);
     drawBeam(c, sim, t);
@@ -494,6 +507,7 @@ export class GameScreen {
     }
     this.rig.draw(c, sim, dx, dy, { reducedFlash, reduced: this.reduced });
     drawShots(c, sim, alpha);
+    drawAct3Front(c, sim, t);
     this.fx.draw(c, alpha, reducedFlash, prefs().damageNumbers);
     if (st) drawPrompt(c, st, t);
     this.art.drawMotes(c, cam);

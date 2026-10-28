@@ -14,7 +14,9 @@ export type Sfx =
   | 'wireGrab' | 'wirePlug' | 'wireSnap' | 'rowTick' | 'pass' | 'notYet' | 'spark' | 'lever' | 'plate' | 'liftHum'
   | 'portOpen' | 'bossPhase' | 'fanfare' | 'chirp' | 'crack' | 'shatter' | 'lightsOn' | 'reading'
   // act 1 (phase 3): enemies, boss attacks, the beam
-  | 'turret' | 'revive' | 'split' | 'laser' | 'bossDrop' | 'chain' | 'freeze' | 'mirror' | 'beam';
+  | 'turret' | 'revive' | 'split' | 'laser' | 'bossDrop' | 'chain' | 'freeze' | 'mirror' | 'beam'
+  // act 3 (phase 6): Slack Parry, Scan Visor, Via Phase, Trace Tether
+  | 'parry' | 'scan' | 'phase' | 'tether';
 
 type Wave = OscillatorType | 'noise';
 interface Voice { at?: number; wave: Wave; f: number; to?: number; len: number; level: number; filter?: { type: BiquadFilterType; f: number; to?: number; q?: number } }
@@ -100,13 +102,27 @@ const V: Record<Sfx, Voice[]> = {
   // the envelope only decays, so the reversed swell is a rising chirp with a short cut after it
   mirror: [{ wave: 'sine', f: 600, to: 2600, len: 0.16, level: 0.05 }, { at: 0.16, wave: 'square', f: 2600, len: 0.02, level: 0.02 }],
   beam: [{ wave: 'triangle', f: 1800, len: 0.02, level: 0.04 }, { wave: 'noise', f: 1, len: 0.015, level: 0.03, filter: { type: 'lowpass', f: 3000 } }],
+  // a bright bell on a fifth with a click under it: the parry has to read over the hit it cancelled
+  parry: [
+    { wave: 'square', f: 1760, len: 0.03, level: 0.03 }, { wave: 'sine', f: 1318.51, len: 0.3, level: 0.05 },
+    { wave: 'sine', f: 1975.53, len: 0.3, level: 0.035 },
+  ],
+  scan: [{ wave: 'sine', f: 300, to: 1500, len: 0.35, level: 0.035 }, { at: 0.1, wave: 'triangle', f: 1500, len: 0.12, level: 0.02 }],
+  phase: [{ wave: 'noise', f: 1, len: 0.18, level: 0.04, filter: { type: 'bandpass', f: 1200 } }, { wave: 'sine', f: 220, to: 660, len: 0.18, level: 0.03 }],
+  tether: [{ wave: 'triangle', f: 900, to: 300, len: 0.14, level: 0.04 }, { at: 0.12, wave: 'square', f: 300, len: 0.03, level: 0.025 }],
 };
 
 // --- the music: loops of 24 bars in three 8-bar sections that add voices. The test room's ambient loop is 96 BPM
 // Am F C G; the story adds the Keeper's room theme, the boss, the Loft and the workbench (Level 1 spec, "Sound"). ---
-export type Track = 'test' | 'keeper' | 'boss' | 'loft' | 'bench' | 'core' | 'under';
-interface TrackDef { bpm: number; chords: number[][]; from: number; arp: OscillatorType | null; drums: boolean; bass: 2 | 1 }
-const TRACKS: Record<Track, TrackDef> = {
+export type Track = 'test' | 'keeper' | 'boss' | 'loft' | 'bench' | 'core' | 'under' | 'silicon';
+export interface TrackDef {
+  bpm: number; chords: number[][]; from: number; arp: OscillatorType | null; drums: boolean; bass: 2 | 1;
+  /** Optional 16-step gate for the pad: a chord stab plays on each 1 step, so the pad is chopped in 16ths (Silicon). */
+  gate?: number[];
+}
+/** The Silicon pad gate: 10 of the 16 sixteenths of a bar are open; the first step of the bar is always open. */
+const SILICON_GATE = [1, 0, 1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 0];
+export const TRACKS: Record<Track, TrackDef> = {
   test: { bpm: 96, chords: [[57, 60, 64], [53, 57, 60], [48, 52, 55], [55, 59, 62]], from: 0, arp: 'square', drums: true, bass: 2 }, // Am F C G
   keeper: { bpm: 120, chords: [[52, 55, 59], [48, 52, 55], [55, 59, 62], [50, 54, 57]], from: 0, arp: 'square', drums: true, bass: 2 }, // Em C G D
   boss: { bpm: 150, chords: [[50, 53, 57], [46, 50, 53], [48, 52, 55], [45, 49, 52]], from: 2, arp: 'sawtooth', drums: true, bass: 1 }, // Dm Bb C A
@@ -114,7 +130,12 @@ const TRACKS: Record<Track, TrackDef> = {
   core: { bpm: 128, chords: [[57, 60, 64], [53, 57, 60], [48, 52, 55], [55, 59, 62]], from: 0, arp: 'square', drums: true, bass: 2 }, // Am F C G
   under: { bpm: 90, chords: [[50, 53, 57, 60], [46, 50, 53, 57], [43, 46, 50, 53], [45, 48, 52, 55]], from: 0, arp: 'triangle', drums: false, bass: 2 }, // Dm7 Bbmaj7 Gm7 Am7
   bench: { bpm: 90, chords: [[48, 51, 55], [44, 48, 51], [51, 55, 58], [46, 50, 53]], from: 0, arp: null, drums: false, bass: 2 }, // Cm Ab Eb Bb
+  silicon: { bpm: 132, chords: [[64, 67, 71], [60, 64, 67], [62, 66, 69], [59, 62, 66]], from: 0, arp: 'square', drums: true, bass: 1, gate: SILICON_GATE }, // Em C D Bm
 };
+/** The pad-only variants: the same loop with no arp and no drums, as the bench track is. Deep Layers D12 to D15 use
+ * 'silicon' this way. Built once, so a variant keeps its identity and a restart is only a real change of track. */
+export const PAD_ONLY = {} as Record<Track, TrackDef>;
+for (const k of Object.keys(TRACKS) as Track[]) PAD_ONLY[k] = { ...TRACKS[k], arp: null, drums: false };
 const BARS = 24;
 const midi = (n: number) => 440 * 2 ** ((n - 69) / 12);
 
@@ -255,10 +276,11 @@ export class GameAudio {
     } catch { this.hum = null; }
   }
 
-  /** Start a loop, fading in over 2 s. A different track while one plays changes over at once, from its first bar. */
-  startMusic(track: Track = 'test') {
+  /** Start a loop, fading in over 2 s. A different track while one plays changes over at once, from its first bar.
+   * `padOnly` plays the track's pad-only variant (no arp, no drums). */
+  startMusic(track: Track = 'test', padOnly = false) {
     const c = this.init();
-    const def = TRACKS[track];
+    const def = padOnly ? PAD_ONLY[track] : TRACKS[track];
     if (c && this.musicTimer && this.track !== def) { this.track = def; this.step = 0; return; }
     this.track = def;
     if (!c || !this.music || this.musicTimer) return;
@@ -302,8 +324,9 @@ export class GameAudio {
     const out = this.music!;
     const tone = (wave: OscillatorType, f: number, len: number, level: number, cutoff = 2000) =>
       this.voice(c, out, { wave, f, len, level, filter: { type: 'lowpass', f: cutoff } }, t, 1, 1);
-    // pad: a soft chord on the first beat of each bar
-    if (s16 === 0) for (const n of chord) { tone('sawtooth', midi(n), SIXT * 15, 0.018, 900); tone('sawtooth', midi(n) * 1.004, SIXT * 15, 0.014, 700); }
+    // pad: a soft chord on the first beat of each bar; a gated track (Silicon) chops it, a stab on each open 16th
+    if (tr.gate) { if (tr.gate[s16]) for (const n of chord) tone('sawtooth', midi(n), SIXT * 0.9, 0.01, 900); }
+    else if (s16 === 0) for (const n of chord) { tone('sawtooth', midi(n), SIXT * 15, 0.018, 900); tone('sawtooth', midi(n) * 1.004, SIXT * 15, 0.014, 700); }
     // bass: root on the eighths, octave on the off-beats
     if (s16 % tr.bass === 0) tone('triangle', midi(chord[0] - 24 + (s16 % 4 === 2 ? 12 : 0)), SIXT * 1.6, 0.06, 1200);
     // arp from the second section on

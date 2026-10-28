@@ -58,7 +58,8 @@ export interface Drone {
   /** `jump2`: the double jump's speed in px/step (Overflow Jump Mk II raises it); default DRONE.doubleJump. */
   /** `dashCooldown`: steps between dashes (Kickback Dash: 42); default DRONE.dashCooldown. The Sim sets it each step. */
   /** `hover`: steps of hover per airtime (0 or undefined: off); `drop`: Damped Landing. The Sim copies its kit in each step. */
-  abilities: { doubleJump: boolean; wallLatch: boolean; jump2?: number; dashCooldown?: number; hover?: number; drop?: boolean };
+  /** `hoverFall`: the hover's fall cap, px/s (PID Stabilizer: 0); default UP.hover.fall. */
+  abilities: { doubleJump: boolean; wallLatch: boolean; jump2?: number; dashCooldown?: number; hover?: number; drop?: boolean; hoverFall?: number };
   /** Run speed multiplier: 0.5 inside a Stall Bubble's field (Phase 4 Spec, section 5). */
   slow: number;
 }
@@ -275,7 +276,7 @@ export function stepDrone(d: Drone, c: Controls, w: World, energy: number, froze
       let next = Math.min(d.vy + g, d.latched ? DRONE.wallSlide : Math.max(DRONE.fallCap, d.vy));
       // a falling drone with jump held floats at 60 px/s while its hover steps last (the double jump comes first: it sets vy up)
       if ((d.abilities.hover ?? 0) > d.hoverUsed && airborne && d.vy > 0 && held('jump') && !d.latched) {
-        next = Math.min(next, UP.hover.fall / HZ);
+        next = Math.min(next, (d.abilities.hoverFall ?? UP.hover.fall) / HZ); // the PID Stabilizer holds height (0)
         d.hoverUsed++;
         d.hovering = true;
       }

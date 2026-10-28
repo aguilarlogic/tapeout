@@ -15,6 +15,8 @@ import { ROOMS } from './templates/rooms';
 import { TRAVERSE_VARIANTS } from './templates/traverse';
 import { themeFor as act1Theme } from './themes/act1';
 import { ACT2_THEMES } from './themes/act2';
+import { ACT3A_THEMES } from './themes/act3a';
+import { ACT3B_THEMES } from './themes/act3b';
 import { UNDER_THEMES } from './themes/under';
 import type { BackdropKind, PlaceDef, PlaceTheme, Shell, Template, TemplateOpts } from './types';
 
@@ -34,7 +36,7 @@ const BACKDROP: Record<PlaceDef['act'], BackdropKind> = { 1: 'lamps', 2: 'core',
 
 /** The theme a place without its own (phases 4 to 8 fill these in) is built with. */
 export function themeOf(place: PlaceDef): PlaceTheme {
-  return act1Theme(place.id) ?? [...ACT2_THEMES, ...UNDER_THEMES].find((t) => t.place === place.id) ?? {
+  return act1Theme(place.id) ?? [...ACT2_THEMES, ...UNDER_THEMES, ...ACT3A_THEMES, ...ACT3B_THEMES].find((t) => t.place === place.id) ?? {
     place: place.id, music: 'keeper', enemies: ['glitch', 'spark', 'latch'], fights: 3, backdrop: BACKDROP[place.act],
     lines: { arrive: [`${place.name}.`], rooms: {}, clear: ['Clear.'], bossIntro: [], bossBeaten: [], leave: [] },
   };
@@ -119,6 +121,11 @@ export function composePlace(place: PlaceDef, theme: PlaceTheme = themeOf(place)
     const stations = room.role === 'arena' ? arenaStations(room, s) : room.role === 'exit' || room.role === 'landing' ? [...liftStation(s), ...hatchStation(place, room, s)] : stationsFor(room, s);
     const rail = room.role === 'traverse' && place.act === 2 ? railFor(s) : null;
     if (rail) stations.push({ id: 'rail0', kind: 'rail', x: rail.x1, y: rail.y1 + RAIL_LIFT, label: 'BUS RAIL', arg: '0' });
+    // act 3 on (Phase 6 Spec, section 3): a metal barrier on the floor of traverse rooms from Metal Stack, copper pads
+    // from The Board; both need a place at or after theirs in play order (Deep and Study places count by position)
+    const at = PLACES.indexOf(place), traverse = room.role === 'traverse';
+    const barrier = traverse && at >= PLACES.findIndex((p) => p.id === 'metal-stack') ? barrierFor(s) : null;
+    const copper = traverse && at >= PLACES.findIndex((p) => p.id === 'board') ? copperFor(s) : [];
     const signs = room.role === 'landing' ? [{ x: 640, y: 200, text: `${place.name.toUpperCase()} · ${place.region.toUpperCase()} · T-${clockAt(place)}` }] : s.signs;
     return {
       ...base,
@@ -135,6 +142,8 @@ export function composePlace(place: PlaceDef, theme: PlaceTheme = themeOf(place)
       ...(room.role === 'bench' && s.anchors.rig ? { props2: [{ kind: 'rig' as const, x: s.anchors.rig.x, y: s.anchors.rig.y, w: 520, h: 140 }] } : {}),
       ...(room.role === 'arena' && s.anchors.boss ? { boss: { incident: room.incident!, rect: s.anchors.boss } } : {}),
       ...(rail ? { rails: [rail] } : {}),
+      ...(barrier ? { barriers: [barrier] } : {}),
+      ...(copper.length ? { copper } : {}),
     };
   });
 }
@@ -154,6 +163,42 @@ function liftStation(s: Shell): Station[] {
   const l = s.anchors.lift;
   // the landing's lift is the one the drone came down on: it goes home too
   return l ? [{ id: 'lift', kind: 'lift', x: l.x, y: l.y, label: 'LIFT TO THE LOFT' }] : [];
+}
+
+/** A metal barrier: 24 px wide, 140 px tall, so a beginner can jump it (169 px) and Via Phase can dash through it. */
+const BARRIER = { w: 24, h: 140, clear: 120 };
+
+/**
+ * A metal barrier standing on the ground of a traverse room (Phase 6 Spec, section 3), at the first ground point in the
+ * middle of the room with clear air above and beside it, away from the spawn and the exit. None fits: no barrier.
+ */
+function barrierFor(s: Shell): { x: number; y: number; w: number; h: number } | null {
+  for (let x = Math.max(s.spawn.x + 360, Math.round(s.w * 0.35)); x <= s.w - 420; x += 40) {
+    const ground = s.solids.filter((b) => b.x <= x - BARRIER.clear && b.x + b.w >= x + BARRIER.clear).map((b) => b.y).filter((y) => y > 200).sort((a, b) => a - b);
+    const y = ground.find((g) => !s.solids.some((b) => overlaps(b, { x: x - BARRIER.clear, y: g - BARRIER.h - 120, w: BARRIER.clear * 2, h: BARRIER.h + 119 })));
+    if (y === undefined) continue;
+    return { x: x - BARRIER.w / 2, y: y - BARRIER.h, w: BARRIER.w, h: BARRIER.h };
+  }
+  return null;
+}
+
+/** Copper pads hang this high over the ground, out of a beginner's jump, with this much clear air around them. */
+const COPPER = { above: 300, clear: 70 };
+
+/** Two copper pads over open ground at a third and two thirds of a traverse room, where the air around them is clear. */
+function copperFor(s: Shell): { x: number; y: number }[] {
+  const out: { x: number; y: number }[] = [];
+  for (const k of [1 / 3, 2 / 3]) {
+    for (let x = Math.round(s.w * k); x <= Math.round(s.w * k) + 240; x += 40) {
+      const top = s.solids.filter((b) => b.x <= x && b.x + b.w >= x && b.y > COPPER.above + 40).map((b) => b.y).sort((a, b) => a - b)[0];
+      if (top === undefined) continue;
+      const p = { x, y: top - COPPER.above };
+      if (s.solids.some((b) => overlaps(b, { x: p.x - COPPER.clear, y: p.y - COPPER.clear, w: COPPER.clear * 2, h: COPPER.clear * 2 + 80 }))) continue;
+      out.push(p);
+      break;
+    }
+  }
+  return out;
 }
 
 /** A rail starts this far above the ground at its start station, so the drone barely rises as it clips on. */

@@ -1,9 +1,12 @@
 // The HUD (plan K, polish bar P5): line-art health and energy bars top-left, the selected weapon's icon beside the
 // energy bar (decision 29) and a small crosshair. Damage drops the health bar at once and a white "recent damage"
 // segment drains over 400 ms; the energy bar pulses below 25%. Drawn in view coordinates (1280 × 720 logical px).
-import type { Sim, Weapon } from '../sim';
+import type { Gadget, Sim, Weapon } from '../sim';
 import { frames } from '../tuning';
 import { easeOut, FONT, PAL, rgba } from './palette';
+
+/** The gadget on F, by id. */
+const GADGET_NAME: Record<Gadget, string> = { sync: 'SYNC', turret: 'TURRET' };
 
 /** The weapon's name, shown under its readout for 1.2 s after a swap and faded over the last 0.3 s. */
 const SHORT: Record<Weapon, string> = { pulse: 'PULSE', charged: 'CHARGED', fan: 'FAN', cannon: 'CANNON', burst: 'BURST' };
@@ -108,6 +111,13 @@ export class Hud {
       c.globalAlpha = s * this.gunA * Math.min(1, (NAME_STEPS - this.nameT) / NAME_FADE);
       c.fillStyle = rgba(sim.weapon === 'charged' ? PAL.neon : PAL.trace, 0.9);
       c.fillText(WEAPON_NAME[sim.weapon], wx + 30, wy + 16);
+    }
+    // the gadget on F (act 3): its name, and G to switch when there are two
+    const gadgets = sim.gadgets;
+    if (gadgets.length) {
+      c.globalAlpha = s * this.gunA;
+      c.fillStyle = rgba(PAL.text, 0.6);
+      c.fillText(`F ${GADGET_NAME[sim.gadget]}${gadgets.length > 1 ? '   G switch' : ''}`, wx + 30, wy + 30);
     }
     c.restore();
   }
