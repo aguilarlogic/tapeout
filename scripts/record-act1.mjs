@@ -241,10 +241,10 @@ const moduleAt = async (st, show) => {
   await page.waitForTimeout(show);
   await story((id) => window.__tapeoutAward(id), st.module);
   await page.waitForTimeout(900);
-  // an arcade app opened from a bench sits on top of it: Escape closes the app first
-  if (await page.locator('.st-unplug').count() && !(await page.locator('.st-unplug').isVisible())) await page.keyboard.press('Escape');
-  await page.waitForTimeout(300);
-  if (await page.locator('.st-unplug').count()) await page.locator('.st-unplug').click({ force: true });
+  // an arcade app opened from a station sits on top of it, with its own close button: close the top windows first
+  const closes = page.getByTestId('overlay-close');
+  while ((await closes.count()) > 1) { await closes.last().click(); await page.waitForTimeout(300); }
+  if (await page.locator('.st-unplug').count()) await page.locator('.st-unplug').click();
   else if (await page.getByTestId('overlay-close').count()) await page.getByTestId('overlay-close').click();
   else await page.keyboard.press('Escape');
   await page.waitForTimeout(500);
