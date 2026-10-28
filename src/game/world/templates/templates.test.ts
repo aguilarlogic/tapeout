@@ -8,7 +8,7 @@ import { TILE } from '../../tuning';
 import type { Shell, Template } from '../types';
 import { arena } from './arena';
 import { FIGHT_VARIANTS, fight } from './fight';
-import { pick, REACH } from './kit';
+import { gapFor, pick, REACH } from './kit';
 import { TRAVERSE_VARIANTS, traverse } from './traverse';
 
 const KITS = [
@@ -51,7 +51,7 @@ function reachProblems(s: Shell, kit: { doubleJump: boolean }): string[] {
     const rise = a.y - b.y;
     const gap = Math.max(0, b.x - (a.x + a.w), a.x - (b.x + b.w));
     if (rise > maxRise) problems.push(`foothold ${i}: rise ${rise} > ${maxRise}`);
-    if (gap > REACH.gap) problems.push(`foothold ${i}: gap ${gap} > ${REACH.gap}`);
+    if (gap > (kit.doubleJump ? REACH.gap : gapFor(rise))) problems.push(`foothold ${i}: gap ${gap} at rise ${rise} > ${kit.doubleJump ? REACH.gap : gapFor(rise)}`);
   }
   const last = f[f.length - 1];
   if (s.exit.y !== undefined) {

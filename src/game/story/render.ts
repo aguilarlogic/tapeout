@@ -5,7 +5,7 @@
 // ranges, patrol boards and powered traces, the darkness of an unlit room (and the headlamp's cone), TAPEOUT's speech
 // bubble, the E prompt, and the boss's bar, log and readings.
 import { chipProgress, CHIPS, slotProgress } from '../../chip';
-import { findModule } from '../../curriculum';
+import { findModule, KIND_APP } from '../../curriculum';
 import { easeOut, FONT, PAL, rgba } from '../render/palette';
 import { HZ, TUNING, VIEW_H, VIEW_W } from '../tuning';
 import type { Director } from './director';
@@ -269,15 +269,30 @@ function drawBenchRig(c: C, x: number, y: number, w: number, h: number, d: Direc
     c.font = `${size}px ${FONT}`;
     while (size > 9 && c.measureText(title).width > mw - 28) { size--; c.font = `${size}px ${FONT}`; }
     const verdict = done ? '// PASS' : '// write me';
+    const mod = findModule(m)?.module;
+    // the idea it teaches, wrapped to the monitor, then where it opens
+    const words = (mod?.concept ?? '').split(/\s+/).filter(Boolean), lines: string[] = [];
+    for (const wd of words) {
+      const last = lines[lines.length - 1];
+      if (last !== undefined && c.measureText(`//   ${last} ${wd}`).width <= mw - 28) lines[lines.length - 1] = `${last} ${wd}`;
+      else if (lines.length < 3) lines.push(wd);
+      else break;
+    }
+    const rows = Math.min(lines.length, Math.max(0, Math.floor((h - 70) / 16)));
     c.save();
     c.beginPath();
     c.rect(mx + 2, y0 + 2, mw - 4, h - 4);
     c.clip();
     c.fillStyle = rgba(PAL.trace, 0.85);
     c.fillText(title, mx + 14, y0 + 24);
+    c.fillStyle = rgba(PAL.text, 0.45);
+    for (let k = 0; k < rows; k++) c.fillText(`//   ${lines[k]}`, mx + 14, y0 + 44 + k * 16);
+    const vy = y0 + h - 18;
+    c.fillStyle = rgba(PAL.text, 0.35);
+    if (mod) c.fillText(`// opens in: ${KIND_APP[mod.kind]}`, mx + 14, vy - 18);
     c.fillStyle = done ? PAL.ok : rgba(PAL.trace, 0.85);
-    c.fillText(verdict, mx + 14, y0 + 42);
-    if (!done && Math.floor(t / 30) % 2) c.fillRect(mx + 14 + c.measureText(verdict).width + 4, y0 + 42 - 11, 7, 13);
+    c.fillText(verdict, mx + 14, vy);
+    if (!done && Math.floor(t / 30) % 2) c.fillRect(mx + 14 + c.measureText(verdict).width + 4, vy - 11, 7, 13);
     c.restore();
   });
   if (d.room.role === 'bench' && d.room.upgrade) drawCapstone(c, d, x, y0, t);
@@ -617,9 +632,24 @@ function drawStation(c: C, d: Director, st: Station, t: number) {
       break;
     }
     case 'lever': {
-      const on = !!d.rs.levers[st.id], passed = d.rs.passed;
-      if (!passed) break; // drawn as a terminal until the check passes
+      const on = !!d.rs.levers[st.id], passed = d.rs.passed, puzzle = !!d.rs.mech;
+      if (!passed && !puzzle) break; // drawn as a terminal until the check passes
       const a = on ? -0.6 : 0.6;
+      if (puzzle) {
+        // a discovery puzzle's lever: a post with its own name; the handle flips with each pull
+        chamfer(c, x - 14, y - 64, 28, 64, 4);
+        c.fillStyle = PAL.fill;
+        c.fill();
+        c.strokeStyle = rgba(PAL.line, 0.6);
+        c.lineWidth = 1.5;
+        c.stroke();
+        c.beginPath();
+        c.moveTo(x, y - 60); c.lineTo(x + Math.sin(a) * 34, y - 60 - Math.cos(a) * 34);
+        glowLine(c, PAL.amber, 3, 0.2);
+        dot(c, x + Math.sin(a) * 34, y - 60 - Math.cos(a) * 34, 6, PAL.amber);
+        label(c, st.label, x, y - 108, rgba(PAL.text, 0.6), 10);
+        break;
+      }
       c.beginPath();
       c.moveTo(x, y - 60); c.lineTo(x + Math.sin(a) * 34, y - 60 - Math.cos(a) * 34);
       glowLine(c, on ? PAL.ok : PAL.amber, 3, 0.2);
@@ -1096,7 +1126,8 @@ export function drawBossHud(c: C, d: Director, t: number, showLog: boolean) {
   c.font = `12px ${FONT}`;
   c.textAlign = 'center';
   c.fillStyle = b.enraged > 0 ? PAL.hostile : PAL.neon;
-  c.fillText(b.enraged > 0 ? 'THE DARK DEMO BOARD · ENRAGED' : 'THE DARK DEMO BOARD', VIEW_W / 2, y - 6);
+  const name = (d.form?.form.name ?? 'The Dark Demo Board').toUpperCase();
+  c.fillText(b.enraged > 0 ? `${name} · ENRAGED` : name, VIEW_W / 2, y - 6);
   chamfer(c, x, y, W, 12, 3);
   c.fillStyle = rgba(PAL.bgDeep, 0.7);
   c.fill();

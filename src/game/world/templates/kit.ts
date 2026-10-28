@@ -21,6 +21,19 @@ export const REACH = {
   gap: 180,
 };
 
+/**
+ * The widest gap a beginner can clear while rising `rise` px with one jump: 80% of what a full run covers before the
+ * jump falls back to that height (jump 780 px/s, gravity 1800 px/s², run 240 px/s). Rise and gap are not independent:
+ * 150 px up leaves about 110 px across, level ground about 165.
+ */
+export function gapFor(rise: number): number {
+  if (rise <= 0) return REACH.gap;
+  const v = 780, g = 1800, run = 240;
+  if (v * v - 2 * g * rise < 0) return 0;
+  const t = (v + Math.sqrt(v * v - 2 * g * rise)) / g;
+  return Math.min(REACH.gap, Math.floor(0.8 * run * t));
+}
+
 /** Outer walls, ceiling and floor for a w × h room. The right wall leaves a doorway `door` px tall above `exitFloor`
  * (default: the floor; door 0 closes it); `floor: false` leaves the floor out for templates that build their own. */
 export function shell(w: number, h: number, o: { exitFloor?: number; door?: number; floor?: boolean } = {}): Rect[] {

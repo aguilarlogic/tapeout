@@ -17,6 +17,7 @@ mkdirSync(out, { recursive: true });
 const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
 const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 }, recordVideo: { dir: out, size: { width: 1280, height: 720 } } });
 const page = await ctx.newPage();
+page.setDefaultTimeout(30000);
 const errors = [];
 const t0 = Date.now();
 const log = (s) => console.log(`${((Date.now() - t0) / 1000).toFixed(1).padStart(6)}s  ${s}`);
@@ -71,6 +72,15 @@ await page.evaluate(() => {
         if (Math.abs(dx) > 6 && c.t > 3) held.push(dx > 0 ? 'right' : 'left');
         if (c.t > 34 && d.grounded) c.done = true;
         if (c.t > 200) c.done = true;
+        break;
+      }
+      case 'leap': { // a running jump: run at the edge, jump at x0, steer to land, done once down again
+        const dir = c.land > c.x0 ? 1 : -1;
+        if (!c.up && (d.x - c.x0) * dir >= 0 && d.grounded) { c.up = 1; }
+        if (c.up && c.up < 28) { held.push('jump'); c.up++; }
+        if (!c.up || Math.abs(c.land - d.x) > 12) held.push(dir > 0 ? 'right' : 'left');
+        if (c.up >= 28 && d.grounded) c.done = true;
+        if (c.t > 300) c.done = true;
         break;
       }
       case 'press': if (c.t > 2 && c.t < 6) held.push(c.a); if (c.t >= 8) c.done = true; break;
@@ -161,6 +171,66 @@ const station = async (testid, id, show) => {
 };
 
 
+/** Each act 1 place's scored modules, in order (from world/places.ts), and the names the lift shows. */
+const MODULES = {"bit-zero": ["first-wire", "bits", "bool", "first-not", "first-and", "logic-half", "inc-demo-board", "gates", "half-adder-v"], "volts-and-amps": ["electricity", "resistance"], "lamp-board": ["bitadd", "twos", "inc-lamp-board"], "inverted-hall": ["demorgan", "inc-logic"], "carry-chain": ["mux", "logic-enable", "logic-mux", "decoder", "logic-dec", "adder", "logic-full", "compare", "logic-cmp", "inc-adder"], "clockwork": ["seq", "logic-dff", "logic-toggle", "logic-counter", "fsm", "boss-logic", "inc-controller"], "boot-rom": ["verilog", "full-adder-v", "mux2", "adder4", "verilog-seq", "mux4", "prio", "hex", "seg7", "reg8", "bcd", "shift", "edge", "seqdet", "popcount", "gray", "fifo", "adder8", "alu8", "regfile4", "pc8", "cpu-decode", "cpu-tiny", "boss-numbers", "inc-numbers", "boss-hdl", "inc-rtl"]};
+const ORDER = Object.keys(MODULES);
+const NAMES = {"lamp-board": "The Lamp Board", "inverted-hall": "The Inverted Hall", "carry-chain": "Carry Chain", "clockwork": "Clockwork", "boot-rom": "Boot ROM"};
+
+
+/** Platforms of the room the drone can stand on (tops of solids and one-way ledges; tall thin walls left out). */
+const platforms = () => story(() => {
+  const r = window.__tapeoutGame.story.room;
+  return [...r.solids.map((p) => ({ ...p, one: false })), ...r.oneWay.map((p) => ({ ...p, one: true }))].filter((p) => p.w >= 60 && !(p.h > 200 && p.w < 100));
+});
+const RISE = 150, GAP = 230;
+/** A route of platforms from the one under the drone to one the exit can be walked to from: breadth first. */
+const route = (ps, d, exit) => {
+  const under = ps.filter((p) => d.x >= p.x - 22 && d.x <= p.x + p.w + 22 && p.y >= d.y - 10).sort((a, b) => a.y - b.y)[0];
+  const goal = (p) => p.x + p.w >= exit.x - 60 && (exit.y === undefined || p.y <= exit.y + 4);
+  const gap = (a, b) => Math.max(0, Math.max(a.x, b.x) - Math.min(a.x + a.w, b.x + b.w));
+  const prev = new Map([[under, null]]), q = [under];
+  while (q.length) {
+    const p = q.shift();
+    if (goal(p)) { const out = []; for (let k = p; k && k !== under; k = prev.get(k)) out.unshift(k); out.under = under; return out; }
+    for (const n of ps) if (!prev.has(n) && n !== p && p.y - n.y <= RISE && gap(p, n) <= GAP && !(n.y > p.y + 500)) { prev.set(n, p); q.push(n); }
+  }
+  return null;
+};
+/** Leave the room the way a player would: up and across its platforms to the exit, then through it. */
+const traverse = async (exit) => {
+  for (let tries = 0; tries < 12; tries++) {
+    const d = await drone();
+    if (exit.y === undefined || d.y <= exit.y + 4) {
+      const ps = await platforms(), path = route(ps, d, exit);
+      if (!path || path.length === 0) return;
+    }
+    const ps = await platforms(), path = route(ps, await drone(), exit);
+    if (!path) { log('no route'); return; }
+    if (!path.length) return;
+    const n = path[0], cur = await drone();
+    log(`  climb: at ${Math.round(cur.x)},${Math.round(cur.y)} → ${n.x},${n.y} ${n.w}w ${n.one ? 'one-way' : 'solid'} (${path.length} to go)`);
+    const rising = n.y < cur.y - 10, P = path.under;
+    const right = n.x + n.w / 2 > cur.x;
+    const overlap = P && Math.min(P.x + P.w, n.x + n.w) - Math.max(P.x, n.x) > 40;
+    // take off beside a solid ledge (never under it); under a one-way ledge is fine; across a gap, from the edge
+    let off;
+    if (!overlap && P) off = right ? P.x + P.w - 18 : P.x + 18;
+    else if (!rising) off = right ? n.x - 30 : n.x + n.w + 30;
+    else if (n.one) off = Math.min(Math.max(cur.x, n.x + 30), n.x + n.w - 30);
+    else off = right ? n.x - 50 : n.x + n.w + 50;
+    const land = right ? Math.min(n.x + 70, n.x + n.w / 2) : Math.max(n.x + n.w - 70, n.x + n.w / 2);
+    if (!overlap && P) {
+      // a running start from well back on this platform
+      await walk(right ? Math.max(P.x + 20, off - 120) : Math.min(P.x + P.w - 20, off + 120), { tol: 12 });
+      await run({ type: 'leap', x0: off, land });
+    } else {
+      await walk(off, { tol: 12 });
+      await wait(6);
+      if (rising) await run({ type: 'jumpTo', x: land });
+    }
+  }
+};
+
 /** Open a composed station's module, show it, sign it off, and close it the way a player would. */
 const moduleAt = async (st, show) => {
   await walk(st.x, { tol: 14 });
@@ -175,9 +245,11 @@ const moduleAt = async (st, show) => {
   await page.waitForTimeout(500);
   if (await page.getByTestId('story-card').count()) await card(3200);
 };
-const leave = async (exit) => {
+const leave = async () => {
   const before = await story(() => window.__tapeoutGame.story.index);
-  await walk(exit + 30);
+  const exit = await story(() => window.__tapeoutGame.story.room.exit);
+  await traverse(exit);
+  await walk(exit.x + 30);
   await page.waitForFunction((i) => window.__tapeoutGame.story.index !== i && !window.__tapeoutGame.story.fade, before, { timeout: 20000 });
   await page.waitForTimeout(500);
 };
@@ -228,29 +300,27 @@ const arena = async (place) => {
 };
 
 try {
-  // the run so far: Level 1 and the electricity primer are done, so the lift offers the next places
-  await story(() => {
-    for (const id of ['first-wire', 'bits', 'bool', 'first-not', 'first-and', 'logic-half', 'inc-demo-board', 'gates', 'half-adder-v']) window.__tapeoutAward(id);
-  });
-  await story(() => { const s = window.__tapeoutGame.story; for (const r of s.roomsFor('volts-and-amps')) void r; });
+  // the run so far: every place before the first one recorded is signed off, so the lift offers it
+  const first = ORDER.indexOf(places[0]);
+  await story((ids) => { for (const id of ids) window.__tapeoutAward(id); }, ORDER.slice(0, first).flatMap((p) => MODULES[p]));
   await story(() => window.__tapeoutGame.story.warp('loft', 0));
   await wait(90);
   for (const place of places) {
-    // prerequisites: every earlier place's modules, signed off
-    await story((p) => {
-      const g = window.__tapeoutGame.story;
-      window.__tapeoutPrereq?.(p);
-      void g;
-    }, place);
-    const lift = (await roomNow()).stations.find((x) => x.kind === 'lift');
-    await walk(lift.x, { tol: 14 });
-    await still(`${place}-00-loft`);
-    await press();
-    await page.getByTestId('story-choice').waitFor();
-    await page.waitForTimeout(1800);
-    const name = await story((p) => window.__tapeoutPlaceName(p), place);
-    await page.getByTestId('story-choice').getByRole('button', { name: new RegExp(`^(Continue: )?${name}$`) }).first().click();
-    await page.waitForFunction((p) => window.__tapeoutGame.story.place === p && !window.__tapeoutGame.story.fade, place, { timeout: 20000 });
+    if (process.env.WARP) {
+      // for working on one room: straight there (WARP=<room index>)
+      await story(([p, k]) => window.__tapeoutGame.story.warp(p, k), [place, Number(process.env.WARP)]);
+      await wait(30);
+    } else {
+      const lift = (await roomNow()).stations.find((x) => x.kind === 'lift');
+      await walk(lift.x, { tol: 14 });
+      await still(`${place}-00-loft`);
+      await press();
+      await page.getByTestId('story-choice').waitFor();
+      await page.waitForTimeout(1800);
+      const name = NAMES[place];
+      await page.getByTestId('story-choice').getByRole('button', { name: new RegExp(`^(Continue: )?${name}$`) }).first().click();
+      await page.waitForFunction((p) => window.__tapeoutGame.story.place === p && !window.__tapeoutGame.story.fade, place, { timeout: 20000 });
+    }
     for (let guard = 0; guard < 40; guard++) {
       const r = await roomNow();
       if (r.place !== place) break;
@@ -277,12 +347,12 @@ try {
       if (r.role === 'arena') await arena(place);
       if (['port', 'panel', 'bench', 'gate', 'bossdoor'].includes(r.role)) {
         for (const st of r.stations.filter((x) => x.module)) {
-          if (await story((id) => !!window.__tapeoutDone(id), st.module)) continue;
+          if (await story((id) => window.__tapeoutGame.story.kitDone(id), st.module)) continue;
           await moduleAt(st, r.role === 'bench' ? 4500 : 3500);
         }
       }
       if (r.role === 'bossdoor') await wait(90);
-      await leave(r.exit);
+      await leave();
     }
   }
   // the chip map, back home

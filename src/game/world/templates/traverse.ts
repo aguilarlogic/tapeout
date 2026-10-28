@@ -92,9 +92,10 @@ export const gapRun: Template = (rng, opts) => {
  * ledge that leads out of the top right. The exit is the ledge's top: the drone must be above it. */
 export const shaftUp: Template = (_rng, opts) => {
   const w = 1280, h = 1440, F = floorY(h), top = 260;
-  const col = [100, 520, 940];
-  const one = (c: number, y: number) => r(col[c], y, 260, 16);
-  const solid = (c: number, y: number) => r(col[c], y, 260, 40);
+  // columns 40 px apart: each step rises 130 px, which leaves a beginner little room across (kit.ts gapFor)
+  const col = [100, 440, 780];
+  const one = (c: number, y: number) => r(col[c], y, 300, 16);
+  const solid = (c: number, y: number) => r(col[c], y, 300, 40);
   const s1 = one(0, 1230), s2 = one(1, 1100), s3 = solid(2, 970), s4 = one(1, 840);
   const s5 = solid(0, 710), s6 = one(1, 580), s7 = one(2, 450), s8 = solid(1, 320);
   const ledge = r(col[2], top, w - col[2], 40);
