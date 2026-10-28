@@ -344,10 +344,12 @@ function drawBenchRig(c: C, x: number, y: number, w: number, h: number, d: Direc
     c.strokeStyle = done ? PAL.ok : rgba(PAL.trace, 0.6);
     c.lineWidth = 2;
     c.stroke();
-    // the title shrinks to fit the monitor
+    const mod = findModule(m)?.module;
+    const opens = mod ? `// opens in: ${KIND_APP[mod.kind]}` : '';
+    // the title and the "opens in" line shrink to fit the monitor
     let size = 12;
     c.font = `${size}px ${FONT}`;
-    while (size > 9 && c.measureText(title).width > mw - 28) { size--; c.font = `${size}px ${FONT}`; }
+    while (size > 9 && Math.max(c.measureText(title).width, c.measureText(opens).width) > mw - 28) { size--; c.font = `${size}px ${FONT}`; }
     // still too long at the smallest size: cut at a word with an ellipsis, never mid-word at the edge
     let shown = title;
     if (c.measureText(shown).width > mw - 28) {
@@ -356,7 +358,6 @@ function drawBenchRig(c: C, x: number, y: number, w: number, h: number, d: Direc
       shown = `${ws.join(' ')}…`;
     }
     const verdict = done ? '// PASS' : '// write me';
-    const mod = findModule(m)?.module;
     // the idea it teaches, wrapped to the monitor, then where it opens
     const words = (mod?.concept ?? '').split(/\s+/).filter(Boolean), lines: string[] = [];
     let cut = false;
@@ -383,7 +384,7 @@ function drawBenchRig(c: C, x: number, y: number, w: number, h: number, d: Direc
     for (let k = 0; k < rows; k++) c.fillText(`//   ${lines[k]}`, mx + 14, y0 + 44 + k * 16);
     const vy = y0 + h - 18;
     c.fillStyle = rgba(PAL.text, 0.35);
-    if (mod) c.fillText(`// opens in: ${KIND_APP[mod.kind]}`, mx + 14, vy - 18);
+    if (mod) c.fillText(c.measureText(opens).width > mw - 28 ? `// ${KIND_APP[mod.kind]}` : opens, mx + 14, vy - 18);
     c.fillStyle = done ? PAL.ok : rgba(PAL.trace, 0.85);
     c.fillText(verdict, mx + 14, vy);
     if (!done && Math.floor(t / 30) % 2) c.fillRect(mx + 14 + c.measureText(verdict).width + 4, vy - 11, 7, 13);
