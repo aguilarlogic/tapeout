@@ -1,23 +1,8 @@
 // TAPE-OS: the desktop the whole game lives in. The terminal (TAPEOUT) is always there; labs, minigames,
 // the map and flashcards open as windows. URLs (#/rtl/fifo, #/learn/cache...) open the matching window.
-import { circuitPage } from '../games/circuit/page';
-import { codePage } from '../games/code/page';
-import { shellPage } from '../games/shell/page';
-import { svaPage } from '../games/sva/page';
-import { svPage } from '../games/sv/page';
-import { cdcPage } from '../games/cdc/page';
-import { archPage } from '../games/arch/page';
-import { isaPage } from '../games/isa/page';
-import { rvPage } from '../games/rv/page';
 import { findModule, KIND_APP } from '../curriculum';
 import { closeGame, openGame } from '../game/screen';
-import { coveragePage } from '../games/coverage/page';
 import { drillsPage } from '../games/drills/page';
-import { logicPage } from '../games/logic/page';
-import { pcbPage } from '../games/pcb/page';
-import { rtlPage } from '../games/rtl/page';
-import { timingPage } from '../games/timing/page';
-import { uvmPage } from '../games/uvm/page';
 import { skillsApp } from '../mastery/app';
 import { MINIGAMES } from '../minigames/apps';
 import { onChange, profile, rank, resetAll, totalXp } from '../state';
@@ -25,16 +10,13 @@ import { Shell } from '../term/shell';
 import { Terminal } from '../term/terminal';
 import { h } from '../ui/dom';
 import { avatar } from './avatar';
+import { LABS } from './labs';
 import { launchGame } from './launch';
 import { mapApp } from './map';
 import { settingsApp } from './settings';
 import { bindMentorLog } from './mentor';
 import { buildRegions } from './regions';
 import { focusedWindow, getWindow, initWM, onWindowsChange, openWindow } from './wm';
-
-const LABS: Record<string, (id: string) => HTMLElement> = {
-  logic: logicPage, rtl: rtlPage, pcb: pcbPage, sta: timingPage, cov: coveragePage, uvm: uvmPage, clab: circuitPage, code: codePage, shell: shellPage, sva: svaPage, tb: svPage, cdc: cdcPage, isa: isaPage, arch: archPage, rv: rvPage, dft: archPage, pd: archPage, sta2: archPage, layout: archPage, sig: archPage, spec: archPage,
-};
 
 let term: Terminal;
 let shell: Shell;
