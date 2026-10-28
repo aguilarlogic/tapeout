@@ -156,7 +156,7 @@ const card = async (hold = 2200) => {
   await page.waitForTimeout(400);
 };
 const nextRoom = async (id) => { await page.waitForFunction((id) => window.__tapeoutGame.story.room.id === id && !window.__tapeoutGame.story.fade, id, { timeout: 20000 }); await page.waitForTimeout(600); log(`room ${id}`); };
-const roomNow = () => story(() => { const s = window.__tapeoutGame.story; return { id: s.room.id, role: s.room.role, index: s.index, place: s.place, exit: s.room.exit.x, stations: s.room.stations.map((x) => ({ kind: x.kind, x: x.x, y: x.y, module: x.module, arg: x.arg })) }; });
+const roomNow = () => story(() => { const s = window.__tapeoutGame.story; return { id: s.room.id, role: s.room.role, index: s.index, place: s.place, exit: s.room.exit.x, stations: s.room.stations.map((x) => ({ kind: x.kind, x: x.x, y: x.y, module: x.module, arg: x.arg })), enemies: s.room.enemies.length }; });
 const wire = async (a, b) => {
   const xs = await story(() => Object.fromEntries(window.__tapeoutGame.story.room.wire.terminals.map((t) => [t.pin, t.x])));
   await walk(xs[a]); await press(); await walk(xs[b]); await press();
@@ -350,8 +350,11 @@ try {
       // played; the other rooms are signed off and skipped
       const seen = (seenRoles[place] ??= new Set());
       const rail = r.role === 'traverse' && r.stations.some((x) => x.kind === 'rail') && (await story(() => !!window.__tapeoutGame.sim.kit.rail));
-      const keep = (place === places[0] && process.env.HIGHLIGHTS !== 'all') || (['discovery', 'arena', 'exit'].includes(r.role) || (['fight', 'bench'].includes(r.role) && !seen.has(r.role))) || (rail && !seen.has('rail'));
+      // a Deep Layer shows its landing and its first room with bugs in it
+      const bugs = r.role === 'traverse' && r.enemies > 0 && !seen.has('bugs');
+      const keep = (place === places[0] && process.env.HIGHLIGHTS !== 'all') || (['discovery', 'arena', 'exit', 'landing'].includes(r.role) || (['fight', 'bench'].includes(r.role) && !seen.has(r.role))) || (rail && !seen.has('rail')) || bugs;
       seen.add(r.role);
+      if (bugs) seen.add('bugs');
       if (rail && keep) seen.add('rail');
       if (!keep) {
         const mods = (await story(() => window.__tapeoutGame.story.room.modules));
@@ -362,6 +365,8 @@ try {
       }
       log(`${place} room ${r.index} ${r.role}`);
       await wait(60);
+      // a card on arrival (the Underlayers): read it, then close it
+      if (await page.getByTestId('story-card').count()) await card(3500);
       await still(`${place}-${String(r.index + 1).padStart(2, '0')}-${r.role}`);
       if (r.role === 'exit') {
         const l = r.stations.find((x) => x.kind === 'lift');
@@ -388,7 +393,7 @@ try {
         await page.waitForFunction(() => !window.__tapeoutGame.sim.riding, null, { timeout: 20000 });
         await wait(30);
       }
-      if (r.role === 'fight') await run({ type: 'fight' }, 90000);
+      if (r.role === 'fight' || bugs) await run({ type: 'fight' }, 90000);
       if (r.role === 'arena') await arena(place);
       if (['port', 'panel', 'bench', 'gate', 'bossdoor'].includes(r.role)) {
         for (const st of r.stations.filter((x) => x.module)) {

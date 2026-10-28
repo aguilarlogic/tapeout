@@ -55,7 +55,7 @@ function mount(host: OverlayHost, node: HTMLElement, onEsc: () => void): () => v
   };
 }
 
-/** The chip map: today's ADA-1 block grid, then the act 1 places with their percent done and a Go button when open. */
+/** The chip map: today's ADA-1 block grid, then each open act's places with their percent done and a Go button when open. */
 function chipMap(a: LoftActions, choose: (run: () => void) => void): HTMLElement {
   const chip = CHIPS[0];
   const p = chipProgress(chip);
@@ -66,10 +66,26 @@ function chipMap(a: LoftActions, choose: (run: () => void) => void): HTMLElement
       const cls = states.every((s) => s === 'built') ? 'built' : states.some((s) => s !== 'empty') ? 'half' : 'empty';
       return h('div', { class: `st-block ${cls}` }, h('b', null, b.name), h('span', { class: 'dim' }, cls === 'built' ? 'working' : cls === 'half' ? 'half lit' : 'dark'));
     })),
-    h('p', { class: 'st-line' }, 'Act 1, place by place.'),
-    h('ol', { class: 'st-log' }, ...mapRows(recorded).map((r) => h('li', null,
-      h('b', null, r.name), ' ', h('span', { class: 'dim' }, `${r.pct}% done`), ' ',
-      r.open ? button('Go', () => choose(() => a.go(r.place)), 'primary mini') : h('span', { class: 'dim' }, 'Locked')))));
+    ...actGroups(mapRows(recorded)).flatMap(([act, rows]) => [
+      h('h3', null, ACT_NAME[act]),
+      h('ul', { class: 'st-log st-places' }, ...rows.map((r) => h('li', null,
+        h('span', { class: 'dim' }, r.n), h('b', null, r.name), h('span', { class: 'dim' }, `${r.pct}%`),
+        r.open ? button('Go', () => choose(() => a.go(r.place)), 'primary mini') : h('span', { class: 'dim' }, 'Locked')))),
+    ]));
+}
+
+type MapRow = ReturnType<typeof mapRows>[number];
+/** What each act is called on the chip map. */
+const ACT_NAME: Record<MapRow['act'], string> = { 1: 'Act 1 · The Keeper', 2: 'Act 2 · The Core', 3: 'Act 3 · Silicon', 4: 'Act 4 · The Cluster', 5: 'The Underlayers', 6: 'The Wings' };
+/** The rows in runs of one act, in play order. */
+function actGroups(rows: MapRow[]): [MapRow['act'], MapRow[]][] {
+  const out: [MapRow['act'], MapRow[]][] = [];
+  for (const r of rows) {
+    const last = out[out.length - 1];
+    if (last && last[0] === r.act) last[1].push(r);
+    else out.push([r.act, [r]]);
+  }
+  return out;
 }
 
 /** The chalkboard: the open study rooms, each with its modules as buttons and a line once it is complete. */

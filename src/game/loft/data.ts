@@ -50,13 +50,16 @@ export function liftChoices(done: (id: string) => boolean): { place: string; tex
   return out;
 }
 
-/** The act 1 places on the chip map: name, percent of scored modules done, and whether the place is open. */
-export function mapRows(done: (id: string) => boolean): { place: string; name: string; pct: number; open: boolean }[] {
+/** The chip map rows: every place of act 1 and of each act with an open place, in play order, with its
+ * number, act, percent of scored modules done, and whether it is open. */
+export function mapRows(done: (id: string) => boolean): { place: string; n: string; act: PlaceDef['act']; name: string; pct: number; open: boolean }[] {
   const open = new Set(openPlaces(done).map((p) => p.id));
-  return PLACES.filter((p) => p.act === 1).map((p) => {
+  // act 1 always shows; a later act shows once any of its places is open
+  const acts = new Set<PlaceDef['act']>([1, ...PLACES.filter((p) => open.has(p.id)).map((p) => p.act)]);
+  return PLACES.filter((p) => acts.has(p.act)).map((p) => {
     const scored = scoredOf(chapterOf(p));
     const got = scored.filter((m) => done(m.id)).length;
-    return { place: p.id, name: p.name, pct: scored.length ? Math.round((100 * got) / scored.length) : 100, open: open.has(p.id) };
+    return { place: p.id, n: p.n, act: p.act, name: p.name, pct: scored.length ? Math.round((100 * got) / scored.length) : 100, open: open.has(p.id) };
   });
 }
 

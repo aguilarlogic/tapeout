@@ -1111,7 +1111,7 @@ export function drawBubble(c: C, d: Director, t: number) {
   c.globalAlpha = inK * (1 - fadeOut);
   c.font = `15px ${FONT}`;
   // top centre, under the HUD (under the boss bar in the arena), clear of the drone and the floor
-  const w = Math.max(240, c.measureText(b.text).width + 40), ax = (VIEW_W - w) / 2 - 8, y = (d.bossBar ? 104 : 66) + (1 - inK) * -8;
+  const w = Math.max(240, c.measureText(b.text).width + 40), ax = (VIEW_W - w) / 2 - 8, y = (d.bossBar ? 104 : 86) + (1 - inK) * -8;
   const x = ax + 36;
   // the avatar: TAPEOUT's eye in a ring, flickering while it is still broken
   const broken = !d.kit.voice;
