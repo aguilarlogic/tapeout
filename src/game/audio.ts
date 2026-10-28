@@ -10,7 +10,9 @@ export type Sfx =
   | 'uiHover' | 'uiPress' | 'uiOpen' | 'uiClose'
   // the story (Level 1)
   | 'wireGrab' | 'wirePlug' | 'wireSnap' | 'rowTick' | 'pass' | 'notYet' | 'spark' | 'lever' | 'plate' | 'liftHum'
-  | 'portOpen' | 'bossPhase' | 'fanfare' | 'chirp' | 'crack' | 'shatter' | 'lightsOn' | 'reading';
+  | 'portOpen' | 'bossPhase' | 'fanfare' | 'chirp' | 'crack' | 'shatter' | 'lightsOn' | 'reading'
+  // act 1 (phase 3): enemies, boss attacks, the beam
+  | 'turret' | 'revive' | 'split' | 'laser' | 'bossDrop' | 'chain' | 'freeze' | 'mirror' | 'beam';
 
 type Wave = OscillatorType | 'noise';
 interface Voice { at?: number; wave: Wave; f: number; to?: number; len: number; level: number; filter?: { type: BiquadFilterType; f: number; to?: number; q?: number } }
@@ -70,6 +72,31 @@ const V: Record<Sfx, Voice[]> = {
   shatter: [{ wave: 'noise', f: 1, len: 0.45, level: 0.1, filter: { type: 'highpass', f: 2500, to: 800 } }, { wave: 'triangle', f: 2400, to: 900, len: 0.2, level: 0.03 }, { at: 0.06, wave: 'triangle', f: 3100, to: 1200, len: 0.2, level: 0.025 }],
   lightsOn: [{ wave: 'sawtooth', f: 60, to: 120, len: 0.5, level: 0.04, filter: { type: 'lowpass', f: 400, to: 1500 } }, { at: 0.2, wave: 'triangle', f: 1046.5, len: 0.6, level: 0.035 }, { at: 0.3, wave: 'triangle', f: 1568, len: 0.6, level: 0.025 }],
   reading: [{ wave: 'sine', f: 1200, len: 0.04, level: 0.03 }, { at: 0.06, wave: 'sine', f: 1600, len: 0.06, level: 0.03 }],
+  // act 1 (phase 3): enemies, boss attacks, the beam
+  turret: [{ wave: 'square', f: 1320, to: 880, len: 0.05, level: 0.035 }],
+  revive: [
+    { wave: 'square', f: 523.25, len: 0.2, level: 0.035 }, { at: 0.09, wave: 'square', f: 659.25, len: 0.2, level: 0.035 },
+    { at: 0.18, wave: 'square', f: 783.99, len: 0.2, level: 0.035 }, { at: 0.27, wave: 'square', f: 1046.5, len: 0.2, level: 0.035 },
+    { at: 0.36, wave: 'triangle', f: 1318.5, len: 0.2, level: 0.05 },
+  ],
+  split: [
+    { wave: 'sine', f: 620, to: 160, len: 0.12, level: 0.07 }, { at: 0.04, wave: 'sine', f: 380, to: 200, len: 0.1, level: 0.04 },
+    { wave: 'noise', f: 1, len: 0.06, level: 0.05, filter: { type: 'bandpass', f: 900, q: 3 } },
+  ],
+  laser: [{ wave: 'sawtooth', f: 2200, to: 260, len: 0.22, level: 0.045, filter: { type: 'lowpass', f: 3500, to: 900 } }],
+  bossDrop: [{ wave: 'sine', f: 90, to: 40, len: 0.22, level: 0.09 }, { wave: 'noise', f: 1, len: 0.12, level: 0.04, filter: { type: 'lowpass', f: 500 } }],
+  chain: [
+    { wave: 'triangle', f: 2000, len: 0.03, level: 0.05 }, { at: 0.05, wave: 'triangle', f: 1900, len: 0.03, level: 0.05 },
+    { at: 0.1, wave: 'triangle', f: 2000, len: 0.03, level: 0.05 }, { at: 0.15, wave: 'triangle', f: 1800, len: 0.03, level: 0.05 },
+    { at: 0.2, wave: 'triangle', f: 2200, len: 0.03, level: 0.06 },
+  ],
+  freeze: [
+    { wave: 'sine', f: 880, len: 0.26, level: 0.035 }, { wave: 'sine', f: 1108.73, len: 0.26, level: 0.03 },
+    { wave: 'sine', f: 1318.51, len: 0.26, level: 0.03 }, { wave: 'noise', f: 1, len: 0.26, level: 0.025, filter: { type: 'highpass', f: 6000 } },
+  ],
+  // the envelope only decays, so the reversed swell is a rising chirp with a short cut after it
+  mirror: [{ wave: 'sine', f: 600, to: 2600, len: 0.16, level: 0.05 }, { at: 0.16, wave: 'square', f: 2600, len: 0.02, level: 0.02 }],
+  beam: [{ wave: 'triangle', f: 1800, len: 0.02, level: 0.04 }, { wave: 'noise', f: 1, len: 0.015, level: 0.03, filter: { type: 'lowpass', f: 3000 } }],
 };
 
 // --- the music: loops of 24 bars in three 8-bar sections that add voices. The test room's ambient loop is 96 BPM
