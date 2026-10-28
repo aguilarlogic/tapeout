@@ -389,7 +389,9 @@ export class Director {
     this.sim.targets.push({ id: 'board', rect: this.boardRect(), active: false });
     // shooting a node takes its reading, the same as E beside it
     for (const st of this.room.stations) if (st.kind === 'node') this.sim.targets.push({ id: `node:${st.arg}`, rect: { x: st.x - 16, y: st.y - 74, w: 32, h: 56 }, active: true });
-    this.out.push({ t: 'card', kind: 'pager', title: 'PAGER · SEV-3', lines: [this.boss.incident.pager], button: 'Take the call' });
+    // the card's title carries the page's own severity, and the body drops the repeated "PAGER · SEV-n · " prefix
+    const page = /^PAGER · (SEV-\d) · (.*)$/s.exec(this.boss.incident.pager);
+    this.out.push({ t: 'card', kind: 'pager', title: `PAGER · ${page?.[1] ?? 'SEV-2'}`, lines: [page?.[2] ?? this.boss.incident.pager], button: 'Take the call' });
     this.waiting = true;
   }
 
