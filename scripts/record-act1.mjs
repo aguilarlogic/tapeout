@@ -331,6 +331,8 @@ try {
       await story(([p, k]) => window.__tapeoutGame.story.warp(p, k), [place, Number(process.env.WARP)]);
       await wait(30);
     } else {
+      // places between the recorded ones (a Deep Layer not on the list) are signed off, so the lift opens the next
+      await story((ids) => { for (const id of ids) window.__tapeoutAward(id); }, ORDER.slice(0, ORDER.indexOf(place)).filter((p) => !places.includes(p)).flatMap((p) => MODULES[p] ?? []));
       const lift = (await roomNow()).stations.find((x) => x.kind === 'lift');
       await walk(lift.x, { tol: 14 });
       await still(`${place}-00-loft`);
@@ -347,8 +349,10 @@ try {
       // highlights (every place after the first): the puzzle, the first fight, a bench, the boss and the way out are
       // played; the other rooms are signed off and skipped
       const seen = (seenRoles[place] ??= new Set());
-      const keep = (place === places[0] && process.env.HIGHLIGHTS !== 'all') || (['discovery', 'arena', 'exit'].includes(r.role) || (['fight', 'bench'].includes(r.role) && !seen.has(r.role)));
+      const rail = r.role === 'traverse' && r.stations.some((x) => x.kind === 'rail') && (await story(() => !!window.__tapeoutGame.sim.kit.rail));
+      const keep = (place === places[0] && process.env.HIGHLIGHTS !== 'all') || (['discovery', 'arena', 'exit'].includes(r.role) || (['fight', 'bench'].includes(r.role) && !seen.has(r.role))) || (rail && !seen.has('rail'));
       seen.add(r.role);
+      if (rail && keep) seen.add('rail');
       if (!keep) {
         const mods = (await story(() => window.__tapeoutGame.story.room.modules));
         await story((ids) => { for (const id of ids) window.__tapeoutAward(id); }, mods);
@@ -374,6 +378,15 @@ try {
         await wait(240);
         await story(() => { const s = window.__tapeoutGame.story; s.discover(`${s.place}:${s.room.mechanic}`); s.rs.mech.solved = true; for (const id of s.rs.gates.keys()) s.openGate(id); });
         await wait(60);
+      }
+      if (rail) {
+        // a bus rail: clip on and ride it across
+        const st = r.stations.find((x) => x.kind === 'rail');
+        await walk(st.x, { tol: 14 });
+        await press();
+        await wait(30);
+        await page.waitForFunction(() => !window.__tapeoutGame.sim.riding, null, { timeout: 20000 });
+        await wait(30);
       }
       if (r.role === 'fight') await run({ type: 'fight' }, 90000);
       if (r.role === 'arena') await arena(place);

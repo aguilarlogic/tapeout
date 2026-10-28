@@ -112,6 +112,8 @@ export interface Kit {
   /** ALU Cannon damage (Mk II: 48). */
   cannonDamage?: number;
   // --- act 2 upgrades (Phase 4 Spec, section 7) ---
+  /** Weapon slots the HUD lists and the number keys pick (left out: every owned weapon). Q still cycles them all. */
+  slots?: number;
   /** Pipeline Burst: bolts a burst. */
   burstBolts?: number;
   /** Loop Drone: damage a bolt (left out: no companion). */
@@ -224,6 +226,14 @@ export class Sim {
   stalled = false;
   /** The weapons the drone can switch between now. */
   get weapons(): Weapon[] { return this.kit.weapons ?? (this.kit.charged ? ['pulse', 'charged'] : ['pulse']); }
+  /** Weapons in the order they were last picked, most recent first (Phase 4 Spec, section 7: the slot rule). */
+  picked: Weapon[] = [];
+  /** The slots the HUD shows and the number keys pick: the most recently picked weapons, in the order owned. */
+  get slotted(): Weapon[] {
+    const ws = this.weapons, n = Math.min(this.kit.slots ?? ws.length, ws.length);
+    const keep = [...this.picked.filter((w) => ws.includes(w)), ...ws.filter((w) => !this.picked.includes(w))].slice(0, n);
+    return ws.filter((w) => keep.includes(w));
+  }
 
   constructor(public room: Room, seed = 1, make?: { act: number; story: boolean }) {
     if (make) this.make = make;
@@ -311,9 +321,10 @@ export class Sim {
     if (!ws.includes(this.weapon)) this.weapon = ws[0];
     if (!frozen && ws.length > 1) {
       const slot = (['slot1', 'slot2', 'slot3'] as const).findIndex((a) => c.pressed.has(a));
-      const next = c.pressed.has('weapon') ? ws[(ws.indexOf(this.weapon) + 1) % ws.length] : slot >= 0 ? ws[slot] : undefined;
+      const next = c.pressed.has('weapon') ? ws[(ws.indexOf(this.weapon) + 1) % ws.length] : slot >= 0 ? this.slotted[slot] : undefined;
       if (next && next !== this.weapon) {
         this.weapon = next;
+        this.picked = [next, ...this.picked.filter((w) => w !== next)];
         this.charge = 0;
         this.fx.push({ t: 'swap', weapon: this.weapon });
       }

@@ -249,8 +249,11 @@ export class Director {
     this.bubble = null;
     this.form = null;
     this.formPlatforms.clear();
+    // the weapon in hand and the slot order go with the drone from room to room
+    const hand = this.sim ? { weapon: this.sim.weapon, picked: this.sim.picked } : null;
     this.sim = new Sim(room, (this.seed = (this.seed * 1664525 + 1013904223) >>> 0), { act: placeById(place)?.act ?? 1, story: Director.difficulty() === 'story' });
     this.sim.respawnEnemies = room.id === 'arena';
+    if (hand) { this.sim.weapon = hand.weapon; this.sim.picked = hand.picked; }
     this.sim.panels = [false, false, false, false, false, false];
     const rs: RoomState = {
       wires: [], carrying: null, check: { state: 'open' }, strip: null, spark: 0, passed: false, attempts: 0, firstWire: false,
@@ -291,7 +294,7 @@ export class Director {
       gun: k.gun, coil: k.coil, charged: false, grabLimit: k.grabLimit, carryShot: k.carryShot,
       weapons: a.weapons, probeDamage: a.probeDamage, cannonDamage: a.cannonDamage, counterTo: a.counterTo, weak: a.weak || undefined,
       holster: a.holster && QUIET.has(this.room.role ?? ''), gripEnemies: a.gripEnemies, fieldRadius: a.fieldRadius,
-      burstBolts: a.burstBolts || undefined, loopDrone: a.loopDrone || undefined, rail: a.rail || undefined, sync: a.sync || undefined,
+      slots: a.slots, burstBolts: a.burstBolts || undefined, loopDrone: a.loopDrone || undefined, rail: a.rail || undefined, sync: a.sync || undefined,
     };
     s.drone.abilities = { doubleJump: a.doubleJump, wallLatch: a.wallLatch, ...(a.doubleJump ? { jump2: a.jump2 / HZ } : {}) };
     if (!a.beam) this.beamOn = false;

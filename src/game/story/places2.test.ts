@@ -109,6 +109,25 @@ describe('act 2 upgrades', () => {
     expect(kit().slots).toBe(3);
   });
 
+  it('slot rule: Q cycles every weapon, the slots hold the two last picked, and the hand carries to the next room', () => {
+    for (const id of ['logic-dec', 'cpu-tiny', 'logic-mux', 'pipe-boss']) pass(id);
+    const d = director();
+    d.warp('datapath', 0);
+    expect(d.sim.weapons).toEqual(['pulse', 'fan', 'cannon', 'burst']);
+    expect(d.sim.slotted).toEqual(['pulse', 'fan']);
+    step(d, ['weapon'], ['weapon']);
+    step(d);
+    step(d, ['weapon'], ['weapon']);
+    expect(d.sim.weapon).toBe('cannon');
+    expect(d.sim.slotted).toEqual(['fan', 'cannon']);
+    step(d);
+    step(d, ['slot1'], ['slot1']);
+    expect(d.sim.weapon).toBe('fan');
+    d.warp('datapath', 1);
+    expect(d.sim.weapon).toBe('fan');
+    expect(d.sim.slotted).toEqual(['fan', 'cannon']);
+  });
+
   it('Synchronizer: F slows enemies to half for 3 s and costs 40 energy, with a cooldown', () => {
     pass('cdc-fifo');
     const d = director();
