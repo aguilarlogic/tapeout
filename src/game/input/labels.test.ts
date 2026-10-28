@@ -186,3 +186,12 @@ describe('deviceText: mouse words', () => {
     expect(deviceText('Hold left click to fire.', 'keys', DEFAULTS)).toBe('Hold left click to fire.');
   });
 });
+
+describe('deviceText: a key opening a sentence', () => {
+  it('rewrites "E or" and "E on" at a sentence start only', () => {
+    expect(deviceText('Take readings. ...nodes. E or shoot.', 'pad', DEFAULTS)).toBe('Take readings. ...nodes. X or shoot.');
+    expect(deviceText('E on a pad warps you to the other.', 'touch', DEFAULTS)).toBe('USE on a pad warps you to the other.');
+    expect(deviceText('Wire C to D, then E or F.', 'pad', DEFAULTS)).toBe('Wire C to D, then E or F.');
+    expect(deviceText('Take readings. E or shoot.', 'keys', DEFAULTS)).toBe('Take readings. E or shoot.');
+  });
+});

@@ -22,7 +22,7 @@ const WORD_CODE: Record<string, string> = { Shift: 'ShiftLeft', Space: 'Space', 
  * A key name in game text, with its context: after "press " or "Press " (the prefix is kept), or before " switches" or
  * " again", or the prompt prefix "E  " at the very start. Word-bounded, so the letters inside words are never matched.
  */
-const KEY_IN_TEXT = /(^|[^A-Za-z0-9_])([Pp]ress )?(Shift|Space|Tab|[A-Z])(?![A-Za-z0-9_])( (?:switches|again)(?![A-Za-z0-9_])|  )?/g;
+const KEY_IN_TEXT = /(^|[^A-Za-z0-9_])([Pp]ress )?(Shift|Space|Tab|[A-Z])(?![A-Za-z0-9_])( (?:switches|again|or|on|at)(?![A-Za-z0-9_])|  )?/g;
 
 /** The name of the control for an action on a device. keys: keyName of the main binding, else the second, else '—'.
  * pad: the PAD_BUTTONS name ('left'/'right' -> 'left stick'; 'down' -> 'D-pad down'; 'slot1..3' -> 'Y').
@@ -76,8 +76,10 @@ export function deviceText(text: string, kind: DeviceKind, bindings: Bindings): 
   }
   return text.replace(KEY_IN_TEXT, (match: string, pre: string, press: string | undefined, key: string,
     tail: string | undefined, offset: number) => {
-    // A bare key only counts before " switches" or " again", or as the two-space prompt prefix at the very start.
-    if (!press && (tail === undefined || (tail === '  ' && offset !== 0))) return match;
+    // A bare key only counts before " switches" or " again", as the two-space prompt prefix at the very start, or
+    // opening a sentence before " or", " on" or " at" ("E or shoot.", "E on a pad warps you").
+    const opens = offset === 0 || /[.!?]\s*$/.test(text.slice(0, offset + pre.length));
+    if (!press && (tail === undefined || (tail === '  ' && offset !== 0) || (/^ (?:or|on|at)$/.test(tail) && !opens))) return match;
     const label = keyPrompt(key, kind, bindings);
     if (label === key) return match;
     return `${pre}${press ?? ''}${label}${tail ?? ''}`;

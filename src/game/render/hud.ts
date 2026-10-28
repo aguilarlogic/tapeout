@@ -1,6 +1,9 @@
 // The HUD (plan K, polish bar P5): line-art health and energy bars top-left, the selected weapon's icon beside the
 // energy bar (decision 29) and a small crosshair. Damage drops the health bar at once and a white "recent damage"
 // segment drains over 400 ms; the energy bar pulses below 25%. Drawn in view coordinates (1280 × 720 logical px).
+import { type Bindings, DEFAULTS } from '../input/bindings';
+import { actionLabel } from '../input/labels';
+import type { DeviceKind } from '../input/padmap';
 import type { Gadget, Sim, Weapon } from '../sim';
 import { frames, HZ } from '../tuning';
 import { UP } from '../world/upgrades';
@@ -14,7 +17,12 @@ const SHORT: Record<Weapon, string> = { pulse: 'PULSE', charged: 'CHARGED', fan:
 const WEAPON_NAME: Record<Weapon, string> = { pulse: 'PULSE PROBE', charged: 'CHARGED PROBE', fan: 'FAN DECODER', cannon: 'ALU CANNON', burst: 'PIPELINE BURST', spec: 'SPECULATIVE SHOT' };
 const NAME_STEPS = frames(1200), NAME_FADE = frames(300);
 
+/** A control's name, short enough for the HUD: the D-pad's names become arrows. */
+const SHORT_PAD: Record<string, string> = { 'D-pad up': 'D↑', 'D-pad down': 'D↓', 'D-pad left': 'D←', 'D-pad right': 'D→' };
+
 export class Hud {
+  /** The device in use and the key bindings, so the HUD names the right controls (Phase 9). */
+  device: { kind: DeviceKind; bindings: Bindings } = { kind: 'keys', bindings: DEFAULTS };
   /** Health shown by the white recent-damage segment; drains toward the real value. */
   private ghost = 100;
   private ghostHold = 0;
@@ -47,6 +55,14 @@ export class Hud {
   syncKit(sim: Sim) { this.coilA = sim.kit.coil ? 1 : 0; this.gunA = sim.kit.gun ? 1 : 0; }
 
   /** `slide` 0..1 brings the HUD in from the top-left during the boot (P2). */
+  /** The gadget line: its control and name, and the switch control when there are two. On touch the buttons say it. */
+  private gadgetLine(g: Gadget, two: boolean): string {
+    const { kind, bindings } = this.device;
+    if (kind === 'touch') return `${GADGET_NAME[g]}${two ? '   NEXT switch' : ''}`;
+    const key = (a: 'gadget' | 'gadgetNext') => { const n = actionLabel(a, kind, bindings); return SHORT_PAD[n] ?? n; };
+    return `${key('gadget')} ${GADGET_NAME[g]}${two ? `   ${key('gadgetNext')} switch` : ''}`;
+  }
+
   draw(c: CanvasRenderingContext2D, sim: Sim, slide: number, t: number) {
     const v = sim.vitals, s = easeOut(slide);
     const x = 24 - (1 - s) * 280, y = 22;
@@ -102,7 +118,7 @@ export class Hud {
     const sy = many ? ey + 24 : wy;
     let tx = many ? x : wx + 30;
     slots.forEach((w, i) => {
-      const on = w === sim.weapon, label = many ? `${i + 1} ${SHORT[w]}` : SHORT[w];
+      const on = w === sim.weapon, label = many && this.device.kind === 'keys' ? `${i + 1} ${SHORT[w]}` : SHORT[w];
       c.fillStyle = on ? rgba(PAL.text, 0.85) : rgba(PAL.text, 0.35);
       c.fillText(label, tx, sy);
       const tw = c.measureText(label).width;
@@ -120,7 +136,7 @@ export class Hud {
     if (gadgets.length) {
       c.globalAlpha = s * this.gunA;
       c.fillStyle = rgba(PAL.text, 0.6);
-      c.fillText(`F ${GADGET_NAME[sim.gadget]}${gadgets.length > 1 ? '   G switch' : ''}`, x, many ? ey + 42 : ey + 24);
+      c.fillText(this.gadgetLine(sim.gadget, gadgets.length > 1), x, many ? ey + 42 : ey + 24);
     }
     // the wings (Phase 8 Spec, section 6): Overclock's tag and draining bar, and Neuro Reflex's ready pip
     const ry = (many ? ey + 42 : ey + 24) + (gadgets.length ? 18 : 0);

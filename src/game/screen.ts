@@ -424,6 +424,7 @@ export class GameScreen {
     this.showLog = input.held.has('map');
     if (this.story) {
       this.story.device = { kind: this.kind, bindings: this.input.bindings };
+      this.hud.device = this.story.device;
       input = this.story.before(input);
     }
     this.aimNow = this.computeAim(input.held.has('field'));
