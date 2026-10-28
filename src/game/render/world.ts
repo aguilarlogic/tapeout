@@ -58,6 +58,9 @@ function pointAt(t: Trace, d: number): Pt {
   return t.pts[t.pts.length - 1];
 }
 
+/** The 'under' motif's component heights, as rail gaps (between rails 0-1, 1-2, 2-3). */
+const UNDER_LEVEL = [0, 1, 2, 1];
+
 export class WorldArt {
   private layers: Layer[];
   private roomTraces: Trace[];
@@ -142,8 +145,8 @@ export class WorldArt {
     this.drawTraces(c, this.roomTraces, view, 0.5, LINE.trace, 1);
   }
 
-  /** A room's faint motif, in room coordinates and culled to `vis`. Strokes stay at 0.08 alpha or below so they never
-   * fight the foreground; the kinds without a motif draw nothing. */
+  /** A room's faint motif, in room coordinates and culled to `vis`. Most strokes stay at 0.12 alpha or below so they never
+   * fight the foreground (the 'under' power rails are the brighter exception, at 0.3); the kinds without a motif draw nothing. */
   private motif(c: C, kind: BackdropKind, vis: Rect) {
     const W = this.room.w, H = this.room.h, x0 = Math.max(0, vis.x), x1 = Math.min(W, vis.x + vis.w);
     c.lineWidth = 1.5;
@@ -237,6 +240,69 @@ export class WorldArt {
           c.arc(sx + seg * (BW + GAP) + BW + f * GAP, cy, 2.5, 0, Math.PI * 2);
           c.fill();
         }
+        break;
+      }
+      case 'under': { // the Underlayers: violet power rails 220 px apart, a current dash riding each, vias every 300 px;
+        // between them, faint components (resistor, capacitor, inductor) every 900 px
+        const RAIL0 = 110, RAIL_GAP = 220, VIA = 300, CUR = 40;
+        const y0 = Math.max(0, vis.y), y1 = Math.min(H, vis.y + vis.h);
+        // far layer: each rail is 4 px at 30% alpha, with its dashes on top (14 on, 26 off), moving at 40 px/s on the clock
+        // (the clock holds still under reduced motion, so the dashes do too); vias are rings of radius 5 with a per-rail phase
+        for (let j = Math.max(0, Math.ceil((y0 - RAIL0) / RAIL_GAP)); RAIL0 + j * RAIL_GAP <= y1; j++) {
+          const y = RAIL0 + j * RAIL_GAP;
+          c.strokeStyle = rgba(PAL.x, 0.3);
+          c.lineWidth = 4;
+          c.beginPath();
+          c.moveTo(x0, y);
+          c.lineTo(x1, y);
+          c.stroke();
+          c.strokeStyle = rgba(PAL.trace, 0.4);
+          c.lineWidth = 2;
+          c.setLineDash([14, 26]);
+          c.lineDashOffset = -this.clock * CUR;
+          c.stroke(); // the same line, now dashed
+          c.setLineDash([]);
+          c.lineDashOffset = 0;
+          c.strokeStyle = rgba(PAL.x, 0.3);
+          c.lineWidth = 1.5;
+          c.beginPath();
+          const phase = (j * 97) % VIA;
+          for (let x = Math.ceil((x0 - phase) / VIA) * VIA + phase; x <= x1; x += VIA) {
+            c.moveTo(x + 5, y);
+            c.arc(x, y, 5, 0, Math.PI * 2);
+          }
+          c.stroke();
+        }
+        // near layer: one component every 900 px, cycling resistor, capacitor, inductor, at heights between the rails
+        c.strokeStyle = rgba(PAL.trace, 0.12);
+        c.lineWidth = 1.5;
+        c.beginPath();
+        for (let k = Math.max(0, Math.floor((x0 - 494) / 900)); 900 * k + 406 <= x1; k++) {
+          const cx = 900 * k + 450, y = RAIL0 + RAIL_GAP / 2 + RAIL_GAP * UNDER_LEVEL[k % 4];
+          if (k % 3 === 0) { // resistor: 12 px leads, a 60 px zigzag with 6 peaks
+            c.moveTo(cx - 42, y);
+            c.lineTo(cx - 30, y);
+            for (let i = 1; i <= 11; i++) c.lineTo(cx - 30 + i * 5, y + (i % 2 ? -8 : 8));
+            c.lineTo(cx + 30, y);
+            c.lineTo(cx + 42, y);
+          } else if (k % 3 === 1) { // capacitor: two plates 24 px tall, 8 px apart, on 14 px leads
+            c.moveTo(cx - 18, y);
+            c.lineTo(cx - 4, y);
+            c.moveTo(cx - 4, y - 12);
+            c.lineTo(cx - 4, y + 12);
+            c.moveTo(cx + 4, y - 12);
+            c.lineTo(cx + 4, y + 12);
+            c.moveTo(cx + 4, y);
+            c.lineTo(cx + 18, y);
+          } else { // inductor: four 10 px arcs bulging up, on 12 px leads
+            c.moveTo(cx - 32, y);
+            c.lineTo(cx - 20, y);
+            for (let i = 0; i < 4; i++) c.arc(cx - 15 + i * 10, y, 5, Math.PI, 0);
+            c.moveTo(cx + 20, y);
+            c.lineTo(cx + 32, y);
+          }
+        }
+        c.stroke();
         break;
       }
     }

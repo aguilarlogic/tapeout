@@ -10,7 +10,8 @@ import type { Action } from '../input/bindings';
 import type { Rect, Room } from '../level/room';
 import { type Vec, approach, overlaps } from '../physics/geom';
 import { boundsRect, CAT, MASK, type World } from '../physics/world';
-import { DRONE } from '../tuning';
+import { DRONE, HZ } from '../tuning';
+import { UP } from '../world/upgrades';
 
 export interface Controls {
   held: Set<Action>;
@@ -46,11 +47,18 @@ export interface Drone {
   dashCd: number;
   dashUsed: boolean; // used this airtime
   drop: number; // steps left ignoring one-way platforms
+  /** Resonant Hover: hover steps used this airtime, and whether this step hovered. */
+  hoverUsed: number;
+  hovering: boolean;
+  /** Damped Landing: down is held in the air, so this step drops at UP.drop.speed. */
+  dropping: boolean;
   prevX: number; // body position before the world step
   prevBottom: number;
   /** Upgrades that switch moves on (Level 1 spec): double jump comes in Level 2, wall latch in Level 5. */
   /** `jump2`: the double jump's speed in px/step (Overflow Jump Mk II raises it); default DRONE.doubleJump. */
-  abilities: { doubleJump: boolean; wallLatch: boolean; jump2?: number };
+  /** `dashCooldown`: steps between dashes (Kickback Dash: 42); default DRONE.dashCooldown. The Sim sets it each step. */
+  /** `hover`: steps of hover per airtime (0 or undefined: off); `drop`: Damped Landing. The Sim copies its kit in each step. */
+  abilities: { doubleJump: boolean; wallLatch: boolean; jump2?: number; dashCooldown?: number; hover?: number; drop?: boolean };
   /** Run speed multiplier: 0.5 inside a Stall Bubble's field (Phase 4 Spec, section 5). */
   slow: number;
 }
@@ -71,7 +79,8 @@ export function createDrone(w: World, x: number, y: number): Drone {
   return {
     body, x, y, vx: 0, vy: 0, h: DRONE.h, facing: 1, crouched: false, grounded: false, onOneWay: false, ceiling: false,
     wall: 0, latched: 0, coyote: 0, buffer: 0, shortHop: false, airJumps: 1, wallTime: 0, lastLatch: 0, wallLock: 0,
-    lockSide: 1, dash: null, dashCd: 0, dashUsed: false, drop: 0, prevX: x, prevBottom: y + DRONE.h / 2,
+    lockSide: 1, dash: null, dashCd: 0, dashUsed: false, drop: 0, hoverUsed: 0, hovering: false, dropping: false,
+    prevX: x, prevBottom: y + DRONE.h / 2,
     abilities: { doubleJump: true, wallLatch: true },
     slow: 1,
   };
@@ -87,7 +96,7 @@ export function placeDrone(d: Drone, x: number, y: number) {
   d.crouched = false;
   Matter.Body.setPosition(d.body, { x, y });
   Matter.Body.setVelocity(d.body, { x: 0, y: 0 });
-  Object.assign(d, { x, y, vx: 0, vy: 0, dash: null, latched: 0, wallLock: 0, drop: 0, shortHop: false });
+  Object.assign(d, { x, y, vx: 0, vy: 0, dash: null, latched: 0, wallLock: 0, drop: 0, shortHop: false, hoverUsed: 0, hovering: false, dropping: false });
 }
 
 function setHeight(d: Drone, h: number) {
@@ -152,6 +161,10 @@ export function stepDrone(d: Drone, c: Controls, w: World, energy: number, froze
     d.wallTime = 0;
     d.lastLatch = 0;
   }
+  // the hover budget comes back on the ground and on a wall (latched); it is spent per airtime
+  if (d.grounded || d.latched !== 0) d.hoverUsed = 0;
+  d.hovering = false;
+  d.dropping = false;
   const airborne = !d.grounded;
   d.dashCd = Math.max(0, d.dashCd - 1);
   d.drop = Math.max(0, d.drop - 1);
@@ -174,7 +187,7 @@ export function stepDrone(d: Drone, c: Controls, w: World, energy: number, froze
   if (!d.dash && pressed('dash') && d.dashCd === 0 && energy >= DRONE.dashEnergy && (d.grounded || !d.dashUsed) && !d.crouched) {
     const v = DRONE.dashDist / DRONE.dashSteps;
     d.dash = { t: DRONE.dashSteps, dx: c.aim.x * v, dy: c.aim.y * v };
-    d.dashCd = DRONE.dashCooldown;
+    d.dashCd = d.abilities.dashCooldown ?? DRONE.dashCooldown;
     d.dashUsed = !d.grounded;
     d.latched = 0;
     res.dashed = true;
@@ -249,13 +262,23 @@ export function stepDrone(d: Drone, c: Controls, w: World, energy: number, froze
       d.latched = 0;
     }
 
-    // gravity (trapezoid), fast fall, wall slide, fall cap
-    if (d.grounded && d.vy >= 0) {
+    // gravity (trapezoid), fast fall, wall slide, fall cap; damped landing (down in the air) and resonant hover (jump held)
+    if (d.abilities.drop && airborne && held('down')) {
+      d.dropping = true;
+      d.vy = UP.drop.speed / HZ;
+      applyVy = d.vy;
+    } else if (d.grounded && d.vy >= 0) {
       d.vy = 0;
       applyVy = 0;
     } else {
       const g = DRONE.gravity * (held('down') && !d.latched ? DRONE.fastFall : 1);
-      const next = Math.min(d.vy + g, d.latched ? DRONE.wallSlide : Math.max(DRONE.fallCap, d.vy));
+      let next = Math.min(d.vy + g, d.latched ? DRONE.wallSlide : Math.max(DRONE.fallCap, d.vy));
+      // a falling drone with jump held floats at 60 px/s while its hover steps last (the double jump comes first: it sets vy up)
+      if ((d.abilities.hover ?? 0) > d.hoverUsed && airborne && d.vy > 0 && held('jump') && !d.latched) {
+        next = Math.min(next, UP.hover.fall / HZ);
+        d.hoverUsed++;
+        d.hovering = true;
+      }
       applyVy = (d.vy + next) / 2;
       d.vy = next;
     }

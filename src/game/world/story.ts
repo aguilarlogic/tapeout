@@ -54,6 +54,10 @@ export interface StoryLines {
   liftNext: string;
   /** The lift back home. */
   liftHome: string;
+  /** E at a hatch into a place that is not open yet. */
+  hatchLocked: string;
+  /** The card on the first landing in the Underlayers. */
+  underlayers: { title: string; lines: readonly string[]; button: string };
   /** E at a bus rail without the Datapath Rail. */
   railLocked: string;
 }
@@ -84,5 +88,15 @@ export const STORY: StoryLines = {
   upgradeGeneric: 'Something new is online. Try it out.',
   liftNext: 'Next stop: {place}.',
   liftHome: 'Lift is on. Home, for now.',
+  hatchLocked: 'Locked. Finish {place} first.',
+  underlayers: {
+    title: 'THE UNDERLAYERS',
+    lines: [
+      'Below the logic is the analog layer: volts, current, charge and fields.',
+      'Every chip runs on it.',
+      'Down here there are no bosses, only circuits to learn and parts to fit.',
+    ],
+    button: 'Go down',
+  },
   railLocked: 'A bus rail. The Datapath has the clip you need to ride it.',
 };

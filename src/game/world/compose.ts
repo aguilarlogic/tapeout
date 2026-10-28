@@ -15,6 +15,7 @@ import { ROOMS } from './templates/rooms';
 import { TRAVERSE_VARIANTS } from './templates/traverse';
 import { themeFor as act1Theme } from './themes/act1';
 import { ACT2_THEMES } from './themes/act2';
+import { UNDER_THEMES } from './themes/under';
 import type { BackdropKind, PlaceDef, PlaceTheme, Shell, Template, TemplateOpts } from './types';
 
 /** A small seeded rng (mulberry32). */
@@ -29,11 +30,11 @@ export function rngFor(seed: number): () => number {
   };
 }
 
-const BACKDROP: Record<PlaceDef['act'], BackdropKind> = { 1: 'lamps', 2: 'core', 3: 'silicon', 4: 'cluster', 5: 'grid', 6: 'fab' };
+const BACKDROP: Record<PlaceDef['act'], BackdropKind> = { 1: 'lamps', 2: 'core', 3: 'silicon', 4: 'cluster', 5: 'under', 6: 'fab' };
 
 /** The theme a place without its own (phases 4 to 8 fill these in) is built with. */
 export function themeOf(place: PlaceDef): PlaceTheme {
-  return act1Theme(place.id) ?? ACT2_THEMES.find((t) => t.place === place.id) ?? {
+  return act1Theme(place.id) ?? [...ACT2_THEMES, ...UNDER_THEMES].find((t) => t.place === place.id) ?? {
     place: place.id, music: 'keeper', enemies: ['glitch', 'spark', 'latch'], fights: 3, backdrop: BACKDROP[place.act],
     lines: { arrive: [`${place.name}.`], rooms: {}, clear: ['Clear.'], bossIntro: [], bossBeaten: [], leave: [] },
   };
@@ -182,18 +183,18 @@ function railFor(s: Shell): { x1: number; y1: number; x2: number; y2: number } |
 }
 
 /** The places in play order without the chalkboard studies: the ones with rooms, as the drone walks them. */
-const WALKED = PLACES.filter((p) => p.kind !== 'study');
 
-/** Deep Layer hatches (Phase 4 Spec, section 3): the exit of the place before a Deep Layer drops into it, and a Deep
- * Layer's landing climbs back up to that exit. `arg` names the place the hatch leads to. */
+/** Deep Layer hatches (Phase 4 Spec, section 3; Phase 5 Spec, section 3): the exit of the place before a Deep Layer
+ * drops into it, and a Deep Layer's landing climbs back up to that exit. A hatch joins only neighbours in PLACES: a
+ * study chapter between them (taught at the Loft's chalkboard) breaks the link. `arg` names the place it leads to. */
 function hatchStation(place: PlaceDef, room: PlanRoom, s: Shell): Station[] {
-  const l = s.anchors.lift, i = WALKED.indexOf(place);
+  const l = s.anchors.lift, i = PLACES.indexOf(place);
   if (!l || i < 0) return [];
-  const next = WALKED[i + 1], prev = WALKED[i - 1];
+  const next = PLACES[i + 1], prev = PLACES[i - 1];
   if (room.role === 'exit' && next?.kind === 'deep') {
     return [{ id: 'hatch', kind: 'hatch', x: l.x - HATCH_OFF, y: l.y, label: `HATCH · ${next.name.toUpperCase()}`, arg: next.id }];
   }
-  if (room.role === 'landing' && place.kind === 'deep' && prev) {
+  if (room.role === 'landing' && place.kind === 'deep' && prev && (prev.kind === 'main' || prev.kind === 'deep')) {
     return [{ id: 'hatch', kind: 'hatch', x: l.x + HATCH_OFF, y: l.y, label: `HATCH · UP TO ${prev.name.toUpperCase()}`, arg: prev.id }];
   }
   return [];

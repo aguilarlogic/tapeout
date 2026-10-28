@@ -15,8 +15,8 @@ import { openModule } from './story/open';
 import { levelRecord } from '../state';
 import { calibRows } from './loft/data';
 import { type LoftActions, openLoftPanel } from './loft/panels';
-import { mk2, UPGRADES } from './world/upgrades';
-import { drawBossHud, drawBubble, drawDark, drawExitLift, drawPrompt, drawStoryBack, drawStoryFront } from './story/render';
+import { mk2, UP, UPGRADES } from './world/upgrades';
+import { drawBossHud, drawBubble, drawCompass, drawDark, drawExitLift, drawPrompt, drawStoryBack, drawStoryFront } from './story/render';
 import { Loop } from './loop';
 import { pauseMenu } from './pause';
 import { Camera } from './render/camera';
@@ -352,6 +352,9 @@ export class GameScreen {
         case 'fizzle': a.play('fizzle'); fx.sparks(f.x, f.y, sim.aim.x, sim.aim.y, 4, PAL.idle, 2); break;
         case 'repair': a.play('repair'); break;
         case 'enemyBoot': fx.ring(f.x, f.y, 30, PAL.neon, 20); break;
+        // a ring grows from 0.2 to 1.2 of its size, so size radius / 1.2 ends at the drop's radius
+        case 'slam': a.play('land', 1.3); fx.ring(f.x, f.y, UP.drop.radius / 1.2, PAL.trace, frames(250)); this.cam.shake(2, 200, noShake); break;
+        case 'hover': a.play('hover'); break;
         case 'sync': a.play('freeze'); fx.ring(f.x, f.y, 80, PAL.trace, 24); fx.ring(f.x, f.y, 140, PAL.trace, 30); break;
         case 'rail': a.play('grab'); fx.sparks(f.x, f.y - 30, 0, -1, 6, PAL.trace, 3, Math.PI); break;
       }
@@ -502,7 +505,7 @@ export class GameScreen {
     drawSyncTint(c, sim, VIEW_W, VIEW_H, this.reduced);
     const bt = this.bootTimes();
     this.hud.draw(c, sim, Math.max(0, Math.min(1, (this.age - bt.hud) / BOOT.hud)), t);
-    if (st) { drawBossHud(c, st, t, this.showLog); drawBubble(c, st, t); drawExitLift(c, st.exitLift); }
+    if (st) { drawBossHud(c, st, t, this.showLog); drawCompass(c, st, cam, t, this.reduced); drawBubble(c, st, t); drawExitLift(c, st.exitLift); }
     if (!this.ready || this.age < bt.control + 1) this.drawBoot(c, bt);
     if (this.ready && !this.paused && (sim.kit.gun || sim.kit.coil)) { const m = this.mouseView(); this.hud.crosshair(c, sim, m.x, m.y); }
     let black = 0;

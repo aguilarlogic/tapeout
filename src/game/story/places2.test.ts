@@ -8,7 +8,7 @@ import { levelRecord, resetAll } from '../../state';
 import type { Action } from '../input/bindings';
 import { TUNING } from '../tuning';
 import { roomsOf } from '../world/compose';
-import { PLACES } from '../world/places';
+import { chapterOf, PLACES, placeById } from '../world/places';
 import { planPlace } from '../world/slots';
 import { themeOf } from '../world/compose';
 import { actKit, UP } from '../world/upgrades';
@@ -80,6 +80,11 @@ describe('act 2 places', () => {
     const exit = roomsOf('boot-rom').length - 1;
     d.warp('boot-rom', exit);
     expect(d.room.stations.find((s) => s.kind === 'hatch')?.arg).toBe('firmware-pit');
+    // shut while the Firmware Pit is locked (Phase 5 Spec, section 3)
+    use(d, 'hatch');
+    run(d, 90);
+    expect(d.place).toBe('boot-rom');
+    pass(chapterOf(placeById('firmware-pit')!).modules[0].id);
     use(d, 'hatch');
     run(d, 90);
     expect([d.place, d.index]).toEqual(['firmware-pit', 0]);

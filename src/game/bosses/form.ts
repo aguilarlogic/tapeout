@@ -11,11 +11,17 @@ import type { Attack, AttackCtx, BodyState, BossForm } from './types';
 const GAP = { calm: 2.4, enraged: 1.8, finish: 1.6 };
 /** Steps of drone positions the mirror twin can replay (3 s). */
 const TRAIL = 3 * HZ;
+/** How long an attack's start shows as "starting" (the Spectrum Visor's flash), 0.2 s. */
+const FLASH = Math.round(0.2 * HZ);
 
 export class FormRun {
   /** Steps since the fight started. */
   t = 0;
   private wait: number;
+  /** The length of the wait now running, in steps (the gap the attack schedule set). */
+  private cycle: number;
+  /** The step the last attack started on. */
+  private attackAt = -Infinity;
   private turn = 0;
   private now: { a: Attack<unknown>; run: unknown } | null = null;
   /** Drone positions (top-left), oldest first. */
@@ -27,10 +33,21 @@ export class FormRun {
   platforms: { r: Rect; until: number }[] = [];
 
   constructor(readonly form: BossForm, readonly box: Rect, private story: boolean) {
-    this.wait = this.gap('calm');
+    this.cycle = this.wait = this.gap('calm');
   }
 
   private gap(k: keyof typeof GAP) { return Math.round(GAP[k] * HZ * (this.story ? 2 : 1)); }
+  private arm(k: keyof typeof GAP) { this.cycle = this.wait = this.gap(k); }
+
+  /**
+   * The next attack, read from the schedule (the gap is fixed per mood, so the fill is the share of the wait run).
+   * `progress` is 0 while an attack is on and rises to 1 as the wait runs out; `starting` holds for 0.2 s from an
+   * attack's start. Reads only: nothing here changes the fight.
+   */
+  nextAttack(): { progress: number; starting: boolean } {
+    const progress = this.now ? 0 : Math.min(1, Math.max(0, 1 - this.wait / this.cycle));
+    return { progress, starting: this.t - this.attackAt < FLASH };
+  }
 
   /** One step. `mood` picks the pace; `hold` pauses attacks (a card is open, or the boss is down). */
   step(c: AttackCtx, mood: 'calm' | 'enraged' | 'finish', hold: boolean) {
@@ -44,12 +61,13 @@ export class FormRun {
     if (hold) return;
     const speed = mood === 'finish' ? 1.4 : mood === 'enraged' ? 1.25 : 1;
     if (this.now) {
-      if (this.now.a.step(this.now.run, c, speed)) { this.now = null; this.wait = this.gap(mood); }
+      if (this.now.a.step(this.now.run, c, speed)) { this.now = null; this.arm(mood); }
       return;
     }
     if (--this.wait > 0) return;
     const a = ATTACKS[this.form.attacks[this.turn++ % this.form.attacks.length]];
     this.now = { a, run: a.start(c) };
+    this.attackAt = this.t;
   }
 
   /** Add a hazard for `ms` (the freeze attack's frosted platforms). */

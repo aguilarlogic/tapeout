@@ -34,6 +34,8 @@ export interface Shot {
   pierce: number;
   /** Knockback on hit, times the Pulse Probe's (the ALU Cannon hits harder). */
   knockMul: number;
+  /** Phasor Curve: a friendly Charged Probe shot fired with the upgrade turns this many deg/s toward an enemy (0: straight). */
+  home: number;
   hit: Set<Enemy>;
   reflected: boolean;
   dead: boolean;
@@ -69,7 +71,11 @@ export type Fx =
   | { t: 'repair'; panel: number }
   | { t: 'sync'; x: number; y: number }
   | { t: 'rail'; x: number; y: number }
-  | { t: 'enemyBoot'; x: number; y: number };
+  | { t: 'enemyBoot'; x: number; y: number }
+  /** Damped Landing: the ring where a drop lands. */
+  | { t: 'slam'; x: number; y: number }
+  /** Resonant Hover: the drone starts to hover (the hum). */
+  | { t: 'hover'; x: number; y: number };
 
 /** Deterministic random numbers (mulberry32), so a test run is the same every time. */
 export function rng(seed: number) {
@@ -134,7 +140,7 @@ export interface Kit {
   throwDamage?: number;
   /** Damped Landing: hold down in the air to drop, and land with a ring. */
   drop?: boolean;
-  /** Resonant Hover: seconds of hover a airtime. */
+  /** Resonant Hover: seconds of hover per airtime. */
   hover?: number;
   /** Spectrum Visor: the boss's next-attack bar. */
   visor?: boolean;
@@ -213,6 +219,8 @@ export class Sim {
   private fireWasHeld = false;
   private emitT: number[];
   private pushCd = new Map<Enemy, number>();
+  /** Kickback Dash: the enemies this dash has already hit (cleared when a dash starts). */
+  private dashStruck = new Set<Enemy>();
   private rand: () => number;
   kit: Kit = { gun: true, coil: true, charged: true, grabLimit: TUNING.field.grabLimit, carryShot: false };
   /** Assists and difficulty: damage taken is scaled (0 = invincible); infinite energy refills the bar each step. */
@@ -236,6 +244,8 @@ export class Sim {
   /** Inverted Grip: the enemy the field holds, and enemies thrown and still flying (they hurt what they hit). */
   heldEnemy: Enemy | null = null;
   private thrown = new Map<Enemy, number>();
+  /** Matrix Throw: props the field threw and has not grabbed since (their hits deal the kit's throwDamage). */
+  private thrownProps = new Set<Prop>();
   /** Synchronizer: steps of slow time left, and steps until it can be used again. */
   slowT = 0;
   slowCd = 0;
@@ -359,9 +369,16 @@ export class Sim {
     this.stalled = !frozen && this.enemies.some((e) => e.alive && !!e.field && Math.hypot(e.x - d.x, e.y - d.y) < e.field);
     d.slow = this.stalled ? 0.5 : 1;
     this.stepSync(ctl, frozen);
+    // the Kickback Dash cooldown: set here, not once, since the Director replaces drone.abilities on every applyKit
+    d.abilities.dashCooldown = this.kit.dashCooldownMs === undefined ? undefined : frames(this.kit.dashCooldownMs);
+    // the Underlayers' kit drives the drone's hover (steps per airtime) and Damped Landing
+    d.abilities.hover = this.kit.hover ? Math.round(this.kit.hover * HZ) : undefined;
+    d.abilities.drop = this.kit.drop || undefined;
+    const wasHovering = d.hovering;
     const r = stepDrone(d, ctl, this.world, v.energy, frozen);
+    if (d.hovering && !wasHovering && !frozen) this.fx.push({ t: 'hover', x: d.x, y: d.y + d.h / 2 });
     if (!frozen) d.facing = aimAt.x >= d.x ? 1 : -1;
-    if (r.dashed) { spend(v, DRONE.dashEnergy); this.events.push('dash'); this.fx.push({ t: 'dash', x: d.x, y: d.y }); }
+    if (r.dashed) { spend(v, DRONE.dashEnergy); this.events.push('dash'); this.fx.push({ t: 'dash', x: d.x, y: d.y }); this.dashStruck.clear(); }
     if (r.jumped) { this.events.push('jump'); this.fx.push({ t: 'jump', x: d.x, y: d.y + d.h / 2 }); }
     this.stepField(ctl, frozen);
     const ctx = this.ctx();
@@ -376,8 +393,10 @@ export class Sim {
       if (b && e.body) Matter.Body.setPosition(e.body, { x: b.x + (e.body.position.x - b.x) * UP.sync.scale, y: b.y + (e.body.position.y - b.y) * UP.sync.scale });
     });
     this.stepRail(ctl, frozen);
+    this.stepDashHits(); // before settleDrone: the dash's last step is still a dash here
     settleDrone(d, this.world, this.room);
     if (!wasGrounded && d.grounded && !frozen) { this.events.push('land'); this.fx.push({ t: 'land', x: d.x, y: d.y + d.h / 2, speed: Math.max(0, fallSpeed) }); }
+    if (!wasGrounded && d.grounded && !frozen && d.dropping) this.slam();
     if (d.grounded && !d.onOneWay && !this.room.hazards.some((h) => overlaps(droneRect(d), { ...h, y: h.y - 40, h: h.h + 40 }))) {
       this.lastSafe = { x: d.x, y: d.y + d.h / 2 - DRONE.h / 2 };
     }
@@ -393,7 +412,9 @@ export class Sim {
     this.stepDoorAndPads();
     this.stepHazards();
     this.stepRespawns();
-    tickVitals(v);
+    // Integrator: this step's energy regen × stillRegen while grounded and under stillSpeed px/s (delay unchanged)
+    const still = d.grounded && Math.hypot(d.vx, d.vy) * HZ < UP.integrator.stillSpeed;
+    tickVitals(v, still ? (this.kit.stillRegen ?? 1) : 1);
     if (this.assist.infiniteEnergy) v.energy = v.maxEnergy;
     for (let i = 0; i < 6; i++) this.panelAge[i]++;
     this.booting = Math.max(0, this.booting - 1);
@@ -403,6 +424,8 @@ export class Sim {
 
   private hurtDrone(n: number, from?: Vec) {
     n *= this.assist.damageScale;
+    if (from && (from.x - this.drone.x) * this.drone.facing < 0) n *= this.kit.behindScale ?? 1;
+    if (this.kit.damageScale !== undefined && this.kit.damageScale < 1 && n > 0) n = Math.max(1, Math.round(n * this.kit.damageScale));
     if (n <= 0) return;
     if (!hurt(this.vitals, n, this.invulnerable)) return;
     this.events.push('hit');
@@ -460,7 +483,7 @@ export class Sim {
     this.heldEnemy = null;
     if (this.field.on && this.field.held) {
       const p = this.field.held;
-      if (vel) Matter.Body.setVelocity(p.body, vel);
+      if (vel) { Matter.Body.setVelocity(p.body, vel); this.thrownProps.add(p); }
       p.held = false;
       p.noDrone = frames(T.field.noDroneMs);
     }
@@ -511,6 +534,7 @@ export class Sim {
       }
       if (best) {
         f.held = best;
+        this.thrownProps.delete(best);
         f.charge = 0;
         setHeld(best, true);
         this.events.push('grab');
@@ -537,7 +561,7 @@ export class Sim {
       const b = he.body, target = { x: o.x + this.aim.x * F.holdDist, y: o.y + this.aim.y * F.holdDist };
       Matter.Body.setVelocity(b, { x: (target.x - b.position.x) * 0.3 + this.drone.vx, y: (target.y - b.position.y) * 0.3 + this.drone.vy });
       he.knock({ x: 0, y: 0 }); // held bugs are stunned
-      if (c.held.has('fire')) f.charge = Math.min(1, f.charge + 1 / (F.chargeS * HZ));
+      if (c.held.has('fire')) f.charge = Math.min(1, f.charge + 1 / ((this.kit.throwChargeS ?? F.chargeS) * HZ));
       else if (this.fireWasHeld) {
         const sp = throwSpeed(f.charge) / HZ;
         this.fx.push({ t: 'throw', x: b.position.x, y: b.position.y, charge: f.charge });
@@ -563,7 +587,7 @@ export class Sim {
       // stuck behind a wall: let go
       if (Math.hypot(b.position.x - target.x, b.position.y - target.y) > F.radius * 2.2) { this.fx.push({ t: 'drop', x: b.position.x, y: b.position.y }); this.dropHeld(); return; }
       // throw: hold left click to charge over 0.8 s, release to throw at 600 + 900 × charge px/s
-      if (c.held.has('fire')) f.charge = Math.min(1, f.charge + 1 / (F.chargeS * HZ));
+      if (c.held.has('fire')) f.charge = Math.min(1, f.charge + 1 / ((this.kit.throwChargeS ?? F.chargeS) * HZ));
       else if (this.fireWasHeld) {
         const s = throwSpeed(f.charge) / HZ;
         this.fx.push({ t: 'throw', x: b.position.x, y: b.position.y, charge: f.charge });
@@ -585,13 +609,14 @@ export class Sim {
   }
   private fire(kind: 'bolt' | 'charged') {
     if (kind === 'bolt') this.shoot('bolt', (this.rand() * 2 - 1) * T.probe.spread * deg, T.probe.speed, T.probe.life * T.probe.speed, this.kit.probeDamage ?? T.probe.damage, 1, 1, 'pulse');
-    else this.shoot('charged', 0, T.charged.speed, T.charged.range, T.charged.damage, T.charged.pierce, 3, 'charged');
+    else this.shoot('charged', 0, T.charged.speed, T.charged.range, this.kit.chargedDamage ?? T.charged.damage, T.charged.pierce, 3, 'charged');
   }
   /** One shot from the muzzle: `off` radians off the aim, speed in px/s, range in px. */
   private shoot(kind: 'bolt' | 'charged', off: number, speed: number, range: number, damage: number, pierce: number, knockMul: number, weapon: Weapon, fx = true) {
     const m = this.muzzle(), a = Math.atan2(this.aim.y, this.aim.x) + off, sp = speed / HZ;
     const s = this.take();
-    Object.assign(s, { x: m.x, y: m.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, left: Math.round((range / speed) * HZ), damage, friendly: true, kind, pierce, knockMul, reflected: false, dead: false });
+    const home = kind === 'charged' && weapon === 'charged' ? this.kit.phasor ?? 0 : 0;
+    Object.assign(s, { x: m.x, y: m.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, left: Math.round((range / speed) * HZ), damage, friendly: true, kind, pierce, knockMul, home, reflected: false, dead: false });
     s.hit.clear();
     this.shots.push(s);
     if (!fx) return;
@@ -775,6 +800,25 @@ export class Sim {
     }
   }
 
+  /** Kickback Dash: while the drone dashes, each live enemy its rect or body crosses takes `kit.dashHit` once per dash,
+   * through the same damage, fx and death path as a bolt, with the dash direction as the hit direction. */
+  private stepDashHits() {
+    const d = this.drone, n = this.kit.dashHit;
+    if (!d.dash || !n) return;
+    // the body, not d.x/d.y, since settleDrone (which copies them) has not run yet this step
+    const r: Rect = { x: d.body.position.x - DRONE.w / 2, y: d.body.position.y - d.h / 2, w: DRONE.w, h: d.h };
+    const dir = norm({ x: d.dash.dx, y: d.dash.dy });
+    for (const e of this.enemies) {
+      if (!e.alive || !e.hittable() || this.dashStruck.has(e)) continue;
+      if (!polyRect(e.outline(), r) && !(e.body && overlaps(boundsRect(e.body), r))) continue;
+      this.dashStruck.add(e);
+      const armored = e instanceof Latch && e.armored(dir);
+      const landed = e.damage(n, dir);
+      this.fx.push({ t: 'hit', x: e.x, y: e.y, dx: dir.x, dy: dir.y, n: landed, armored, enemy: true });
+      this.onEnemyDamaged(e, dir);
+    }
+  }
+
   private stepEmitters() {
     this.room.emitters.forEach((em, i) => {
       if (--this.emitT[i] > 0) return;
@@ -809,6 +853,7 @@ export class Sim {
         this.fx.push({ t: 'reflect', x: s.x, y: s.y });
         continue;
       }
+      if (s.home) this.phasorTurn(s);
       const p = { x: s.x, y: s.y }, dv = { x: s.vx, y: s.vy };
       let t = 1, end = false;
       let hit: { e: Enemy } | { prop: Prop } | { target: Target } | 'drone' | 'dummy' | 'wall' | null = null;
@@ -885,6 +930,28 @@ export class Sim {
     while (this.dummyHits.length && this.dummyHits[0][0] < cut) this.dummyHits.shift();
   }
 
+  /** Phasor Curve: a homing shot turns toward the nearest hittable enemy within UP.phasor.coneDeg of its heading and
+   * within its remaining range, by at most `home` deg/s (a step's share), keeping its speed. No enemy: it flies straight. */
+  private phasorTurn(s: Shot) {
+    const sp = Math.hypot(s.vx, s.vy);
+    if (sp === 0) return;
+    const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
+    const heading = Math.atan2(s.vy, s.vx), reach = s.left * sp, cone = UP.phasor.coneDeg * Math.PI / 180;
+    let best: Enemy | null = null, bestD = Infinity;
+    for (const e of this.enemies) {
+      if (!e.hittable() || s.hit.has(e)) continue;
+      const dx = e.x - s.x, dy = e.y - s.y, d = Math.hypot(dx, dy);
+      if (d === 0 || d > reach || d >= bestD || Math.abs(wrap(Math.atan2(dy, dx) - heading)) > cone) continue;
+      best = e;
+      bestD = d;
+    }
+    if (!best) return;
+    const max = s.home / HZ * Math.PI / 180;
+    const a = heading + Math.max(-max, Math.min(max, wrap(Math.atan2(best.y - s.y, best.x - s.x) - heading)));
+    s.vx = Math.cos(a) * sp;
+    s.vy = Math.sin(a) * sp;
+  }
+
   /** Damage per second at the dummy over the last 2 s (decision 22). */
   dummyDps(): number {
     return this.dummyHits.reduce((a, [, n]) => a + n, 0) / 2;
@@ -918,7 +985,7 @@ export class Sim {
       if (prop && enemy && enemy.alive) {
         const last = prop.hits.get(enemy) ?? -999;
         if (this.steps - last < frames(T.field.propHitCooldownMs)) continue;
-        const n = propDamage(prop.mass, rel);
+        const n = this.throwHit(propDamage(prop.mass, rel), this.thrownProps.has(prop));
         if (n <= 0) continue;
         prop.hits.set(enemy, this.steps);
         const dir = norm({ x: enemy.x - prop.body.position.x, y: enemy.y - prop.body.position.y });
@@ -930,6 +997,11 @@ export class Sim {
       }
     }
   }
+  /** Matrix Throw: a thrown hit deals the kit's throwDamage, rounded. Other hits, and the upgrade off, are unchanged. */
+  private throwHit(n: number, thrown: boolean): number {
+    const m = this.kit.throwDamage ?? 1;
+    return thrown && m !== 1 ? Math.round(n * m) : n;
+  }
   /** Inverted Grip: a thrown bug hurts the first other bug it reaches, and itself, like a thrown crate. */
   private stepThrown() {
     for (const [e, until] of this.thrown) {
@@ -937,7 +1009,7 @@ export class Sim {
       const v = e.body.velocity, speed = Math.hypot(v.x, v.y) * HZ;
       const other = this.enemies.find((o) => o !== e && o.alive && o.hittable() && Math.hypot(o.x - e.x, o.y - e.y) < 34);
       if (!other) continue;
-      const n = propDamage(e.gripMass ?? 1, speed);
+      const n = this.throwHit(propDamage(e.gripMass ?? 1, speed), true);
       this.thrown.delete(e);
       if (n <= 0) continue;
       const dir = norm({ x: other.x - e.x, y: other.y - e.y });
@@ -1006,6 +1078,21 @@ export class Sim {
     for (const e of this.enemies) if (e.alive && e.body && e.y > this.room.h + 200) { e.alive = false; this.onEnemyDamaged(e, { x: 0, y: 1 }); }
   }
 
+  /** Damped Landing: a drop that lands hurts and knocks away every bug within UP.drop.radius of the drone's feet. */
+  private slam() {
+    const d = this.drone, U = UP.drop, feet = { x: d.x, y: d.y + d.h / 2 };
+    d.dropping = false;
+    for (const e of this.enemies) {
+      const dx = e.x - feet.x, dy = e.y - feet.y;
+      if (!e.alive || !e.hittable() || Math.hypot(dx, dy) > U.radius) continue;
+      const dir = norm({ x: dx, y: dy });
+      e.damage(U.damage, dir);
+      e.knock({ x: dir.x * U.push, y: dir.y * U.push });
+      this.onEnemyDamaged(e, dir);
+    }
+    this.fx.push({ t: 'slam', x: feet.x, y: feet.y });
+  }
+
   private stepRespawns() {
     for (const r of this.respawns) {
       if (--r.t > 0) continue;
@@ -1047,7 +1134,7 @@ export class Sim {
 }
 
 function blankShot(): Shot {
-  return { x: 0, y: 0, vx: 0, vy: 0, left: 0, damage: 0, friendly: true, kind: 'bolt', pierce: 1, knockMul: 1, hit: new Set(), reflected: false, dead: true };
+  return { x: 0, y: 0, vx: 0, vy: 0, left: 0, damage: 0, friendly: true, kind: 'bolt', pierce: 1, knockMul: 1, home: 0, hit: new Set(), reflected: false, dead: true };
 }
 
 /** Does a convex polygon overlap a rect? */

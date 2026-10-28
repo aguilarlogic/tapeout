@@ -8,6 +8,8 @@ export type Sfx =
   | 'shot' | 'charged' | 'charge' | 'hit' | 'clank' | 'kill' | 'jump' | 'land' | 'dash' | 'grab' | 'throw' | 'drop' | 'hurt'
   | 'boot' | 'door' | 'orb' | 'reflect' | 'push' | 'swap' | 'fizzle' | 'death' | 'thud' | 'repair'
   | 'uiHover' | 'uiPress' | 'uiOpen' | 'uiClose'
+  // the Underlayers (phase 5): Resonant Hover starts
+  | 'hover'
   // the story (Level 1)
   | 'wireGrab' | 'wirePlug' | 'wireSnap' | 'rowTick' | 'pass' | 'notYet' | 'spark' | 'lever' | 'plate' | 'liftHum'
   | 'portOpen' | 'bossPhase' | 'fanfare' | 'chirp' | 'crack' | 'shatter' | 'lightsOn' | 'reading'
@@ -48,6 +50,7 @@ const V: Record<Sfx, Voice[]> = {
   thud: [{ wave: 'sine', f: 110, to: 55, len: 0.08, level: 0.06 }, { wave: 'noise', f: 1, len: 0.05, level: 0.04, filter: { type: 'lowpass', f: 700 } }],
   repair: [{ wave: 'triangle', f: 660, len: 0.06, level: 0.04 }, { at: 0.06, wave: 'triangle', f: 990, len: 0.12, level: 0.04 }],
   uiHover: [{ wave: 'sine', f: 1400, len: 0.025, level: 0.02 }],
+  hover: [{ wave: 'sine', f: 110, len: 0.15, level: 0.03 }],
   uiPress: [{ wave: 'square', f: 700, to: 1050, len: 0.05, level: 0.03 }],
   uiOpen: [{ wave: 'triangle', f: 440, to: 880, len: 0.12, level: 0.035 }],
   uiClose: [{ wave: 'triangle', f: 880, to: 440, len: 0.12, level: 0.035 }],

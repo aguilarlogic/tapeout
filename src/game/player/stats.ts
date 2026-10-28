@@ -32,10 +32,11 @@ export function hurt(v: Vitals, amount: number, invulnerable: boolean): boolean 
   return true;
 }
 
-export function tickVitals(v: Vitals) {
+/** One step of vitals. `regenScale` multiplies this step's energy regen only (the Integrator); the delay is unchanged. */
+export function tickVitals(v: Vitals, regenScale = 1) {
   v.iFrames = Math.max(0, v.iFrames - 1);
   v.sinceSpend++;
   v.sinceHit++;
-  if (v.sinceSpend > VITALS.energyRegenDelay) v.energy = Math.min(v.maxEnergy, v.energy + VITALS.energyRegen);
+  if (v.sinceSpend > VITALS.energyRegenDelay) v.energy = Math.min(v.maxEnergy, v.energy + VITALS.energyRegen * regenScale);
   if (v.sinceHit > VITALS.repairDelay && v.integrity > 0) v.integrity = Math.min(v.maxIntegrity, v.integrity + VITALS.repairRate);
 }

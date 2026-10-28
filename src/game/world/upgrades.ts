@@ -88,7 +88,7 @@ export const UP = {
   /** Current Limiter: damage taken × this, rounded, at least 1. */
   limiter: 0.9,
   /** Phasor Curve: cone half-angle (degrees) and turn rate (degrees/s) for charged shots. */
-  phasor: { coneDeg: 30, turnDegS: 90 },
+  phasor: { coneDeg: 30, turnDegS: 240 },
   /** Integrator: energy regen × this while grounded and under stillSpeed px/s. */
   integrator: { regen: 1.5, stillSpeed: 20 },
   /** Kickback Dash: damage to each enemy crossed, and the dash cooldown. */
