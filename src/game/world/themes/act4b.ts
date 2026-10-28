@@ -94,7 +94,7 @@ export const ACT4B_THEMES: PlaceTheme[] = [
         ],
         traverse: [
           'A long hall of process tiles, each one waiting for a turn on the chip.',
-          'Two jobs that wait on each other are a deadlock. Keep them apart.',
+          'Two jobs that wait on each other are a deadlock. A shove breaks it.',
         ],
         'gate:boss-os': [
           'This gate checks your scheduling plan before the last bench.',
@@ -234,7 +234,7 @@ export const ACT4B_THEMES: PlaceTheme[] = [
         ],
         fight: [
           'Deadlocks, swarms and crosstalk pairs guard this hall. Shoot them.',
-          'Two deadlock squares lock each other. Break the lock to hurt them.',
+          'Deadlock squares lock each other. Throw a block or push one with the field.',
         ],
         'gate:boss-interconnect': [
           'This gate checks your link speed and router count before the boss.',
@@ -342,7 +342,7 @@ export const ACT4B_THEMES: PlaceTheme[] = [
           'Keep moving. Jump the gaps, and mind the false passes.',
         ],
         fight: [
-          'Xblobs, brutes and deadlocks guard the last hall. Shoot them.',
+          'Xblobs, brutes and deadlocks guard the last hall. Push a deadlock apart.',
           'X is hiding in the checks. Clear the hall and it will show.',
         ],
         'gate:final': [

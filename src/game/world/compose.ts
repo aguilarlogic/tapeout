@@ -50,11 +50,11 @@ export const clockAt = (place: PlaceDef) => 27 - PLACES.slice(0, PLACES.indexOf(
 
 /** The label on a module's station. */
 function label(kind: ModKind, title: string): string {
-  const head = kind === 'boss' ? 'GATE TERMINAL' : kind === 'lesson' || kind === 'final' ? 'PORT' : kind === 'logic' || kind === 'cmos' ? 'PATCH PANEL' : kind === 'clab' ? 'CIRCUIT BENCH' : 'WORKBENCH';
+  const head = kind === 'boss' ? 'GATE TERMINAL' : kind === 'lesson' || kind === 'final' ? 'PORT' : kind === 'logic' || kind === 'cmos' ? 'PATCH PANEL' : kind === 'clab' ? 'CIRCUIT BENCH' : kind === 'drills' ? 'INTERVIEW DESK' : 'WORKBENCH';
   return `${head} · ${title.toUpperCase()}`;
 }
 const stationKind = (role: PlanRoom['role'], kind: ModKind): Station['kind'] =>
-  role === 'gate' || role === 'bossdoor' ? 'gate' : role === 'bench' ? 'bench' : kind === 'lesson' || kind === 'final' ? 'port' : 'panel';
+  role === 'gate' || role === 'bossdoor' ? 'gate' : role === 'bench' ? 'bench' : kind === 'lesson' || kind === 'final' || kind === 'drills' ? 'port' : 'panel';
 
 /** Stations on a shell's anchors, one per module. */
 function stationsFor(room: PlanRoom, s: Shell): Station[] {
