@@ -130,14 +130,14 @@ function fan(s: GatingState, c: MechCtx) {
   s.inFan = hot;
 }
 
-/** The levers' words: what each does now. */
+/** The levers' words: what each does now, beside the lever so they never cross its handle. */
 function drawLevers(g: CanvasRenderingContext2D, s: GatingState) {
   g.fillStyle = PAL.text;
   g.font = `13px ${FONT}`;
-  g.textAlign = 'center';
+  g.textAlign = 'left';
   g.textBaseline = 'middle';
-  g.fillText(`B ${s.pwr ? 'ON' : 'OFF'}`, PWR_X, F - 72);
-  g.fillText(`ISO ${s.iso ? 'ON' : 'OFF'}`, ISO_X, F - 72);
+  g.fillText(`B ${s.pwr ? 'ON' : 'OFF'}`, PWR_X + 28, F - 30);
+  g.fillText(`ISO ${s.iso ? 'ON' : 'OFF'}`, ISO_X + 28, F - 30);
 }
 
 /** The fan: a duct with spinning blades while B is on, dashed and still while it is off. */
@@ -162,9 +162,10 @@ function drawFan(g: CanvasRenderingContext2D, s: GatingState) {
   g.shadowBlur = 0;
   g.fillStyle = on ? PAL.hostile : PAL.idle;
   g.font = `13px ${FONT}`;
-  g.textAlign = 'center';
+  // beside the fan, never over its blades
+  g.textAlign = 'right';
   g.textBaseline = 'middle';
-  g.fillText(on ? '! FAN ON' : 'FAN OFF', cx, 40);
+  g.fillText(on ? '! FAN ON' : 'FAN OFF', cx - 36, 40);
 }
 
 /** B's output: a wire to the door, dashed while it floats, with a dot that is filled while the output is driven or

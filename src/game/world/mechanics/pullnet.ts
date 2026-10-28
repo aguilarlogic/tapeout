@@ -29,13 +29,14 @@ const DOOR = r(1400, 0, 48, LEDGE_TOP);
 /** The shaft's centre line, and the IN lever: on the platform's left corner, where E reaches it from the platform. */
 const SX = PLAT.x + PLAT.w / 2;
 const LEVER_X = PLAT.x + 24;
-/** The rails: VDD across the ceiling of the shaft, GND under the floor. */
-const VDD_Y = 40, GND_Y = F + 60;
+/** The rails: VDD across the ceiling of the shaft; GND is a ground mark on the floor, left of the NMOS. */
+const VDD_Y = 40, GND_X = 520;
 /** The rail spans, and the labels' right edge. */
 const RAIL_X0 = 620, RAIL_X1 = 940;
-/** The PMOS box above the shaft, and the NMOS box in the floor face below it. Both 44 px wide. */
+/** The PMOS box above the shaft, and the NMOS box standing on the floor left of the shaft (the floor would hide it
+ * under the platform). Both 44 px wide. */
 const PMOS = { y: 70, h: 40 };
-const NMOS = { y: F + 14, h: 30 };
+const NMOS = { x: 600, y: F - 40, h: 30 };
 const BOX_W = 44;
 /** The wall lamp: centre and radius, px. It hangs on the wall left of the shaft. */
 const LAMP = { x: 620, y: 300, r: 12 };
@@ -100,21 +101,24 @@ function standsOnLedge(c: MechCtx): boolean {
   return c.grounded && cx > LEDGE.x && cx < LEDGE.x + LEDGE.w && Math.abs(d.y + d.h - LEDGE.y) <= 2;
 }
 
-/** A rail: a plain line across the shaft, with its name to the left. */
+/** VDD: a plain line across the shaft, with its name to the left. GND: the three-bar ground mark, named below. */
 function drawRails(g: CanvasRenderingContext2D) {
   g.strokeStyle = PAL.line;
-  for (const y of [VDD_Y, GND_Y]) {
-    g.beginPath();
-    g.moveTo(RAIL_X0, y);
-    g.lineTo(RAIL_X1, y);
-    g.stroke();
-  }
+  g.beginPath();
+  g.moveTo(RAIL_X0, VDD_Y);
+  g.lineTo(RAIL_X1, VDD_Y);
+  const gy = NMOS.y + NMOS.h / 2;
+  g.moveTo(GND_X, gy - 12);
+  g.lineTo(GND_X, gy);
+  for (const [w, dy] of [[18, 0], [12, 5], [6, 10]]) { g.moveTo(GND_X - w / 2, gy + dy); g.lineTo(GND_X + w / 2, gy + dy); }
+  g.stroke();
   g.fillStyle = PAL.text;
   g.font = `11px ${FONT}`;
   g.textAlign = 'right';
   g.textBaseline = 'middle';
   g.fillText('VDD', RAIL_X0 - 8, VDD_Y);
-  g.fillText('GND', RAIL_X0 - 8, GND_Y);
+  g.textAlign = 'center';
+  g.fillText('GND', GND_X, gy - 22);
 }
 
 /** A wire, glowing when its switch conducts and dashed when it does not. */
@@ -136,9 +140,10 @@ function wire(g: CanvasRenderingContext2D, x: number, y0: number, y1: number, li
   }
 }
 
-/** A switch: a chamfered box with its name beside it, and a gate line from the left. A PMOS gate has a bubble. */
-function drawSwitch(g: CanvasRenderingContext2D, y: number, h: number, name: string, bubble: boolean, on: boolean) {
-  const x = SX - BOX_W / 2, mid = y + h / 2;
+/** A switch centred on `cx`: a chamfered box with its name beside it, and a gate line from the left. A PMOS gate
+ * has a bubble. */
+function drawSwitch(g: CanvasRenderingContext2D, cx: number, y: number, h: number, name: string, bubble: boolean, on: boolean) {
+  const x = cx - BOX_W / 2, mid = y + h / 2;
   g.strokeStyle = PAL.line;
   g.fillStyle = PAL.fill;
   g.beginPath();
@@ -167,23 +172,44 @@ function drawSwitch(g: CanvasRenderingContext2D, y: number, h: number, name: str
   g.font = `11px ${FONT}`;
   g.textAlign = 'left';
   g.textBaseline = 'middle';
-  g.fillText(name, x + BOX_W + 8, mid);
+  // the PMOS's name sits to its right; the NMOS's above it, clear of the wire to OUT
+  if (bubble) g.fillText(name, x + BOX_W + 8, mid);
+  else { g.textAlign = 'center'; g.fillText(name, cx, y - 10); }
 }
 
 /** The circuit: VDD to the PMOS, PMOS to the platform, platform to the NMOS, NMOS to GND. The PMOS conducts at IN=0,
- * the NMOS at IN=1, so exactly one of the two wires glows. */
+ * the NMOS at IN=1, so exactly one path, rail to OUT, glows. The NMOS's wire runs up the shaft's left wall to the platform. */
 function drawCircuit(g: CanvasRenderingContext2D, s: PullnetState) {
-  const top = REST - s.lift.pos, bottom = top + PLAT.h;
+  const top = REST - s.lift.pos;
   const pOn = s.input === 0, nOn = s.input === 1;
-  wire(g, SX, VDD_Y, PMOS.y, false);
+  const ny = NMOS.y + NMOS.h / 2, wallX = PLAT.x - 8;
+  wire(g, SX, VDD_Y, PMOS.y, pOn);
   wire(g, SX, PMOS.y + PMOS.h, top, pOn);
-  wire(g, SX, bottom, NMOS.y, nOn);
-  wire(g, SX, NMOS.y + NMOS.h, GND_Y, false);
-  drawSwitch(g, PMOS.y, PMOS.h, 'PMOS', true, pOn);
-  drawSwitch(g, NMOS.y, NMOS.h, 'NMOS', false, nOn);
+  link(g, [[NMOS.x + BOX_W / 2, ny], [wallX, ny], [wallX, top + PLAT.h / 2], [PLAT.x, top + PLAT.h / 2]], nOn);
+  link(g, [[NMOS.x - BOX_W / 2, ny], [GND_X, ny]], nOn);
+  drawSwitch(g, SX, PMOS.y, PMOS.h, 'PMOS', true, pOn);
+  drawSwitch(g, NMOS.x, NMOS.y, NMOS.h, 'NMOS', false, nOn);
 }
 
-/** The OUT platform as a chamfered slab, its top edge glowing, and its name inside. */
+/** A wire through the points, glowing when live and dashed when not. */
+function link(g: CanvasRenderingContext2D, pts: [number, number][], live: boolean) {
+  g.beginPath();
+  pts.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y)));
+  if (live) {
+    g.strokeStyle = PAL.trace;
+    g.shadowColor = PAL.trace;
+    g.shadowBlur = LINE.traceGlow;
+    g.stroke();
+    g.shadowBlur = 0;
+  } else {
+    g.strokeStyle = PAL.idle;
+    g.setLineDash([4, 5]);
+    g.stroke();
+    g.setLineDash([]);
+  }
+}
+
+/** The OUT platform as a chamfered slab, its top edge glowing, and its name standing on it. */
 function drawPlatform(g: CanvasRenderingContext2D, pos: number) {
   const x = PLAT.x, y = REST - pos, c = CHAMFER;
   g.beginPath();
@@ -210,7 +236,8 @@ function drawPlatform(g: CanvasRenderingContext2D, pos: number) {
   g.font = `11px ${FONT}`;
   g.textAlign = 'center';
   g.textBaseline = 'middle';
-  g.fillText('OUT', SX, y + PLAT.h / 2);
+  // on top of the slab, right of the lever: the world draws the slab itself over this one
+  g.fillText('OUT', PLAT.x + PLAT.w - 30, y - 12);
 }
 
 /** The wall lamp: lit when OUT is 1, with the reading written under it. */

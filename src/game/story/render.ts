@@ -952,6 +952,8 @@ export function drawStoryFront(c: C, d: Director, t: number, droneHand: Pt) {
         break;
       }
       case 'lift': {
+        // the inverter's OUT platform is drawn by its beat, with its name on it
+        if (room.mechanic === 'pullnet') break;
         c.beginPath();
         c.rect(r.x, r.y, r.w, r.h);
         c.fillStyle = PAL.fill;
@@ -963,7 +965,8 @@ export function drawStoryFront(c: C, d: Director, t: number, droneHand: Pt) {
         c.strokeStyle = rgba(PAL.line, 0.3);
         c.lineWidth = 1.5;
         c.stroke();
-        // the sensor box on the lift: reads 1 while empty
+        // the sensor box on Level 1's lift: reads 1 while empty (a discovery beat's lifts carry their own labels)
+        if (room.mechanic) break;
         const v = d.liftOccupied ? 0 : 1;
         chamfer(c, r.x + r.w / 2 - 22, r.y + 4, 44, 16, 3);
         c.fillStyle = '#0E0C22';
