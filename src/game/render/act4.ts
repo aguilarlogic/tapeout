@@ -4,10 +4,12 @@ import type { Vec } from '../physics/geom';
 import type { Sim } from '../sim';
 import { HZ } from '../tuning';
 import { UP } from '../world/upgrades';
-import { FONT, LINE, PAL, rgba } from './palette';
+import { blink, FONT, LINE, PAL, rgba } from './palette';
 
 type C = CanvasRenderingContext2D;
 const TAU = Math.PI * 2;
+/** The armed mine's blink rate in Hz (its dot is lit for one third of a second, then dark for one third). */
+const MINE_BLINK_HZ = 1.5;
 
 /** A router pad: a 40 x 8 px plate on the floor with four arrow ticks; lit while the NoC Warp can use it. */
 function router(c: C, x: number, y: number, live: boolean, here: boolean, t: number) {
@@ -49,7 +51,7 @@ function mine(c: C, x: number, y: number, age: number, t: number) {
   c.strokeStyle = armed ? PAL.amber : rgba(PAL.amber, 0.5);
   c.lineWidth = 1.5;
   c.stroke();
-  if (armed && Math.floor(t / 20) % 2 === 0) {
+  if (armed && blink(t / HZ, MINE_BLINK_HZ) === 1) {
     c.globalCompositeOperation = 'lighter';
     c.fillStyle = rgba(PAL.amber, 0.8);
     c.beginPath();

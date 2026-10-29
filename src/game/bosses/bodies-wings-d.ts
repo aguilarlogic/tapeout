@@ -3,7 +3,7 @@
 // line art with a glow, a PAL.fill inside, amber for the part about to attack, cracks for damage, a white flash on a hit, a
 // dashed shield ring) and draw inside the arena's boss rect. The qubit's ball is exported, so the phase attack draws its two
 // ghost copies with the same drawing.
-import { FONT, LINE, PAL, rgba } from '../render/palette';
+import { FONT, LINE, PAL, rgba, type PalKey } from '../render/palette';
 import { HZ } from '../tuning';
 import { centre, circle, cracks, flash, glow, rrect, shield, silhouette, telegraph } from './bodies';
 import type { C, Ext } from './bodies';
@@ -15,8 +15,8 @@ import type { BodyDrawer } from './types';
  *  right side, 16 px apart, and end 200 px right of the centre. Each has its number 216 px right of the centre. */
 const ENG_W = 170, ENG_H = 130, ENG_R = 14, LENS_R = 24;
 const CHANNELS = 8, CH_GAP = 16, CH_X1 = 200, CH_LABEL = 216;
-/** One colour per channel. Each line also carries its number, so the state is not just colour. */
-const CH_COLOURS = [PAL.trace, PAL.ok, PAL.gold, PAL.amber, PAL.neon, PAL.x, PAL.line, PAL.text];
+/** One palette key per channel, read from PAL at draw time. Each line also carries its number, so the state is not just colour. */
+const CH_COLOURS: readonly PalKey[] = ['trace', 'ok', 'gold', 'amber', 'neon', 'x', 'line', 'text'];
 
 /** The optical engine: a long block with a lens, and eight numbered channel lines out of its right side. The flare attack
  *  glows the channels as they telegraph; the other attacks glow the block. */
@@ -44,13 +44,13 @@ export const optical: BodyDrawer = (g, box, s) => {
     g.beginPath();
     g.moveTo(x1, chY(k));
     g.lineTo(cx + CH_X1, chY(k));
-    glow(g, CH_COLOURS[k], 1, LINE.world);
+    glow(g, PAL[CH_COLOURS[k]], 1, LINE.world);
   }
   g.font = `12px ${FONT}`;
   g.textAlign = 'center';
   g.textBaseline = 'middle';
   for (let k = 0; k < CHANNELS; k++) {
-    g.fillStyle = CH_COLOURS[k];
+    g.fillStyle = PAL[CH_COLOURS[k]];
     g.fillText(String(k + 1), cx + CH_LABEL, chY(k));
   }
   telegraph(g, s, s.attack === 'flare' ? lines : block);

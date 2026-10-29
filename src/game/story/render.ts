@@ -7,7 +7,7 @@
 import { chipProgress, CHIPS, slotProgress } from '../../chip';
 import { findModule, KIND_APP } from '../../curriculum';
 import { actionLabel } from '../input/labels';
-import { easeOut, FONT, PAL, rgba } from '../render/palette';
+import { blink, blinkSteady, easeOut, FONT, PAL, px, rgba } from '../render/palette';
 import { drawHiringPanel, drawOfficeFloor } from '../render/hall';
 import { drawRail } from '../render/rails';
 import { HZ, TUNING, VIEW_H, VIEW_W } from '../tuning';
@@ -18,7 +18,11 @@ import type { Station, StationKind, Terminal } from './types';
 
 type C = CanvasRenderingContext2D;
 type Pt = { x: number; y: number };
+/** TAPEOUT's bubble (Phase 10 Spec, section 2.1): the words' size, the label's, the line step, the widest box, and the most lines. */
+const BUBBLE_PX = 15, BUBBLE_LABEL_PX = 10, BUBBLE_LINE = 22, BUBBLE_MAX_W = 640, BUBBLE_MAX_LINES = 4;
 const S = TUNING.story;
+/** The text cursors' blink rate, and the amber PASS label's flicker, in Hz (on for half a second, then off). */
+const BLINK_HZ = 1;
 
 function glowLine(c: C, col: string, w: number, a = 0.3) {
   c.save();
@@ -41,6 +45,8 @@ function chamfer(c: C, x: number, y: number, w: number, h: number, k = 4) {
 
 /** The widest a station label may run before it would reach its neighbour's (set per station by drawStations). */
 let labelRoom = Infinity;
+/** Stations closer than this in y share a floor, so their labels share its width. */
+const LABEL_FLOOR = 100;
 
 function label(c: C, text: string, x: number, y: number, col: string = rgba(PAL.text, 0.6), size = 11) {
   c.font = `${size}px ${FONT}`;
@@ -120,8 +126,9 @@ export function drawStoryBack(c: C, d: Director, t: number) {
   // the Hiring Hall's offices (Phase 8 Spec, section 4): carpet lines along the floor under the panels
   if (room.role === 'offices' && room.stations.length) drawOfficeFloor(c, 0, room.w, room.stations[0].y);
   for (const st of room.stations) {
-    // room for the label: up to halfway to the nearest station on either side, less a gap
-    const near = Math.min(...room.stations.filter((o) => o !== st).map((o) => Math.abs(o.x - st.x)));
+    // room for the label: up to the nearest station on either side on the same floor, less a gap (a station on the floor
+    // above, like the Loft's patrol board over the chalkboard, never cuts a label short)
+    const near = Math.min(...room.stations.filter((o) => o !== st && Math.abs(o.y - st.y) < LABEL_FLOOR).map((o) => Math.abs(o.x - st.x)));
     labelRoom = Number.isFinite(near) ? Math.max(60, near - 16) : Infinity;
     drawStation(c, d, st, t);
   }
@@ -203,7 +210,7 @@ function drawBit(c: C, x: number, y: number, t: number) {
   c.strokeStyle = PAL.gold;
   c.lineWidth = 2;
   c.strokeRect(x - 10, y - 10, 20, 20);
-  c.font = `bold 14px ${FONT}`;
+  c.font = `bold ${px(14)}px ${FONT}`;
   c.textAlign = 'center';
   c.textBaseline = 'middle';
   c.fillStyle = PAL.gold;
@@ -388,7 +395,7 @@ function drawBenchRig(c: C, x: number, y: number, w: number, h: number, d: Direc
     if (mod) c.fillText(c.measureText(opens).width > mw - 28 ? `// ${KIND_APP[mod.kind]}` : opens, mx + 14, vy - 18);
     c.fillStyle = done ? PAL.ok : rgba(PAL.trace, 0.85);
     c.fillText(verdict, mx + 14, vy);
-    if (!done && Math.floor(t / 30) % 2) c.fillRect(mx + 14 + c.measureText(verdict).width + 4, vy - 11, 7, 13);
+    if (!done && blink(t / HZ, BLINK_HZ) === 1) c.fillRect(mx + 14 + c.measureText(verdict).width + 4, vy - 11, 7, 13);
     c.restore();
   });
   if (d.room.role === 'bench' && d.room.upgrade) drawCapstone(c, d, x, y0, t);
@@ -447,13 +454,13 @@ function drawRig(c: C, x: number, y: number, w: number, h: number, d: Director, 
     c.strokeStyle = done ? PAL.ok : rgba(PAL.trace, 0.6);
     c.lineWidth = 2;
     c.stroke();
-    c.font = `12px ${FONT}`;
+    c.font = `${px(12)}px ${FONT}`;
     c.fillStyle = rgba(done ? PAL.ok : PAL.trace, 0.85);
     const lines = m === 'gates'
       ? ['module gates(', '  input a, b,', '  output y_and, y_or', ');', done ? '// PASS' : '// write me']
       : ['module half_adder(', '  input a, b,', '  output sum, carry', ');', done ? '// PASS' : '// write me'];
     lines.forEach((l, k) => c.fillText(l, mx + 14, y0 + 24 + k * 18));
-    if (!done && Math.floor(t / 30) % 2) c.fillRect(mx + 14 + c.measureText(lines[4]).width + 4, y0 + 24 + 4 * 18 - 11, 7, 13);
+    if (!done && blink(t / HZ, BLINK_HZ) === 1) c.fillRect(mx + 14 + c.measureText(lines[4]).width + 4, y0 + 24 + 4 * 18 - 11, 7, 13);
   });
 }
 
@@ -575,7 +582,7 @@ function drawBoard(c: C, d: Director, x: number, y: number, w: number, h: number
     chamfer(c, x0 - 10, y0 - 10, w + 20, h + 20, 18);
     c.clip();
     c.globalCompositeOperation = 'lighter';
-    c.strokeStyle = rgba(red, 0.16 + 0.08 * Math.sin(t * 0.2));
+    c.strokeStyle = rgba(red, blinkSteady() ? 0.2 : 0.16 + 0.08 * Math.sin(t * 0.2));
     c.lineWidth = 1.5;
     c.beginPath();
     const R = 22;
@@ -738,7 +745,7 @@ function drawStation(c: C, d: Director, st: Station, t: number) {
       c.strokeStyle = done ? PAL.ok : PAL.amber;
       c.lineWidth = 1.5;
       c.stroke();
-      label(c, done ? 'PASS' : '_', x, y - 92, done ? PAL.ok : rgba(PAL.amber, 0.5 + 0.5 * (Math.floor(t / 30) % 2)), 12);
+      label(c, done ? 'PASS' : '_', x, y - 92, done ? PAL.ok : rgba(PAL.amber, blink(t / HZ, BLINK_HZ) ? 1 : 0.5), 12);
       label(c, st.label, x, y - 130, rgba(PAL.text, 0.55));
       break;
     }
@@ -827,7 +834,7 @@ function drawLoftStation(c: C, d: Director, st: Station, t: number) {
       break;
     case 'board':
       chamfer(c, x - 90, y - 250, 180, 130, 6); c.fillStyle = '#0F1A1A'; c.fill(); c.stroke();
-      c.font = `13px ${FONT}`; c.fillStyle = rgba(PAL.text, 0.7);
+      c.font = `${px(13)}px ${FONT}`; c.fillStyle = rgba(PAL.text, 0.7);
       c.fillText('V = I × R', x - 70, y - 214); c.fillText('1 V = 1 A × 1 Ω', x - 70, y - 190); c.fillText('P = V × I', x - 70, y - 166);
       c.beginPath(); c.moveTo(x - 60, y - 120); c.lineTo(x - 70, y); c.moveTo(x + 60, y - 120); c.lineTo(x + 70, y); c.strokeStyle = rgba(PAL.line, 0.4); c.stroke();
       break;
@@ -835,7 +842,7 @@ function drawLoftStation(c: C, d: Director, st: Station, t: number) {
     case 'crt':
       chamfer(c, x - 60, y - 170, 120, 96, 10); c.fillStyle = PAL.fill; c.fill(); c.stroke();
       chamfer(c, x - 48, y - 160, 96, 70, 14); c.fillStyle = '#062018'; c.fill(); c.strokeStyle = rgba(PAL.ok, 0.6); c.stroke();
-      c.font = `11px ${FONT}`; c.fillStyle = rgba(PAL.ok, 0.8); c.fillText('$ tapeout', x - 38, y - 136); if (Math.floor(t / 30) % 2) c.fillRect(x - 38, y - 126, 7, 11);
+      c.font = `${px(11)}px ${FONT}`; c.fillStyle = rgba(PAL.ok, 0.8); c.fillText('$ tapeout', x - 38, y - 136); if (blink(t / HZ, BLINK_HZ) === 1) c.fillRect(x - 38, y - 126, 7, 11);
       c.beginPath(); c.moveTo(x - 70, y - 74); c.lineTo(x + 70, y - 74); c.moveTo(x - 60, y - 74); c.lineTo(x - 60, y); c.moveTo(x + 60, y - 74); c.lineTo(x + 60, y); c.strokeStyle = col; c.stroke();
       break;
     case 'arcade':
@@ -1189,25 +1196,58 @@ export function drawDark(c: C, d: Director, cam: Pt, drone: Pt, scratch: { canva
 
 // ------------------------------------------------------------------------------------------------ view space
 
+/** Breaks bubble text into lines no wider than maxW (the font is already set), at most BUBBLE_MAX_LINES; a text that
+ * runs longer ends its last line with an ellipsis. */
+function wrapBubble(c: C, text: string, maxW: number): string[] {
+  const lines: string[] = [];
+  let cur = '';
+  for (const word of text.split(' ')) {
+    const next = cur ? `${cur} ${word}` : word;
+    if (!cur || c.measureText(next).width <= maxW) cur = next;
+    else { lines.push(cur); cur = word; }
+  }
+  lines.push(cur);
+  if (lines.length <= BUBBLE_MAX_LINES) return lines;
+  const kept = lines.slice(0, BUBBLE_MAX_LINES);
+  let last = kept[BUBBLE_MAX_LINES - 1];
+  while (last.length > 1 && c.measureText(`${last}…`).width > maxW) last = last.slice(0, -1);
+  kept[BUBBLE_MAX_LINES - 1] = `${last.trimEnd()}…`;
+  return kept;
+}
+
+/** The first n characters of the wrapped lines, as they show while the bubble types. */
+function revealLines(lines: string[], n: number): string[] {
+  let left = n;
+  const out: string[] = [];
+  for (const l of lines) {
+    if (left <= 0) break;
+    out.push(l.slice(0, left));
+    left -= l.length;
+  }
+  return out;
+}
+
 /** TAPEOUT's speech bubble, bottom left, typed at 40 characters a second. */
 export function drawBubble(c: C, d: Director, t: number) {
   const b = d.bubble;
   if (!b) return;
   const text = d.keyed(b.text);
   const shown = Math.min(text.length, Math.floor((b.age / HZ) * S.lineCps));
-  const typed = text.slice(0, shown);
   const typedFor = text.length / S.lineCps * HZ;
   const fadeOut = Math.max(0, Math.min(1, (b.age - typedFor - (S.lineMs / 1000) * HZ + 20) / 20));
   const inK = easeOut(Math.min(1, b.age / 10));
   c.save();
   c.globalAlpha = inK * (1 - fadeOut);
-  c.font = `15px ${FONT}`;
+  c.font = `${px(BUBBLE_PX)}px ${FONT}`;
+  // the words wrap to the widest box, so the box grows downward with the text (at most BUBBLE_MAX_LINES lines)
+  const lines = wrapBubble(c, text, BUBBLE_MAX_W - 40), boxH = px(52) + (lines.length - 1) * px(BUBBLE_LINE);
+  const textW = Math.max(...lines.map((l) => c.measureText(l).width));
   // top centre, under the HUD (under the boss bar in the arena), clear of the drone and the floor
-  const w = Math.max(240, c.measureText(text).width + 40), ax = (VIEW_W - w) / 2 - 8, y = (d.bossBar ? 104 : 86) + (1 - inK) * -8;
+  const w = Math.max(240, textW + 40), ax = (VIEW_W - w) / 2 - 8, y = (d.bossBar ? 104 : 86) + (1 - inK) * -8;
   const x = ax + 36;
   // the avatar: TAPEOUT's eye in a ring, flickering while it is still broken
   const broken = !d.kit.voice;
-  const flick = broken && Math.floor(t / 7) % 9 === 0 ? 0.5 : 1;
+  const flick = broken && !blinkSteady() && Math.floor(t / 7) % 9 === 0 ? 0.5 : 1;
   const cy = y + 8;
   c.beginPath();
   c.arc(ax, cy, 22, 0, Math.PI * 2);
@@ -1220,18 +1260,18 @@ export function drawBubble(c: C, d: Director, t: number) {
   dot(c, ax + (shown < text.length ? Math.sin(t * 0.6) * 2 : 0), cy, 6, PAL.trace, flick);
   dot(c, ax + 2, cy - 2, 2.2, '#FFFFFF', flick);
   // the box
-  chamfer(c, x, y - 18, w, 52, 6);
+  chamfer(c, x, y - px(18), w, boxH, 6);
   c.fillStyle = rgba(PAL.bgDeep, 0.85);
   c.fill();
   c.strokeStyle = rgba(PAL.trace, 0.7);
   c.lineWidth = 1.5;
   c.stroke();
   c.fillStyle = rgba(PAL.trace, 0.7);
-  c.font = `10px ${FONT}`;
-  c.fillText('TAPEOUT', x + 14, y - 3);
-  c.font = `15px ${FONT}`;
+  c.font = `${px(BUBBLE_LABEL_PX)}px ${FONT}`;
+  c.fillText('TAPEOUT', x + 14, y - px(3));
+  c.font = `${px(BUBBLE_PX)}px ${FONT}`;
   c.fillStyle = PAL.text;
-  c.fillText(typed, x + 14, y + 20);
+  revealLines(lines, shown).forEach((l, i) => c.fillText(l, x + 14, y + px(20) + i * px(BUBBLE_LINE)));
   c.restore();
 }
 
@@ -1241,9 +1281,9 @@ export function drawPrompt(c: C, d: Director, t: number) {
   if (!p) return;
   const text = d.keyed(p.text);
   c.save();
-  c.font = `12px ${FONT}`;
+  c.font = `${px(12)}px ${FONT}`;
   const w = c.measureText(text).width + 20, bob = Math.sin(t * 0.08) * 2;
-  chamfer(c, p.x - w / 2, p.y - 16 + bob, w, 24, 4);
+  chamfer(c, p.x - w / 2, p.y - px(16) + bob, w, px(24), 4);
   c.fillStyle = rgba(PAL.bgDeep, 0.85);
   c.fill();
   c.strokeStyle = rgba(PAL.amber, 0.9);
@@ -1255,21 +1295,31 @@ export function drawPrompt(c: C, d: Director, t: number) {
   c.restore();
 }
 
+/** The lab line under the boss bar: the phase, the lab clock and the key for notes. */
+function bossStatus(d: Director, b: NonNullable<Director['bossBar']>): string {
+  const phase = b.phase === 'investigate' ? (b.tempDown > 0 ? 'SHIELD DOWN · HIT IT' : 'TAKE READINGS · THEN THE DEBUG PORT') : b.phase === 'fix' ? 'PICK THE FIX' : 'SHIELD DOWN · FINISH IT';
+  const notes = d.device.kind === 'touch' ? 'NOTES button' : `${actionLabel('map', d.device.kind, d.device.bindings).toUpperCase()}: notes`;
+  return `${phase}  ·  lab time ${Math.max(0, b.inv.left)} min  ·  ${notes}`;
+}
+
 /** The boss bar (top centre), its lab-time clock, the latest reading, and the log while Tab is held. */
 export function drawBossHud(c: C, d: Director, t: number, showLog: boolean) {
   const b = d.bossBar;
   if (!b) return;
   const W = 460, x = (VIEW_W - W) / 2, y = 26;
   c.save();
-  // a dark backing plate, so world labels behind the bar never show through its text
-  chamfer(c, x - 40, 4, W + 80, y + 40, 6);
+  // the lab line sets the plate's width, so the plate grows at 150%; the plate keeps world labels behind the bar from showing through its text
+  c.font = `${px(11)}px ${FONT}`;
+  const status = d.xn ? `FORM ${d.xn} OF 4  ·  MAKE IT A 1 OR A 0` : bossStatus(d, b);
+  const plateW = Math.max(W + 80, c.measureText(status).width + 40);
+  chamfer(c, VIEW_W / 2 - plateW / 2, 4, plateW, y + px(40), 6);
   c.fillStyle = rgba(PAL.bgDeep, 0.82);
   c.fill();
-  c.font = `12px ${FONT}`;
+  c.font = `${px(12)}px ${FONT}`;
   c.textAlign = 'center';
   c.fillStyle = b.enraged > 0 ? PAL.hostile : PAL.neon;
   const name = (d.form?.form.name ?? 'The Dark Demo Board').toUpperCase();
-  c.fillText(b.enraged > 0 ? `${name} · ENRAGED` : name, VIEW_W / 2, y - 6);
+  c.fillText(b.enraged > 0 ? `${name} · ENRAGED` : name, VIEW_W / 2, y - px(6));
   chamfer(c, x, y, W, 12, 3);
   c.fillStyle = rgba(PAL.bgDeep, 0.7);
   c.fill();
@@ -1289,8 +1339,8 @@ export function drawBossHud(c: C, d: Director, t: number, showLog: boolean) {
   if (d.xn) {
     // X has no investigation and no lab clock: a straight fight
     c.fillStyle = rgba(PAL.text, 0.75);
-    c.font = `11px ${FONT}`;
-    c.fillText(`FORM ${d.xn} OF 4  ·  MAKE IT A 1 OR A 0`, VIEW_W / 2, y + 30);
+    c.font = `${px(11)}px ${FONT}`;
+    c.fillText(status, VIEW_W / 2, y + px(30));
     c.restore();
     return;
   }
@@ -1298,10 +1348,8 @@ export function drawBossHud(c: C, d: Director, t: number, showLog: boolean) {
   c.fillStyle = rgba(frac < 0.3 ? PAL.hostile : PAL.amber, 0.9);
   c.fillRect(x + 3, y + (visor ? 23 : 18), (W - 6) * frac, 3);
   c.fillStyle = rgba(PAL.text, 0.75);
-  c.font = `11px ${FONT}`;
-  const phase = b.phase === 'investigate' ? (b.tempDown > 0 ? 'SHIELD DOWN · HIT IT' : 'TAKE READINGS · THEN THE DEBUG PORT') : b.phase === 'fix' ? 'PICK THE FIX' : 'SHIELD DOWN · FINISH IT';
-  const notes = d.device.kind === 'touch' ? 'NOTES button' : `${actionLabel('map', d.device.kind, d.device.bindings).toUpperCase()}: notes`;
-  c.fillText(`${phase}  ·  lab time ${Math.max(0, left)} min  ·  ${notes}`, VIEW_W / 2, y + 36);
+  c.font = `${px(11)}px ${FONT}`;
+  c.fillText(status, VIEW_W / 2, y + px(36));
   c.restore();
   // the latest reading, for a few seconds
   const r = d.lastReading;
@@ -1356,7 +1404,7 @@ function panel(c: C, x: number, y: number, w: number, lines: string[], alpha: nu
   if (alpha <= 0) return;
   c.save();
   c.globalAlpha = alpha;
-  c.font = `12px ${FONT}`;
+  c.font = `${px(12)}px ${FONT}`;
   // wrap long lines
   const out: string[] = [];
   for (const l of lines) {
@@ -1370,7 +1418,7 @@ function panel(c: C, x: number, y: number, w: number, lines: string[], alpha: nu
     }
     out.push(s);
   }
-  const h = out.length * 17 + 18;
+  const h = out.length * px(17) + px(18);
   chamfer(c, x, y, w, h, 6);
   c.fillStyle = rgba(PAL.bgDeep, 0.9);
   c.fill();
@@ -1379,7 +1427,7 @@ function panel(c: C, x: number, y: number, w: number, lines: string[], alpha: nu
   c.stroke();
   out.forEach((l, i) => {
     c.fillStyle = i === 0 || l === 'READINGS' || l === 'CAUSES' ? col : rgba(PAL.text, l.startsWith('–') || l.startsWith('✗') ? 0.45 : 0.85);
-    c.fillText(l, x + 14, y + 22 + i * 17);
+    c.fillText(l, x + 14, y + px(22) + i * px(17));
   });
   c.restore();
 }

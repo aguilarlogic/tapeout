@@ -1,7 +1,7 @@
 {
   "name": "tapeout",
   "private": true,
-  "version": "0.14.0",
+  "version": "0.17.0",
   "description": "A game that trains you to be a competitive semiconductor engineer: RTL, verification, timing closure, PCB layout.",
   "type": "module",
   "scripts": {
@@ -20,6 +20,7 @@
   "devDependencies": {
     "@playwright/test": "1.64.1",
     "@types/matter-js": "0.20.2",
+    "axe-core": "4.10.2",
     "electron": "44.9.0",
     "electron-builder": "26.15.3",
     "typescript": "~5.9",

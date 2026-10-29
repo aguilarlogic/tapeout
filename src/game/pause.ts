@@ -18,7 +18,13 @@ export interface PauseHooks {
   sound(s: Sfx): void;
   /** The story is running (not the test room): the menu offers difficulty and assists. */
   story?: boolean;
+  /** Room skip (Phase 10 Spec, section 2.6): true when this room may be skipped; skipRoom moves on and resumes. */
+  canSkipRoom?(): boolean;
+  skipRoom?(): void;
 }
+
+/** A labelled select row for the Accessibility panel. */
+interface Choice<T extends string> { value: T; label: string }
 
 export function pauseMenu(hooks: PauseHooks): HTMLElement {
   const root = h('div', { class: 'gm-pause', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Paused' });
@@ -41,7 +47,9 @@ export function pauseMenu(hooks: PauseHooks): HTMLElement {
     show(h('div', { class: 'gm-panel' },
       h('h2', null, 'PAUSED'),
       resume,
+      hooks.story && prefs().roomSkip && hooks.canSkipRoom?.() ? btn('Skip this room', () => hooks.skipRoom?.()) : null,
       btn('Settings', settings),
+      btn('Accessibility', access),
       hooks.story ? btn('Difficulty and assists', assists) : null,
       btn(hooks.story ? 'Classic desktop' : 'Quit to title', hooks.quit),
       h('p', { class: 'gm-note' }, hooks.story
@@ -53,7 +61,7 @@ export function pauseMenu(hooks: PauseHooks): HTMLElement {
   const assists = () => {
     const p = prefs();
     const diff = p.difficulty ?? (profile()?.background === 'pro' ? 'standard' : 'story');
-    const flip = (label: string, key: 'invincible' | 'autoFire' | 'infiniteEnergy') =>
+    const flip = (label: string, key: 'invincible' | 'autoFire' | 'infiniteEnergy' | 'roomSkip') =>
       btn(`${label}: ${p[key] ? 'On' : 'Off'}`, () => { setPrefs({ [key]: !prefs()[key] } as Partial<Prefs>); hooks.onSettings(); assists(); }, 'toggle');
     const out = h('output', null, `${p.gameSpeed}%`);
     const speed = h('input', { type: 'range', min: '50', max: '100', step: '10', value: `${p.gameSpeed}`, 'aria-label': 'Game speed' }) as HTMLInputElement;
@@ -73,8 +81,39 @@ export function pauseMenu(hooks: PauseHooks): HTMLElement {
       h('p', { class: 'gm-note' }, diff === 'story' ? 'Story: you take half damage and the boss has less health. The puzzles are the same.' : 'Standard: full damage, full boss. The puzzles are the same.'),
       h('label', { class: 'gm-slider' }, h('span', null, 'Game speed'), speed, out),
       h('label', { class: 'gm-slider' }, h('span', null, 'Aim assist'), aim),
-      h('div', { class: 'gm-grid' }, flip('Invincible', 'invincible'), flip('Auto-fire', 'autoFire'), flip('Endless energy', 'infiniteEnergy')),
+      h('div', { class: 'gm-grid' }, flip('Invincible', 'invincible'), flip('Auto-fire', 'autoFire'), flip('Endless energy', 'infiniteEnergy'), flip('Room skip', 'roomSkip')),
       h('p', { class: 'gm-note' }, 'Assists never cost stars or progress. Turn them on and off whenever you like.'),
+      h('div', { class: 'gm-row' }, h('span'), back)), back);
+  };
+
+  /** Accessibility (Phase 10 Spec, section 2): text size, colours, captions and hold or toggle. Selects work from the
+   * keyboard, the pad (padnav) and touch alike, and read their label. */
+  const access = () => {
+    const p = prefs();
+    const select = <T extends string>(label: string, value: T, options: Choice<T>[], set: (v: T) => void) => {
+      const el = h('select', { class: 'gm-select', 'aria-label': label }, ...options.map((o) => h('option', { value: o.value }, o.label))) as HTMLSelectElement;
+      el.value = value;
+      el.addEventListener('change', () => {
+        const pick = options.find((o) => o.value === el.value);
+        if (pick) { set(pick.value); hooks.sound('uiPress'); hooks.onSettings(); }
+      });
+      return h('label', { class: 'gm-slider' }, h('span', null, label), el);
+    };
+    const back = btn('Back', main, 'primary');
+    show(h('div', { class: 'gm-panel wide' },
+      h('h2', null, 'ACCESSIBILITY'),
+      select('Text size', String(p.textSize ?? 100) as '100' | '125' | '150',
+        [{ value: '100', label: '100%' }, { value: '125', label: '125%' }, { value: '150', label: '150%' }],
+        (v) => setPrefs({ textSize: Number(v) as 100 | 125 | 150 })),
+      select('Colours', p.palette ?? 'standard',
+        [{ value: 'standard', label: 'Standard' }, { value: 'okabe', label: 'Colour-blind safe (Okabe-Ito)' }],
+        (v) => setPrefs({ palette: v })),
+      select('Hold actions', p.holdMode ?? 'hold',
+        [{ value: 'hold', label: 'Hold' }, { value: 'toggle', label: 'Press to toggle' }],
+        (v) => setPrefs({ holdMode: v })),
+      h('div', { class: 'gm-grid' },
+        btn(`Captions: ${p.captions ? 'On' : 'Off'}`, () => { setPrefs({ captions: !prefs().captions }); hooks.onSettings(); access(); }, 'toggle')),
+      h('p', { class: 'gm-note' }, 'Captions name the sounds that matter. Press to toggle latches the Field Coil, the charged shot and your notes, so you never have to hold a button. Reduce flashes, in Settings, also holds every blink steady.'),
       h('div', { class: 'gm-row' }, h('span'), back)), back);
   };
 
@@ -136,9 +175,9 @@ export function pauseMenu(hooks: PauseHooks): HTMLElement {
         h('h2', null, 'CONTROLS'),
         h('p', { class: 'gm-note' }, 'Click a key to change it, then press the new key or mouse button. Esc cancels. A key used elsewhere swaps places.'),
         h('div', { class: 'gm-status', role: 'status' }, note),
-        h('div', { class: 'gm-table-wrap' }, h('table', { class: 'gm-keys' }, h('thead', null, h('tr', null, h('th', null, 'Action'), h('th', null, 'Main'), h('th', null, 'Second'))), h('tbody', null, ...rows))),
+        h('div', { class: 'gm-table-wrap', tabindex: '0', role: 'region', 'aria-label': 'Keys' }, h('table', { class: 'gm-keys' }, h('thead', null, h('tr', null, h('th', null, 'Action'), h('th', null, 'Main'), h('th', null, 'Second'))), h('tbody', null, ...rows))),
         h('h3', { class: 'gm-sub' }, 'Gamepad'),
-        h('div', { class: 'gm-table-wrap' }, h('table', { class: 'gm-keys' },
+        h('div', { class: 'gm-table-wrap', tabindex: '0', role: 'region', 'aria-label': 'Gamepad buttons' }, h('table', { class: 'gm-keys' },
           h('thead', null, h('tr', null, h('th', null, 'Action'), h('th', null, 'Button'))),
           h('tbody', null, ...padRows().map(([what, button]) => h('tr', null, h('th', { scope: 'row' }, what), h('td', null, button)))))),
         h('h3', { class: 'gm-sub' }, 'Touch'),

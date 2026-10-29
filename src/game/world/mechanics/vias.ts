@@ -34,8 +34,10 @@ const LEDGE_X = 1300;
 /** The exit door on M3, with the wall solid above it. */
 const EXIT = r(W - 200, M3 - 200, 48, 200);
 const EXIT_WALL = r(EXIT.x, 0, EXIT.w, EXIT.y);
-/** Each layer's colour: M1 trace, M2 neon, M3 amber. Shape and labels carry the layer too. */
-const LAYER_COLOUR = { 1: PAL.trace, 2: PAL.neon, 3: PAL.amber } as const;
+/** Each layer's colour, read from PAL at draw time: M1 trace, M2 neon, M3 amber. Shape and labels carry the layer too. */
+function layerColour(n: 1 | 2 | 3): string {
+  return n === 1 ? PAL.trace : n === 2 ? PAL.neon : PAL.amber;
+}
 /** Lines TAPEOUT says. */
 const TOO_CLOSE = 'Too close. Metal needs space.';
 const SOCKET_LINE = 'The socket is empty. A via block fits it.';
@@ -97,7 +99,7 @@ function inSocket(p: Rect): boolean {
 
 /** One layer: a glowing line on its walking top, with its label. */
 function layer(g: CanvasRenderingContext2D, n: 1 | 2 | 3, top: number) {
-  const colour = LAYER_COLOUR[n];
+  const colour = layerColour(n);
   g.strokeStyle = colour;
   g.lineWidth = LINE.world;
   g.shadowColor = colour;
@@ -219,7 +221,7 @@ export const VIAS: MechanicDef<ViasState> = {
     g.textBaseline = 'bottom';
     g.fillText(s.filled ? 'SOCKET FILLED' : 'SOCKET EMPTY', SOCKET.x + SOCKET.w / 2, socketY - 6);
     // the two vias: M1 to M2 always, M2 to M3 solid once its socket is filled
-    viaArrow(g, VIA12.x, F, M2, LAYER_COLOUR[1], true);
+    viaArrow(g, VIA12.x, F, M2, layerColour(1), true);
     viaArrow(g, VIA23.x, M2, M3, s.filled ? PAL.amber : PAL.idle, s.filled);
     g.restore();
   },

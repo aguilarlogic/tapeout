@@ -1,6 +1,7 @@
 // The story game screen: a full-window canvas over the desktop, the loop, input, camera, effects, sound, pause menu,
 // the F3 tuning panel and (dev builds only) the F9 debug overlay. Entry fades to black in 300 ms and boots the drone
 // (polish bar P2); quitting fades out the same way.
+import Matter from 'matter-js';
 import { award } from '../mastery/promotion';
 import { prefs, profile, setPrefs } from '../state';
 import { prefersReducedMotion } from '../term/typewriter';
@@ -14,12 +15,14 @@ import { deviceText } from './input/labels';
 import type { DeviceKind } from './input/padmap';
 import { PadCursor } from './input/padcursor';
 import { PadNav } from './input/padnav';
+import { trapTab } from './input/trap';
 import { type TouchButton, type TouchFrame, TouchSource, touchLayout } from './input/touch';
 import { drawTouch } from './render/touch';
+import { Captions } from './render/captions';
 import type { Vec } from './physics/geom';
 import { TEST_ROOM } from './level/testroom';
 import { Director } from './story/director';
-import { gameMount, openCard, openChoice, openLab, openLoft, openPort, openProfile, type OverlayHost } from './story/overlay';
+import { gameMount, openCard, openChoice, openLab, openLearningRoute, openLoft, openPort, openProfile, type OverlayHost } from './story/overlay';
 import { openModule } from './story/open';
 import { levelRecord } from '../state';
 import { calibRows } from './loft/data';
@@ -37,7 +40,8 @@ import { drawAimLine, drawBeam, drawEnemies, drawField, drawLoopDrone, drawShots
 import { DroneRig } from './render/drone';
 import { Fx } from './render/fx';
 import { Hud } from './render/hud';
-import { easeOut, FONT, PAL, rgba } from './render/palette';
+import { applyPalette, blink, easeOut, FONT, PAL, rgba, setSteadyBlink, setTextSize } from './render/palette';
+import { LATCH_KINDS, latch } from './input/latch';
 import { WorldArt } from './render/world';
 import { rng, Sim } from './sim';
 import { Tuner } from './tuner';
@@ -68,6 +72,8 @@ const TEST_BOOT = ['PROBE-7 FIRMWARE 7.0.3 . . . . . . . OK', 'LEGS / PULSE PROB
 const BOOT = { fadeIn: 0.3, eye: 0.6, cps: 40, hold: 0.35, hud: 0.25 };
 /** The Start button's standard index. */
 const START = 9;
+/** The canvas's name (Phase 10 Spec, section 2.8). It stays focusable, since keys reach the game through it. */
+const CANVAS_LABEL = "Action game, not playable with a screen reader. Press Escape to pause. Every lesson and lab is in the Learning route on the Loft's Chip Map, and on the Classic Desktop.";
 
 export class GameScreen {
   el: HTMLElement;
@@ -86,6 +92,8 @@ export class GameScreen {
   private input: InputDevice;
   loop: Loop;
   private audio = new GameAudio();
+  /** Sound captions (Phase 10 Spec, section 2.4), shown while the Captions setting is on. */
+  private captions = new Captions();
   private fx = new Fx();
   private rig = new DroneRig();
   private hud = new Hud();
@@ -127,8 +135,17 @@ export class GameScreen {
   private touchNow: TouchFrame | null = null;
   /** The touch controls' fade, 0..1 (150 ms in and out). */
   private touchAlpha = 0;
+  /** The move stick's fade, 0..1 (150 ms in and out), and where it last was, so it fades out where the thumb lifted. */
+  private stickFade = 0;
+  private lastStick: TouchFrame['stick'] = null;
   private navRaf = 0;
   private startHeld = false;
+  // Phase 10 Spec, section 2.5: the actions latched by Press to toggle, and the room and death they belong to
+  private latched = new Set<Action>();
+  private latchRoom: unknown = null;
+  /** Render time per frame, ms (Phase 10 Spec, section 4), beside stepMs. */
+  private renderMs: number[] = [];
+  private palette: 'standard' | 'okabe' = 'standard';
 
   constructor(private onQuit: () => void, opts: { test?: boolean } = {}) {
     if (opts.test) {
@@ -140,7 +157,7 @@ export class GameScreen {
     }
     this.art = new WorldArt(this.sim.room);
     this.bootLen = this.bootLines.reduce((a, l) => a + l.length, 0);
-    this.canvas = h('canvas', { class: 'gm-canvas', 'aria-label': 'Story game. Press Escape to pause.', tabindex: '0' });
+    this.canvas = h('canvas', { class: 'gm-canvas', 'aria-label': CANVAS_LABEL, tabindex: '0' });
     this.el = h('div', { class: 'gm-screen gm-fading', 'data-testid': 'game' }, this.canvas);
     document.body.append(this.el);
     requestAnimationFrame(() => requestAnimationFrame(() => this.el.classList.remove('gm-fading')));
@@ -152,22 +169,39 @@ export class GameScreen {
     this.navRaf = requestAnimationFrame(nav);
     this.offs.push(() => cancelAnimationFrame(this.navRaf));
     this.tuner = new Tuner(this.el, { repair: () => this.sim.repairPanel(), breakPanels: () => this.sim.breakPanels(), stress: () => this.stress() });
-    this.loop = new Loop(() => this.step(), (a) => this.render(a));
+    this.loop = new Loop(() => this.step(), (a) => {
+      const t0 = performance.now();
+      this.render(a);
+      this.renderMs.push(performance.now() - t0);
+      if (this.renderMs.length > 240) this.renderMs.shift();
+    });
     this.cam.snap(this.sim.drone, this.sim.room);
     this.prev = { x: this.sim.drone.x, y: this.sim.drone.y };
     const resize = () => this.resize();
     const vis = () => { if (document.hidden) this.pause(); };
     const mq = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null;
-    const rm = () => (this.reduced = reducedMotion());
+    const rm = () => { this.reduced = reducedMotion(); this.applyAccess(); };
     // F3 is the browser's find shortcut: take it before the browser does
     const f3 = (e: KeyboardEvent) => { if (e.code === 'F3') { e.preventDefault(); if (!this.paused) this.tuner.toggle(); } };
     window.addEventListener('resize', resize);
     const mouseNav = () => { delete document.documentElement.dataset.nav; };
     window.addEventListener('mousemove', mouseNav);
     window.addEventListener('keydown', f3, true);
+    // Tab stays inside the topmost dialog (WCAG: a modal keeps focus); with none open it is left alone
+    const trap = (e: KeyboardEvent) => {
+      if (e.code !== 'Tab') return;
+      // a code editor in a lab takes Tab for indenting, so the trap leaves it alone
+      if (document.activeElement?.closest('textarea, [contenteditable="true"], .cm-editor')) return;
+      const top = this.topDialog();
+      if (top && trapTab(top, document.activeElement, e.shiftKey)) e.preventDefault();
+    };
+    window.addEventListener('keydown', trap, true);
+    this.offs.push(() => window.removeEventListener('keydown', trap, true));
     document.addEventListener('visibilitychange', vis);
     mq?.addEventListener('change', rm);
     this.offs.push(() => window.removeEventListener('resize', resize), () => window.removeEventListener('mousemove', mouseNav), () => window.removeEventListener('keydown', f3, true), () => document.removeEventListener('visibilitychange', vis), () => mq?.removeEventListener('change', rm));
+    this.audio.onPlay = (name) => { if (prefs().captions) this.captions.push(name, performance.now()); };
+    this.applyAccess();
     this.resize();
     this.canvas.focus();
     this.loop.start();
@@ -175,6 +209,17 @@ export class GameScreen {
     // the Level 1 recorder (scripts/record-level1.mjs, `?record` in the URL) signs off the lessons it shows but cannot
     // answer; it never runs for a player
     if (new URLSearchParams(location.search).has('record')) (window as unknown as { __tapeoutAward?: (id: string) => void }).__tapeoutAward = (id) => award(id, 50, 3);
+  }
+
+  /** Accessibility prefs (Phase 10 Spec, section 2): the palette, the text size (canvas and overlays) and steady
+   * blinks, which follow Reduce flashes and reduced motion. */
+  private applyAccess() {
+    const p = prefs();
+    const pal = p.palette ?? 'standard';
+    if (pal !== this.palette) { this.palette = pal; applyPalette(pal); this.art = new WorldArt(this.sim.room); }
+    setTextSize(p.textSize ?? 100);
+    setSteadyBlink(p.reduceFlash || this.reduced);
+    this.el.style.setProperty('--gm-text', String((p.textSize ?? 100) / 100));
   }
 
   private onKey(code: string) {
@@ -189,6 +234,7 @@ export class GameScreen {
     this.paused = true;
     this.loop.stop();
     this.input.clear();
+    this.latched.clear();
     this.input.active = false;
     this.audio.fieldHum(false);
     this.audio.duck(true);
@@ -200,7 +246,7 @@ export class GameScreen {
       resume: () => this.resume(),
       quit: () => this.quit(),
       onBindings: (b: Bindings) => (this.input.bindings = b),
-      onSettings: () => { this.reduced = reducedMotion(); this.audio.applyVolumes(); this.story?.applyPrefs(); },
+      onSettings: () => { this.reduced = reducedMotion(); this.audio.applyVolumes(); this.story?.applyPrefs(); this.applyAccess(); },
       story: !!this.story,
       sound: (s) => this.audio.play(s),
     });
@@ -372,13 +418,19 @@ export class GameScreen {
     if (!on && this.kind === 'pad' && this.ready) this.pause();
   }
 
+  /** The topmost dialog showing over the game (a lab's own hidden dialogs, like its win card, do not count). */
+  private topDialog(): HTMLElement | null {
+    const dialogs = [...this.el.querySelectorAll<HTMLElement>('[role="dialog"]')].filter((d) => !d.closest('[hidden]'));
+    return dialogs[dialogs.length - 1] ?? null;
+  }
+
   /** Menus by pad (Phase 9 Spec, section 7): runs every animation frame while a menu, card or overlay is up. */
   private navStep() {
     if (this.quitting) return;
     const start = !!pickPad(readPads())?.buttons[START]?.pressed;
     if (this.input.active && !this.paused) { this.startHeld = start; this.padCursor.step(performance.now(), null, null); return; }
     // a lab's own hidden dialogs (its win card) are not the top one until they show
-    const dialogs = [...this.el.querySelectorAll<HTMLElement>('[role="dialog"]')].filter((d) => !d.closest('[hidden]')), top = dialogs[dialogs.length - 1] ?? null;
+    const top = this.topDialog();
     this.padNav.step(performance.now(), top ?? this.el);
     this.padCursor.step(performance.now(), top, pickPad(readPads()));
     // Start closes the pause menu too, on a fresh press (the press that opened it is still held at first)
@@ -423,6 +475,7 @@ export class GameScreen {
     this.driven = auto ? { held: new Set(auto.held), aim: auto.aim } : null;
     if (this.driven) input = { held: this.driven.held, pressed: new Set([...this.driven.held].filter((a) => !prevHeld.has(a))) };
     if (!this.ready) input = { held: new Set(), pressed: new Set() };
+    input = this.latchStep(input);
     this.showLog = input.held.has('map');
     if (this.story) {
       this.story.device = { kind: this.kind, bindings: this.input.bindings };
@@ -443,8 +496,23 @@ export class GameScreen {
     this.respawnFade = Math.max(0, this.respawnFade - 1);
     const showTouch = this.kind === 'touch' && this.ready && this.input.active && !this.story?.ending;
     this.touchAlpha = Math.max(0, Math.min(1, this.touchAlpha + (showTouch ? 1 : -1) / frames(150)));
+    const stick = this.touchNow?.stick ?? null;
+    if (stick) this.lastStick = stick;
+    this.stickFade = Math.max(0, Math.min(1, this.stickFade + (stick ? 1 : -1) / frames(150)));
     this.stepMs.push(performance.now() - t0);
     if (this.stepMs.length > 240) this.stepMs.shift();
+  }
+
+  /** Press to toggle (Phase 10 Spec, section 2.5): field, map and the charged shot latch. Death, a room change or
+   * pause clears every latch; a recorder's driven input never latches. */
+  private latchStep(input: { held: Set<Action>; pressed: Set<Action> }) {
+    const sim = this.sim;
+    if (sim.dying > 0 || sim.room !== this.latchRoom) this.latched.clear();
+    this.latchRoom = sim.room;
+    if (prefs().holdMode !== 'toggle' || this.driven) { this.latched.clear(); return input; }
+    const r = latch(this.latched, input.held, input.pressed, LATCH_KINDS(sim.weapon === 'charged'));
+    this.latched = r.latched;
+    return { held: r.held, pressed: input.pressed };
   }
 
   /** Turn the sim's fx records into particles, shake and sound. */
@@ -609,6 +677,11 @@ export class GameScreen {
     return {
       openModule: (id) => { st.waiting = true; openModule(host, id, () => {}, (passed) => st.overlayClosed(id, passed)); },
       go: (place) => st.go(place, 0),
+      route: () => {
+        st.waiting = true;
+        const back = () => openLoftPanel(host, 'map', this.loftActions(), () => { st.waiting = false; });
+        openLearningRoute(host, (id, onClose) => openModule(host, id, () => {}, (passed) => { st.overlayClosed(id, passed); st.waiting = true; onClose(passed); }), back);
+      },
       openMix: () => { st.waiting = true; openPort(host, 'mix', () => {}, () => { st.waiting = false; st.applyKit(true); }, { label: 'DAILY MIX', practice: true }); },
       mk2: (chapter) => {
         const ids = calibRows(done).find((r) => r.chapter === chapter)?.banks.map((b) => b.id) ?? [];
@@ -693,8 +766,10 @@ export class GameScreen {
     if (!this.ready || this.age < bt.control + 1) this.drawBoot(c, bt);
     if (this.ready && !this.paused && !st?.ending && (sim.kit.gun || sim.kit.coil) && (this.kind !== 'touch' || this.touchNow?.aim)) { const m = this.mouseView(); this.hud.crosshair(c, sim, m.x, m.y); }
     if (this.touchAlpha > 0 && this.touchNow) {
-      drawTouch(c, { buttons: this.touchButtons(), held: this.touchNow.heldButtons, stick: this.touchNow.stick, alpha: easeOut(this.touchAlpha), t });
+      drawTouch(c, { buttons: this.touchButtons(), held: this.touchNow.heldButtons, stick: this.touchNow.stick ?? this.lastStick, stickAlpha: easeOut(this.stickFade), alpha: easeOut(this.touchAlpha), t });
     }
+    this.captions.step(performance.now());
+    this.captions.draw(c, VIEW_W, VIEW_H, this.touchAlpha > 0 ? 150 : 40);
     let black = 0;
     if (this.age < BOOT.fadeIn + BOOT.eye) black = 1 - easeOut((this.age - BOOT.fadeIn) / BOOT.eye);
     if (sim.dying > 0) black = Math.max(black, Math.max(0, (1 - sim.dying / VITALS.deathSteps - 0.6) / 0.4));
@@ -722,7 +797,7 @@ export class GameScreen {
       const s = line.slice(0, n);
       c.fillStyle = rgba(i === lines.length - 1 ? PAL.gold : PAL.trace, 0.9 * fade);
       c.fillText(s, x, y + i * 22);
-      if (n < line.length && n > 0 && Math.floor(this.age * 6) % 2) c.fillRect(x + c.measureText(s).width + 2, y + i * 22, 8, 15);
+      if (n < line.length && n > 0 && blink(this.age, 3)) c.fillRect(x + c.measureText(s).width + 2, y + i * 22, 8, 15);
     });
     c.restore();
   }
@@ -730,8 +805,8 @@ export class GameScreen {
   /** Frame statistics, for the debug overlay and the frame-budget check. */
   frameStats() {
     const pct = (a: number[], p: number) => (a.length ? [...a].sort((x, y) => x - y)[Math.min(a.length - 1, Math.floor(a.length * p))] : 0);
-    const f = this.loop.stats.frameMs, w = this.loop.stats.workMs;
-    return { fps: f.length ? 1000 / (f.reduce((a, b) => a + b, 0) / f.length) : 0, workAvg: w.length ? w.reduce((a, b) => a + b, 0) / w.length : 0, workP95: pct(w, 0.95), stepP95: pct(this.stepMs, 0.95), frames: f.length, particles: this.fx.count, enemies: this.sim.enemies.filter((e) => e.alive).length, props: this.sim.world.props.length };
+    const f = this.loop.stats.frameMs, w = this.loop.stats.workMs, mean = (a: number[]) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
+    return { fps: f.length ? 1000 / (f.reduce((a, b) => a + b, 0) / f.length) : 0, workAvg: w.length ? w.reduce((a, b) => a + b, 0) / w.length : 0, workP95: pct(w, 0.95), stepP95: pct(this.stepMs, 0.95), stepAvg: mean(this.stepMs), renderAvg: mean(this.renderMs), renderP95: pct(this.renderMs, 0.95), shots: this.sim.shots.length, bodies: Matter.Composite.allBodies(this.sim.world.engine.world).length, frames: f.length, particles: this.fx.count, enemies: this.sim.enemies.filter((e) => e.alive).length, props: this.sim.world.props.length };
   }
 
   /** For the browser test: reset the frame statistics. */
@@ -739,6 +814,7 @@ export class GameScreen {
     this.loop.stats.frameMs.length = 0;
     this.loop.stats.workMs.length = 0;
     this.stepMs.length = 0;
+    this.renderMs.length = 0;
   }
 
   /** For the browser test: run the stress scene. */

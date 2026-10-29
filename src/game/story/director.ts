@@ -64,6 +64,8 @@ export type Choice = 'cause' | 'fix' | 'loftLift' | 'guard' | 'node';
 
 /** Rooms where Enable Lock folds the gun away. */
 const QUIET = new Set(['port', 'panel', 'annex', 'bench', 'gate']);
+/** Rooms the Room skip assist may pass (Phase 10 Spec, section 2.6): never a lesson, lab, boss or exit room. */
+const SKIPPABLE = new Set(['traverse', 'fight', 'discovery', 'annex']);
 /** The main-path bosses after the Dark Demo Board: each one beaten adds integrity. */
 /** Boss health by act from act 2 on (Phase 4 Spec, section 3; the Design Doc's table). Act 1 ramps instead. */
 const BOSS_HP: Partial<Record<number, number>> = { 2: 900, 3: 1500, 4: 2200, 6: 2500 };
@@ -1385,6 +1387,24 @@ export class Director {
     this.cut = null;
     this.waiting = false;
     this.enter(place, index);
+  }
+
+  /**
+   * Can this room be skipped (Phase 10 Spec, section 2.6)? Only a traverse, fight, discovery or annex room with a next
+   * room in its place, never in the Loft. The pause menu reads it.
+   */
+  canSkipRoom(): boolean {
+    return this.place !== 'loft' && SKIPPABLE.has(this.room.role ?? '') && this.index + 1 < this.roomsFor(this.place).length;
+  }
+
+  /**
+   * Room skip (assist, Phase 10 Spec, section 2.6): warp to the next room of the place, keeping the kit. It writes no
+   * learning record. False, and nothing changes, when the room cannot be skipped.
+   */
+  skipRoom(): boolean {
+    if (!this.canSkipRoom()) return false;
+    this.warp(this.place, this.index + 1);
+    return true;
   }
 
   /**

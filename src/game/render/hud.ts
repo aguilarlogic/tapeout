@@ -7,7 +7,9 @@ import type { DeviceKind } from '../input/padmap';
 import type { Gadget, Sim, Weapon } from '../sim';
 import { frames, HZ } from '../tuning';
 import { UP } from '../world/upgrades';
-import { easeOut, FONT, PAL, rgba } from './palette';
+import { easeOut, FONT, PAL, px, rgba } from './palette';
+/** The backing behind the top left HUD: its width and its height below the health bar, view px. */
+const BACK_W = 380, BACK_H = 64;
 
 /** The gadget on F, by id. */
 const GADGET_NAME: Record<Gadget, string> = { sync: 'SYNC', turret: 'TURRET', mine: 'MINE', decoy: 'DECOY' };
@@ -69,8 +71,15 @@ export class Hud {
     c.save();
     c.globalAlpha = s;
     c.lineWidth = 1.5;
-    c.font = `11px ${FONT}`;
+    c.font = `${px(11)}px ${FONT}`;
     c.textBaseline = 'middle';
+    // a soft dark backing, so the room's art behind the top left never fights the bars (Phase 10 Spec, section 5)
+    const back = c.createLinearGradient(0, 0, BACK_W, 0);
+    back.addColorStop(0, rgba(PAL.bgDeep, 0.75));
+    back.addColorStop(0.7, rgba(PAL.bgDeep, 0.45));
+    back.addColorStop(1, rgba(PAL.bgDeep, 0));
+    c.fillStyle = back;
+    c.fillRect(0, 0, BACK_W, y + px(BACK_H));
     // health
     const W = 220, frac = Math.max(0, v.integrity / v.maxIntegrity), ghost = Math.max(frac, this.ghost / v.maxIntegrity);
     frame(c, x, y, W, 12);
@@ -115,31 +124,31 @@ export class Hud {
     // one weapon: its short name beside the icon. Two or more (the Selector): the slots in a row under the bars,
     // numbered for their keys, the one in hand lit, so a long row never runs under the boss bar at the top centre
     const many = sim.weapons.length > 1, slots = many ? sim.slotted : [sim.weapon];
-    const sy = many ? ey + 24 : wy;
+    const sy = many ? ey + px(24) : wy;
     let tx = many ? x : wx + 30;
     slots.forEach((w, i) => {
       const on = w === sim.weapon, label = many && this.device.kind === 'keys' ? `${i + 1} ${SHORT[w]}` : SHORT[w];
-      c.fillStyle = on ? rgba(PAL.text, 0.85) : rgba(PAL.text, 0.35);
+      c.fillStyle = on ? rgba(PAL.text, 0.85) : rgba(PAL.text, 0.6);
       c.fillText(label, tx, sy);
       const tw = c.measureText(label).width;
-      if (on && many) { c.fillStyle = rgba(w === 'charged' ? PAL.neon : PAL.trace, 0.8); c.fillRect(tx, sy + 7, tw, 1.5); }
+      if (on && many) { c.fillStyle = rgba(w === 'charged' ? PAL.neon : PAL.trace, 0.8); c.fillRect(tx, sy + px(7), tw, 1.5); }
       tx += tw + 12;
     });
     // the weapon's name, beside the icon, after a swap
     if (this.nameT < NAME_STEPS) {
       c.globalAlpha = s * this.gunA * Math.min(1, (NAME_STEPS - this.nameT) / NAME_FADE);
       c.fillStyle = rgba(sim.weapon === 'charged' ? PAL.neon : PAL.trace, 0.9);
-      c.fillText(WEAPON_NAME[sim.weapon], wx + 30, many ? wy : wy + 16);
+      c.fillText(WEAPON_NAME[sim.weapon], wx + 30, many ? wy : wy + px(16));
     }
     // the gadget on F (act 3): its name, and G to switch when there are two, under the weapons
     const gadgets = sim.gadgets;
     if (gadgets.length) {
       c.globalAlpha = s * this.gunA;
       c.fillStyle = rgba(PAL.text, 0.6);
-      c.fillText(this.gadgetLine(sim.gadget, gadgets.length > 1), x, many ? ey + 42 : ey + 24);
+      c.fillText(this.gadgetLine(sim.gadget, gadgets.length > 1), x, many ? ey + px(42) : ey + px(24));
     }
     // the wings (Phase 8 Spec, section 6): Overclock's tag and draining bar, and Neuro Reflex's ready pip
-    const ry = (many ? ey + 42 : ey + 24) + (gadgets.length ? 18 : 0);
+    const ry = (many ? ey + px(42) : ey + px(24)) + (gadgets.length ? px(18) : 0);
     let rx = x;
     if (sim.ocT > 0) {
       const k = sim.ocT / Math.round(UP.overclock.s * HZ);
@@ -155,11 +164,11 @@ export class Hud {
     if (sim.kit.reflex) {
       const ready = sim.reflexCd <= 0;
       c.globalAlpha = s * this.gunA;
-      c.fillStyle = rgba(ready ? PAL.ok : PAL.text, ready ? 0.85 : 0.35);
+      c.fillStyle = rgba(ready ? PAL.ok : PAL.text, ready ? 1 : 0.6);
       c.fillText('REFLEX', rx + 10, ry);
       c.beginPath();
       c.arc(rx + 3, ry - 3, 3, 0, Math.PI * 2);
-      if (ready) c.fill(); else { c.strokeStyle = rgba(PAL.text, 0.35); c.lineWidth = 1; c.stroke(); }
+      if (ready) c.fill(); else { c.strokeStyle = rgba(PAL.text, 0.6); c.lineWidth = 1; c.stroke(); }
     }
     c.restore();
   }

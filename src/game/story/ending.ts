@@ -1,11 +1,13 @@
 // The ending (Phase 7 Spec, section 7, item 5): a timed run of steps over black, after the bit is picked up in Level 27.
 // The director steps the clock and plays the sounds; this file holds the timeline and paints one frame of it, with the
 // pieces from ending-art.ts. Any key skips to the next step once the step has run for SKIP_S.
-import { FONT, PAL, rgba } from '../render/palette';
+import { blink, FONT, PAL, px, rgba } from '../render/palette';
 import { HZ } from '../tuning';
 import { drawCredits, drawDemoBoard, drawEndingText, drawTapeoutFace } from './ending-art';
 
 type C = CanvasRenderingContext2D;
+/** The typing cursor's blink rate in Hz (on for a quarter second, off for a quarter second). */
+const CURSOR_BLINK_HZ = 2;
 
 export type EndingStep = 'tapeout' | 'later' | 'board' | 'hello' | 'face' | 'credits';
 
@@ -60,14 +62,14 @@ export function drawEnding(c: C, w: number, h: number, i: number, t: number, nam
     const lit = step.id !== 'board' || t >= Math.round(LAMP_AT_S * HZ);
     const text = step.id === 'board' ? '' : step.id === 'hello' ? HELLO.slice(0, typed(t)) : HELLO;
     c.globalAlpha = step.id === 'board' ? Math.min(1, t / edge) : step.id === 'face' ? Math.min(1, (len - t) / edge) : 1;
-    const cursor = step.id === 'hello' && typed(t) < HELLO.length && Math.floor(t / 15) % 2 === 0 ? '_' : '';
+    const cursor = step.id === 'hello' && typed(t) < HELLO.length && blink(t / HZ, CURSOR_BLINK_HZ) === 1 ? '_' : '';
     drawDemoBoard(c, w / 2, h / 2 - 20, lit, text + cursor);
     if (step.id === 'face') {
       const k = Math.min(1, t / Math.round(0.6 * HZ)), ease = 1 - (1 - k) ** 3;
       const fx = w / 2 - 300 + 40 * ease, fy = h / 2 + 170;
       drawTapeoutFace(c, fx, fy, ease);
       c.globalAlpha *= ease;
-      c.font = `20px ${FONT}`;
+      c.font = `${px(20)}px ${FONT}`;
       c.textAlign = 'left';
       c.textBaseline = 'middle';
       c.fillStyle = rgba(PAL.text, 0.92);

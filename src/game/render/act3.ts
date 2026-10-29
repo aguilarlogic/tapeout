@@ -2,10 +2,13 @@
 // the Scan Visor's marks and the Power Gate's fade. Line art with an additive glow pass, like the rest of the world.
 import type { Rect } from '../level/room';
 import type { Sim } from '../sim';
-import { LINE, PAL, rgba } from './palette';
+import { HZ } from '../tuning';
+import { blink, LINE, PAL, rgba } from './palette';
 
 type C = CanvasRenderingContext2D;
 const TAU = Math.PI * 2;
+/** The blink-out rate of a Buffer Turret at the end of its life, in Hz. */
+const TURRET_BLINK_HZ = 5;
 
 /** A metal barrier: a magenta block hatched on the diagonal, or, while a Via Phase dash is inside it, a dashed ghost. */
 function barrier(c: C, r: Rect, present: boolean, t: number) {
@@ -70,7 +73,7 @@ export function drawAct3Back(c: C, sim: Sim, t: number) {
 
 /** A Buffer Turret: a post with a buffer triangle on top that points at nothing in particular; it blinks out at the end. */
 function turret(c: C, x: number, y: number, life: number, t: number) {
-  if (life < 90 && Math.floor(t / 6) % 2) return;
+  if (life < 90 && blink(t / HZ, TURRET_BLINK_HZ) === 0) return;
   c.save();
   c.strokeStyle = PAL.trace;
   c.lineWidth = LINE.world;

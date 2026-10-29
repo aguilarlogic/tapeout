@@ -50,6 +50,13 @@ export interface Prefs {
   aimAssist?: 'auto' | 'on' | 'off';
   /** True once the first-touch-play card (game speed 75%) has been shown. */
   touchHintSeen?: boolean;
+  /** Accessibility (Phase 10 Spec, section 2): text size in percent, colour palette, sound captions, hold or toggle
+   * for held actions, and the room skip assist. All optional, so older saves load with the defaults. */
+  textSize?: 100 | 125 | 150;
+  palette?: 'standard' | 'okabe';
+  captions?: boolean;
+  holdMode?: 'hold' | 'toggle';
+  roomSkip?: boolean;
 }
 
 export interface Progress {

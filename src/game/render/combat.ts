@@ -8,7 +8,7 @@ import type { Enemy } from '../enemies/types';
 import type { EnemyKind } from '../level/room';
 import type { Sim } from '../sim';
 import { TUNING } from '../tuning';
-import { PAL, rgba } from './palette';
+import { blinkSteady, PAL, rgba } from './palette';
 
 type C = CanvasRenderingContext2D;
 /** Kinds drawn here; every other kind draws itself through the registry. */
@@ -42,7 +42,7 @@ export function drawEnemies(c: C, sim: Sim, t: number, reducedFlash: boolean) {
     }
     const flash = e.flash > 0;
     poly(c, out);
-    c.fillStyle = flash && !reducedFlash ? '#FFFFFF' : PAL.fill;
+    c.fillStyle = flash && !reducedFlash && !blinkSteady() ? '#FFFFFF' : PAL.fill;
     c.fill();
     c.save();
     c.globalCompositeOperation = 'lighter';

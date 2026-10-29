@@ -2,7 +2,7 @@
 // step with the 60 Hz simulation and are drawn with the render's interpolation fraction. Lights (sparks, flashes,
 // rings) draw additively with a soft halo (polish bar P4).
 import type { Rect } from '../level/room';
-import { FONT, rgba } from './palette';
+import { blinkSteady, FONT, rgba } from './palette';
 
 export type PKind = 'spark' | 'dust' | 'frag' | 'flash' | 'ring' | 'text' | 'mote';
 
@@ -148,7 +148,7 @@ export class Fx {
           break;
         }
         case 'flash': {
-          if (reducedFlash) {
+          if (reducedFlash || blinkSteady()) {
             c.globalCompositeOperation = 'source-over';
             c.strokeStyle = rgba(p.color, 0.6 * k);
             c.lineWidth = 1;

@@ -4,7 +4,7 @@
 // bodies.ts imports these four and the helpers they share from it, so these drawers only call those helpers from
 // inside themselves.
 import type { Rect } from '../level/room';
-import { FONT, LINE, PAL, rgba } from '../render/palette';
+import { blink, blinkSteady, FONT, LINE, PAL, rgba } from '../render/palette';
 import { HZ } from '../tuning';
 import { centre, circle, cracks, flash, glow, rrect, shield, silhouette, telegraph } from './bodies';
 import type { C, Ext } from './bodies';
@@ -181,7 +181,8 @@ export const clocks: BodyDrawer = (g, box, s) => {
   };
   const halves = () => { for (const d of sides) half(d); };
   const lampRings = () => { for (const d of sides) circle(g, arcX(d), cy, LAMP_RING); };
-  const flick = FLICKER.base + FLICKER.span * Math.abs(Math.sin(sec * 1.3) * Math.cos(sec * 2.9));
+  // the dashed line's alpha is a smooth wobble, so reduced flashes hold it at the top of its range
+  const flick = FLICKER.base + FLICKER.span * (blinkSteady() ? 1 : Math.abs(Math.sin(sec * 1.3) * Math.cos(sec * 2.9)));
   const e: Ext = { cx, cy, w: 2 * (CUT_X + HALF_W), h: HALF_H };
   g.save();
   shield(g, e, s);
@@ -194,7 +195,7 @@ export const clocks: BodyDrawer = (g, box, s) => {
   glow(g, PAL.neon, flick, LINE.hud);
   g.setLineDash([]);
   sides.forEach((d, i) => {
-    const lit = Math.sin(2 * Math.PI * BLINK_HZ[i] * sec) > 0;
+    const lit = blink(sec, BLINK_HZ[i]) === 1;
     const col = lit ? (s.enraged ? PAL.hostile : PAL.amber) : PAL.fill;
     g.beginPath();
     circle(g, arcX(d), cy, LAMP_R);

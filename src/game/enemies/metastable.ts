@@ -4,9 +4,7 @@
 // It floats, drifting toward the drone at 20 px/s while it can see it, and never comes within 220 px. The Synchronizer
 // holds it resolved with resolve().
 import type { Vec } from '../physics/geom';
-import { LINE, PAL, rgba } from '../render/palette';
-import { prefs } from '../../state';
-import { prefersReducedMotion } from '../../term/typewriter';
+import { blinkSteady, LINE, PAL, rgba } from '../render/palette';
 import { frames, HZ, TUNING } from '../tuning';
 import { register, scaledHp, type MakeCtx } from './registry';
 import type { Enemy, EnemyCtx } from './types';
@@ -163,12 +161,6 @@ function make(x: number, y: number, k: MakeCtx) {
   return new Metastable(x, y, scaledHp(S.hp, k), frames(S.flickerMinMs + k.rand() * (S.flickerMaxMs - S.flickerMinMs)));
 }
 
-/** Reduced motion as the story game resolves it (screen.ts reducedMotion): the setting, or the system's if set so. */
-function reducedMotion(): boolean {
-  const p = prefs().reducedMotion;
-  return p === 'on' || (p === 'system' && prefersReducedMotion());
-}
-
 /** Trace the two overlapping triangles centred on (cx, cy) as one path. */
 function trace(g: CanvasRenderingContext2D, cx: number, cy: number) {
   g.beginPath();
@@ -203,14 +195,14 @@ function sketch(
   g.restore();
 }
 
-/** Line art in the enemy colour. While flickering, the other spot ghosts at low alpha (both show steady under reduced
- * motion); a hit flashes white. */
+/** Line art in the enemy colour. While flickering, the other spot ghosts at low alpha (both show steady when blinks are
+ * held steady); a hit flashes white, and under steady blinks only its outline does. */
 function draw(g: CanvasRenderingContext2D, e: Enemy) {
   if (!(e instanceof Metastable)) return;
   const flash = e.flash > 0;
   const colour = flash ? PAL.text : e.telegraph > 0.6 ? PAL.line : PAL.neon;
-  const fill = flash ? PAL.text : PAL.fill;
-  if (e.flickering() && reducedMotion()) {
+  const fill = flash && !blinkSteady() ? PAL.text : PAL.fill;
+  if (e.flickering() && blinkSteady()) {
     // a steady double outline: both spots, no blinking
     for (const side of [-1, 1] as const) {
       sketch(g, e.x + side * S.spot, e.y, { colour: PAL.neon, fill: PAL.fill, alpha: 1, tele: 0 });
