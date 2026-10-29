@@ -1,39 +1,22 @@
 // TAPE-OS: the desktop the whole game lives in. The terminal (TAPEOUT) is always there; labs, minigames,
 // the map and flashcards open as windows. URLs (#/rtl/fifo, #/learn/cache...) open the matching window.
-import { circuitPage } from '../games/circuit/page';
-import { codePage } from '../games/code/page';
-import { shellPage } from '../games/shell/page';
-import { svaPage } from '../games/sva/page';
-import { svPage } from '../games/sv/page';
-import { cdcPage } from '../games/cdc/page';
-import { archPage } from '../games/arch/page';
-import { isaPage } from '../games/isa/page';
-import { rvPage } from '../games/rv/page';
 import { findModule, KIND_APP } from '../curriculum';
-import { coveragePage } from '../games/coverage/page';
+import { closeGame, openGame } from '../game/screen';
 import { drillsPage } from '../games/drills/page';
-import { logicPage } from '../games/logic/page';
-import { pcbPage } from '../games/pcb/page';
-import { rtlPage } from '../games/rtl/page';
-import { timingPage } from '../games/timing/page';
-import { uvmPage } from '../games/uvm/page';
 import { skillsApp } from '../mastery/app';
 import { MINIGAMES } from '../minigames/apps';
-import { onChange, profile, rank, resetAll, totalXp } from '../state';
+import { onChange, prefs, profile, rank, resetAll, totalXp } from '../state';
 import { Shell } from '../term/shell';
 import { Terminal } from '../term/terminal';
 import { h } from '../ui/dom';
 import { avatar } from './avatar';
+import { LABS } from './labs';
 import { launchGame } from './launch';
 import { mapApp } from './map';
 import { settingsApp } from './settings';
 import { bindMentorLog } from './mentor';
 import { buildRegions } from './regions';
 import { focusedWindow, getWindow, initWM, onWindowsChange, openWindow } from './wm';
-
-const LABS: Record<string, (id: string) => HTMLElement> = {
-  logic: logicPage, rtl: rtlPage, pcb: pcbPage, sta: timingPage, cov: coveragePage, uvm: uvmPage, clab: circuitPage, code: codePage, shell: shellPage, sva: svaPage, tb: svPage, cdc: cdcPage, isa: isaPage, arch: archPage, rv: rvPage, dft: archPage, pd: archPage, sta2: archPage, layout: archPage, sig: archPage, spec: archPage,
-};
 
 let term: Terminal;
 let shell: Shell;
@@ -60,9 +43,23 @@ function home() {
   if (location.hash && location.hash !== '#/') location.hash = '#/';
 }
 
+/** TAPEOUT's shell starts the first time the desktop shows, so its onboarding never runs hidden under the game. */
+let shellStarted = false;
+function startShell() {
+  if (shellStarted) return;
+  shellStarted = true;
+  void shell.start();
+}
+
 function route() {
   const [section, id] = location.hash.replace(/^#\/?/, '').split('/').filter(Boolean);
   document.querySelectorAll('.modal-bg').forEach((m) => m.remove());
+  if (section === 'story') {
+    openGame(home, { test: id === 'test' });
+    return;
+  }
+  closeGame();
+  startShell();
   if (!section) {
     (getWindow('term') ?? openTerminal()).focus();
     term.focus();
@@ -133,7 +130,8 @@ function taskbar(): HTMLElement {
     item('◈', 'Campaign map', () => (location.hash = '#/map')),
     item('◉', 'Skills & job readiness', () => (location.hash = '#/skills')),
     item('?!', 'Interview flashcards', () => (location.hash = '#/drills')),
-    item('⚙', 'Settings: typing speed', () => (location.hash = '#/settings')),
+    item('⚙', 'Settings', () => (location.hash = '#/settings')),
+    item('▶', 'Play the story', () => (location.hash = '#/story')),
     h('div', { class: 'start-sep' }, 'Arcade'),
     ...MINIGAMES.map((g) => item(g.icon, g.title, () => void launchGame(g.id))),
     h('div', { class: 'start-sep' }),
@@ -186,7 +184,8 @@ export async function bootDesktop() {
   const os = document.getElementById('os')!;
   // The mentor column (left) and the workspace (right). The wallpaper and icons belong to the workspace.
   const { desktop, workspace } = buildRegions();
-  workspace.append(wallpaper(), icons());
+  // The story game is the first screen (Phase 7 Spec, section 3); the desktop keeps a button back into it.
+  workspace.append(wallpaper(), icons(), h('button', { class: 'story-preview', 'data-testid': 'story-preview', onclick: () => (location.hash = '#/story') }, '▶ Play the story'));
   const bar = taskbar();
   os.replaceChildren(desktop, bar);
   initWM(bar.querySelector('.tasks') as HTMLElement);
@@ -202,9 +201,12 @@ export async function bootDesktop() {
     if (!term.el.isConnected) return;
     term.print(`${text}`, 'ai-aside');
   });
-  await bootScreen(!profile());
+  // with no hash, a fresh load opens the game unless the player chose to start on the desktop
+  const toGame = (!location.hash || location.hash === '#/') && (prefs().startIn ?? 'game') === 'game';
+  if (!toGame) await bootScreen(!profile());
   openTerminal();
-  void shell.start();
   window.addEventListener('hashchange', route);
-  if (location.hash && location.hash !== '#/') route();
+  if (toGame) location.hash = '#/story';
+  else if (location.hash && location.hash !== '#/') route();
+  else startShell();
 }

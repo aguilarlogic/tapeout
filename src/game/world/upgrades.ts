@@ -1,0 +1,436 @@
+// The drone's upgrades (Phase 3 Spec, section 7). Each is earned by passing a module and is never stored: owned() reads
+// today's records, so a player who finished a lab on the desktop has its part in the game too. Numbers are on this
+// game's scale (Pulse Probe 10 damage at 7 shots/s, integrity 100).
+
+export type UpgradeId =
+  | 'overflow-jump' | 'inverted-grip' | 'nand-plating' | 'enable-lock' | 'selector' | 'fan-decoder' | 'full-adder'
+  | 'comparator-sight' | 'wall-latch' | 'beam-toggle' | 'counter-fire' | 'alu-cannon' | 'power-cell'
+  | 'loop-drone' | 'datapath-rail' | 'synchronizer' | 'pipeline-burst' | 'third-slot'
+  | 'current-limiter' | 'phasor-curve' | 'integrator' | 'kickback-dash' | 'charged-probe' | 'gradient-compass'
+  | 'matrix-throw' | 'damped-landing' | 'resonant-hover' | 'spectrum-visor' | 'gauss-field' | 'diode-plating'
+  | 'gain-stage' | 'bias-plates'
+  | 'cmos-mirror' | 'sized-drivers' | 'slack-parry' | 'via-phase' | 'buffer-turret' | 'power-gate' | 'scan-visor'
+  | 'trace-tether' | 'scripted-loop' | 'make-repair' | 'noise-filter' | 'pid-stabilizer'
+  | 'templates' | 'rewind' | 'monte-carlo-crit' | 'newton-aim' | 'coverage-map' | 'agent-pair' | 'assertion-mine'
+  | 'speculative-shot' | 'scheduler' | 'cache-pockets' | 'noc-warp' | 'model-lens'
+  | 'buck-converter' | 'thermal-spreader' | 'overclock' | 'wavelength-splitter' | 'superposition-decoy' | 'phase-lock'
+  | 'esd-clamp' | 'neuro-reflex';
+
+export interface Upgrade {
+  id: UpgradeId;
+  name: string;
+  /** A major upgrade is a place's capstone; a minor one comes from any other module. */
+  type: 'major' | 'minor';
+  weapon?: boolean;
+  /** Modules that grant it (NAND Plating: one plate each). */
+  source: string[];
+  /** The effect, one sentence, for the upgrade card. */
+  effect: string;
+  /** The Mk II: the practice banks that tune it, and what it adds. */
+  mk2?: { banks: string[]; effect: string };
+}
+
+export const UPGRADES: Upgrade[] = [
+  { id: 'overflow-jump', name: 'Overflow Jump', type: 'major', source: ['twos'], effect: 'Jump again in mid-air, once per jump.', mk2: { banks: ['practice-bits', 'practice-twos'], effect: 'A stronger second jump.' } },
+  { id: 'inverted-grip', name: 'Inverted Grip', type: 'major', source: ['demorgan'], effect: 'The Field Coil can grab small bugs. A held bug is stunned, and a thrown one hits hard.', mk2: { banks: ['practice-bool'], effect: 'A wider field.' } },
+  { id: 'nand-plating', name: 'NAND Plating', type: 'minor', source: ['logic-not', 'logic-and', 'logic-or', 'logic-xor', 'logic-latch'], effect: 'Two more points of hull.' },
+  { id: 'enable-lock', name: 'Enable Lock', type: 'minor', source: ['logic-enable'], effect: 'Your gun folds away in quiet rooms, so a click never fires by mistake.' },
+  { id: 'selector', name: 'Selector', type: 'minor', source: ['logic-mux'], effect: 'Switch weapons with Q, the mouse wheel, or the number keys.' },
+  { id: 'fan-decoder', name: 'Fan Decoder', type: 'minor', weapon: true, source: ['logic-dec'], effect: 'A new weapon: three bolts in a fan.' },
+  { id: 'full-adder', name: 'Full-Adder Coupling', type: 'minor', source: ['logic-full'], effect: 'The Pulse Probe hits for 12 instead of 10.' },
+  { id: 'comparator-sight', name: 'Comparator Sight', type: 'major', source: ['logic-cmp'], effect: 'Hurt bugs show their health, and weak spots take extra damage.', mk2: { banks: ['practice-comb'], effect: 'Weak spots take even more.' } },
+  { id: 'wall-latch', name: 'Wall Latch', type: 'minor', source: ['logic-dff'], effect: 'Cling to walls and jump off them.' },
+  { id: 'beam-toggle', name: 'Beam Toggle', type: 'minor', source: ['logic-toggle'], effect: 'Press B to switch your lamp to a long beam that shows hidden things.' },
+  { id: 'counter-fire', name: 'Counter Fire', type: 'major', source: ['logic-counter'], effect: 'Hits in a row speed up the Pulse Probe. A miss resets it.', mk2: { banks: ['practice-seq', 'practice-fsm'], effect: 'A higher top speed.' } },
+  { id: 'alu-cannon', name: 'ALU Cannon', type: 'major', weapon: true, source: ['cpu-tiny'], effect: 'A new weapon: one heavy shot a second that knocks bugs back.', mk2: { banks: ['practice-verilog'], effect: 'Heavier shots.' } },
+  { id: 'power-cell', name: 'Power Cell', type: 'minor', source: ['resistance'], effect: 'More energy for the Field Coil and the cannon.' },
+  // Act 2, the Core (Phase 4 Spec, section 7)
+  { id: 'loop-drone', name: 'Loop Drone', type: 'major', source: ['isa-boss-rec'], effect: 'A small helper drone circles you and shoots the nearest bug.', mk2: { banks: ['practice-asm'], effect: 'Its shots hit harder.' } },
+  { id: 'datapath-rail', name: 'Datapath Rail', type: 'major', source: ['rv-boss'], effect: 'Press E at a bus rail to clip on and ride it fast.', mk2: { banks: ['practice-alu'], effect: 'Faster rides.' } },
+  { id: 'synchronizer', name: 'Synchronizer', type: 'major', source: ['cdc-fifo'], effect: 'Press F to slow every bug to half speed for 3 seconds.', mk2: { banks: ['practice-clk'], effect: 'The slow lasts longer.' } },
+  { id: 'pipeline-burst', name: 'Pipeline Burst', type: 'major', weapon: true, source: ['pipe-boss'], effect: 'A new weapon: four quick bolts in a row.', mk2: { banks: ['practice-pipe'], effect: 'Five bolts instead of four.' } },
+  { id: 'third-slot', name: 'Third Slot', type: 'minor', source: ['code-boss-c-crc'], effect: 'Room for a third weapon on the Selector.' },
+  // The Underlayers (Phase 5 Spec, section 7)
+  { id: 'current-limiter', name: 'Current Limiter', type: 'minor', source: ['clab-mesh'], effect: 'You take a little less damage from every hit.' },
+  { id: 'phasor-curve', name: 'Phasor Curve', type: 'minor', source: ['phasor'], effect: 'Charged shots curve toward a bug just off your aim.' },
+  { id: 'integrator', name: 'Integrator', type: 'minor', source: ['integral'], effect: 'Energy refills faster while you stand still.' },
+  { id: 'kickback-dash', name: 'Kickback Dash', type: 'major', source: ['clab-kickback'], effect: 'Your dash hits every bug it passes through, and recharges faster.' },
+  { id: 'charged-probe', name: 'Charged Probe', type: 'major', weapon: true, source: ['clab-debounce'], effect: 'A new weapon: hold to charge a heavy shot that goes through bugs.' },
+  { id: 'gradient-compass', name: 'Gradient Compass', type: 'minor', source: ['calc'], effect: 'An arrow at the edge of the screen points to the next thing to do.' },
+  { id: 'matrix-throw', name: 'Matrix Throw', type: 'minor', source: ['linalg'], effect: 'Throws charge twice as fast and hit harder.' },
+  { id: 'damped-landing', name: 'Damped Landing', type: 'major', source: ['clab-boss-ode'], effect: 'Hold down in the air to drop fast. You land with a ring that hits nearby bugs.' },
+  { id: 'resonant-hover', name: 'Resonant Hover', type: 'major', source: ['clab-boss-ac'], effect: 'Hold jump while falling to float for a moment.' },
+  { id: 'spectrum-visor', name: 'Spectrum Visor', type: 'minor', source: ['fourier'], effect: 'In a boss fight, a bar shows when the next attack comes.' },
+  { id: 'gauss-field', name: 'Gauss Field', type: 'minor', source: ['em'], effect: 'The Field Coil reaches further and lifts heavier things.' },
+  { id: 'diode-plating', name: 'Diode Plating', type: 'minor', source: ['clab-boss-ohm'], effect: 'Hits from behind do half damage.' },
+  { id: 'gain-stage', name: 'Gain Stage', type: 'minor', source: ['clab-dac'], effect: 'Charged shots hit for 60 instead of 40.' },
+  { id: 'bias-plates', name: 'Bias Plates', type: 'minor', source: ['clab-boss-bjt'], effect: 'Ten more points of hull.' },
+  // --- act 3, Silicon (Phase 6 Spec, section 7) ---
+  { id: 'cmos-mirror', name: 'CMOS Mirror', type: 'major', source: ['cmos-aoi'], effect: 'Shots your field bounces fly back at the bug that fired them, and hit harder.', mk2: { banks: ['practice-mos'], effect: 'Bounced shots hit even harder.' } },
+  { id: 'sized-drivers', name: 'Sized Drivers', type: 'major', source: ['vlsi'], effect: 'Every weapon fires a quarter faster.', mk2: { banks: ['practice-vlsi'], effect: 'A little faster still.' } },
+  { id: 'slack-parry', name: 'Slack Parry', type: 'major', source: ['sta-eco'], effect: 'Press the field just before a hit lands: no damage, the bug is stunned, and you gain energy.', mk2: { banks: ['practice-sta'], effect: 'A wider timing window.' } },
+  { id: 'via-phase', name: 'Via Phase', type: 'major', source: ['layout-boss'], effect: 'Dash straight through thin magenta metal walls.', mk2: { banks: ['practice-openflow'], effect: 'Thicker walls too.' } },
+  { id: 'buffer-turret', name: 'Buffer Turret', type: 'major', source: ['pd-boss'], effect: 'A gadget: press F to set down a turret that shoots nearby bugs. G switches gadgets.', mk2: { banks: ['practice-pnr'], effect: 'Turrets last longer.' } },
+  { id: 'power-gate', name: 'Power Gate', type: 'major', source: ['power'], effect: 'Stand still for a second and bugs lose track of you. Energy refills faster too.', mk2: { banks: ['practice-power'], effect: 'You fade out sooner.' } },
+  { id: 'scan-visor', name: 'Scan Visor', type: 'major', source: ['dft-boss'], effect: 'Press V to scan. Bugs in range show their health and take more damage.', mk2: { banks: ['practice-dft'], effect: 'A wider scan.' } },
+  { id: 'trace-tether', name: 'Trace Tether', type: 'major', source: ['clab-boss-pdn'], effect: 'Aim at a copper pad and press the right mouse button to pull yourself to it.', mk2: { banks: ['practice-pcb'], effect: 'A longer reach.' } },
+  { id: 'scripted-loop', name: 'Scripted Loop', type: 'minor', source: ['code-boss-py-log'], effect: 'Your Loop Drone hits harder and reaches further.' },
+  { id: 'make-repair', name: 'Make Repair', type: 'minor', source: ['sh-boss-make'], effect: 'Your hull starts to repair sooner after a hit.' },
+  { id: 'noise-filter', name: 'Noise Filter', type: 'minor', source: ['sig-boss'], effect: 'Copied shots from crosstalk bugs can no longer hurt you.' },
+  { id: 'pid-stabilizer', name: 'PID Stabilizer', type: 'minor', source: ['sig-pid'], effect: 'The ALU Cannon no longer kicks you back, and your hover holds its height.' },
+  // --- act 4, the Cluster (Phase 7 Spec, section 8) ---
+  { id: 'templates', name: 'Templates', type: 'minor', source: ['cpp'], effect: 'Every gadget gets one more charge: four turrets, four mines.' },
+  { id: 'rewind', name: 'Rewind', type: 'major', source: ['tb-boss-env'], effect: 'Press R to go back to where you were 3 seconds ago, with the hull you had then.', mk2: { banks: ['practice-dv'], effect: 'It recharges sooner.' } },
+  { id: 'monte-carlo-crit', name: 'Monte Carlo Crit', type: 'minor', source: ['code-py-mc'], effect: 'Each hit has a one in ten chance to deal double.' },
+  { id: 'newton-aim', name: 'Newton Aim', type: 'minor', source: ['code-boss-py-root'], effect: 'Charged shots aim where a moving bug is going to be.' },
+  { id: 'coverage-map', name: 'Coverage Map', type: 'major', source: ['cov-cache'], effect: 'A strip at the top shows every room of a place, and which ones you have seen.' },
+  { id: 'agent-pair', name: 'Agent Pair', type: 'major', source: ['tbu-boss'], effect: 'Two helper drones fly with you. One shoots, and one marks a bug so it takes more damage.', mk2: { banks: ['practice-uvm'], effect: 'Marked bugs take even more.' } },
+  { id: 'assertion-mine', name: 'Assertion Mine', type: 'major', source: ['formal-boss-wrap'], effect: 'A gadget: press F to lay a mine. A bug that comes close sets it off. G switches gadgets.', mk2: { banks: ['practice-formal'], effect: 'Bigger blasts.' } },
+  { id: 'speculative-shot', name: 'Speculative Shot', type: 'major', weapon: true, source: ['ooo-boss'], effect: 'A new weapon: slow shots that turn to chase the nearest bug.', mk2: { banks: ['practice-ooo'], effect: 'They hit harder.' } },
+  { id: 'scheduler', name: 'Scheduler', type: 'minor', source: ['code-os-boss-sched'], effect: 'Every cooldown is a fifth shorter.' },
+  { id: 'cache-pockets', name: 'Cache Pockets', type: 'major', source: ['cache-boss'], effect: 'Press C to pocket the block your field holds, up to three. Press C again to take one out.', mk2: { banks: ['practice-cache'], effect: 'A fourth pocket.' } },
+  { id: 'noc-warp', name: 'NoC Warp', type: 'major', source: ['serdes'], effect: 'Press E on a router pad to warp to the other pad in the room.' },
+  { id: 'model-lens', name: 'Model Lens', type: 'major', source: ['perf'], effect: 'Boss attacks and bug wind-ups show their warning sooner.', mk2: { banks: ['practice-perf'], effect: 'Sooner still.' } },
+  // --- the wings (Phase 8 Spec, section 6) ---
+  { id: 'buck-converter', name: 'Buck Converter', type: 'major', source: ['clab-boss-buck'], effect: 'Energy refills half again as fast.', mk2: { banks: ['practice-pmic'], effect: 'Faster still.' } },
+  { id: 'thermal-spreader', name: 'Thermal Spreader', type: 'major', source: ['pkg-thermal'], effect: 'The Charged Probe charges in half a second.', mk2: { banks: ['practice-pkg'], effect: 'A little quicker still.' } },
+  { id: 'overclock', name: 'Overclock', type: 'major', source: ['fpga-fmax'], effect: 'Three kills within 4 seconds overclock you: every weapon fires faster for 8 seconds.', mk2: { banks: ['practice-emu'], effect: 'A bigger boost.' } },
+  { id: 'wavelength-splitter', name: 'Wavelength Splitter', type: 'major', source: ['ph-wdm'], effect: 'The Pulse Probe fires two bolts side by side, each a little weaker.', mk2: { banks: ['practice-photonics'], effect: 'Each bolt hits harder.' } },
+  { id: 'superposition-decoy', name: 'Superposition Decoy', type: 'major', source: ['qc-pulse'], effect: 'A gadget: press F to leave a ghost drone. Bugs shoot at it for 4 seconds. G switches gadgets.', mk2: { banks: ['practice-qctrl'], effect: 'The ghost lasts longer.' } },
+  { id: 'phase-lock', name: 'Phase Lock', type: 'major', source: ['pll-jitter'], effect: 'In a boss fight, aim close to the boss and your aim locks onto it.', mk2: { banks: ['practice-clocking'], effect: 'It locks from further off.' } },
+  { id: 'esd-clamp', name: 'ESD Clamp', type: 'major', source: ['ae-tpm'], effect: 'Once in each room, a hit that would break you leaves you with 1 point of hull.', mk2: { banks: ['practice-ae-tpm'], effect: 'Then a second with no damage.' } },
+  { id: 'neuro-reflex', name: 'Neuro Reflex', type: 'major', source: ['emerging'], effect: 'Once every 10 seconds, the first shot that would hit you passes through.', mk2: { banks: ['practice-neuro'], effect: 'It is ready again sooner.' } },
+];
+
+/** The numbers each upgrade changes. */
+export const UP = {
+  doubleJump: 650, doubleJumpMk2: 780,
+  gripMass: 3, fieldRadiusMk2: 108,
+  plating: 2,
+  fan: { bolts: 3, spreadDeg: 20, damage: 7, rate: 2.5, speed: 800, range: 480 },
+  fullAdderDamage: 12,
+  weakPoint: 1.5, weakPointMk2: 1.8,
+  beam: { reach: 400, halfDeg: 25 },
+  counter: { from: 7, to: 10, toMk2: 11, hits: 4 },
+  /** ALU Cannon; `kick` px/s pushes the drone back along the aim on each shot (the PID Stabilizer removes it). */
+  cannon: { damage: 40, damageMk2: 48, rate: 1, speed: 700, range: 720, knock: 600, energy: 10, kick: 160 },
+  energyMax: 125,
+  /** Integrity: +5 per main-path boss after the Dark Demo Board, capped. */
+  bossIntegrity: 5, integrityCap: 200,
+  // --- act 2 (Phase 4 Spec, section 7) ---
+  /** Loop Drone: orbit radius px, damage (Mk II), shots a second, reach px, bolt speed px/s. */
+  loopDrone: { orbit: 60, damage: 4, damageMk2: 5, rate: 2, range: 400, speed: 900 },
+  /** Datapath Rail: ride speed px/s (Mk II). */
+  rail: { speed: 600, speedMk2: 720 },
+  /** Synchronizer: enemies at this fraction of speed for s seconds (Mk II), its energy and cooldown. */
+  sync: { scale: 0.5, s: 3, sMk2: 3.6, energy: 40, cooldownS: 12 },
+  /** Pipeline Burst: bolts (Mk II) 80 ms apart, a 1.2 s cooldown, 10 damage each at 1000 px/s over 640 px, 12 energy. */
+  burst: { bolts: 4, boltsMk2: 5, gapMs: 80, cooldownS: 1.2, damage: 10, speed: 1000, range: 640, energy: 12 },
+  // --- the Underlayers (Phase 5 Spec, section 7) ---
+  /** Current Limiter: damage taken × this, rounded, at least 1. */
+  limiter: 0.9,
+  /** Phasor Curve: cone half-angle (degrees) and turn rate (degrees/s) for charged shots. */
+  phasor: { coneDeg: 30, turnDegS: 240 },
+  /** Integrator: energy regen × this while grounded and under stillSpeed px/s. */
+  integrator: { regen: 1.5, stillSpeed: 20 },
+  /** Kickback Dash: damage to each enemy crossed, and the dash cooldown. */
+  kickback: { damage: 12, cooldownMs: 700 },
+  /** Matrix Throw: throw charge time (s) and thrown-prop damage multiplier. */
+  matrixThrow: { chargeS: 0.4, damage: 1.5 },
+  /** Damped Landing: drop speed px/s, ring radius px, damage, push px/s. */
+  drop: { speed: 900, radius: 100, damage: 10, push: 300 },
+  /** Resonant Hover: fall speed cap px/s, and seconds a hover lasts (once per airtime). */
+  hover: { fall: 60, s: 1.2 },
+  /** Gauss Field: Field Coil radius px and grab limit added. */
+  gauss: { radius: 135, grab: 2 },
+  /** Diode Plating: damage from behind × this. */
+  diode: 0.5,
+  /** Gain Stage: Charged Probe damage. */
+  chargedDamage: 40, gainStageDamage: 60,
+  /** Bias Plates: integrity added. */
+  biasPlates: 10,
+  // --- act 3, Silicon (Phase 6 Spec, section 7) ---
+  /** CMOS Mirror: reflected shots' damage × this (Mk II), homing on their shooter at turnDegS. */
+  mirror: { damage: 1.5, damageMk2: 1.8, turnDegS: 360 },
+  /** Sized Drivers: weapon cooldowns × this (Mk II). */
+  drivers: { cooldown: 0.8, cooldownMk2: 0.77 },
+  /** Slack Parry: window ms before a hit (Mk II), stun ms, energy gained, hit-stop ms. */
+  parry: { windowMs: 150, windowMsMk2: 180, stunMs: 1000, energy: 20, hitStopMs: 60 },
+  /** Via Phase: thickest barrier a dash passes, px (Mk II). */
+  via: { thick: 40, thickMk2: 80 },
+  /** Buffer Turret: count, damage, shots a second, reach px, life s (Mk II), energy, bolt speed px/s. */
+  turret: { max: 3, damage: 6, rate: 2, range: 400, lifeS: 30, lifeSMk2: 36, energy: 25, speed: 900 },
+  /** Power Gate: seconds still before it gates (Mk II), and energy regen × this while gated. */
+  gate: { stillS: 1, stillSMk2: 0.8, regen: 2 },
+  /** Scan Visor: pulse radius px (Mk II), seconds the scan lasts, damage taken × this, energy. */
+  scan: { radius: 600, radiusMk2: 720, s: 5, damage: 1.15, energy: 20 },
+  /** Trace Tether: reach px (Mk II), pull speed px/s, aim cone half-angle degrees. */
+  tether: { reach: 480, reachMk2: 576, speed: 900, coneDeg: 20 },
+  /** Scripted Loop: Loop Drone damage and reach px. */
+  scriptedLoop: { damage: 6, range: 560 },
+  /** Make Repair: hull repair delay after a hit, ms. */
+  repairDelayMs: 2000,
+  // --- act 4, the Cluster (Phase 7 Spec, section 8) ---
+  /** Rewind: how far back, s; cooldown s (Mk II). */
+  rewind: { backS: 3, cooldownS: 20, cooldownSMk2: 16 },
+  /** Monte Carlo Crit: chance a hit deals × mul. */
+  crit: { chance: 0.1, mul: 2 },
+  /** Agent Pair: driver damage, shots a second, reach px, bolt speed px/s; the monitor's mark bonus (Mk II); orbit px. */
+  agents: { damage: 6, rate: 2, range: 480, speed: 900, mark: 0.15, markMk2: 0.18, orbit: 60 },
+  /** Assertion Mine: count, trigger px, blast px, damage (Mk II), energy, arming s. */
+  mine: { max: 3, trigger: 60, radius: 120, damage: 40, damageMk2: 48, energy: 20, armS: 0.5 },
+  /** Speculative Shot: damage (Mk II), homing deg/s, shots a second, speed px/s, reach px. */
+  spec: { damage: 12, damageMk2: 14, turnDegS: 360, rate: 2, speed: 600, range: 900 },
+  /** Scheduler: every cooldown × this. */
+  scheduler: 0.8,
+  /** Cache Pockets: blocks held (Mk II). */
+  pockets: { n: 3, nMk2: 4 },
+  /** NoC Warp: fade out and fade in, s each. */
+  warp: { fadeS: 0.25 },
+  /** Model Lens: warnings this much sooner, s (Mk II). */
+  lens: { s: 0.3, sMk2: 0.36 },
+  // --- the wings (Phase 8 Spec, section 6) ---
+  /** Buck Converter: energy regen × this (Mk II). */
+  buck: { regen: 1.5, regenMk2: 1.7 },
+  /** Thermal Spreader: Charged Probe charge time, s (Mk II). */
+  spreader: { chargeS: 0.5, chargeSMk2: 0.45 },
+  /** Overclock: kills within windowS start it; fire rates × (1 + boost) (Mk II) for s seconds. */
+  overclock: { kills: 3, windowS: 4, boost: 0.15, boostMk2: 0.2, s: 8 },
+  /** Wavelength Splitter: degrees between the two bolts, and each bolt's damage × this (Mk II). */
+  splitter: { splitDeg: 4, damage: 0.6, damageMk2: 0.7 },
+  /** Superposition Decoy: life s (Mk II), cooldown s, energy. */
+  decoy: { s: 4, sMk2: 5, cooldownS: 15, energy: 25 },
+  /** Phase Lock: snap angle, degrees (Mk II). */
+  phaseLock: { deg: 12, degMk2: 15 },
+  /** ESD Clamp: seconds with no damage after it saves the drone (Mk II only). */
+  clamp: { graceSMk2: 1 },
+  /** Neuro Reflex: seconds until it is ready again (Mk II). */
+  reflex: { cooldownS: 10, cooldownSMk2: 8 },
+} as const;
+
+/** The upgrade a module grants, if any. */
+export const upgradeFor = (module: string): Upgrade | undefined => UPGRADES.find((u) => u.source.includes(module));
+export const upgradeById = (id: string): Upgrade | undefined => UPGRADES.find((u) => u.id === id);
+
+/** Whether the drone has an upgrade (any of its sources done). */
+export const owned = (id: UpgradeId, done: (id: string) => boolean): boolean => !!upgradeById(id)?.source.some(done);
+
+/** Mk II state: banks done of total, online when all are done. Null for an upgrade without a Mk II. */
+export function mk2(id: UpgradeId, done: (id: string) => boolean): { done: number; total: number; online: boolean } | null {
+  const m = upgradeById(id)?.mk2;
+  if (!m) return null;
+  const n = m.banks.filter(done).length;
+  return { done: n, total: m.banks.length, online: n === m.banks.length };
+}
+
+/** What act 1 and act 2's upgrades add to the drone, from records (the Director lays it over Level 1's kit). */
+export interface ActKit {
+  doubleJump: boolean;
+  /** Double jump speed, px/s. */
+  jump2: number;
+  wallLatch: boolean;
+  /** Weapons the Selector cycles; just the Pulse Probe before it. */
+  weapons: ('pulse' | 'charged' | 'fan' | 'cannon' | 'burst' | 'spec')[];
+  /** Weapon slots the HUD shows: 2, or 3 after the Firmware Pit (Phase 4 Spec, section 7: Q still cycles them all). */
+  slots: 2 | 3;
+  /** Pipeline Burst bolts a burst (0: not owned). */
+  burstBolts: number;
+  /** Loop Drone damage a bolt (0: not owned). */
+  loopDrone: number;
+  /** Datapath Rail ride speed, px/s (0: not owned). */
+  rail: number;
+  /** Synchronizer seconds (0: not owned). */
+  sync: number;
+  probeDamage: number;
+  cannonDamage: number;
+  /** Counter Fire's top rate, 0 when not owned. */
+  counterTo: number;
+  /** Comparator Sight's weak-point multiplier, 0 when not owned. */
+  weak: number;
+  /** Enable Lock: the gun folds away in quiet rooms. */
+  holster: boolean;
+  gripEnemies: boolean;
+  fieldRadius: number | undefined;
+  beam: boolean;
+  energyMax: number;
+  /** Integrity on top of Level 1's: +5 per later main-path boss, +2 per NAND plate, +10 Bias Plates. */
+  integrityBonus: number;
+  // --- the Underlayers (Phase 5 Spec, section 7); 0, 1 or false when not owned ---
+  /** Damage taken × this (Current Limiter 0.9). */
+  damageScale: number;
+  /** Damage from behind × this (Diode Plating 0.5). */
+  behindScale: number;
+  /** Phasor Curve turn rate, degrees/s (0: off). */
+  phasor: number;
+  /** Energy regen × this when still (Integrator 1.5). */
+  stillRegen: number;
+  /** Kickback Dash damage to each enemy crossed (0: off). */
+  dashHit: number;
+  /** Dash cooldown, ms. */
+  dashCooldownMs: number;
+  /** Gradient Compass on. */
+  compass: boolean;
+  /** Throw charge seconds (0.8 before Matrix Throw). */
+  throwChargeS: number;
+  /** Thrown-prop damage × this (Matrix Throw 1.5). */
+  throwDamage: number;
+  /** Damped Landing on. */
+  drop: boolean;
+  /** Resonant Hover seconds (0: off). */
+  hover: number;
+  /** Spectrum Visor on. */
+  visor: boolean;
+  /** Grab limit added (Gauss Field 2). */
+  grabBonus: number;
+  /** Charged Probe damage (Gain Stage 60). */
+  chargedDamage: number;
+  // --- act 3, Silicon (Phase 6 Spec, section 7); 0, 1 or false when not owned ---
+  /** CMOS Mirror: reflected shots' damage × this, homing on their shooter (0: off, today's plain reflect). */
+  mirror: number;
+  /** Weapon cooldowns × this (Sized Drivers 0.8). */
+  cooldownScale: number;
+  /** Slack Parry window, ms (0: off). */
+  parryMs: number;
+  /** Via Phase: thickest barrier a dash passes, px (0: off). */
+  viaThick: number;
+  /** Buffer Turret life, s (0: not owned). */
+  turret: number;
+  /** Power Gate: seconds still before it gates (0: off). */
+  gateS: number;
+  /** Scan Visor radius, px (0: not owned). */
+  scan: number;
+  /** Trace Tether reach, px (0: not owned). */
+  tether: number;
+  /** Loop Drone reach, px. */
+  loopRange: number;
+  /** Hull repair delay after a hit, ms. */
+  repairDelayMs: number;
+  /** Noise Filter: crosstalk victims' copied shots do no damage. */
+  noiseFilter: boolean;
+  /** PID Stabilizer: no cannon recoil, and the hover holds height. */
+  pid: boolean;
+  // --- act 4, the Cluster (Phase 7 Spec, section 8); 0 or false when not owned ---
+  /** Templates: one more turret and mine. */
+  templates: boolean;
+  /** Rewind cooldown, s (0: not owned). */
+  rewind: number;
+  /** Monte Carlo Crit: chance of a double hit. */
+  crit: number;
+  /** Newton Aim: charged shots lead moving targets. */
+  newton: boolean;
+  /** Coverage Map strip on. */
+  coverageMap: boolean;
+  /** Agent Pair: the monitor's mark bonus (0: not owned). */
+  agents: number;
+  /** Assertion Mine damage (0: not owned). */
+  mine: number;
+  /** Speculative Shot damage. */
+  specDamage: number;
+  /** Scheduler: gadget and ability cooldowns × this (weapons get it through cooldownScale). */
+  sched: number;
+  /** Cache Pockets held (0: not owned). */
+  pockets: number;
+  /** NoC Warp on. */
+  warp: boolean;
+  /** Model Lens, s sooner (0: off). */
+  lens: number;
+  // --- the wings (Phase 8 Spec, section 6); 0 or 1 when not owned ---
+  /** Buck Converter: energy regen × this. */
+  regen: number;
+  /** Thermal Spreader: Charged Probe charge time, s. */
+  chargeS: number;
+  /** Overclock boost (0: not owned). */
+  overclock: number;
+  /** Wavelength Splitter: each bolt's damage × this (0: not owned). */
+  split: number;
+  /** Superposition Decoy life, s (0: not owned). */
+  decoy: number;
+  /** Phase Lock snap angle, degrees (0: not owned). */
+  phaseLock: number;
+  /** ESD Clamp: grace s after a save, or undefined when not owned. */
+  clamp: number | undefined;
+  /** Neuro Reflex cooldown, s (0: not owned). */
+  reflex: number;
+}
+
+/**
+ * The act 1 kit for a player with these records. `bosses` are the main-path incidents after the Dark Demo Board
+ * (places.ts knows them; passed in to keep this module free of the curriculum).
+ */
+export function actKit(done: (id: string) => boolean, bosses: readonly string[]): ActKit {
+  const has = (id: UpgradeId) => owned(id, done);
+  const mk = (id: UpgradeId) => !!mk2(id, done)?.online;
+  const plates = upgradeById('nand-plating')!.source.filter(done).length;
+  const sched = has('scheduler') ? UP.scheduler : 1;
+  return {
+    doubleJump: has('overflow-jump'),
+    jump2: mk('overflow-jump') ? UP.doubleJumpMk2 : UP.doubleJump,
+    wallLatch: has('wall-latch'),
+    // the Charged Probe is in the list as soon as it is owned (Level 1's Q swap); the rest need the Selector
+    weapons: [
+      'pulse', ...(has('charged-probe') ? ['charged' as const] : []),
+      ...(has('selector') ? [...(has('fan-decoder') ? ['fan' as const] : []), ...(has('alu-cannon') ? ['cannon' as const] : []), ...(has('pipeline-burst') ? ['burst' as const] : []), ...(has('speculative-shot') ? ['spec' as const] : [])] : []),
+    ],
+    slots: has('third-slot') ? 3 : 2,
+    burstBolts: has('pipeline-burst') ? (mk('pipeline-burst') ? UP.burst.boltsMk2 : UP.burst.bolts) : 0,
+    loopDrone: has('loop-drone') ? (has('scripted-loop') ? UP.scriptedLoop.damage : mk('loop-drone') ? UP.loopDrone.damageMk2 : UP.loopDrone.damage) : 0,
+    rail: has('datapath-rail') ? (mk('datapath-rail') ? UP.rail.speedMk2 : UP.rail.speed) : 0,
+    sync: has('synchronizer') ? (mk('synchronizer') ? UP.sync.sMk2 : UP.sync.s) : 0,
+    probeDamage: has('full-adder') ? UP.fullAdderDamage : 10,
+    cannonDamage: mk('alu-cannon') ? UP.cannon.damageMk2 : UP.cannon.damage,
+    counterTo: has('counter-fire') ? (mk('counter-fire') ? UP.counter.toMk2 : UP.counter.to) : 0,
+    weak: has('comparator-sight') ? (mk('comparator-sight') ? UP.weakPointMk2 : UP.weakPoint) : 0,
+    holster: has('enable-lock'),
+    gripEnemies: has('inverted-grip'),
+    fieldRadius: has('gauss-field') ? UP.gauss.radius : mk('inverted-grip') ? UP.fieldRadiusMk2 : undefined,
+    beam: has('beam-toggle'),
+    energyMax: has('power-cell') ? UP.energyMax : 100,
+    integrityBonus: bosses.filter(done).length * UP.bossIntegrity + plates * UP.plating + (has('bias-plates') ? UP.biasPlates : 0),
+    damageScale: has('current-limiter') ? UP.limiter : 1,
+    behindScale: has('diode-plating') ? UP.diode : 1,
+    phasor: has('phasor-curve') ? UP.phasor.turnDegS : 0,
+    stillRegen: has('integrator') ? UP.integrator.regen : 1,
+    dashHit: has('kickback-dash') ? UP.kickback.damage : 0,
+    dashCooldownMs: (has('kickback-dash') ? UP.kickback.cooldownMs : 1000) * sched,
+    compass: has('gradient-compass'),
+    throwChargeS: has('matrix-throw') ? UP.matrixThrow.chargeS : 0.8,
+    throwDamage: has('matrix-throw') ? UP.matrixThrow.damage : 1,
+    drop: has('damped-landing'),
+    hover: has('resonant-hover') ? UP.hover.s : 0,
+    visor: has('spectrum-visor'),
+    grabBonus: has('gauss-field') ? UP.gauss.grab : 0,
+    chargedDamage: has('gain-stage') ? UP.gainStageDamage : UP.chargedDamage,
+    mirror: has('cmos-mirror') ? (mk('cmos-mirror') ? UP.mirror.damageMk2 : UP.mirror.damage) : 0,
+    cooldownScale: (has('sized-drivers') ? (mk('sized-drivers') ? UP.drivers.cooldownMk2 : UP.drivers.cooldown) : 1) * sched,
+    parryMs: has('slack-parry') ? (mk('slack-parry') ? UP.parry.windowMsMk2 : UP.parry.windowMs) : 0,
+    viaThick: has('via-phase') ? (mk('via-phase') ? UP.via.thickMk2 : UP.via.thick) : 0,
+    turret: has('buffer-turret') ? (mk('buffer-turret') ? UP.turret.lifeSMk2 : UP.turret.lifeS) : 0,
+    gateS: has('power-gate') ? (mk('power-gate') ? UP.gate.stillSMk2 : UP.gate.stillS) : 0,
+    scan: has('scan-visor') ? (mk('scan-visor') ? UP.scan.radiusMk2 : UP.scan.radius) : 0,
+    tether: has('trace-tether') ? (mk('trace-tether') ? UP.tether.reachMk2 : UP.tether.reach) : 0,
+    loopRange: has('scripted-loop') ? UP.scriptedLoop.range : UP.loopDrone.range,
+    repairDelayMs: has('make-repair') ? UP.repairDelayMs : 4000,
+    noiseFilter: has('noise-filter'),
+    pid: has('pid-stabilizer'),
+    templates: has('templates'),
+    rewind: has('rewind') ? (mk('rewind') ? UP.rewind.cooldownSMk2 : UP.rewind.cooldownS) * sched : 0,
+    crit: has('monte-carlo-crit') ? UP.crit.chance : 0,
+    newton: has('newton-aim'),
+    coverageMap: has('coverage-map'),
+    agents: has('agent-pair') ? (mk('agent-pair') ? UP.agents.markMk2 : UP.agents.mark) : 0,
+    mine: has('assertion-mine') ? (mk('assertion-mine') ? UP.mine.damageMk2 : UP.mine.damage) : 0,
+    specDamage: mk('speculative-shot') ? UP.spec.damageMk2 : UP.spec.damage,
+    sched,
+    pockets: has('cache-pockets') ? (mk('cache-pockets') ? UP.pockets.nMk2 : UP.pockets.n) : 0,
+    warp: has('noc-warp'),
+    lens: has('model-lens') ? (mk('model-lens') ? UP.lens.sMk2 : UP.lens.s) : 0,
+    regen: has('buck-converter') ? (mk('buck-converter') ? UP.buck.regenMk2 : UP.buck.regen) : 1,
+    chargeS: has('thermal-spreader') ? (mk('thermal-spreader') ? UP.spreader.chargeSMk2 : UP.spreader.chargeS) : 0.8,
+    overclock: has('overclock') ? (mk('overclock') ? UP.overclock.boostMk2 : UP.overclock.boost) : 0,
+    split: has('wavelength-splitter') ? (mk('wavelength-splitter') ? UP.splitter.damageMk2 : UP.splitter.damage) : 0,
+    decoy: has('superposition-decoy') ? (mk('superposition-decoy') ? UP.decoy.sMk2 : UP.decoy.s) : 0,
+    phaseLock: has('phase-lock') ? (mk('phase-lock') ? UP.phaseLock.degMk2 : UP.phaseLock.deg) : 0,
+    clamp: has('esd-clamp') ? (mk('esd-clamp') ? UP.clamp.graceSMk2 : 0) : undefined,
+    reflex: has('neuro-reflex') ? (mk('neuro-reflex') ? UP.reflex.cooldownSMk2 : UP.reflex.cooldownS) : 0,
+  };
+}

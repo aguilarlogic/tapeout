@@ -8,6 +8,9 @@ import {
 import { PCB_LEVELS } from './levels';
 import { finish } from '../../ui/labkit';
 
+/** Pointer capture, when the browser has that pointer (a pad cursor's pointer is synthetic and has none). */
+const capture = (el: Element, id: number) => { try { el.setPointerCapture(id); } catch { /* not a live pointer */ } };
+
 type Tool = 'route' | 'via' | 'erase' | 'move';
 const CELL = 34;
 
@@ -304,7 +307,7 @@ export function pcbPage(id: string): HTMLElement {
       if (!comp) { toast('Only dashed-outline parts can be moved.', 'info'); return; }
       snapshot();
       drag = { last: [x, y], ref: comp };
-      canvas.setPointerCapture(ev.pointerId);
+      capture(canvas, ev.pointerId);
       return;
     }
     snapshot();
@@ -320,7 +323,7 @@ export function pcbPage(id: string): HTMLElement {
       drag = { net, last: [x, y] };
       commit();
     }
-    canvas.setPointerCapture(ev.pointerId);
+    capture(canvas, ev.pointerId);
   });
   canvas.addEventListener('pointermove', (ev) => {
     const [x, y] = cellAt(ev);

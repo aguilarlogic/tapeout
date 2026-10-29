@@ -24,6 +24,39 @@ export interface Profile {
 export interface Prefs {
   speed: 'slow' | 'normal' | 'fast' | 'instant';
   muted: boolean; // true silences the synthesized sound cues (see ui/sound.ts); sound is on by default
+  /** The story game's key bindings: action id -> [main key, second key] as KeyboardEvent.code or Mouse0/Mouse2/Wheel.
+   * Only actions the player changed are stored; the rest use the defaults in game/input/bindings.ts. */
+  keys: Record<string, [string | null, string | null]>;
+  /** Reduced motion for the story game: follow the system setting, or force it on or off. */
+  reducedMotion: 'system' | 'on' | 'off';
+  /** Story game settings (Feel and Combat Plan sections I and J, polish bar P5): no screen shake; flashes drawn as
+   * outlines; floating damage numbers; master, effects and music volume, 0-100. */
+  reduceShake: boolean;
+  reduceFlash: boolean;
+  damageNumbers: boolean;
+  volume: number;
+  sfxVolume: number;
+  musicVolume: number;
+  /** Story difficulty (Level 1 spec): Story halves damage taken and trims boss health; Standard plays as tuned. */
+  difficulty: 'story' | 'standard' | null;
+  /** Story assists (they never change scores): game speed in percent, and three switches. */
+  gameSpeed: number;
+  invincible: boolean;
+  autoFire: boolean;
+  infiniteEnergy: boolean;
+  /** Where a fresh load opens (Phase 7 Spec, section 3): the story game (the default) or the Classic Desktop. */
+  startIn?: 'game' | 'desktop';
+  /** Aim assist (Phase 9 Spec, section 5): auto is on for a gamepad and touch and off for keys; touch forces it on. */
+  aimAssist?: 'auto' | 'on' | 'off';
+  /** True once the first-touch-play card (game speed 75%) has been shown. */
+  touchHintSeen?: boolean;
+  /** Accessibility (Phase 10 Spec, section 2): text size in percent, colour palette, sound captions, hold or toggle
+   * for held actions, and the room skip assist. All optional, so older saves load with the defaults. */
+  textSize?: 100 | 125 | 150;
+  palette?: 'standard' | 'okabe';
+  captions?: boolean;
+  holdMode?: 'hold' | 'toggle';
+  roomSkip?: boolean;
 }
 
 export interface Progress {
@@ -39,11 +72,15 @@ export interface Progress {
 const KEY = 'tapeout.progress.v1';
 /** 2: the curriculum-order rework moved chapters between acts. Progress is keyed by module id and no id changed, so an
  * older save needs no rewriting: it is stamped with the new version and every level, star, card and rank stays. */
-export const SAVE_VERSION = 2;
+/** 3: the story game's preview adds prefs.keys and prefs.reducedMotion. Missing fields get their defaults on load. */
+/** 4: the story game's settings add prefs.reduceShake, reduceFlash, damageNumbers, volume, sfxVolume and musicVolume. */
+/** 5: Level 1 adds prefs.difficulty (null until the player picks, or the profile card picks for them) and the assists
+ * gameSpeed, invincible, autoFire and infiniteEnergy. World state lives under its own key, tapeout.world.v1. */
+export const SAVE_VERSION = 5;
 let cache: Progress | null = null;
 
 function blank(): Progress {
-  return { levels: {}, cards: {}, prefs: { speed: 'normal', muted: false }, best: {}, daily: emptyDaily(), version: SAVE_VERSION };
+  return { levels: {}, cards: {}, prefs: { speed: 'normal', muted: false, keys: {}, reducedMotion: 'system', reduceShake: false, reduceFlash: false, damageNumbers: false, volume: 70, sfxVolume: 100, musicVolume: 60, difficulty: null, gameSpeed: 100, invincible: false, autoFire: false, infiniteEnergy: false }, best: {}, daily: emptyDaily(), version: SAVE_VERSION };
 }
 
 export function load(): Progress {
@@ -224,11 +261,12 @@ export function setDailyGoal(d: DailyState) {
 export function resetAll() {
   cache = blank();
   save();
-  // Lab drafts (saveDraft) live under their own keys; drop them too or old solutions reappear in the editors.
+  // Lab drafts (saveDraft) live under their own keys; drop them too or old solutions reappear in the editors. The story
+  // world (where the drone stands, what it discovered) goes too: a reset starts at the cold boot.
   try {
     for (let i = localStorage.length - 1; i >= 0; i--) {
       const k = localStorage.key(i);
-      if (k?.startsWith('tapeout.draft.')) localStorage.removeItem(k);
+      if (k?.startsWith('tapeout.draft.') || k === 'tapeout.world.v1') localStorage.removeItem(k);
     }
   } catch {
     /* storage unavailable - nothing persisted to clear */
