@@ -154,6 +154,8 @@
 [data-nav="pad"] .gm-btn.primary:hover:not(:focus-visible) { border-color: rgba(255, 62, 200, 0.8); }
 [data-nav="pad"] .gm-btn:hover:not(:focus-visible)::before { transform: rotate(45deg) scale(0.6); opacity: 0.4; background: none; }
 
-/* The Learning route (Phase 10 Spec, section 2.7): each place's modules as a wrapping list of buttons */
-.st-route { list-style: none; padding: 0; margin: 0 0 12px; display: flex; flex-wrap: wrap; gap: 8px; }
+/* The Learning route (Phase 10 Spec, section 2.7): each place's modules as even columns of buttons, the kind word right */
+.st-route { list-style: none; padding: 0; margin: 0 0 12px; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr)); gap: 8px; }
 .st-route li { margin: 0; }
+.st-route .gm-btn { width: 100%; display: flex; align-items: center; text-align: left; }
+.st-route .gm-btn .dim { margin-left: auto; padding-left: 12px; }

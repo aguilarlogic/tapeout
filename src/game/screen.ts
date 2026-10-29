@@ -249,6 +249,8 @@ export class GameScreen {
       onSettings: () => { this.reduced = reducedMotion(); this.audio.applyVolumes(); this.story?.applyPrefs(); this.applyAccess(); },
       story: !!this.story,
       sound: (s) => this.audio.play(s),
+      canSkipRoom: () => this.story?.canSkipRoom() ?? false,
+      skipRoom: () => { if (this.story?.skipRoom()) this.resume(); },
     });
     this.el.append(this.pauseEl);
     const esc = (e: KeyboardEvent) => {
@@ -769,7 +771,8 @@ export class GameScreen {
       drawTouch(c, { buttons: this.touchButtons(), held: this.touchNow.heldButtons, stick: this.touchNow.stick ?? this.lastStick, stickAlpha: easeOut(this.stickFade), alpha: easeOut(this.touchAlpha), t });
     }
     this.captions.step(performance.now());
-    this.captions.draw(c, VIEW_W, VIEW_H, this.touchAlpha > 0 ? 150 : 40);
+    if (this.touchAlpha > 0) this.captions.draw(c, VIEW_W, VIEW_H, 150);
+    else this.captions.draw(c, VIEW_W, VIEW_H, 40, 24);
     let black = 0;
     if (this.age < BOOT.fadeIn + BOOT.eye) black = 1 - easeOut((this.age - BOOT.fadeIn) / BOOT.eye);
     if (sim.dying > 0) black = Math.max(black, Math.max(0, (1 - sim.dying / VITALS.deathSteps - 0.6) / 0.4));

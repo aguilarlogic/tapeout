@@ -1242,8 +1242,10 @@ export function drawBubble(c: C, d: Director, t: number) {
   // the words wrap to the widest box, so the box grows downward with the text (at most BUBBLE_MAX_LINES lines)
   const lines = wrapBubble(c, text, BUBBLE_MAX_W - 40), boxH = px(52) + (lines.length - 1) * px(BUBBLE_LINE);
   const textW = Math.max(...lines.map((l) => c.measureText(l).width));
-  // top centre, under the HUD (under the boss bar in the arena), clear of the drone and the floor
-  const w = Math.max(240, textW + 40), ax = (VIEW_W - w) / 2 - 8, y = (d.bossBar ? 104 : 86) + (1 - inK) * -8;
+  // top centre, under the HUD (under the boss plate in the arena, which grows with the text), clear of the drone and the
+  // floor; y is the label's line, px(18) under the box's top
+  const top = d.bossBar ? 30 + px(40) + 10 : 68;
+  const w = Math.max(240, textW + 40), ax = (VIEW_W - w) / 2 - 8, y = top + px(18) + (1 - inK) * -8;
   const x = ax + 36;
   // the avatar: TAPEOUT's eye in a ring, flickering while it is still broken
   const broken = !d.kit.voice;

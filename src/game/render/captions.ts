@@ -1,6 +1,6 @@
 // Phase 10 Spec, section 2.4: captions for the sounds that carry meaning. Each shows for 2 s with a 200 ms fade, at most
 // three at once (the oldest drops), and a repeat of a caption already showing restarts its timer and counts up. They
-// draw at bottom centre, the newest lowest. Times are in milliseconds.
+// draw at bottom right (bottom centre over the touch controls), the newest lowest. Times are in milliseconds.
 import { CAPTION, type Sfx } from '../audio';
 import { FONT, PAL, px, rgba } from './palette';
 
@@ -90,9 +90,10 @@ export class Captions {
     return captionState(this.list, this.now);
   }
 
-  /** Draws the captions at bottom centre of a w by h canvas. The lowest box's bottom edge sits `bottom` px above the
-   * canvas bottom (150 when touch controls show, 40 otherwise). */
-  draw(ctx: CanvasRenderingContext2D, w: number, h: number, bottom: number): void {
+  /** Draws the captions on a w by h canvas, the lowest box's bottom edge `bottom` px above the canvas bottom. With
+   * `right`, each box's right edge sits `right` px in from the canvas edge, clear of the drone at bottom centre; without
+   * it, the boxes centre (over the touch controls, where the bottom right holds the buttons). */
+  draw(ctx: CanvasRenderingContext2D, w: number, h: number, bottom: number, right?: number): void {
     const shown = this.view();
     if (shown.length === 0) return;
     const pad = px(PAD), boxH = px(FONT_PX) + 2 * pad, gap = px(GAP);
@@ -107,13 +108,14 @@ export class Captions {
       const boxW = ctx.measureText(label).width + 2 * pad;
       const y = edge - boxH;
       ctx.globalAlpha = alpha;
-      roundRect(ctx, (w - boxW) / 2, y, boxW, boxH, RADIUS);
+      const cx = right === undefined ? w / 2 : w - right - boxW / 2;
+      roundRect(ctx, cx - boxW / 2, y, boxW, boxH, RADIUS);
       ctx.fillStyle = rgba(PAL.bgDeep, BOX_ALPHA);
       ctx.fill();
       ctx.strokeStyle = rgba(PAL.line, BORDER_ALPHA);
       ctx.stroke();
       ctx.fillStyle = PAL.text;
-      ctx.fillText(label, w / 2, y + boxH / 2);
+      ctx.fillText(label, cx, y + boxH / 2);
       edge = y - gap;
     }
     ctx.restore();
