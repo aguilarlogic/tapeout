@@ -106,6 +106,32 @@ describe('world backdrop motif', () => {
     expect(labels).toContain('WB');
   });
 
+  it("draws the 'silicon' cells without throwing, each 60 x 40 px, and the same layout at any camera", () => {
+    const siliconRoom = { w: 6000, h: 720, traces: [], backdrop: 'silicon' } as unknown as Room;
+    const art = new WorldArt(siliconRoom);
+    const { c, calls } = spyCanvas();
+    expect(() => art.drawBackdrop(c, { x: 0, y: 0 })).not.toThrow();
+    expect(() => art.drawBackdrop(c, { x: 2600, y: 200 })).not.toThrow();
+    const rects = calls.filter((k) => k.name === 'rect');
+    expect(rects.length).toBeGreaterThan(0);
+    expect(rects.every((k) => k.args[2] === 60 && k.args[3] === 40)).toBe(true);
+    // the layout is a function of the cell's position: a fresh canvas and a fresh art draw the same calls
+    const again = spyCanvas();
+    new WorldArt(siliconRoom).drawBackdrop(again.c, { x: 0, y: 0 });
+    const first = spyCanvas();
+    art.drawBackdrop(first.c, { x: 0, y: 0 });
+    expect(JSON.stringify(again.calls)).toBe(JSON.stringify(first.calls));
+  });
+
+  it("draws the 'silicon' backdrop after reduced-motion steps", () => {
+    const siliconRoom = { w: 6000, h: 720, traces: [], backdrop: 'silicon' } as unknown as Room;
+    const art = new WorldArt(siliconRoom);
+    for (let i = 0; i < 120; i++) art.step(true);
+    const { c, calls } = spyCanvas();
+    expect(() => art.drawBackdrop(c, { x: 0, y: 0 })).not.toThrow();
+    expect(calls.some((k) => k.name === 'rect')).toBe(true);
+  });
+
   it('draws no core labels for a room without a backdrop', () => {
     const plain = { w: 6000, h: 720, traces: [] } as unknown as Room;
     const art = new WorldArt(plain);

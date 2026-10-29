@@ -90,7 +90,7 @@ export type Template = (rng: () => number, opts: TemplateOpts) => Shell;
 
 // --- themes ---------------------------------------------------------------------------------------------------------
 
-export type MechanicKind = 'lamps' | 'inverted' | 'select' | 'clocked' | 'pattern' | 'loop' | 'bus' | 'clocks' | 'stages';
+export type MechanicKind = 'lamps' | 'inverted' | 'select' | 'clocked' | 'pattern' | 'loop' | 'bus' | 'clocks' | 'stages' | 'pullnet' | 'repeater' | 'slack' | 'vias' | 'placement' | 'gating' | 'scan' | 'return';
 export interface MechanicSpec { kind: MechanicKind; /** The module whose port follows the discovery room. */ before: string }
 
 export type BackdropKind = 'lamps' | 'gates' | 'carry' | 'clock' | 'rom' | 'core' | 'under' | 'grid' | 'silicon' | 'cluster' | 'fab' | 'loft';

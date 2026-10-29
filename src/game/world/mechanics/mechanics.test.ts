@@ -1,4 +1,4 @@
-// Discovery beats (Phase 3 Spec, section 6), headless: every room is valid, each beat's scripted play solves it once, an
+// Discovery beats (Phase 3 Spec, section 6; Phase 6 Spec, section 4), headless: every room is valid, each beat's scripted play solves it once, an
 // idle drone never solves it, and each beat's own rule holds (lamp holds, door weight, the lift choice, clock edges,
 // platforms that never crush the drone, switch bits). The drone and the gates are a fake MechCtx, not the real sim.
 import { describe, expect, it } from 'vitest';
@@ -12,14 +12,25 @@ import { MECHANICS } from './index';
 import { BUS } from './bus';
 import { CLOCKED } from './clocked';
 import { CLOCKS } from './clocks';
+import { GATING } from './gating';
 import { INVERTED } from './inverted';
 import { LAMPS } from './lamps';
 import { LOOP } from './loop';
 import { PATTERN } from './pattern';
+import { blockRect, PLACEMENT, SLOT_X } from './placement';
+import { PULLNET } from './pullnet';
+import { REPEATER, SOCKETS } from './repeater';
+import { RETURN } from './return';
+import { SCAN } from './scan';
 import { SELECT } from './select';
+import { SLACK } from './slack';
 import { HAZARD_TICK, STAGES, TICK_STEPS } from './stages';
+import { VIAS } from './vias';
 
-const KINDS: MechanicKind[] = ['lamps', 'inverted', 'select', 'clocked', 'pattern', 'loop', 'bus', 'clocks', 'stages'];
+const KINDS: MechanicKind[] = [
+  'lamps', 'inverted', 'select', 'clocked', 'pattern', 'loop', 'bus', 'clocks', 'stages',
+  'pullnet', 'repeater', 'slack', 'vias', 'placement', 'gating', 'scan', 'return',
+];
 const FLOOR = floorY(720);
 /** A lift at rest on the floor, and fully risen (360 px above the floor). */
 const REST = FLOOR - 24, UP = FLOOR - 360;
@@ -103,11 +114,12 @@ function expectRoom(room: StoryRoom, kind: MechanicKind) {
   expect(room.exit.x).toBe(room.w - 40);
   const exit = room.gates.find((g) => g.id === 'exit');
   expect(exit?.kind).toBe('door');
-  // the exit door is 48 x 200 at the right, standing on the floor or on a ledge, with the wall solid above it
+  // the exit door is 48 x 200 at the right, standing on the floor or on a ledge, with the wall solid above it (a door
+  // whose top is the ceiling has no wall above it)
   const door = exit!.rect;
   expect([door.x, door.w, door.h]).toEqual([room.w - 200, 48, 200]);
   expect(door.y + door.h === floor || room.solids.some((s) => s.y === door.y + door.h && s.x <= door.x && s.x + s.w >= door.x)).toBe(true);
-  expect(room.solids).toContainEqual(r(room.w - 200, 0, 48, door.y));
+  if (door.y > 0) expect(room.solids).toContainEqual(r(room.w - 200, 0, 48, door.y));
   expect(room.spawn.y + 24).toBe(floor);
   expect(room.spawn.x).toBeGreaterThan(0);
   expect(room.spawn.x).toBeLessThan(room.w);
@@ -219,6 +231,126 @@ function playStages(rg: Rig) {
   tick(STAGES, s, rg, 1800);
 }
 
+function playPullnet(rg: Rig) {
+  const s = PULLNET.init();
+  rg.c.used = 'in'; // IN goes to 0: the platform lifts toward the ledge
+  tick(PULLNET, s, rg);
+  tick(PULLNET, s, rg, 72); // 1.2 s: the platform is level with the ledge at y 200
+  place(rg, 1000, 200, true);
+  tick(PULLNET, s, rg);
+}
+
+function playRepeater(rg: Rig) {
+  const s = REPEATER.init();
+  // two blocks in sockets 1 and 2
+  rg.c.props = [0, 1].map((i) => ({ x: SOCKETS[i] - 14, y: FLOOR - 28, w: 28, h: 28 }));
+  rg.c.used = 'send';
+  tick(REPEATER, s, rg);
+  // walk from the button at run speed (4 px a step, full speed after 9 steps); a shut door stops the drone at its face
+  let x = 200, v = 0;
+  for (let i = 0; i < 900 && solves(rg) === 0; i++) {
+    v = Math.min(4, v + 4 / 9);
+    x += v;
+    const doorOpen = rg.log.filter((l) => l === 'open:exit' || l === 'close:exit').pop() === 'open:exit';
+    if (!doorOpen && x + 18 > 1400) x = 1400 - 18;
+    place(rg, x, FLOOR, true);
+    tick(REPEATER, s, rg);
+  }
+}
+
+function playSlack(rg: Rig) {
+  const s = SLACK.init();
+  rg.c.used = 'path'; // path B: the short wire
+  tick(SLACK, s, rg);
+  place(rg, 100, FLOOR, true); // step off LAUNCH
+  tick(SLACK, s, rg);
+  place(rg, 260, 600, true); // step onto LAUNCH: the next clock tick sends the token
+  tick(SLACK, s, rg);
+  tick(SLACK, s, rg, 289 - rg.c.t); // the token lands before the capture edge at step 288
+  place(rg, 1300, FLOOR, true); // past the open capture door
+  tick(SLACK, s, rg, 11);
+}
+
+/** The vias' two walking tops (M2, M3) and the M2 socket's centre x. */
+const M2 = 440, M3 = 240, SOCKET_X = 984;
+
+function playVias(rg: Rig) {
+  const s = VIAS.init();
+  place(rg, 240, FLOOR, true);
+  rg.c.used = 'via12'; // M1 to M2
+  tick(VIAS, s, rg);
+  place(rg, 700, M2, true); // walk right on M2
+  rg.c.props = [{ x: SOCKET_X - 14, y: M2 - 28, w: 28, h: 28 }]; // the via block, pushed into the socket
+  place(rg, SOCKET_X, M2, true);
+  rg.c.used = 'via23'; // M2 to M3
+  tick(VIAS, s, rg);
+  place(rg, 1350, M3, true); // the M3 ledge
+  tick(VIAS, s, rg);
+}
+
+function playPlacement(rg: Rig) {
+  const s = PLACEMENT.init();
+  const pos = [1060, 340, 1240, 600]; // the four blocks start scattered, A to D
+  const put = () => {
+    rg.c.props = pos.map((x) => blockRect(x));
+    tick(PLACEMENT, s, rg);
+  };
+  put();
+  pos[1] = SLOT_X[1]; put(); // B to slot 2
+  pos[3] = SLOT_X[3]; put(); // D to slot 4
+  pos[0] = SLOT_X[0]; put(); // A to slot 1
+  pos[2] = SLOT_X[2]; put(); // C to slot 3: the wires total 540 and the door opens
+  for (let x = 140; x <= 1460; x += 20) {
+    feet(rg, x, FLOOR);
+    tick(PLACEMENT, s, rg);
+  }
+}
+
+function playGating(rg: Rig) {
+  const s = GATING.init();
+  rg.c.used = 'iso'; // ISO holds the output
+  tick(GATING, s, rg);
+  rg.c.used = 'pwr'; // PWR off: the fan stops
+  tick(GATING, s, rg);
+  for (let x = 140; x <= 1460; x += 10) {
+    feet(rg, x, FLOOR);
+    tick(GATING, s, rg);
+  }
+}
+
+function playScan(rg: Rig) {
+  const s = SCAN.init();
+  rg.c.used = 'scan'; // SCAN on: the flops read the chain
+  tick(SCAN, s, rg);
+  for (const b of [false, true, true, false, true]) { // shift in 0, 1, 1, 0, 1; IN only where the bit must change
+    if (s.bit !== b) {
+      rg.c.used = 'in';
+      tick(SCAN, s, rg);
+    }
+    rg.c.used = 'clk';
+    tick(SCAN, s, rg);
+  }
+  rg.c.used = 'scan'; // SCAN off
+  tick(SCAN, s, rg);
+  place(rg, 1500, FLOOR, true);
+  tick(SCAN, s, rg);
+}
+
+/** A copper bridge block of mass 2, centred at cx on the floor. */
+function bridgeAt(cx: number): Rect {
+  const side = crateSide(2);
+  return { x: cx - side / 2, y: FLOOR - side, w: side, h: side };
+}
+
+function playReturn(rg: Rig) {
+  const s = RETURN.init();
+  rg.c.props = [bridgeAt(760), bridgeAt(840)]; // both bridges in the split link the loops
+  tick(RETURN, s, rg);
+  rg.c.props = [];
+  place(rg, 1500, FLOOR, true);
+  tick(RETURN, s, rg);
+}
+
 const PLAYS: Record<MechanicKind, (rg: Rig) => void> = {
   lamps: playLamps,
   inverted: playInverted,
@@ -229,6 +361,14 @@ const PLAYS: Record<MechanicKind, (rg: Rig) => void> = {
   bus: playBus,
   clocks: playClocks,
   stages: playStages,
+  pullnet: playPullnet,
+  repeater: playRepeater,
+  slack: playSlack,
+  vias: playVias,
+  placement: playPlacement,
+  gating: playGating,
+  scan: playScan,
+  return: playReturn,
 };
 
 // A canvas that accepts every call: the draw code runs, its pixels are not checked.

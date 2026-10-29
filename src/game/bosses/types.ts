@@ -2,8 +2,8 @@
 // investigation); its form is a line-art body in the arena that runs attacks from a shared library, one at a time.
 import type { Rect } from '../level/room';
 
-export type AttackId = 'bolts' | 'drop' | 'grid' | 'chain' | 'freeze' | 'segments' | 'mirror' | 'push' | 'relay' | 'split' | 'stage';
-export type BodyKind = 'lamps' | 'gate' | 'chain' | 'wheel' | 'digit' | 'twin' | 'stack' | 'datapath' | 'clocks' | 'worm';
+export type AttackId = 'bolts' | 'drop' | 'grid' | 'chain' | 'freeze' | 'segments' | 'mirror' | 'push' | 'relay' | 'split' | 'stage' | 'slam' | 'lash' | 'paths' | 'spikes' | 'congest' | 'rush' | 'shift' | 'eye';
+export type BodyKind = 'lamps' | 'gate' | 'chain' | 'wheel' | 'digit' | 'twin' | 'stack' | 'datapath' | 'clocks' | 'worm' | 'cell' | 'serpent' | 'titan' | 'polygon' | 'knot' | 'sleeper' | 'snake' | 'transceivers';
 
 export interface BossForm {
   incident: string;

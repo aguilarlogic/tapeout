@@ -71,6 +71,9 @@ export class WorldArt {
   private backdrop: BackdropKind | undefined;
   /** Seconds of animation so far (held still under reduced motion), for the backdrop's slow pulses. */
   private clock = 0;
+  /** Seconds since the room began, for the Silicon's gentle cell pulses. It keeps running under reduced motion: a pulse
+   * only changes alpha and never moves, like the trace glows. */
+  private pulseT = 0;
 
   constructor(private room: Room, seed = 3) {
     this.rand = rng(seed);
@@ -97,6 +100,7 @@ export class WorldArt {
   /** Advance pulses and motes one 60 Hz step. Pulses start along a trace every 2-4 s (P3). */
   step(reduced: boolean) {
     const dt = 1 / 60;
+    this.pulseT += dt;
     if (!reduced) this.clock += dt;
     for (const t of [...this.layers.flatMap((l) => l.traces), ...this.roomTraces]) {
       if (t.pulse >= 0) {
@@ -305,6 +309,65 @@ export class WorldArt {
         c.stroke();
         break;
       }
+      case 'silicon': { // the Silicon: rows of standard cells, each 60 x 40 px with 2 to 4 pin dots, rows 48 px apart and a
+        // thin rail between each pair (VDD in cyan, GND in violet); one cell in 40 pulses gently. Every choice is a hash
+        // of the cell's column and row, so the layout never changes from frame to frame
+        const COL = 84, CW = 60, CH = 40, ROW = 48, Y0 = 24, RAIL = 44, PIN = 10;
+        const y0 = Math.max(0, vis.y), y1 = Math.min(H, vis.y + vis.h);
+        const rMin = Math.max(0, Math.floor((y0 - Y0) / ROW) - 1), rMax = Math.min(Math.floor((H - Y0) / ROW), Math.ceil((y1 - Y0) / ROW));
+        const cMin = Math.max(0, Math.floor(x0 / COL) - 1), cMax = Math.ceil(x1 / COL);
+        const pins = (k: number, r: number) => 2 + Math.floor(hash(k * 3 + 1, r * 5 + 2) * 3);
+        const pulses = (k: number, r: number) => hash(k, r) < 1 / 40;
+        c.lineWidth = 1;
+        // the rails first: the gap under row r is VDD when r is even and GND when odd
+        for (let g = 0; g < 2; g++) {
+          c.strokeStyle = rgba(g ? PAL.x : PAL.trace, 0.07);
+          c.beginPath();
+          for (let r = rMin; r <= rMax; r++) {
+            const y = Y0 + r * ROW + RAIL;
+            if (r % 2 !== g || y > H) continue;
+            c.moveTo(x0, y);
+            c.lineTo(x1, y);
+          }
+          c.stroke();
+        }
+        // the cells, minus the pulsing ones, drawn in one pass each for the rectangles and the pins
+        c.strokeStyle = rgba(PAL.trace, 0.07);
+        c.beginPath();
+        for (let r = rMin; r <= rMax; r++) for (let k = cMin; k <= cMax; k++) {
+          if (!pulses(k, r)) c.rect(k * COL + 12, Y0 + r * ROW, CW, CH);
+        }
+        c.stroke();
+        c.fillStyle = rgba(PAL.trace, 0.07);
+        c.beginPath();
+        for (let r = rMin; r <= rMax; r++) for (let k = cMin; k <= cMax; k++) {
+          if (pulses(k, r)) continue;
+          const n = pins(k, r), x = k * COL + 12, top = Y0 + r * ROW;
+          for (let i = 1; i <= n; i++) {
+            c.moveTo(x + (CW * i) / (n + 1) + 1.5, top + PIN);
+            c.arc(x + (CW * i) / (n + 1), top + PIN, 1.5, 0, Math.PI * 2);
+          }
+        }
+        c.fill();
+        // the pulsing cells: alpha moves between 0.04 and 0.08, each on its own phase
+        for (let r = rMin; r <= rMax; r++) for (let k = cMin; k <= cMax; k++) {
+          if (!pulses(k, r)) continue;
+          const a = 0.04 + 0.04 * (0.5 + 0.5 * Math.sin(this.pulseT * 2.2 + hash(k * 7, r * 11) * Math.PI * 2));
+          const n = pins(k, r), x = k * COL + 12, top = Y0 + r * ROW;
+          c.strokeStyle = rgba(PAL.trace, a);
+          c.fillStyle = rgba(PAL.trace, a);
+          c.beginPath();
+          c.rect(x, top, CW, CH);
+          c.stroke();
+          c.beginPath();
+          for (let i = 1; i <= n; i++) {
+            c.moveTo(x + (CW * i) / (n + 1) + 1.5, top + PIN);
+            c.arc(x + (CW * i) / (n + 1), top + PIN, 1.5, 0, Math.PI * 2);
+          }
+          c.fill();
+        }
+        break;
+      }
     }
   }
 
@@ -353,7 +416,7 @@ export class WorldArt {
   drawSolids(c: C, sim: Sim, cam: Pt) {
     const view = { x: cam.x - 4, y: cam.y - 4, w: VIEW_W + 8, h: VIEW_H + 8 };
     for (const s of sim.world.statics) {
-      if (s === sim.world.door?.rect) continue;
+      if (s === sim.world.door?.rect || sim.barriers.some((b) => b.rect === s)) continue; // barriers: render/act3.ts
       if (s.x > view.x + view.w || s.x + s.w < view.x || s.y > view.y + view.h || s.y + s.h < view.y) continue;
       this.block(c, s, view);
     }

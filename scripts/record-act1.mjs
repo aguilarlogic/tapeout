@@ -283,10 +283,12 @@ const arena = async (place) => {
       if (b.fits().length <= 1) return null;
       const n = b.inv.bestNext();
       const st = s.room.stations.find((x) => x.arg === n.ins.cmd);
-      return { cmd: n.ins.cmd, arg: n.arg, x: st.x, y: st.y - 40 };
+      return { cmd: n.ins.cmd, arg: n.arg, x: st.x, y: st.y - 40, foot: st.y };
     });
     if (!nx) break;
     const before = await story(() => window.__tapeoutGame.story.boss.log.length);
+    // a node up on a ledge: climb to it the way the exit climb does
+    if ((await drone()).y > nx.foot + 30) await traverse({ x: nx.x, y: nx.foot });
     await walk(nx.x, { tol: 14 });
     await press();
     if (await page.getByTestId('story-choice').count()) {
@@ -366,7 +368,7 @@ try {
       log(`${place} room ${r.index} ${r.role}`);
       await wait(60);
       // a card on arrival (the Underlayers): read it, then close it
-      if (await page.getByTestId('story-card').count()) await card(3500);
+      if (r.role !== 'arena' && (await page.getByTestId('story-card').count())) await card(3500);
       await still(`${place}-${String(r.index + 1).padStart(2, '0')}-${r.role}`);
       if (r.role === 'exit') {
         const l = r.stations.find((x) => x.kind === 'lift');

@@ -8,7 +8,9 @@ export type UpgradeId =
   | 'loop-drone' | 'datapath-rail' | 'synchronizer' | 'pipeline-burst' | 'third-slot'
   | 'current-limiter' | 'phasor-curve' | 'integrator' | 'kickback-dash' | 'charged-probe' | 'gradient-compass'
   | 'matrix-throw' | 'damped-landing' | 'resonant-hover' | 'spectrum-visor' | 'gauss-field' | 'diode-plating'
-  | 'gain-stage' | 'bias-plates';
+  | 'gain-stage' | 'bias-plates'
+  | 'cmos-mirror' | 'sized-drivers' | 'slack-parry' | 'via-phase' | 'buffer-turret' | 'power-gate' | 'scan-visor'
+  | 'trace-tether' | 'scripted-loop' | 'make-repair' | 'noise-filter' | 'pid-stabilizer';
 
 export interface Upgrade {
   id: UpgradeId;
@@ -59,6 +61,19 @@ export const UPGRADES: Upgrade[] = [
   { id: 'diode-plating', name: 'Diode Plating', type: 'minor', source: ['clab-boss-ohm'], effect: 'Hits from behind do half damage.' },
   { id: 'gain-stage', name: 'Gain Stage', type: 'minor', source: ['clab-dac'], effect: 'Charged shots hit for 60 instead of 40.' },
   { id: 'bias-plates', name: 'Bias Plates', type: 'minor', source: ['clab-boss-bjt'], effect: 'Ten more points of hull.' },
+  // --- act 3, Silicon (Phase 6 Spec, section 7) ---
+  { id: 'cmos-mirror', name: 'CMOS Mirror', type: 'major', source: ['cmos-aoi'], effect: 'Shots your field bounces fly back at the bug that fired them, and hit harder.', mk2: { banks: ['practice-mos'], effect: 'Bounced shots hit even harder.' } },
+  { id: 'sized-drivers', name: 'Sized Drivers', type: 'major', source: ['vlsi'], effect: 'Every weapon fires a quarter faster.', mk2: { banks: ['practice-vlsi'], effect: 'A little faster still.' } },
+  { id: 'slack-parry', name: 'Slack Parry', type: 'major', source: ['sta-eco'], effect: 'Press the field just before a hit lands: no damage, the bug is stunned, and you gain energy.', mk2: { banks: ['practice-sta'], effect: 'A wider timing window.' } },
+  { id: 'via-phase', name: 'Via Phase', type: 'major', source: ['layout-boss'], effect: 'Dash straight through thin magenta metal walls.', mk2: { banks: ['practice-openflow'], effect: 'Thicker walls too.' } },
+  { id: 'buffer-turret', name: 'Buffer Turret', type: 'major', source: ['pd-boss'], effect: 'A gadget: press F to set down a turret that shoots nearby bugs. G switches gadgets.', mk2: { banks: ['practice-pnr'], effect: 'Turrets last longer.' } },
+  { id: 'power-gate', name: 'Power Gate', type: 'major', source: ['power'], effect: 'Stand still for a second and bugs lose track of you. Energy refills faster too.', mk2: { banks: ['practice-power'], effect: 'You fade out sooner.' } },
+  { id: 'scan-visor', name: 'Scan Visor', type: 'major', source: ['dft-boss'], effect: 'Press V to scan. Bugs in range show their health and take more damage.', mk2: { banks: ['practice-dft'], effect: 'A wider scan.' } },
+  { id: 'trace-tether', name: 'Trace Tether', type: 'major', source: ['clab-boss-pdn'], effect: 'Aim at a copper pad and press the right mouse button to pull yourself to it.', mk2: { banks: ['practice-pcb'], effect: 'A longer reach.' } },
+  { id: 'scripted-loop', name: 'Scripted Loop', type: 'minor', source: ['code-boss-py-log'], effect: 'Your Loop Drone hits harder and reaches further.' },
+  { id: 'make-repair', name: 'Make Repair', type: 'minor', source: ['sh-boss-make'], effect: 'Your hull starts to repair sooner after a hit.' },
+  { id: 'noise-filter', name: 'Noise Filter', type: 'minor', source: ['sig-boss'], effect: 'Copied shots from crosstalk bugs can no longer hurt you.' },
+  { id: 'pid-stabilizer', name: 'PID Stabilizer', type: 'minor', source: ['sig-pid'], effect: 'The ALU Cannon no longer kicks you back, and your hover holds its height.' },
 ];
 
 /** The numbers each upgrade changes. */
@@ -71,7 +86,8 @@ export const UP = {
   weakPoint: 1.5, weakPointMk2: 1.8,
   beam: { reach: 400, halfDeg: 25 },
   counter: { from: 7, to: 10, toMk2: 11, hits: 4 },
-  cannon: { damage: 40, damageMk2: 48, rate: 1, speed: 700, range: 720, knock: 600, energy: 10 },
+  /** ALU Cannon; `kick` px/s pushes the drone back along the aim on each shot (the PID Stabilizer removes it). */
+  cannon: { damage: 40, damageMk2: 48, rate: 1, speed: 700, range: 720, knock: 600, energy: 10, kick: 160 },
   energyMax: 125,
   /** Integrity: +5 per main-path boss after the Dark Demo Board, capped. */
   bossIntegrity: 5, integrityCap: 200,
@@ -107,6 +123,27 @@ export const UP = {
   chargedDamage: 40, gainStageDamage: 60,
   /** Bias Plates: integrity added. */
   biasPlates: 10,
+  // --- act 3, Silicon (Phase 6 Spec, section 7) ---
+  /** CMOS Mirror: reflected shots' damage × this (Mk II), homing on their shooter at turnDegS. */
+  mirror: { damage: 1.5, damageMk2: 1.8, turnDegS: 360 },
+  /** Sized Drivers: weapon cooldowns × this (Mk II). */
+  drivers: { cooldown: 0.8, cooldownMk2: 0.77 },
+  /** Slack Parry: window ms before a hit (Mk II), stun ms, energy gained, hit-stop ms. */
+  parry: { windowMs: 150, windowMsMk2: 180, stunMs: 1000, energy: 20, hitStopMs: 60 },
+  /** Via Phase: thickest barrier a dash passes, px (Mk II). */
+  via: { thick: 40, thickMk2: 80 },
+  /** Buffer Turret: count, damage, shots a second, reach px, life s (Mk II), energy, bolt speed px/s. */
+  turret: { max: 3, damage: 6, rate: 2, range: 400, lifeS: 30, lifeSMk2: 36, energy: 25, speed: 900 },
+  /** Power Gate: seconds still before it gates (Mk II), and energy regen × this while gated. */
+  gate: { stillS: 1, stillSMk2: 0.8, regen: 2 },
+  /** Scan Visor: pulse radius px (Mk II), seconds the scan lasts, damage taken × this, energy. */
+  scan: { radius: 600, radiusMk2: 720, s: 5, damage: 1.15, energy: 20 },
+  /** Trace Tether: reach px (Mk II), pull speed px/s, aim cone half-angle degrees. */
+  tether: { reach: 480, reachMk2: 576, speed: 900, coneDeg: 20 },
+  /** Scripted Loop: Loop Drone damage and reach px. */
+  scriptedLoop: { damage: 6, range: 560 },
+  /** Make Repair: hull repair delay after a hit, ms. */
+  repairDelayMs: 2000,
 } as const;
 
 /** The upgrade a module grants, if any. */
@@ -185,6 +222,31 @@ export interface ActKit {
   grabBonus: number;
   /** Charged Probe damage (Gain Stage 60). */
   chargedDamage: number;
+  // --- act 3, Silicon (Phase 6 Spec, section 7); 0, 1 or false when not owned ---
+  /** CMOS Mirror: reflected shots' damage × this, homing on their shooter (0: off, today's plain reflect). */
+  mirror: number;
+  /** Weapon cooldowns × this (Sized Drivers 0.8). */
+  cooldownScale: number;
+  /** Slack Parry window, ms (0: off). */
+  parryMs: number;
+  /** Via Phase: thickest barrier a dash passes, px (0: off). */
+  viaThick: number;
+  /** Buffer Turret life, s (0: not owned). */
+  turret: number;
+  /** Power Gate: seconds still before it gates (0: off). */
+  gateS: number;
+  /** Scan Visor radius, px (0: not owned). */
+  scan: number;
+  /** Trace Tether reach, px (0: not owned). */
+  tether: number;
+  /** Loop Drone reach, px. */
+  loopRange: number;
+  /** Hull repair delay after a hit, ms. */
+  repairDelayMs: number;
+  /** Noise Filter: crosstalk victims' copied shots do no damage. */
+  noiseFilter: boolean;
+  /** PID Stabilizer: no cannon recoil, and the hover holds height. */
+  pid: boolean;
 }
 
 /**
@@ -206,7 +268,7 @@ export function actKit(done: (id: string) => boolean, bosses: readonly string[])
     ],
     slots: has('third-slot') ? 3 : 2,
     burstBolts: has('pipeline-burst') ? (mk('pipeline-burst') ? UP.burst.boltsMk2 : UP.burst.bolts) : 0,
-    loopDrone: has('loop-drone') ? (mk('loop-drone') ? UP.loopDrone.damageMk2 : UP.loopDrone.damage) : 0,
+    loopDrone: has('loop-drone') ? (has('scripted-loop') ? UP.scriptedLoop.damage : mk('loop-drone') ? UP.loopDrone.damageMk2 : UP.loopDrone.damage) : 0,
     rail: has('datapath-rail') ? (mk('datapath-rail') ? UP.rail.speedMk2 : UP.rail.speed) : 0,
     sync: has('synchronizer') ? (mk('synchronizer') ? UP.sync.sMk2 : UP.sync.s) : 0,
     probeDamage: has('full-adder') ? UP.fullAdderDamage : 10,
@@ -233,5 +295,17 @@ export function actKit(done: (id: string) => boolean, bosses: readonly string[])
     visor: has('spectrum-visor'),
     grabBonus: has('gauss-field') ? UP.gauss.grab : 0,
     chargedDamage: has('gain-stage') ? UP.gainStageDamage : UP.chargedDamage,
+    mirror: has('cmos-mirror') ? (mk('cmos-mirror') ? UP.mirror.damageMk2 : UP.mirror.damage) : 0,
+    cooldownScale: has('sized-drivers') ? (mk('sized-drivers') ? UP.drivers.cooldownMk2 : UP.drivers.cooldown) : 1,
+    parryMs: has('slack-parry') ? (mk('slack-parry') ? UP.parry.windowMsMk2 : UP.parry.windowMs) : 0,
+    viaThick: has('via-phase') ? (mk('via-phase') ? UP.via.thickMk2 : UP.via.thick) : 0,
+    turret: has('buffer-turret') ? (mk('buffer-turret') ? UP.turret.lifeSMk2 : UP.turret.lifeS) : 0,
+    gateS: has('power-gate') ? (mk('power-gate') ? UP.gate.stillSMk2 : UP.gate.stillS) : 0,
+    scan: has('scan-visor') ? (mk('scan-visor') ? UP.scan.radiusMk2 : UP.scan.radius) : 0,
+    tether: has('trace-tether') ? (mk('trace-tether') ? UP.tether.reachMk2 : UP.tether.reach) : 0,
+    loopRange: has('scripted-loop') ? UP.scriptedLoop.range : UP.loopDrone.range,
+    repairDelayMs: has('make-repair') ? UP.repairDelayMs : 4000,
+    noiseFilter: has('noise-filter'),
+    pid: has('pid-stabilizer'),
   };
 }

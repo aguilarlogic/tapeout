@@ -1,7 +1,7 @@
 // Stuck-At Turret (Phase 3 Spec, section 6): an output stuck at one value forever. A fixed 40 px block with a barrel
 // that turns toward the drone while it can see it, and fires every 1.2 s whether or not it has a target ("stuck on").
 // The hidden variant, stuckat0 (stuck at 0), is faint and cannot be hit until the headlamp cone or the drone's
-// proximity reveals it.
+// proximity reveals it, or the Scan Visor's ring passes over it.
 import { angleTo, approach, type Vec } from '../physics/geom';
 import { FONT, PAL, rgba } from '../render/palette';
 import { frames, HZ, TUNING } from '../tuning';
@@ -83,6 +83,9 @@ export class StuckAt implements Enemy {
       const d = { x: this.x - cone.x, y: this.y - cone.y };
       if (Math.hypot(d.x, d.y) <= cone.reach && angleTo({ x: Math.cos(cone.a), y: Math.sin(cone.a) }, d) <= cone.half) return true;
     }
+    // the Scan Visor's ring (act 3) shows every hidden bug inside it
+    const scan = ctx.lamp.scan;
+    if (scan && Math.hypot(this.x - scan.x, this.y - scan.y) <= scan.r) return true;
     return Math.hypot(ctx.target.x - this.x, ctx.target.y - this.y) <= S.revealNear;
   }
 }

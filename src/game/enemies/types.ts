@@ -14,8 +14,8 @@ export interface EnemyCtx {
   plates: Rect[];
   /** Is there a clear line between two points (no room solid in the way)? */
   sight(a: Vec, b: Vec): boolean;
-  /** Fire an enemy shot (px/s). */
-  shoot(x: number, y: number, vx: number, vy: number, damage: number): void;
+  /** Fire an enemy shot (px/s). `copied`: a Crosstalk victim's copy of its aggressor's shot (Noise Filter stops it). */
+  shoot(x: number, y: number, vx: number, vy: number, damage: number, opts?: { copied?: boolean }): void;
   /** Hurt the drone (it ignores this while invulnerable), knocked away from `from`. */
   hurtDrone(n: number, from: Vec): void;
   /** Add an enemy to the room (an X-Blob's children). It joins on the next step. */
@@ -23,7 +23,7 @@ export interface EnemyCtx {
   /** The room's other live enemies (an X-Blob marks the ones it touches). */
   others(): Enemy[];
   /** The drone's headlamp: on, and when Beam Toggle has it in cone mode, the cone (apex, aim angle, half-angle, reach). */
-  lamp: { cone: { x: number; y: number; a: number; half: number; reach: number } | null };
+  lamp: { cone: { x: number; y: number; a: number; half: number; reach: number } | null; scan?: { x: number; y: number; r: number } | null };
 }
 
 export interface Enemy {

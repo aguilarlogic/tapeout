@@ -58,6 +58,7 @@ export interface StoryLines {
   hatchLocked: string;
   /** The card on the first landing in the Underlayers. */
   underlayers: { title: string; lines: readonly string[]; button: string };
+  silicon: { title: string; lines: readonly string[]; button: string };
   /** E at a bus rail without the Datapath Rail. */
   railLocked: string;
 }
@@ -97,6 +98,15 @@ export const STORY: StoryLines = {
       'Down here there are no bosses, only circuits to learn and parts to fit.',
     ],
     button: 'Go down',
+  },
+  silicon: {
+    title: 'SILICON',
+    lines: [
+      'The logic you fixed is made of transistors.',
+      'Here you repair the cells, the wires and the timing.',
+      'Then the chip meets its board.',
+    ],
+    button: 'Go on',
   },
   railLocked: 'A bus rail. The Datapath has the clip you need to ride it.',
 };

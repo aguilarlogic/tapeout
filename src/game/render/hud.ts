@@ -1,9 +1,12 @@
 // The HUD (plan K, polish bar P5): line-art health and energy bars top-left, the selected weapon's icon beside the
 // energy bar (decision 29) and a small crosshair. Damage drops the health bar at once and a white "recent damage"
 // segment drains over 400 ms; the energy bar pulses below 25%. Drawn in view coordinates (1280 × 720 logical px).
-import type { Sim, Weapon } from '../sim';
+import type { Gadget, Sim, Weapon } from '../sim';
 import { frames } from '../tuning';
 import { easeOut, FONT, PAL, rgba } from './palette';
+
+/** The gadget on F, by id. */
+const GADGET_NAME: Record<Gadget, string> = { sync: 'SYNC', turret: 'TURRET' };
 
 /** The weapon's name, shown under its readout for 1.2 s after a swap and faded over the last 0.3 s. */
 const SHORT: Record<Weapon, string> = { pulse: 'PULSE', charged: 'CHARGED', fan: 'FAN', cannon: 'CANNON', burst: 'BURST' };
@@ -92,22 +95,31 @@ export class Hud {
       c.moveTo(wx + 20, wy - 3); c.lineTo(wx + 24, wy); c.lineTo(wx + 20, wy + 3);
     }
     c.stroke();
-    // one weapon: its short name; two or more (the Selector): the slots, numbered for their keys, the one in hand lit
-    const slots = sim.weapons.length > 1 ? sim.slotted : [sim.weapon];
-    let tx = wx + 30;
+    // one weapon: its short name beside the icon. Two or more (the Selector): the slots in a row under the bars,
+    // numbered for their keys, the one in hand lit, so a long row never runs under the boss bar at the top centre
+    const many = sim.weapons.length > 1, slots = many ? sim.slotted : [sim.weapon];
+    const sy = many ? ey + 24 : wy;
+    let tx = many ? x : wx + 30;
     slots.forEach((w, i) => {
-      const on = w === sim.weapon, label = slots.length > 1 ? `${i + 1} ${SHORT[w]}` : SHORT[w];
+      const on = w === sim.weapon, label = many ? `${i + 1} ${SHORT[w]}` : SHORT[w];
       c.fillStyle = on ? rgba(PAL.text, 0.85) : rgba(PAL.text, 0.35);
-      c.fillText(label, tx, wy);
+      c.fillText(label, tx, sy);
       const tw = c.measureText(label).width;
-      if (on && slots.length > 1) { c.fillStyle = rgba(w === 'charged' ? PAL.neon : PAL.trace, 0.8); c.fillRect(tx, wy + 7, tw, 1.5); }
+      if (on && many) { c.fillStyle = rgba(w === 'charged' ? PAL.neon : PAL.trace, 0.8); c.fillRect(tx, sy + 7, tw, 1.5); }
       tx += tw + 12;
     });
-    // the weapon's name, under the readout, after a swap
+    // the weapon's name, beside the icon, after a swap
     if (this.nameT < NAME_STEPS) {
       c.globalAlpha = s * this.gunA * Math.min(1, (NAME_STEPS - this.nameT) / NAME_FADE);
       c.fillStyle = rgba(sim.weapon === 'charged' ? PAL.neon : PAL.trace, 0.9);
-      c.fillText(WEAPON_NAME[sim.weapon], wx + 30, wy + 16);
+      c.fillText(WEAPON_NAME[sim.weapon], wx + 30, many ? wy : wy + 16);
+    }
+    // the gadget on F (act 3): its name, and G to switch when there are two, under the weapons
+    const gadgets = sim.gadgets;
+    if (gadgets.length) {
+      c.globalAlpha = s * this.gunA;
+      c.fillStyle = rgba(PAL.text, 0.6);
+      c.fillText(`F ${GADGET_NAME[sim.gadget]}${gadgets.length > 1 ? '   G switch' : ''}`, x, many ? ey + 42 : ey + 24);
     }
     c.restore();
   }

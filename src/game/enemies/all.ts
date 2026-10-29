@@ -9,3 +9,7 @@ import './swarm';
 import './bubble';
 import './ringer';
 import './shunt';
+import './brute';
+import './crosstalk';
+import './hotspot';
+import './wake';

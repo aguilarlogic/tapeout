@@ -242,3 +242,27 @@ test('The Underlayers: the Pipeline hatch stays shut until D5 opens, then drops 
   await page.waitForTimeout(1500);
   expect(errors).toEqual([]);
 });
+
+test('Silicon: the arrival card on the first act 3 landing, a metal barrier room and an act 3 arena run clean', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(String(e)));
+  page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') errors.push(`${m.type()}: ${m.text()}`); });
+  await page.goto(`${pathToFileURL(resolve('dist/index.html')).href}?record`);
+  await expect(page.locator('#os')).not.toBeEmpty();
+  await page.getByTestId('story-preview').click();
+  await page.getByRole('textbox', { name: 'Your name' }).fill('Sam');
+  await page.getByRole('button', { name: 'I am new to this' }).click();
+  await page.waitForFunction(() => window.__tapeoutGame?.ready && !window.__tapeoutGame.story!.waiting, null, { timeout: 15000 });
+  await page.evaluate(() => window.__tapeoutGame!.story!.warp('cell-library', 0));
+  await expect(page.getByTestId('story-card')).toContainText('SILICON');
+  await page.getByTestId('story-card').getByRole('button', { name: 'Go on' }).click();
+  await page.waitForTimeout(1000);
+  const barrier = await page.evaluate(() => window.__tapeoutGame!.story!.roomsFor('metal-stack').findIndex((r) => (r.barriers ?? []).length > 0));
+  expect(barrier).toBeGreaterThan(0);
+  await page.evaluate((i) => window.__tapeoutGame!.story!.warp('metal-stack', i), barrier);
+  await page.waitForTimeout(2000);
+  const arena = await page.evaluate(() => window.__tapeoutGame!.story!.roomsFor('critical-path').findIndex((r) => r.role === 'arena'));
+  await page.evaluate((i) => window.__tapeoutGame!.story!.warp('critical-path', i), arena);
+  await page.waitForTimeout(6000);
+  expect(errors).toEqual([]);
+});

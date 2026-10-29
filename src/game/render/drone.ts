@@ -237,6 +237,8 @@ export class DroneRig {
     let alpha = 1;
     if (sim.booting > 0) alpha = (Math.floor(this.t * 30) % 3 === 0 ? 0.25 : 1) * (1 - sim.booting / VITALS.bootSteps) + 0.15;
     else if (v.iFrames > 0 && !dying) alpha = Math.floor(this.t * TUNING.vitals.blinkHz * 2) % 2 ? (opts.reducedFlash ? 0.6 : 0.3) : 1;
+    // the Power Gate: a still drone powers down to save energy, and shows it by fading (the ring is in render/act3.ts)
+    if (sim.gated) alpha *= 0.55;
 
     c.save();
     c.globalAlpha = alpha;

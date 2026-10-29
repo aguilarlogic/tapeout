@@ -1,4 +1,4 @@
-// Attack library tests (Phase 3 Spec, section 6): every attack on a fake context, at speeds 1 and 1.4, Story on and off.
+// Attack library tests (Phase 3 Spec, section 6; Phase 6 Spec, section 6): every attack on a fake context, at speeds 1 and 1.4, Story on and off.
 import { describe, expect, it } from 'vitest';
 import type { Rect } from '../level/room';
 import { bolts, chain, drop, freeze, grid, mirror, segments } from './attacks';
@@ -70,6 +70,7 @@ function stubContext(): CanvasRenderingContext2D {
   const gradient = { addColorStop: noop };
   const g = {
     save: noop, restore: noop, beginPath: noop, closePath: noop, moveTo: noop, lineTo: noop, arc: noop, rect: noop,
+    quadraticCurveTo: noop, bezierCurveTo: noop, ellipse: noop, fillText: noop, strokeText: noop, measureText: () => ({ width: 0 }),
     fill: noop, stroke: noop, fillRect: noop, strokeRect: noop, clip: noop, translate: noop, rotate: noop,
     setLineDash: noop, createRadialGradient: () => gradient, createLinearGradient: () => gradient,
     globalAlpha: 1, globalCompositeOperation: 'source-over', strokeStyle: '', fillStyle: '', lineWidth: 1,
@@ -86,13 +87,15 @@ describe('every attack', () => {
   for (const a of ATTACK_LIST) {
     for (const speed of SPEEDS) {
       for (const story of STORY) {
-        it(`${a.id}: ends within 900 steps, is quiet for the first 30, and sounds once (speed ${speed}, story ${story})`, () => {
+        it(`${a.id}: ends within 900 steps, is quiet for the first 30, and sounds once per strike (speed ${speed}, story ${story})`, () => {
           const { log, steps, done } = play(a, { story, speed, seed: 11 });
           expect(done).toBe(true);
           expect(steps).toBeLessThanOrEqual(900);
           const early = [...log.shots, ...log.hurts, ...log.hazards].filter((e) => e.at < 30);
           expect(early).toEqual([]);
-          expect(log.sfx).toHaveLength(1);
+          // one cue per attack, or one per strike for act 3's multi-strike attacks (4 slams at most, 2 cues each)
+          expect(log.sfx.length).toBeGreaterThanOrEqual(1);
+          expect(log.sfx.length).toBeLessThanOrEqual(8);
         });
       }
     }
