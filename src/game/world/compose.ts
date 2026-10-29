@@ -3,6 +3,8 @@
 // place always gives the same rooms, so saves can name a room by its index.
 import { findModule, type ModKind } from '../../curriculum';
 import { findIncident } from '../../incidents';
+import { capstoneId } from '../../mastery/career';
+import { ROLES } from '../../mastery/skills';
 import type { EnemyKind, PropSpec } from '../level/room';
 import { overlaps } from '../physics/geom';
 import type { Station, StoryRoom, Trigger } from '../story/types';
@@ -11,6 +13,8 @@ import { PLACES, placeById } from './places';
 import { majorOf, planPlace, type PlanRoom } from './slots';
 import { arena } from './templates/arena';
 import { ending } from './templates/ending';
+import { floorY } from './templates/kit';
+import { OFFICE_PANELS, offices } from './templates/offices';
 import { FIGHT_VARIANTS } from './templates/fight';
 import { ROOMS } from './templates/rooms';
 import { TRAVERSE_VARIANTS } from './templates/traverse';
@@ -21,6 +25,8 @@ import { ACT3B_THEMES } from './themes/act3b';
 import { ACT4A_THEMES } from './themes/act4a';
 import { ACT4B_THEMES } from './themes/act4b';
 import { UNDER_THEMES } from './themes/under';
+import { WINGS_A_THEMES } from './themes/wings-a';
+import { WINGS_B_THEMES } from './themes/wings-b';
 import type { BackdropKind, PlaceDef, PlaceTheme, Shell, Template, TemplateOpts } from './types';
 
 /** A small seeded rng (mulberry32). */
@@ -39,7 +45,7 @@ const BACKDROP: Record<PlaceDef['act'], BackdropKind> = { 1: 'lamps', 2: 'core',
 
 /** The theme a place without its own (phases 4 to 8 fill these in) is built with. */
 export function themeOf(place: PlaceDef): PlaceTheme {
-  return act1Theme(place.id) ?? [...ACT2_THEMES, ...UNDER_THEMES, ...ACT3A_THEMES, ...ACT3B_THEMES, ...ACT4A_THEMES, ...ACT4B_THEMES].find((t) => t.place === place.id) ?? {
+  return act1Theme(place.id) ?? [...ACT2_THEMES, ...UNDER_THEMES, ...ACT3A_THEMES, ...ACT3B_THEMES, ...ACT4A_THEMES, ...ACT4B_THEMES, ...WINGS_A_THEMES, ...WINGS_B_THEMES].find((t) => t.place === place.id) ?? {
     place: place.id, music: 'keeper', enemies: ['glitch', 'spark', 'latch'], fights: 3, backdrop: BACKDROP[place.act],
     lines: { arrive: [`${place.name}.`], rooms: {}, clear: ['Clear.'], bossIntro: [], bossBeaten: [], leave: [] },
   };
@@ -54,14 +60,17 @@ function label(kind: ModKind, title: string): string {
   return `${head} · ${title.toUpperCase()}`;
 }
 const stationKind = (role: PlanRoom['role'], kind: ModKind): Station['kind'] =>
-  role === 'gate' || role === 'bossdoor' ? 'gate' : role === 'bench' ? 'bench' : kind === 'lesson' || kind === 'final' || kind === 'drills' ? 'port' : 'panel';
+  role === 'offices' ? 'hire' : role === 'gate' || role === 'bossdoor' ? 'gate' : role === 'bench' ? 'bench' : kind === 'lesson' || kind === 'final' || kind === 'drills' ? 'port' : 'panel';
 
 /** Stations on a shell's anchors, one per module. */
 function stationsFor(room: PlanRoom, s: Shell): Station[] {
   return room.modules.map((id, i) => {
     const m = findModule(id)?.module;
     const at = s.anchors.stations[i] ?? s.anchors.stations[s.anchors.stations.length - 1];
-    return { id: `st:${id}`, kind: stationKind(room.role, m?.kind ?? 'lesson'), x: at.x, y: at.y, label: label(m?.kind ?? 'lesson', m?.title ?? id), module: id };
+    // a Hiring Hall panel is named for its role (Phase 8 Spec, section 4)
+    const role = room.role === 'offices' ? ROLES.find((r) => capstoneId(r) === id) : undefined;
+    const text = role ? `HIRING PANEL · ${role.name.toUpperCase()}` : label(m?.kind ?? 'lesson', m?.title ?? id);
+    return { id: `st:${id}`, kind: stationKind(room.role, m?.kind ?? 'lesson'), x: at.x, y: at.y, label: text, module: id, ...(role ? { arg: role.icon } : {}) };
   });
 }
 
@@ -72,6 +81,8 @@ function lineKey(room: PlanRoom): string | undefined {
     case 'port': case 'panel': case 'bench': case 'gate': return `${room.role}:${first}`;
     case 'bossdoor': return first ? `gate:${first}` : undefined;
     case 'annex': case 'discovery': case 'fight': case 'traverse': return room.role;
+    // the Hiring Hall's offices, 1 to 4, by where their first panel's role sits in ROLES
+    case 'offices': return `offices:${Math.floor(ROLES.findIndex((r) => capstoneId(r) === first) / 8) + 1}`;
     default: return undefined;
   }
 }
@@ -122,6 +133,10 @@ export function composePlace(place: PlaceDef, theme: PlaceTheme = themeOf(place)
       s = arena(rng, { ...opts, nodes: 0 });
     } else if (room.role === 'ending') {
       s = ending();
+    } else if (room.role === 'offices') {
+      // the Hiring Hall's offices (Phase 8 Spec, section 4): a panel on each spot, standing on the floor
+      const o = offices(), F = floorY(o.h);
+      s = { ...o, anchors: { ...o.anchors, stations: OFFICE_PANELS.map((x) => ({ x, y: F })) } };
     } else {
       s = ROOMS[room.role as keyof typeof ROOMS](rng, { ...opts, stations: Math.max(1, room.modules.length) });
     }
@@ -135,7 +150,7 @@ export function composePlace(place: PlaceDef, theme: PlaceTheme = themeOf(place)
     const copper = traverse && at >= PLACES.findIndex((p) => p.id === 'board') ? copperFor(s) : [];
     // act 4 (Phase 7 Spec, section 3): two router pads in traverse rooms from The Mesh, for the NoC Warp
     const routers = traverse && at >= PLACES.findIndex((p) => p.id === 'mesh') ? routersFor(s) : [];
-    const signs = room.role === 'landing' ? [{ x: 640, y: 200, text: `${place.name.toUpperCase()} · ${place.region.toUpperCase()} · T-${clockAt(place)}` }] : s.signs;
+    const signs = room.role === 'landing' ? [{ x: 640, y: 200, text: `${place.name.toUpperCase()} · ${place.region.toUpperCase()}${place.act === 6 ? '' : ` · T-${clockAt(place)}`}` }] : s.signs;
     return {
       ...base,
       name: `${place.name} ${index}`,

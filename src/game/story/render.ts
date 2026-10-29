@@ -7,10 +7,12 @@
 import { chipProgress, CHIPS, slotProgress } from '../../chip';
 import { findModule, KIND_APP } from '../../curriculum';
 import { easeOut, FONT, PAL, rgba } from '../render/palette';
+import { drawHiringPanel, drawOfficeFloor } from '../render/hall';
 import { drawRail } from '../render/rails';
 import { HZ, TUNING, VIEW_H, VIEW_W } from '../tuning';
 import type { Rect } from '../level/room';
 import type { Director } from './director';
+import { panelOf, type Panel } from './hall';
 import type { Station, StationKind, Terminal } from './types';
 
 type C = CanvasRenderingContext2D;
@@ -114,6 +116,8 @@ export function drawStoryBack(c: C, d: Director, t: number) {
   const run = room.wire;
   if (run?.gate) drawWallGate(c, run.gate.kind, run.gate.x, run.gate.y, run.terminals, rs.passed, t);
   if (run) drawStrip(c, d, t);
+  // the Hiring Hall's offices (Phase 8 Spec, section 4): carpet lines along the floor under the panels
+  if (room.role === 'offices' && room.stations.length) drawOfficeFloor(c, 0, room.w, room.stations[0].y);
   for (const st of room.stations) {
     // room for the label: up to halfway to the nearest station on either side, less a gap
     const near = Math.min(...room.stations.filter((o) => o !== st).map((o) => Math.abs(o.x - st.x)));
@@ -340,10 +344,12 @@ function drawBenchRig(c: C, x: number, y: number, w: number, h: number, d: Direc
     c.strokeStyle = done ? PAL.ok : rgba(PAL.trace, 0.6);
     c.lineWidth = 2;
     c.stroke();
-    // the title shrinks to fit the monitor
+    const mod = findModule(m)?.module;
+    const opens = mod ? `// opens in: ${KIND_APP[mod.kind]}` : '';
+    // the title and the "opens in" line shrink to fit the monitor
     let size = 12;
     c.font = `${size}px ${FONT}`;
-    while (size > 9 && c.measureText(title).width > mw - 28) { size--; c.font = `${size}px ${FONT}`; }
+    while (size > 9 && Math.max(c.measureText(title).width, c.measureText(opens).width) > mw - 28) { size--; c.font = `${size}px ${FONT}`; }
     // still too long at the smallest size: cut at a word with an ellipsis, never mid-word at the edge
     let shown = title;
     if (c.measureText(shown).width > mw - 28) {
@@ -352,16 +358,22 @@ function drawBenchRig(c: C, x: number, y: number, w: number, h: number, d: Direc
       shown = `${ws.join(' ')}…`;
     }
     const verdict = done ? '// PASS' : '// write me';
-    const mod = findModule(m)?.module;
     // the idea it teaches, wrapped to the monitor, then where it opens
     const words = (mod?.concept ?? '').split(/\s+/).filter(Boolean), lines: string[] = [];
+    let cut = false;
     for (const wd of words) {
       const last = lines[lines.length - 1];
       if (last !== undefined && c.measureText(`//   ${last} ${wd}`).width <= mw - 28) lines[lines.length - 1] = `${last} ${wd}`;
       else if (lines.length < 3) lines.push(wd);
-      else break;
+      else { cut = true; break; }
     }
     const rows = Math.min(lines.length, Math.max(0, Math.floor((h - 70) / 16)));
+    // the idea runs past the monitor: end the last shown line at a word, with an ellipsis
+    if (rows > 0 && (cut || rows < lines.length)) {
+      const ws = lines[rows - 1].split(' ');
+      while (ws.length > 1 && c.measureText(`//   ${ws.join(' ')}…`).width > mw - 28) ws.pop();
+      lines[rows - 1] = `${ws.join(' ').replace(/[,;:]$/, '')}…`;
+    }
     c.save();
     c.beginPath();
     c.rect(mx + 2, y0 + 2, mw - 4, h - 4);
@@ -372,7 +384,7 @@ function drawBenchRig(c: C, x: number, y: number, w: number, h: number, d: Direc
     for (let k = 0; k < rows; k++) c.fillText(`//   ${lines[k]}`, mx + 14, y0 + 44 + k * 16);
     const vy = y0 + h - 18;
     c.fillStyle = rgba(PAL.text, 0.35);
-    if (mod) c.fillText(`// opens in: ${KIND_APP[mod.kind]}`, mx + 14, vy - 18);
+    if (mod) c.fillText(c.measureText(opens).width > mw - 28 ? `// ${KIND_APP[mod.kind]}` : opens, mx + 14, vy - 18);
     c.fillStyle = done ? PAL.ok : rgba(PAL.trace, 0.85);
     c.fillText(verdict, mx + 14, vy);
     if (!done && Math.floor(t / 30) % 2) c.fillRect(mx + 14 + c.measureText(verdict).width + 4, vy - 11, 7, 13);
@@ -648,9 +660,24 @@ function drawStrip(c: C, d: Director, t: number) {
   void t;
 }
 
+/** Hiring panels' state, read from records once a second (roleReadiness walks every skill). */
+const panels = new Map<string, { at: number; p: Panel | undefined }>();
+function panelAt(module: string, t: number): Panel | undefined {
+  const hit = panels.get(module);
+  if (hit && t - hit.at < HZ && t >= hit.at) return hit.p;
+  const p = panelOf(module);
+  panels.set(module, { at: t, p });
+  return p;
+}
+
 function drawStation(c: C, d: Director, st: Station, t: number) {
   const x = st.x, y = st.y;
   switch (st.kind) {
+    case 'hire': {
+      const p = st.module ? panelAt(st.module, t) : undefined;
+      if (p) drawHiringPanel(c, x, y, { icon: p.role.icon, name: p.role.name, open: p.open, passed: p.passed || d.kitDone(st.module!), t });
+      break;
+    }
     case 'port': {
       const done = !!st.module && d.kitDone(st.module);
       chamfer(c, x - 34, y - 170, 68, 90, 6);
@@ -817,11 +844,15 @@ function drawLoftStation(c: C, d: Director, st: Station, t: number) {
       label(c, 'PLAY', x, y - 168, PAL.neon, 12);
       dot(c, x - 10, y - 120, 5, PAL.gold); dot(c, x + 12, y - 120, 5, PAL.trace);
       break;
-    case 'interview':
-      chamfer(c, x - 46, y - 210, 92, 210, 6); c.fillStyle = PAL.fill; c.fill(); c.strokeStyle = rgba(PAL.idle, 0.8); c.stroke();
-      dot(c, x + 30, y - 100, 4, PAL.hostile, 0.9);
-      label(c, 'LOCKED', x, y - 220, rgba(PAL.hostile, 0.8), 11);
+    case 'interview': {
+      // after the ending the door stands open onto the Hiring Hall (Phase 8 self-review)
+      const open = d.world.cutscenes.includes('ending');
+      chamfer(c, x - 46, y - 210, 92, 210, 6); c.fillStyle = open ? '#0E0C22' : PAL.fill; c.fill(); c.strokeStyle = open ? PAL.ok : rgba(PAL.idle, 0.8); c.stroke();
+      if (open) halo(c, x, y - 105, 70, PAL.ok, 0.14 + 0.05 * Math.sin(t * 0.05));
+      dot(c, x + 30, y - 100, 4, open ? PAL.ok : PAL.hostile, 0.9);
+      label(c, open ? 'OPEN · HIRING HALL' : 'LOCKED', x, y - 220, rgba(open ? PAL.ok : PAL.hostile, 0.8), 11);
       break;
+    }
     case 'gate': {
       // the gate terminal: a tall frame on the floor, its padlock springing open once the module passes
       const done = !!st.module && d.kitDone(st.module), k = done ? PAL.ok : PAL.amber;

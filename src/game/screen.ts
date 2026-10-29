@@ -23,6 +23,7 @@ import { pauseMenu } from './pause';
 import { Camera } from './render/camera';
 import { drawAct3Back, drawAct3Front } from './render/act3';
 import { drawAct4Back, drawAct4Front, drawCoverage, noteRewind } from './render/act4';
+import { drawWingsFront, noteWingFx } from './render/act6';
 import { drawAimLine, drawBeam, drawEnemies, drawField, drawLoopDrone, drawShots, drawSyncTint } from './render/combat';
 import { DroneRig } from './render/drone';
 import { Fx } from './render/fx';
@@ -384,6 +385,11 @@ export class GameScreen {
           break;
         case 'pocket': a.play(f.out ? 'grab' : 'pocket'); fx.ring(f.x, f.y, 22, PAL.trace, 10); break;
         case 'warp': a.play('warp'); fx.ring(f.x, f.y, 40, PAL.trace, 18); fx.sparks(f.x, f.y, 0, -1, 8, PAL.trace, 4, Math.PI); break;
+        // the wings (Phase 8 Spec, sections 6 and 7)
+        case 'overclock': a.play('pass'); noteWingFx(f); break;
+        case 'clamp': a.play('parry'); noteWingFx(f); this.hitStop = frames(UP.parry.hitStopMs); break;
+        case 'reflex': a.play('phase'); noteWingFx(f); break;
+        case 'decoy': a.play(f.out ? 'warp' : 'pocket'); if (!f.out) fx.ring(f.x, f.y, 34, PAL.trace, 14); break;
       }
     }
     if (sim.weapon === 'charged' && sim.charge > 0 && sim.charge < 1 && sim.steps % 6 === 0) a.play('charge', 0.4 + sim.charge * 0.6);
@@ -525,6 +531,7 @@ export class GameScreen {
     drawShots(c, sim, alpha);
     drawAct3Front(c, sim, t);
     drawAct4Front(c, sim, t);
+    drawWingsFront(c, sim);
     this.fx.draw(c, alpha, reducedFlash, prefs().damageNumbers);
     if (st) drawPrompt(c, st, t);
     this.art.drawMotes(c, cam);

@@ -1,5 +1,6 @@
-// Silicon track tests (Phase 6 Spec, section 8): the track runs at 132 BPM in E minor with the Core's three-section
-// layout, its bass is a 16th-note line, its pad is gated in 16ths, and the pad-only variant drops the arp and the drums.
+// Music track tests: the Silicon track (Phase 6 Spec, section 8) runs at 132 BPM in E minor with the Core's three-section
+// layout, a 16th-note bass and a gated pad; the Wings track (Phase 8 Spec, section 7) is the same form at 124 BPM with a
+// plucked arp and a half-time snare. The pad-only variants drop the arp and the drums.
 import { describe, expect, it } from 'vitest';
 import { PAD_ONLY, TRACKS } from './audio';
 
@@ -33,5 +34,41 @@ describe('the silicon track', () => {
     expect(PAD_ONLY.silicon.bass).toBe(TRACKS.silicon.bass);
     expect(PAD_ONLY.silicon.gate).toEqual(TRACKS.silicon.gate);
     expect(PAD_ONLY.silicon.bpm).toBe(132);
+  });
+});
+
+describe('the wings track', () => {
+  it('runs at 124 BPM in E minor, with the same four chords as the Keeper', () => {
+    expect(TRACKS.wings.bpm).toBe(124);
+    for (const chord of TRACKS.wings.chords) for (const n of chord) expect(E_MINOR).toContain(n % 12);
+    expect(TRACKS.wings.chords.map((ch) => ch[0] % 12)).toEqual([4, 0, 7, 2]);
+  });
+
+  it('has the same 24-bar, three-section layout as the Core track', () => {
+    expect(TRACKS.wings.from).toBe(TRACKS.core.from);
+    expect(TRACKS.wings.chords).toHaveLength(TRACKS.core.chords.length);
+  });
+
+  it('has a plucked square arp, a 16th-note bass and a pad gated to one stab per beat', () => {
+    expect(TRACKS.wings.arp).toBe('square');
+    expect(TRACKS.wings.bass).toBe(1);
+    expect(TRACKS.wings.gate).toHaveLength(16);
+    expect(TRACKS.wings.gate?.filter((g) => g === 1)).toHaveLength(4);
+    expect(TRACKS.wings.gate?.[0]).toBe(1);
+  });
+
+  it('has a half-time snare on beat 3 and no other snare, with the kick off the snare', () => {
+    expect(TRACKS.wings.snare).toHaveLength(16);
+    expect(TRACKS.wings.snare?.map((s, i) => (s === 1 ? i : -1)).filter((i) => i >= 0)).toEqual([8]);
+    expect(TRACKS.wings.kick?.[8]).toBe(0);
+  });
+
+  it('plays a pad-only variant with no arp and no drums, keeping its chords, bass and gate', () => {
+    expect(PAD_ONLY.wings.arp).toBeNull();
+    expect(PAD_ONLY.wings.drums).toBe(false);
+    expect(PAD_ONLY.wings.chords).toEqual(TRACKS.wings.chords);
+    expect(PAD_ONLY.wings.bass).toBe(TRACKS.wings.bass);
+    expect(PAD_ONLY.wings.gate).toEqual(TRACKS.wings.gate);
+    expect(PAD_ONLY.wings.bpm).toBe(124);
   });
 });

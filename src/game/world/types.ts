@@ -32,7 +32,7 @@ export interface PlaceDef {
 
 // --- rooms ----------------------------------------------------------------------------------------------------------
 
-export type RoomRole = 'landing' | 'discovery' | 'port' | 'panel' | 'annex' | 'bench' | 'gate' | 'fight' | 'traverse' | 'bossdoor' | 'arena' | 'xarena' | 'ending' | 'exit';
+export type RoomRole = 'landing' | 'discovery' | 'port' | 'panel' | 'annex' | 'bench' | 'gate' | 'fight' | 'traverse' | 'bossdoor' | 'arena' | 'xarena' | 'ending' | 'offices' | 'exit';
 
 /** What a room template returns: geometry plus the anchors compose.ts hangs stations, gates and enemies on. World px,
  * y down, floor 80 px above the bottom edge, entry on the left. */

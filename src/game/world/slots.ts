@@ -64,6 +64,15 @@ export function planPlace(place: PlaceDef, theme: Pick<PlaceTheme, 'fights' | 'd
       { role: 'ending', modules: [] },
     ];
   }
+  // the Hiring Hall has its own plan too (Phase 8 Spec, section 4): four open offices of eight hiring panels each
+  if (place.kind === 'hall') {
+    const caps = chapterOf(place).modules.map((m) => m.id);
+    return [
+      { role: 'landing', modules: [] },
+      ...[0, 1, 2, 3].map((i): PlanRoom => ({ role: 'offices', modules: caps.slice(8 * i, 8 * i + 8) })),
+      { role: 'exit', modules: [] },
+    ];
+  }
   const mods = chapterOf(place).modules.filter((m) => m.kind !== 'practice');
   const cap = capstoneOf(mods);
   const body: PlanRoom[] = [];

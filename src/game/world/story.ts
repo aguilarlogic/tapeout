@@ -61,6 +61,10 @@ export interface StoryLines {
   silicon: { title: string; lines: readonly string[]; button: string };
   /** Act 4's card (Phase 7 Spec, section 3). */
   cluster: { title: string; lines: readonly string[]; button: string };
+  /** The Fab's card, on the first entry to a wing or the Hiring Hall (Phase 8 Spec, section 3). */
+  fab: { title: string; lines: readonly string[]; button: string };
+  /** The Hiring Hall's panels (Phase 8 Spec, section 4): {role} and {pct} are filled in when spoken. */
+  hall: { notYet: string; passed: string };
   /** Level 27's ending (Phase 7 Spec, section 7). */
   ending: { slip: string; bit: string; card: { title: string; lines: readonly string[]; button: string } };
   /** E at a bus rail without the Datapath Rail. */
@@ -117,10 +121,19 @@ export const STORY: StoryLines = {
     lines: ['Four cores share one memory.', 'Nobody checked how they share it.', 'Find where X hides. Then corner it.'],
     button: 'Go on',
   },
+  fab: {
+    title: 'THE FAB',
+    lines: ['ADA is shipping. The Fab builds what we design.', 'Every wing is a team with a problem.', 'Go in any order. Each one teaches a job.'],
+    button: 'Go on',
+  },
+  hall: {
+    notYet: 'Not yet: {role} is {pct}% ready. The panel wants 60.',
+    passed: 'You passed this panel. The team would hire you.',
+  },
   ending: {
     slip: 'X slips away.',
     bit: 'It is just a bit now, a 1. Pick it up.',
-    card: { title: 'ENDING', lines: ['ADA is shipping.', 'Other teams need help.', 'The Fab opens soon.'], button: 'Back to the Loft' },
+    card: { title: 'ENDING', lines: ['ADA is shipping.', 'Other teams need help.', 'The Fab is open now.'], button: 'Back to the Loft' },
   },
   railLocked: 'A bus rail. The Datapath has the clip you need to ride it.',
 };

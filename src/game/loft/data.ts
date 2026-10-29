@@ -8,7 +8,7 @@ import type { PlaceDef } from '../world/types';
 
 /** A place's name on the lift and the chip map: a study room is the chalkboard. */
 function liftName(p: PlaceDef): string {
-  return p.kind === 'study' ? `${p.name} (Chalkboard)` : p.kind === 'deep' ? `${p.name} (Deep Layer)` : p.name;
+  return p.kind === 'study' ? `${p.name} (Chalkboard)` : p.kind === 'deep' ? `${p.name} (Deep Layer)` : p.kind === 'wing' ? `${p.name} (Fab)` : p.name;
 }
 
 /** The modules that count toward a place: not optional and not practice (the same rule as placeDone). */
@@ -24,11 +24,11 @@ export const LOCKED_SHOWN = 3;
  * Then every open main or study place in PLACES order, ticked when finished. Then the next LOCKED_SHOWN locked ones, dimmed,
  * each with the first unfinished place it needs.
  */
-export function liftChoices(done: (id: string) => boolean): { place: string; text: string; dim: boolean }[] {
+export function liftChoices(done: (id: string) => boolean, ended = false): { place: string; text: string; dim: boolean }[] {
   const open = new Set(openPlaces(done).map((p) => p.id));
   // Deep Layers ride the lift too, in play order, so a returning player never walks a level to reach one (Phase 4 Spec,
-  // section 3)
-  const listed = PLACES.filter((p) => p.kind === 'main' || p.kind === 'study' || p.kind === 'deep');
+  // section 3). The wings and the Hiring Hall join them after the ending (Phase 8 Spec, section 3)
+  const listed = PLACES.filter((p) => p.kind === 'main' || p.kind === 'study' || p.kind === 'deep' || (ended && (p.kind === 'wing' || p.kind === 'hall')));
   const out: { place: string; text: string; dim: boolean }[] = [];
   const next = recommended();
   const nextPlace = next ? placeOf(next.id) : undefined;

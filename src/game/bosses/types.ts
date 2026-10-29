@@ -2,8 +2,10 @@
 // investigation); its form is a line-art body in the arena that runs attacks from a shared library, one at a time.
 import type { EnemyKind, Rect } from '../level/room';
 
-export type AttackId = 'bolts' | 'drop' | 'grid' | 'chain' | 'freeze' | 'segments' | 'mirror' | 'push' | 'relay' | 'split' | 'stage' | 'slam' | 'lash' | 'paths' | 'spikes' | 'congest' | 'rush' | 'shift' | 'eye' | 'walls' | 'holes' | 'agents' | 'assume' | 'reorder' | 'evict' | 'jam' | 'predict';
-export type BodyKind = 'lamps' | 'gate' | 'chain' | 'wheel' | 'digit' | 'twin' | 'stack' | 'datapath' | 'clocks' | 'worm' | 'cell' | 'serpent' | 'titan' | 'polygon' | 'knot' | 'sleeper' | 'snake' | 'transceivers' | 'scoreboard' | 'ring' | 'trio' | 'engine' | 'window' | 'tower' | 'mesh' | 'hologram';
+export type AttackId = 'bolts' | 'drop' | 'grid' | 'chain' | 'freeze' | 'segments' | 'mirror' | 'push' | 'relay' | 'split' | 'stage' | 'slam' | 'lash' | 'paths' | 'spikes' | 'congest' | 'rush' | 'shift' | 'eye' | 'walls' | 'holes' | 'agents' | 'assume' | 'reorder' | 'evict' | 'jam' | 'predict'
+  | 'noise' | 'ring' | 'flips' | 'dies' | 'cracks' | 'hang' | 'probes' | 'leak' | 'lockdown' | 'flare' | 'phase' | 'zap' | 'address' | 'mismatch' | 'bands';
+export type BodyKind = 'lamps' | 'gate' | 'chain' | 'wheel' | 'digit' | 'twin' | 'stack' | 'datapath' | 'clocks' | 'worm' | 'cell' | 'serpent' | 'titan' | 'polygon' | 'knot' | 'sleeper' | 'snake' | 'transceivers' | 'scoreboard' | 'ring' | 'trio' | 'engine' | 'window' | 'tower' | 'mesh' | 'hologram'
+  | 'antenna' | 'buck' | 'memarray' | 'wafer' | 'package' | 'server' | 'tester' | 'vault' | 'ecu' | 'optical' | 'qubit' | 'golem' | 'mute' | 'custboard' | 'sensor';
 
 export interface BossForm {
   incident: string;

@@ -34,6 +34,7 @@ import { LEVEL1, LOFT } from './level1';
 import { blankWorld, kitFor, LOG_CAP, loadWorld, nodeIn, PANEL_NAMES, type Place, type PlaceSave, saveWorld, type StoryKit, startFor, type WorldSave } from './progress';
 import { BOOT_COLD, BOOT_PARTIAL, LINES, PARTIAL_LINES } from './script';
 import { ENDING, HELLO, LAMP_AT_S, SKIP_S, stepLen, TYPE_S } from './ending';
+import { badges, notYet, panelOf, withCount } from './hall';
 import type { Music, Station, StationKind, StoryRoom, Terminal } from './types';
 import { combos } from '../../games/logic/circuit';
 import { check, type Check, levelOf, nextWire, runStars, type Wire } from './wirerun';
@@ -63,7 +64,7 @@ export type Choice = 'cause' | 'fix' | 'loftLift' | 'guard' | 'node';
 const QUIET = new Set(['port', 'panel', 'annex', 'bench', 'gate']);
 /** The main-path bosses after the Dark Demo Board: each one beaten adds integrity. */
 /** Boss health by act from act 2 on (Phase 4 Spec, section 3; the Design Doc's table). Act 1 ramps instead. */
-const BOSS_HP: Partial<Record<number, number>> = { 2: 900, 3: 1500, 4: 2200 };
+const BOSS_HP: Partial<Record<number, number>> = { 2: 900, 3: 1500, 4: 2200, 6: 2500 };
 const ACT_BOSSES = PLACES.filter((p) => p.kind === 'main' && p.id !== 'bit-zero').flatMap((p) => p.bosses);
 /** Steps a boss door with no checkpoint waits before it opens. */
 const DOOR_WAIT_MS = 1200;
@@ -112,7 +113,7 @@ type Cut = { kind: 'boot'; lines: string[]; t: number; then: string[] } | { kind
 /** Height of each station's name label above its foot, in px (as drawn in render.ts). */
 const STATION_TOP: Record<string, number> = {
   port: 184, panel: 224, bench: 130, lever: 120, node: 84, debug: 102, board: 264, map: 216, archive: 236, interview: 236, arcade: 236, lift: 236,
-  gate: 184, calib: 236, patrol: 236,
+  gate: 184, calib: 236, patrol: 236, hire: 156,
 };
 
 export class Director {
@@ -300,8 +301,8 @@ export class Director {
     if (room.role === 'ending') this.startEnding();
     this.out.push({ t: 'enter' }, { t: 'music', track: room.music });
     // the first landing in the Underlayers (Phase 5 Spec, section 3), act 3, Silicon (Phase 6 Spec, section 3) and act 4,
-    // the Cluster (Phase 7 Spec, section 3)
-    const act = placeById(place)?.act, card = act === 5 ? 'underlayers' : act === 3 ? 'silicon' : act === 4 ? 'cluster' : null;
+    // the Cluster (Phase 7 Spec, section 3), and the Fab (Phase 8 Spec, section 3)
+    const act = placeById(place)?.act, card = act === 5 ? 'underlayers' : act === 3 ? 'silicon' : act === 4 ? 'cluster' : act === 6 ? 'fab' : null;
     if (card && !this.world.cutscenes.includes(card)) {
       this.world.cutscenes.push(card);
       this.save();
@@ -334,7 +335,10 @@ export class Director {
       templates: a.templates || undefined, rewind: a.rewind || undefined, crit: a.crit || undefined, newton: a.newton || undefined,
       agents: a.agents || undefined, mine: a.mine || undefined, specDamage: a.specDamage, sched: a.sched, pockets: a.pockets || undefined,
       warp: a.warp || undefined, lens: a.lens || undefined,
+      regen: a.regen, chargeS: a.chargeS, overclock: a.overclock || undefined, split: a.split || undefined,
+      decoy: a.decoy || undefined, phaseLock: a.phaseLock || undefined, clamp: a.clamp, reflex: a.reflex || undefined,
     };
+    s.badges = badges();
     s.drone.abilities = { doubleJump: a.doubleJump, wallLatch: a.wallLatch, ...(a.doubleJump ? { jump2: a.jump2 / HZ } : {}) };
     if (!a.beam) this.beamOn = false;
     const v = s.vitals;
@@ -591,10 +595,13 @@ export class Director {
   /** A composed boss's body attacks while the fight is on (held while a card is open or before the pager closes). */
   private stepForm() {
     const f = this.form, b = this.boss, room = this.room;
+    this.sim.lockAt = null;
     if (!f || !b || !room.boss) return;
-    const s = this.sim;
+    const s = this.sim, r = room.boss.rect;
+    // Phase Lock aims at the body's centre; a Superposition Decoy draws the attacks' aim (Phase 8 Spec, section 6)
+    if (b.phase !== 'done') s.lockAt = { x: r.x + r.w / 2, y: r.y + r.h / 2 };
     const c: AttackCtx = {
-      rand: this.rng, story: Director.difficulty() === 'story', drone: droneRect(s.drone), trail: f.trail,
+      rand: this.rng, story: Director.difficulty() === 'story', drone: s.decoyRect() ?? droneRect(s.drone), trail: f.trail,
       arena: { x: 0, y: 0, w: room.w, h: room.h }, boss: room.boss.rect, floors: [...room.solids, ...room.oneWay],
       shoot: (x, y, vx, vy, n) => s.hostileShot(x, y, vx, vy, n),
       hurt: (r, n) => s.hurtIn(r, n),
@@ -646,7 +653,7 @@ export class Director {
         this.card('upgrade', 'FIELD COIL ONLINE', ['Hold right click to grab a crate.', 'Release to drop it. Hold left click while holding to charge a throw.', 'The coil uses energy, the pink bar.']);
       }
       if (this.room.id === 'boss-door' && tr.id === 'ahead') this.openGate('door');
-      this.say(...tr.lines);
+      this.say(...tr.lines.map(withCount));
     }
   }
 
@@ -716,7 +723,7 @@ export class Director {
     const verb: Partial<Record<StationKind, string>> = {
       port: 'Plug in', panel: 'Open the patch panel', bench: 'Use the bench', lever: this.rs.levers[st.id] ? 'Switch off' : 'Switch on',
       debug: 'Open the debug port', node: 'Take the reading', archive: 'Open the archive', review: 'Review', board: 'Study',
-      map: 'Look at the chip map', crt: 'Use the old desktop', arcade: 'Play', interview: 'Try the door', lift: 'Ride the lift',
+      map: 'Look at the chip map', crt: 'Use the old desktop', arcade: 'Play', interview: this.world.cutscenes.includes('ending') ? 'Go to the Hiring Hall' : 'Try the door', lift: 'Ride the lift', hire: 'Meet the panel',
     };
     // above the station's name label (render.ts draws each label at these heights), never over its art
     this.prompt = { x: st.x, y: st.y - (STATION_TOP[st.kind] ?? 186) - 24, text: `E  ${verb[st.kind] ?? 'Use'}` };
@@ -869,7 +876,7 @@ export class Director {
   private rewardRole(module: string) {
     const rs = this.rs, room = this.room;
     const st = room.stations.find((s) => s.module === module);
-    const line = st?.kind === 'gate' ? STORY.gatePass : st?.kind === 'bench' ? STORY.benchPass : st?.kind === 'panel' ? STORY.panelPass : STORY.portPass;
+    const line = st?.kind === 'hire' ? STORY.hall.passed : st?.kind === 'gate' ? STORY.gatePass : st?.kind === 'bench' ? STORY.benchPass : st?.kind === 'panel' ? STORY.panelPass : STORY.portPass;
     this.say(line);
     const scored = room.modules.filter((m) => !room.optional?.includes(m));
     if (!rs.passed && scored.length && scored.every(this.done)) {
@@ -1082,6 +1089,14 @@ export class Director {
 
   // --- stations ---
   private useStation(st: Station) {
+    // a Hiring Hall panel (Phase 8 Spec, section 4): shut until the role is ready enough
+    if (st.kind === 'hire' && st.module) {
+      const p = panelOf(st.module);
+      if (p && !p.open) { this.say(notYet(p)); this.out.push({ t: 'sfx', name: 'notYet' }); return; }
+      this.out.push({ t: 'sfx', name: 'portOpen' }, { t: 'overlay', kind: 'module', module: st.module });
+      this.waiting = true;
+      return;
+    }
     if (this.room.role && st.module && (st.kind === 'port' || st.kind === 'panel' || st.kind === 'bench' || st.kind === 'gate')) {
       // a composed room's station opens its module where it lives: the terminal, or the lab window
       this.out.push({ t: 'sfx', name: 'portOpen' }, { t: 'overlay', kind: 'module', module: st.module });
@@ -1124,6 +1139,16 @@ export class Director {
         this.go(to.id as Place, to.kind === 'deep' && this.place !== to.id && this.room.role === 'exit' ? 0 : roomsOf(to.id).length - 1);
         break;
       }
+      case 'interview':
+        // after the ending the Loft's Interview Room is the way to the Hiring Hall (Phase 8 self-review)
+        if (this.world.cutscenes.includes('ending')) {
+          this.out.push({ t: 'sfx', name: 'door', gain: 0.6 });
+          this.go('hiring-hall', 0);
+          break;
+        }
+        this.say(LINES.interview);
+        this.out.push({ t: 'loft', station: st.kind });
+        break;
       case 'rail':
         if (this.room.rails?.[Number(st.arg ?? 0)]) this.sim.ride(this.room.rails[Number(st.arg ?? 0)]);
         else this.say(STORY.railLocked);
@@ -1132,7 +1157,7 @@ export class Director {
         if (this.room.id === 'workbench') this.startExitLift(1140);
         else if (this.room.role === 'exit' || this.room.role === 'landing') this.startExitLift(st.x);
         else {
-          this.liftOpts = liftChoices(this.done);
+          this.liftOpts = liftChoices(this.done, this.world.cutscenes.includes('ending'));
           this.out.push({ t: 'choose', kind: 'loftLift', title: 'THE LIFT', options: [...this.liftOpts.map((o) => ({ text: o.text, dim: o.dim })), { text: 'Stay in the Loft' }] });
           this.waiting = true;
         }
@@ -1141,7 +1166,7 @@ export class Director {
         const line = LOFT_LINES[st.kind];
         if (line) this.say(line);
         this.out.push({ t: 'loft', station: st.kind });
-        if (st.kind !== 'interview' && st.kind !== 'crt') this.waiting = true;
+        if (st.kind !== 'crt') this.waiting = true;
       }
     }
   }

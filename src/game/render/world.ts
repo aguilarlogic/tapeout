@@ -130,11 +130,12 @@ export class WorldArt {
     c.fillStyle = g;
     c.fillRect(view.x, view.y, view.w, view.h);
     if (this.backdrop) {
-      // the motif sits at parallax 0.15 (the Cluster's at 0.12), drawn in room coordinates like the layers are in theirs
-      const f = this.backdrop === 'cluster' ? 0.12 : 0.15;
+      // the motif sits at parallax 0.15 (the Cluster's at 0.12, the Fab's tiles at 0.1; its wafers step to 0.15 themselves),
+      // drawn in room coordinates like the layers are in theirs
+      const f = this.backdrop === 'cluster' ? 0.12 : this.backdrop === 'fab' ? 0.1 : 0.15;
       c.save();
       c.translate(cam.x * (1 - f), cam.y * (1 - f));
-      this.motif(c, this.backdrop, { x: cam.x * f - 40, y: cam.y * f - 40, w: VIEW_W + 80, h: VIEW_H + 80 });
+      this.motif(c, this.backdrop, { x: cam.x * f - 40, y: cam.y * f - 40, w: VIEW_W + 80, h: VIEW_H + 80 }, cam);
       c.restore();
     }
     for (const L of this.layers) {
@@ -151,7 +152,7 @@ export class WorldArt {
 
   /** A room's faint motif, in room coordinates and culled to `vis`. Most strokes stay at 0.12 alpha or below so they never
    * fight the foreground (the 'under' power rails are the brighter exception, at 0.3); the kinds without a motif draw nothing. */
-  private motif(c: C, kind: BackdropKind, vis: Rect) {
+  private motif(c: C, kind: BackdropKind, vis: Rect, cam: Pt) {
     const W = this.room.w, H = this.room.h, x0 = Math.max(0, vis.x), x1 = Math.min(W, vis.x + vis.w);
     c.lineWidth = 1.5;
     c.lineJoin = 'round';
@@ -406,6 +407,36 @@ export class WorldArt {
             d -= len;
           }
         }
+        break;
+      }
+      case 'fab': { // the Fab (Phase 8 Spec, section 7): a clean-room ceiling of filter tiles, 120 x 60 px, in four rows; a thin
+        // amber band along the top, the litho yellow room light; one amber dot per 1000 px crossing the second tile row every
+        // 3 s; and three wafers per 1000 px, each a circle of radius 90 with a grid of die squares and a flat notch, in their
+        // own layer at parallax 0.15. The motif sits at 0.1, so the wafers move the 0.05 that is left over. The clock holds
+        // still under reduced motion, so the dots do too.
+        const TW = 120, TH = 60, TOP = 6, ROWS = 4, P = 1000, WR = 90, WY = H * 0.6, T = this.clock;
+        c.strokeStyle = rgba(PAL.trace, 0.06);
+        c.beginPath();
+        for (let x = Math.floor(x0 / TW) * TW; x < x1; x += TW) {
+          for (let r = 0; r < ROWS; r++) c.rect(x, TOP + r * TH, TW, TH);
+        }
+        c.stroke();
+        c.fillStyle = rgba(PAL.amber, 0.12);
+        c.fillRect(x0, 0, x1 - x0, TOP);
+        c.fillStyle = rgba(PAL.amber, 0.25);
+        for (let sx = Math.floor(x0 / P) * P; sx < x1; sx += P) {
+          const d = (T / 3 + (sx / P) * 0.37) % 1;
+          c.beginPath();
+          c.arc(sx + d * P, TOP + TH + TH / 2, 3, 0, Math.PI * 2);
+          c.fill();
+        }
+        c.save();
+        c.translate(-cam.x * 0.05, -cam.y * 0.05);
+        c.strokeStyle = rgba(PAL.trace, 0.08);
+        for (let sx = Math.floor((cam.x * 0.15 - WR) / P) * P; sx < cam.x * 0.15 + VIEW_W + WR; sx += P) {
+          for (const o of [200, 500, 800]) wafer(c, sx + o, WY, WR);
+        }
+        c.restore();
         break;
       }
     }
@@ -717,6 +748,22 @@ function drawProp(c: C, p: Prop, sim: Sim, t: number) {
   }
   c.restore();
   void t;
+}
+
+/** A Fab wafer (Phase 8 Spec, section 7): a circle of radius r with a flat notch 24 px wide at the bottom, and a grid of
+ * 12 px die squares on a 16 px pitch clipped to the circle. Strokes only, in the colour the caller set. */
+function wafer(c: C, cx: number, cy: number, r: number) {
+  const notch = Math.asin(12 / r); // the notch's half-angle, so its chord is 24 px wide
+  c.save();
+  c.beginPath();
+  c.arc(cx, cy, r, Math.PI / 2 + notch, Math.PI / 2 - notch + Math.PI * 2);
+  c.closePath();
+  c.stroke();
+  c.clip();
+  c.beginPath();
+  for (let y = cy - r; y < cy + r; y += 16) for (let x = cx - r; x < cx + r; x += 16) c.rect(x, y, 12, 12);
+  c.stroke();
+  c.restore();
 }
 
 /** A logic gate on the path: AND (flat back, round front) or OR (curved back), with its input and output leads. */
