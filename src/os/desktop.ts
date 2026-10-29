@@ -10,6 +10,7 @@ import { archPage } from '../games/arch/page';
 import { isaPage } from '../games/isa/page';
 import { rvPage } from '../games/rv/page';
 import { findModule, KIND_APP } from '../curriculum';
+import { closeGame, openGame } from '../game/screen';
 import { coveragePage } from '../games/coverage/page';
 import { drillsPage } from '../games/drills/page';
 import { logicPage } from '../games/logic/page';
@@ -63,6 +64,11 @@ function home() {
 function route() {
   const [section, id] = location.hash.replace(/^#\/?/, '').split('/').filter(Boolean);
   document.querySelectorAll('.modal-bg').forEach((m) => m.remove());
+  if (section === 'story') {
+    openGame(home);
+    return;
+  }
+  closeGame();
   if (!section) {
     (getWindow('term') ?? openTerminal()).focus();
     term.focus();
@@ -133,7 +139,8 @@ function taskbar(): HTMLElement {
     item('◈', 'Campaign map', () => (location.hash = '#/map')),
     item('◉', 'Skills & job readiness', () => (location.hash = '#/skills')),
     item('?!', 'Interview flashcards', () => (location.hash = '#/drills')),
-    item('⚙', 'Settings: typing speed', () => (location.hash = '#/settings')),
+    item('⚙', 'Settings', () => (location.hash = '#/settings')),
+    item('▶', 'Play the new story (preview)', () => (location.hash = '#/story')),
     h('div', { class: 'start-sep' }, 'Arcade'),
     ...MINIGAMES.map((g) => item(g.icon, g.title, () => void launchGame(g.id))),
     h('div', { class: 'start-sep' }),
@@ -186,7 +193,8 @@ export async function bootDesktop() {
   const os = document.getElementById('os')!;
   // The mentor column (left) and the workspace (right). The wallpaper and icons belong to the workspace.
   const { desktop, workspace } = buildRegions();
-  workspace.append(wallpaper(), icons());
+  // Until the story game is complete (phase 7) the desktop stays the first screen, and the game opens from here.
+  workspace.append(wallpaper(), icons(), h('button', { class: 'story-preview', 'data-testid': 'story-preview', onclick: () => (location.hash = '#/story') }, '▶ Play the new story (preview)'));
   const bar = taskbar();
   os.replaceChildren(desktop, bar);
   initWM(bar.querySelector('.tasks') as HTMLElement);

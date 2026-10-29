@@ -24,8 +24,30 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+      # Browser smoke test: the built Tapeout.html opens, the story preview plays, and frames stay inside 16.7 ms.
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
       # The whole game is one HTML file; download it from the run's summary page and double-click it.
       - uses: actions/upload-artifact@v4
         with:
           name: tapeout-game
           path: dist/index.html
+
+  # The Windows desktop app: build the installer and the portable exe, then launch the unpacked app and check it.
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm run desktop:build
+      - run: npx playwright test --project=electron
+      # Download "tapeout-windows" from the run's summary page to play the exe before a release.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tapeout-windows
+          path: release/*.exe
