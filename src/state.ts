@@ -46,6 +46,10 @@ export interface Prefs {
   infiniteEnergy: boolean;
   /** Where a fresh load opens (Phase 7 Spec, section 3): the story game (the default) or the Classic Desktop. */
   startIn?: 'game' | 'desktop';
+  /** Aim assist (Phase 9 Spec, section 5): auto is on for a gamepad and touch and off for keys; touch forces it on. */
+  aimAssist?: 'auto' | 'on' | 'off';
+  /** True once the first-touch-play card (game speed 75%) has been shown. */
+  touchHintSeen?: boolean;
 }
 
 export interface Progress {

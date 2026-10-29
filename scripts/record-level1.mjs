@@ -35,12 +35,15 @@ await page.getByRole('button', { name: 'I am new to this' }).click();
 await page.waitForFunction(() => window.__tapeoutGame?.ready, null, { timeout: 15000 });
 
 // --- the scripted player: one command at a time, run by the game's drive hook each 60 Hz step ---
-await page.evaluate(() => {
+// INPUT=pad or INPUT=touch: the bot's actions go through a fake gamepad or fake fingers (Phase 9 Spec, section 9), so the
+// run plays through the real pad or touch mapping, aim and aim assist; the bot never sets actions directly.
+const INPUT = process.env.INPUT ?? 'keys';
+await page.evaluate((INPUT) => {
   const g = window.__tapeoutGame;
   const B = { cmd: null };
   window.__bot = B;
   const near = (sim, d, r) => sim.enemies.filter((e) => e.alive && e.kind !== 'spike' && Math.hypot(e.x - d.x, e.y - d.y) < r).sort((a, b) => Math.hypot(a.x - d.x, a.y - d.y) - Math.hypot(b.x - d.x, b.y - d.y))[0];
-  g.drive = (sim) => {
+  const brain = (sim) => {
     const c = B.cmd, d = sim.drone;
     const held = [];
     let aim = { x: d.x + 400 * d.facing, y: d.y - 10 };
@@ -121,7 +124,43 @@ await page.evaluate(() => {
     if (foe) { aim = { x: foe.x, y: foe.y }; held.push('fire'); }
     return { held, aim };
   };
-});
+  if (INPUT === 'keys') { g.drive = brain; return; }
+  // the standard pad layout (src/game/input/padmap.ts): the button each action is on
+  const PAD = { jump: 0, rewind: 1, interact: 2, weapon: 3, weaponPrev: 4, dash: 5, field: 6, fire: 7, map: 8, pause: 9, beam: 10, scan: 11, gadget: 12, gadgetNext: 14, pocket: 15 };
+  const STICK = { x: 200, y: 560 };
+  g.drive = (sim) => {
+    const r = brain(sim), held = new Set(r.held), pv = sim.pivot();
+    if (INPUT === 'pad') {
+      const buttons = Array.from({ length: 17 }, () => ({ pressed: false, value: 0 }));
+      for (const [a, i] of Object.entries(PAD)) if (held.has(a)) buttons[i] = { pressed: true, value: 1 };
+      if (held.has('down')) buttons[13] = { pressed: true, value: 1 };
+      const dx = r.aim.x - pv.x, dy = r.aim.y - pv.y, l = Math.hypot(dx, dy) || 1;
+      const lx = held.has('left') ? -1 : held.has('right') ? 1 : 0;
+      window.__tapeoutPad = { connected: true, mapping: 'standard', axes: [lx, 0, dx / l, dy / l], buttons };
+      return null;
+    }
+    // touch: a resting thumb on the stick, a right-hand aim finger that lands on the right half then slides to the aim,
+    // a second right finger for the field, and a finger on each button the bot holds
+    const cam = g.cam, pts = [];
+    const sx = held.has('left') ? -50 : held.has('right') ? 50 : 0, sy = held.has('jump') ? -60 : held.has('down') ? 60 : 0;
+    pts.push({ id: 1, x: STICK.x + sx, y: STICK.y + sy });
+    const prev = window.__tapeoutTouch ?? [];
+    if (held.has('fire') || held.has('field')) {
+      const down = prev.some((p) => p.id === 2);
+      pts.push(down ? { id: 2, x: r.aim.x - cam.x, y: r.aim.y - cam.y } : { id: 2, x: 960, y: 360 });
+      if (held.has('field') && down) pts.push({ id: 3, x: 1000, y: 240 });
+    }
+    const buttons = g.touchButtons();
+    for (const [i, b] of buttons.entries()) if (held.has(b.action) && b.action !== 'pause') pts.push({ id: 10 + i, x: b.x, y: b.y });
+    window.__tapeoutTouch = pts;
+    return null;
+  };
+}, INPUT);
+if (INPUT === 'touch') {
+  // the first touch play offers game speed 75%: keep 100% so the run matches the others
+  await page.waitForTimeout(800);
+  if (await page.getByTestId('story-choice').count()) await page.getByTestId('story-choice').getByRole('button', { name: 'Keep 100%' }).click();
+}
 
 const run = async (cmd, timeout = 60000) => {
   await page.evaluate((c) => { window.__bot.cmd = c; }, cmd);

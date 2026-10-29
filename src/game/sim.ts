@@ -528,7 +528,9 @@ export class Sim {
     if (!ws.includes(this.weapon)) this.weapon = ws[0];
     if (!frozen && ws.length > 1) {
       const slot = (['slot1', 'slot2', 'slot3'] as const).findIndex((a) => c.pressed.has(a));
-      const next = c.pressed.has('weapon') ? ws[(ws.indexOf(this.weapon) + 1) % ws.length] : slot >= 0 ? this.slotted[slot] : undefined;
+      const i = ws.indexOf(this.weapon);
+      // Q (or Y) steps forward, Z (or LB) steps back (Phase 9 Spec, section 8)
+      const next = c.pressed.has('weapon') ? ws[(i + 1) % ws.length] : c.pressed.has('weaponPrev') ? ws[(i - 1 + ws.length) % ws.length] : slot >= 0 ? this.slotted[slot] : undefined;
       if (next && next !== this.weapon) {
         this.weapon = next;
         this.picked = [next, ...this.picked.filter((w) => w !== next)];

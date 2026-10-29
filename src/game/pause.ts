@@ -5,6 +5,7 @@ import { type Prefs, prefs, profile, setPrefs } from '../state';
 import { h } from '../ui/dom';
 import type { Sfx } from './audio';
 import { ACTIONS, type Action, assign, type Bindings, DEFAULTS, keyName, overrides, resolve } from './input/bindings';
+import { AIM_ASSIST_OPTIONS, padRows, TOUCH_NOTES } from './input/controlsinfo';
 import type { InputDevice } from './input/device';
 
 export interface PauseHooks {
@@ -57,12 +58,21 @@ export function pauseMenu(hooks: PauseHooks): HTMLElement {
     const out = h('output', null, `${p.gameSpeed}%`);
     const speed = h('input', { type: 'range', min: '50', max: '100', step: '10', value: `${p.gameSpeed}`, 'aria-label': 'Game speed' }) as HTMLInputElement;
     speed.addEventListener('input', () => { out.textContent = `${speed.value}%`; setPrefs({ gameSpeed: Number(speed.value) }); hooks.onSettings(); });
+    /** Aim assist (Phase 9 Spec, section 5): a select, so it works from the keyboard and reads as "Aim assist". */
+    const aim = h('select', { class: 'gm-select', 'aria-label': 'Aim assist' },
+      ...AIM_ASSIST_OPTIONS.map((o) => h('option', { value: o.value }, o.label)));
+    aim.value = p.aimAssist ?? 'auto';
+    aim.addEventListener('change', () => {
+      const pick = AIM_ASSIST_OPTIONS.find((o) => o.value === aim.value);
+      if (pick) { setPrefs({ aimAssist: pick.value }); hooks.onSettings(); }
+    });
     const back = btn('Back', main, 'primary');
     show(h('div', { class: 'gm-panel wide' },
       h('h2', null, 'DIFFICULTY'),
       btn(`Difficulty: ${diff === 'story' ? 'Story' : 'Standard'}`, () => { setPrefs({ difficulty: diff === 'story' ? 'standard' : 'story' }); hooks.onSettings(); assists(); }, 'toggle'),
       h('p', { class: 'gm-note' }, diff === 'story' ? 'Story: you take half damage and the boss has less health. The puzzles are the same.' : 'Standard: full damage, full boss. The puzzles are the same.'),
       h('label', { class: 'gm-slider' }, h('span', null, 'Game speed'), speed, out),
+      h('label', { class: 'gm-slider' }, h('span', null, 'Aim assist'), aim),
       h('div', { class: 'gm-grid' }, flip('Invincible', 'invincible'), flip('Auto-fire', 'autoFire'), flip('Endless energy', 'infiniteEnergy')),
       h('p', { class: 'gm-note' }, 'Assists never cost stars or progress. Turn them on and off whenever you like.'),
       h('div', { class: 'gm-row' }, h('span'), back)), back);
@@ -127,6 +137,12 @@ export function pauseMenu(hooks: PauseHooks): HTMLElement {
         h('p', { class: 'gm-note' }, 'Click a key to change it, then press the new key or mouse button. Esc cancels. A key used elsewhere swaps places.'),
         h('div', { class: 'gm-status', role: 'status' }, note),
         h('div', { class: 'gm-table-wrap' }, h('table', { class: 'gm-keys' }, h('thead', null, h('tr', null, h('th', null, 'Action'), h('th', null, 'Main'), h('th', null, 'Second'))), h('tbody', null, ...rows))),
+        h('h3', { class: 'gm-sub' }, 'Gamepad'),
+        h('div', { class: 'gm-table-wrap' }, h('table', { class: 'gm-keys' },
+          h('thead', null, h('tr', null, h('th', null, 'Action'), h('th', null, 'Button'))),
+          h('tbody', null, ...padRows().map(([what, button]) => h('tr', null, h('th', { scope: 'row' }, what), h('td', null, button)))))),
+        h('h3', { class: 'gm-sub' }, 'Touch'),
+        h('ul', { class: 'gm-list' }, ...TOUCH_NOTES.map((t) => h('li', null, t))),
         h('div', { class: 'gm-row' },
           btn('Reset to defaults', () => { save(structuredClone(DEFAULTS)); note = 'Controls reset to the defaults.'; render(); }),
           btn('Done', () => { hooks.input.capture = null; settings(); }, 'primary')));

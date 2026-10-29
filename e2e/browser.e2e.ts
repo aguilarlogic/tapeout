@@ -295,3 +295,108 @@ test('The Fab: the arrival card on the first wing landing, a Hiring Hall office 
   await page.waitForTimeout(6000);
   expect(errors).toEqual([]);
 });
+
+test('Gamepad and touch: a pad moves, pauses and works the menu; touch moves, offers 75% speed and draws its controls', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(String(e)));
+  page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') errors.push(`${m.type()}: ${m.text()}`); });
+  await page.goto(pathToFileURL(resolve('dist/index.html')).href);
+  await page.getByTestId('game').waitFor();
+  await page.getByRole('textbox', { name: 'Your name' }).fill('Sam');
+  await page.getByRole('button', { name: 'I am new to this' }).click();
+  await page.waitForFunction(() => window.__tapeoutGame?.ready && !window.__tapeoutGame.story!.waiting, null, { timeout: 15000 });
+  type Dev = { kind: string; isPaused: boolean; sim: { drone: { x: number } }; story: { keyed(s: string): string } };
+  const dev = () => page.evaluate(() => {
+    const g = window.__tapeoutGame as unknown as Dev;
+    return { kind: g.kind, paused: g.isPaused, x: g.sim.drone.x, prompt: g.story.keyed('E  Ride the lift') };
+  });
+  const pad = (b: number[] = [], axes = [0, 0, 0, 0]) => page.evaluate(([b, axes]) => {
+    const buttons = Array.from({ length: 17 }, (_, i) => ({ pressed: b.includes(i), value: b.includes(i) ? 1 : 0 }));
+    (window as unknown as { __tapeoutPad: unknown }).__tapeoutPad = { connected: true, mapping: 'standard', axes, buttons };
+  }, [b, axes] as const);
+
+  // the left stick walks the drone right, and prompts name the pad's buttons
+  const x0 = (await dev()).x;
+  await pad([], [1, 0, 0, 0]);
+  await page.waitForTimeout(700);
+  await pad();
+  let d = await dev();
+  expect(d.kind).toBe('pad');
+  expect(d.x).toBeGreaterThan(x0 + 60);
+  expect(d.prompt).toBe('X  Ride the lift');
+  await expect(page.getByText('Gamepad connected')).toBeVisible();
+
+  // Start pauses; the D-pad moves focus; B goes back to the game
+  await pad([9]); await page.waitForTimeout(150); await pad(); await page.waitForTimeout(250);
+  expect((await dev()).paused).toBe(true);
+  await pad([13]); await page.waitForTimeout(100); await pad(); await page.waitForTimeout(150);
+  expect(await page.evaluate(() => document.activeElement?.textContent)).toContain('Resume');
+  await pad([1]); await page.waitForTimeout(100); await pad(); await page.waitForTimeout(400);
+  expect((await dev()).paused).toBe(false);
+
+  // a finger takes over: the first touch play offers 75% game speed, then the stick walks the drone
+  const touch = (pts: { id: number; x: number; y: number }[]) => page.evaluate((pts) => { (window as unknown as { __tapeoutTouch: unknown }).__tapeoutTouch = pts; }, pts);
+  await touch([{ id: 1, x: 200, y: 560 }]);
+  await page.waitForTimeout(150);
+  await page.evaluate(() => { delete (window as unknown as { __tapeoutPad?: unknown }).__tapeoutPad; });
+  await expect(page.getByTestId('story-choice')).toContainText('PLAYING BY TOUCH?');
+  await page.getByTestId('story-choice').getByRole('button', { name: 'Keep 100%' }).click();
+  const x1 = (await dev()).x;
+  await touch([{ id: 2, x: 200, y: 560 }]);
+  await page.waitForTimeout(100);
+  await touch([{ id: 2, x: 260, y: 560 }]);
+  await page.waitForTimeout(700);
+  await touch([]);
+  d = await dev();
+  expect(d.kind).toBe('touch');
+  expect(d.paused).toBe(false);
+  expect(d.x).toBeGreaterThan(x1 + 60);
+  expect(d.prompt).toBe('USE  Ride the lift');
+  expect(errors).toEqual([]);
+});
+
+test('Gamepad in a lab: the right stick moves a cursor and RT taps a part onto the Patch Panel board', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(String(e)));
+  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+  await page.goto(pathToFileURL(resolve('dist/index.html')).href);
+  await page.getByTestId('game').waitFor();
+  await page.getByRole('textbox', { name: 'Your name' }).fill('Sam');
+  await page.getByRole('button', { name: 'I am new to this' }).click();
+  await page.waitForFunction(() => window.__tapeoutGame?.ready && !window.__tapeoutGame.story!.waiting, null, { timeout: 15000 });
+  const pad = (b: number[] = [], axes = [0, 0, 0, 0]) => page.evaluate(([b, axes]) => {
+    const buttons = Array.from({ length: 17 }, (_, i) => ({ pressed: b.includes(i), value: b.includes(i) ? 1 : 0 }));
+    (window as unknown as { __tapeoutPad: unknown }).__tapeoutPad = { connected: true, mapping: 'standard', axes, buttons };
+  }, [b, axes] as const);
+  type Warp = { story: { warp(place: string, room: number): void }; sim: { drone: { x: number } } };
+  await pad();
+  await page.evaluate(() => (window.__tapeoutGame as unknown as Warp).story.warp('bit-zero', 6));
+  await page.waitForTimeout(2000);
+  await pad([], [1, 0, 0, 0]);
+  await page.waitForFunction(() => (window.__tapeoutGame as unknown as Warp).sim.drone.x > 780, null, { timeout: 15000 });
+  await pad(); await page.waitForTimeout(600);
+  await pad([2]); await page.waitForTimeout(120); await pad();
+  await page.getByTestId('panel').waitFor();
+  const parts = () => page.locator('.board-svg g.part, .board-svg [data-part]').count();
+  const before = await parts();
+  // steer the cursor onto the first part in the tray, then tap RT
+  const chip = (await page.locator('.bin-part').first().boundingBox())!;
+  const goal = { x: chip.x + chip.width / 2, y: chip.y + chip.height / 2 };
+  await pad([], [0, 0, 0.6, 0]); await page.waitForTimeout(60);
+  await expect(page.locator('.gm-padcursor')).toHaveCount(1);
+  for (let i = 0; i < 200; i++) {
+    const c = await page.evaluate(() => { const m = (document.querySelector('.gm-padcursor') as HTMLElement).style.transform.match(/translate\(([\d.]+)px, ([\d.]+)px\)/)!; return { x: +m[1], y: +m[2] }; });
+    const dx = goal.x - c.x, dy = goal.y - c.y, l = Math.hypot(dx, dy);
+    if (l < 8) break;
+    const k = Math.min(1, 0.35 + l / 400);
+    await pad([], [0, 0, dx / l * k, dy / l * k]);
+    await page.waitForTimeout(16);
+  }
+  await pad([7]); await page.waitForTimeout(100); await pad(); await page.waitForTimeout(300);
+  expect(await parts()).toBe(before + 1);
+  // B leaves the lab and the cursor goes with it
+  await pad([1]); await page.waitForTimeout(120); await pad(); await page.waitForTimeout(500);
+  await expect(page.getByTestId('panel')).toHaveCount(0);
+  await expect(page.locator('.gm-padcursor')).toHaveCount(0);
+  expect(errors).toEqual([]);
+});

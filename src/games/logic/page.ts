@@ -18,6 +18,9 @@ import { route, Routing, wirePath } from './route';
 import { Frame, testRun } from './run';
 import { KIND_COLOR, themeStyle } from './theme';
 
+/** Pointer capture, when the browser has that pointer (a pad cursor's pointer is synthetic and has none). */
+const capture = (el: Element, id: number) => { try { el.setPointerCapture(id); } catch { /* not a live pointer */ } };
+
 /** The first labs show faint outlines where their gates go, so the player learns wiring before layout. */
 const SLOT_LABS = new Set(['first-not', 'first-and', 'logic-enable']);
 const DRAFT = 'logic2';
@@ -390,7 +393,7 @@ export function logicPage(id: string): HTMLElement {
     if (running) return;
     canvas.focus({ preventScroll: true });
     touches.set(e.pointerId, [e.clientX, e.clientY]);
-    canvas.setPointerCapture(e.pointerId);
+    capture(canvas, e.pointerId);
     if (touches.size === 2) {
       // Two fingers: pinch to zoom. Whatever one finger had started is dropped.
       const [a, b] = [...touches.values()];
@@ -469,7 +472,7 @@ export function logicPage(id: string): HTMLElement {
       const sx = e.clientX, sy = e.clientY;
       let moved = false;
       const float = h('div', { class: 'bin-float', style: `--kc:${KIND_COLOR[k]};${themeStyle()}` }, KIND_NAME[k]);
-      chip.setPointerCapture(e.pointerId);
+      capture(chip, e.pointerId);
       const overBoard = (ev: PointerEvent) => { const r = host.getBoundingClientRect(); return ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom; };
       const move = (ev: PointerEvent) => {
         if (!moved && Math.hypot(ev.clientX - sx, ev.clientY - sy) < 8) return;

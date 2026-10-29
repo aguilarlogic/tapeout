@@ -250,6 +250,16 @@ describe('Pulse Probe and Charged Probe (plan E, decision 29)', () => {
     run(sim, 2, (i) => (i === 0 ? ['weapon'] : []));
     expect(sim.weapon).toBe('pulse');
   });
+
+  it('Z (LB on a gamepad) steps back through the weapons, wrapping from the first to the last', () => {
+    const sim = settled();
+    const ws = sim.weapons;
+    expect(ws.length).toBeGreaterThan(1);
+    run(sim, 2, (i) => (i === 0 ? ['weaponPrev'] : []));
+    expect(sim.weapon).toBe(ws[ws.length - 1]);
+    run(sim, 2, (i) => (i === 0 ? ['weapon'] : []));
+    expect(sim.weapon).toBe(ws[0]);
+  });
 });
 
 describe('Field Coil (plan F)', () => {

@@ -4,13 +4,15 @@
 // rewards and upgrades, room transitions, the save node and the bosses. The Sim stays the physics and combat it was;
 // the director sets its kit and reads its target hits.
 // No DOM in here: overlays and sound leave as `out` records the game screen turns into windows and noise.
+import { deviceText } from '../input/labels';
+import type { DeviceKind } from '../input/padmap';
 import Matter from 'matter-js';
 import { recommended } from '../../curriculum';
 import { findIncident } from '../../incidents';
 import { award } from '../../mastery/promotion';
 import { levelRecord, load, prefs, profile } from '../../state';
 import { recordLabFirstWire, recordLabTest } from '../../steplog';
-import type { Action } from '../input/bindings';
+import { type Action, type Bindings, DEFAULTS } from '../input/bindings';
 import type { Rect } from '../level/room';
 import { overlaps } from '../physics/geom';
 import { addMover, boundsRect, type Mover, moveMover, setPresent } from '../physics/world';
@@ -126,6 +128,8 @@ export class Director {
   kit!: StoryKit;
   /** What act 1's upgrades add (from records). */
   act!: ActKit;
+  /** The device in use and the key bindings, so prompts and lines name the right button (Phase 9 Spec, section 6). */
+  device: { kind: DeviceKind; bindings: Bindings } = { kind: 'keys', bindings: DEFAULTS };
   boss: BossFight | null = null;
   /** A composed arena's boss body and its attacks. */
   form: FormRun | null = null;
@@ -140,6 +144,10 @@ export class Director {
   bubble: Bubble | null = null;
   private queue: string[] = [];
   prompt: Prompt | null = null;
+  /** Game text with its key names rewritten for the device in use. */
+  keyed(text: string): string {
+    return deviceText(text, this.device.kind, this.device.bindings);
+  }
   /** Room fade: steps into the fade, with the room to load at the midpoint. */
   fade: { t: number; to: { place: Place; index: number } } | null = null;
   cut: Cut = null;
@@ -710,7 +718,7 @@ export class Director {
     if (this.cut || this.waiting || this.fade) return;
     const it = this.reachable()[0];
     if (!it) {
-      if (this.rs.carrying) this.prompt = { x: this.sim.drone.x, y: this.sim.drone.y - 60, text: 'Carrying a wire · E at a terminal to plug it in' };
+      if (this.rs.carrying) this.prompt = { x: this.sim.drone.x, y: this.sim.drone.y - 60, text: 'Carrying a wire · press E at a terminal to plug it in' };
       return;
     }
     if (it.t === 'terminal') {

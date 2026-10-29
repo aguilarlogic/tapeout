@@ -3,7 +3,7 @@
 // Pure functions only, so the remapping rules are tested without a browser.
 
 export type Action =
-  | 'left' | 'right' | 'jump' | 'down' | 'fire' | 'field' | 'dash' | 'interact' | 'weapon'
+  | 'left' | 'right' | 'jump' | 'down' | 'fire' | 'field' | 'dash' | 'interact' | 'weapon' | 'weaponPrev'
   | 'slot1' | 'slot2' | 'slot3' | 'beam' | 'gadget' | 'gadgetNext' | 'scan' | 'rewind' | 'pocket' | 'map' | 'pause';
 
 export type Pair = [string | null, string | null];
@@ -20,6 +20,7 @@ export const ACTIONS: { id: Action; label: string; later?: boolean }[] = [
   { id: 'dash', label: 'Dash' },
   { id: 'interact', label: 'Interact' },
   { id: 'weapon', label: 'Next weapon' },
+  { id: 'weaponPrev', label: 'Previous weapon' },
   { id: 'slot1', label: 'Weapon slot 1' },
   { id: 'slot2', label: 'Weapon slot 2' },
   { id: 'slot3', label: 'Weapon slot 3' },
@@ -43,6 +44,7 @@ export const DEFAULTS: Bindings = {
   dash: ['ShiftLeft', 'KeyL'],
   interact: ['KeyE', 'Enter'],
   weapon: ['KeyQ', 'Wheel'],
+  weaponPrev: ['KeyZ', null],
   slot1: ['Digit1', null],
   slot2: ['Digit2', null],
   slot3: ['Digit3', null],

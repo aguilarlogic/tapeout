@@ -652,7 +652,7 @@ a.tier:hover { border-color: var(--accent); text-decoration: none; }
 .bin-part small { font-size: 0.68rem; color: var(--lab-dim); }
 .bin-part:hover { box-shadow: 0 0 12px color-mix(in srgb, var(--kc) 50%, transparent); }
 .bin-part:focus-visible { outline: 2px solid #ffffff; outline-offset: 2px; }
-.bin-float { position: fixed; z-index: 3000; transform: translate(-50%, -50%); pointer-events: none; font-family: var(--mono); font-weight: 900; font-size: 1.1rem; padding: 10px 16px; border-radius: 10px; border: 2px solid var(--kc); color: var(--kc); background: color-mix(in srgb, var(--kc) 18%, #0d0720); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5); }
+.bin-float { position: fixed; z-index: 9500; transform: translate(-50%, -50%); pointer-events: none; font-family: var(--mono); font-weight: 900; font-size: 1.1rem; padding: 10px 16px; border-radius: 10px; border: 2px solid var(--kc); color: var(--kc); background: color-mix(in srgb, var(--kc) 18%, #0d0720); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5); }
 .bin-float.over { opacity: 0.35; }
 .tools { display: flex; gap: 6px; flex-wrap: nowrap; }
 

@@ -6,6 +6,7 @@
 // bubble, the E prompt, and the boss's bar, log and readings.
 import { chipProgress, CHIPS, slotProgress } from '../../chip';
 import { findModule, KIND_APP } from '../../curriculum';
+import { actionLabel } from '../input/labels';
 import { easeOut, FONT, PAL, rgba } from '../render/palette';
 import { drawHiringPanel, drawOfficeFloor } from '../render/hall';
 import { drawRail } from '../render/rails';
@@ -1192,16 +1193,17 @@ export function drawDark(c: C, d: Director, cam: Pt, drone: Pt, scratch: { canva
 export function drawBubble(c: C, d: Director, t: number) {
   const b = d.bubble;
   if (!b) return;
-  const shown = Math.min(b.text.length, Math.floor((b.age / HZ) * S.lineCps));
-  const typed = b.text.slice(0, shown);
-  const typedFor = b.text.length / S.lineCps * HZ;
+  const text = d.keyed(b.text);
+  const shown = Math.min(text.length, Math.floor((b.age / HZ) * S.lineCps));
+  const typed = text.slice(0, shown);
+  const typedFor = text.length / S.lineCps * HZ;
   const fadeOut = Math.max(0, Math.min(1, (b.age - typedFor - (S.lineMs / 1000) * HZ + 20) / 20));
   const inK = easeOut(Math.min(1, b.age / 10));
   c.save();
   c.globalAlpha = inK * (1 - fadeOut);
   c.font = `15px ${FONT}`;
   // top centre, under the HUD (under the boss bar in the arena), clear of the drone and the floor
-  const w = Math.max(240, c.measureText(b.text).width + 40), ax = (VIEW_W - w) / 2 - 8, y = (d.bossBar ? 104 : 86) + (1 - inK) * -8;
+  const w = Math.max(240, c.measureText(text).width + 40), ax = (VIEW_W - w) / 2 - 8, y = (d.bossBar ? 104 : 86) + (1 - inK) * -8;
   const x = ax + 36;
   // the avatar: TAPEOUT's eye in a ring, flickering while it is still broken
   const broken = !d.kit.voice;
@@ -1215,7 +1217,7 @@ export function drawBubble(c: C, d: Director, t: number) {
   c.lineWidth = 2;
   c.stroke();
   halo(c, ax, cy, 20, PAL.trace, 0.25 * flick);
-  dot(c, ax + (shown < b.text.length ? Math.sin(t * 0.6) * 2 : 0), cy, 6, PAL.trace, flick);
+  dot(c, ax + (shown < text.length ? Math.sin(t * 0.6) * 2 : 0), cy, 6, PAL.trace, flick);
   dot(c, ax + 2, cy - 2, 2.2, '#FFFFFF', flick);
   // the box
   chamfer(c, x, y - 18, w, 52, 6);
@@ -1237,9 +1239,10 @@ export function drawBubble(c: C, d: Director, t: number) {
 export function drawPrompt(c: C, d: Director, t: number) {
   const p = d.prompt;
   if (!p) return;
+  const text = d.keyed(p.text);
   c.save();
   c.font = `12px ${FONT}`;
-  const w = c.measureText(p.text).width + 20, bob = Math.sin(t * 0.08) * 2;
+  const w = c.measureText(text).width + 20, bob = Math.sin(t * 0.08) * 2;
   chamfer(c, p.x - w / 2, p.y - 16 + bob, w, 24, 4);
   c.fillStyle = rgba(PAL.bgDeep, 0.85);
   c.fill();
@@ -1248,7 +1251,7 @@ export function drawPrompt(c: C, d: Director, t: number) {
   c.stroke();
   c.fillStyle = PAL.text;
   c.textAlign = 'center';
-  c.fillText(p.text, p.x, p.y + 1 + bob);
+  c.fillText(text, p.x, p.y + 1 + bob);
   c.restore();
 }
 
@@ -1297,7 +1300,8 @@ export function drawBossHud(c: C, d: Director, t: number, showLog: boolean) {
   c.fillStyle = rgba(PAL.text, 0.75);
   c.font = `11px ${FONT}`;
   const phase = b.phase === 'investigate' ? (b.tempDown > 0 ? 'SHIELD DOWN · HIT IT' : 'TAKE READINGS · THEN THE DEBUG PORT') : b.phase === 'fix' ? 'PICK THE FIX' : 'SHIELD DOWN · FINISH IT';
-  c.fillText(`${phase}  ·  lab time ${Math.max(0, left)} min  ·  TAB: notes`, VIEW_W / 2, y + 36);
+  const notes = d.device.kind === 'touch' ? 'NOTES button' : `${actionLabel('map', d.device.kind, d.device.bindings).toUpperCase()}: notes`;
+  c.fillText(`${phase}  ·  lab time ${Math.max(0, left)} min  ·  ${notes}`, VIEW_W / 2, y + 36);
   c.restore();
   // the latest reading, for a few seconds
   const r = d.lastReading;
