@@ -65,7 +65,7 @@ function route() {
   const [section, id] = location.hash.replace(/^#\/?/, '').split('/').filter(Boolean);
   document.querySelectorAll('.modal-bg').forEach((m) => m.remove());
   if (section === 'story') {
-    openGame(home);
+    openGame(home, { test: id === 'test' });
     return;
   }
   closeGame();

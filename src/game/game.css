@@ -51,6 +51,81 @@
 .gm-tuner legend { font-size: 11px; color: #2EF2FF; text-transform: uppercase; letter-spacing: 0.1em; }
 .story-preview { position: absolute; top: 14px; left: 16px; z-index: 2; font: inherit; padding: 8px 14px; color: #F4F3FF; background: rgba(20, 18, 43, 0.85); border: 1.5px solid #FF3EC8; box-shadow: 0 0 12px rgba(255, 62, 200, 0.45); cursor: pointer; }
 .story-preview:hover, .story-preview:focus-visible { border-color: #2EF2FF; box-shadow: 0 0 14px rgba(46, 242, 255, 0.55); outline: none; }
+/* Story overlays (Level 1): station frames over the canvas, cards and choices. Same line art as the pause menu. */
+.st-overlay { position: absolute; inset: 0; display: grid; place-items: center; padding: 16px; background: rgba(11, 10, 26, 0.55); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: #F4F3FF; cursor: default; animation: gm-in 200ms ease-out; transition: opacity 160ms ease-out; z-index: 3; }
+.st-overlay.gm-leave { opacity: 0; }
+.st-frame { display: flex; flex-direction: column; width: min(1120px, 96vw); height: min(780px, 92vh); border: 1.5px solid rgba(255, 210, 63, 0.75); background: #0B0A1A; box-shadow: 0 0 32px rgba(255, 210, 63, 0.18), 0 24px 60px rgba(0, 0, 0, 0.6);
+  clip-path: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px);
+  transition: opacity 200ms ease-out, transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+.st-frame.gm-enter { opacity: 0; transform: translateY(10px) scale(0.985); }
+.st-frame-head { display: flex; align-items: center; gap: 12px; padding: 10px 14px 10px 22px; border-bottom: 1.5px solid rgba(255, 210, 63, 0.35); background: linear-gradient(90deg, rgba(255, 210, 63, 0.10), rgba(255, 62, 200, 0.04)); }
+.st-frame-head b { letter-spacing: 0.16em; font-size: 13px; color: #FFD23F; text-shadow: 0 0 8px rgba(255, 210, 63, 0.5); }
+.st-frame-head .dim { font-size: 11px; color: #8A87A3; letter-spacing: 0.08em; }
+.st-frame-head .spacer { flex: 1; }
+.st-frame-head .gm-btn.mini { margin-left: 6px; }
+.st-frame-body { position: relative; flex: 1; min-height: 0; overflow: auto; }
+.st-term { display: flex; height: 100%; background: var(--term-bg, #060a0e); }
+/* labs and terminals inside the game always use the dark theme, whatever the system theme (they sit in a dark world) */
+.st-frame {
+  --bg: #0b0f14;
+  --bg-2: #111821;
+  --panel: #131b25;
+  --panel-2: #1a2430;
+  --border: #243140;
+  --text: #dbe4ee;
+  --text-dim: #8a9aab;
+  --accent: #14b8a6;
+  --accent-2: #0e8f82;
+  --accent-ink: #04201d;
+  --ok: #34d399;
+  --warn: #fbbf24;
+  --err: #f87171;
+  --gold: #fbbf24;
+  --code-bg: #0d131a;
+  --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+
+  --wave-grid: #1c2632;
+  --wave-bit: #4ade80;
+  --wave-bus: #38bdf8;
+  --wave-clk: #a78bfa;
+  --wave-exp: #fbbf24;
+  --wave-internal: #f0abfc;
+
+  --pcb-board: #0c3b2e;
+  --pcb-dot: #1f5c48;
+  --pcb-top: #e8604c;
+  --pcb-bot: #4c8dff;
+  --pcb-pad: #d6a73a;
+  --pcb-silk: #e9ecef;
+  --pcb-plane: #2a4f9a;
+  --pcb-rats: #ffffff;
+
+  --tk-kw: #c792ea;
+  --tk-num: #f78c6c;
+  --tk-com: #5f7489;
+  --tk-sys: #82aaff;
+  color-scheme: dark;
+}
+.st-lab { height: 100%; }
+.st-lab.lab-bench { padding: 12px; overflow: auto; background: var(--bg, #0b0f14); }
+.st-mini { padding: 16px; overflow: auto; height: 100%; background: var(--panel, #11161d); color: var(--text, #e6edf3); }
+.st-card .st-line { margin: 0; font-size: 14px; line-height: 1.55; color: #E1DFF2; }
+.st-card.upgrade { border-color: rgba(61, 255, 162, 0.75); box-shadow: 0 0 28px rgba(61, 255, 162, 0.18); }
+.st-card.upgrade h2 { color: #3DFFA2; text-shadow: 0 0 10px rgba(61, 255, 162, 0.6); }
+.st-card.pager { border-color: rgba(255, 62, 200, 0.8); box-shadow: 0 0 28px rgba(255, 62, 200, 0.22); }
+.st-card.pager h2 { color: #FF3EC8; text-shadow: 0 0 10px rgba(255, 62, 200, 0.6); }
+.st-card.debrief h2 { color: #FFD23F; text-shadow: 0 0 10px rgba(255, 210, 63, 0.6); }
+.st-stars { font-size: 26px; letter-spacing: 6px; color: #3A3660; }
+.st-stars .on { color: #FFD23F; text-shadow: 0 0 10px rgba(255, 210, 63, 0.7); }
+.st-choice .gm-btn.dim { color: #8A87A3; border-style: dashed; }
+.st-input { font: inherit; font-size: 15px; padding: 9px 12px; color: #F4F3FF; background: #14122B; border: 1.5px solid #4A4670; outline: none; transition: border-color 150ms ease-out; }
+.st-input:focus { border-color: #2EF2FF; box-shadow: 0 0 10px rgba(46, 242, 255, 0.3); }
+.st-log { margin: 4px 0; padding-left: 1.6em; max-height: 40vh; overflow: auto; font-size: 13px; line-height: 1.6; color: #B9B6CF; }
+.st-map { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.st-block { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border: 1.5px solid #2A2650; font-size: 13px; }
+.st-block.half { border-color: rgba(46, 242, 255, 0.5); }
+.st-block.built { border-color: #2EF2FF; box-shadow: inset 0 0 18px rgba(46, 242, 255, 0.18); }
+.st-block .dim { font-size: 11px; color: #8A87A3; }
 @media (prefers-reduced-motion: reduce) {
-  .gm-screen, .gm-pause, .gm-panel, .gm-btn, .gm-btn::before, .gm-tuner { transition: none; animation: none; }
+  .gm-screen, .gm-pause, .gm-panel, .gm-btn, .gm-btn::before, .gm-tuner, .st-overlay, .st-frame { transition: none; animation: none; }
 }

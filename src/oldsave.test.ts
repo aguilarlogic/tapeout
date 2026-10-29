@@ -41,8 +41,8 @@ describe('a save from before the curriculum-order rework', () => {
     expect(p.levels).toEqual(OLD.levels);
     expect(p.cards).toEqual(OLD.cards);
     expect(p.profile).toEqual(OLD.profile);
-    // versions 3 and 4 add the story game's prefs
-    expect(p.prefs).toEqual({ ...OLD.prefs, keys: {}, reducedMotion: 'system', reduceShake: false, reduceFlash: false, damageNumbers: false, volume: 70, sfxVolume: 100, musicVolume: 60 });
+    // versions 3 and 4 add the story game's prefs, version 5 its difficulty and assists
+    expect(p.prefs).toEqual({ ...OLD.prefs, keys: {}, reducedMotion: 'system', reduceShake: false, reduceFlash: false, damageNumbers: false, volume: 70, sfxVolume: 100, musicVolume: 60, difficulty: null, gameSpeed: 100, invincible: false, autoFire: false, infiniteEnergy: false });
     expect(p.best).toEqual(OLD.best);
   });
 

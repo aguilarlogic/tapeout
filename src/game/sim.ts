@@ -72,6 +72,22 @@ export function rng(seed: number) {
   };
 }
 
+/** What the drone has working (Level 1 spec, the drone's kit). The test room has everything. */
+export interface Kit {
+  gun: boolean;
+  coil: boolean;
+  /** Q swaps to the Charged Probe only once it exists. */
+  charged: boolean;
+  /** Heaviest prop the Field Coil can lift; Grip Servos raise it from 3 to 5. */
+  grabLimit: number;
+  /** Carry Shot: a second hit on the same enemy within 0.5 s deals +4. */
+  carryShot: boolean;
+}
+
+/** A shootable story fixture (an X crust, an instrument node, the boss board). Shots that hit one are reported in
+ * `targetHits`; the story decides what they do. */
+export interface Target { id: string; rect: Rect; active: boolean }
+
 export type SimEvent = 'hit' | 'shot' | 'kill' | 'block' | 'throw' | 'death' | 'respawn' | 'pit' | 'jump' | 'dash' | 'grab' | 'land' | 'reflect' | 'push';
 
 const SHOT_POOL = 256;
@@ -120,6 +136,16 @@ export class Sim {
   private emitT: number[];
   private pushCd = new Map<Enemy, number>();
   private rand: () => number;
+  kit: Kit = { gun: true, coil: true, charged: true, grabLimit: TUNING.field.grabLimit, carryShot: false };
+  /** Assists and difficulty: damage taken is scaled (0 = invincible); infinite energy refills the bar each step. */
+  assist = { damageScale: 1, infiniteEnergy: false };
+  /** Story rooms keep the dead dead; the test room brings enemies back (decision 20). */
+  respawnEnemies = true;
+  targets: Target[] = [];
+  /** This step's hits on targets. */
+  targetHits: { id: string; n: number }[] = [];
+  /** Carry Shot: the step each enemy was last hit by a bolt. */
+  private lastBoltHit = new Map<Enemy, number>();
 
   constructor(public room: Room, seed = 1) {
     this.rand = rng(seed);
@@ -175,6 +201,7 @@ export class Sim {
   step(c: Omit<Controls, 'aim'>, aimAt: Vec) {
     this.events = [];
     this.fx = [];
+    this.targetHits = [];
     this.steps++;
     this.hurtAge++;
     const d = this.drone, v = this.vitals;
@@ -186,7 +213,7 @@ export class Sim {
     const ctl: Controls = { ...c, aim: this.aim };
     const wasGrounded = d.grounded, fallSpeed = d.vy * HZ;
 
-    if (!frozen && c.pressed.has('weapon')) {
+    if (!frozen && this.kit.charged && c.pressed.has('weapon')) {
       this.weapon = WEAPONS[(WEAPONS.indexOf(this.weapon) + 1) % WEAPONS.length];
       this.charge = 0;
       this.fx.push({ t: 'swap', weapon: this.weapon });
@@ -215,6 +242,7 @@ export class Sim {
     this.stepHazards();
     this.stepRespawns();
     tickVitals(v);
+    if (this.assist.infiniteEnergy) v.energy = v.maxEnergy;
     for (let i = 0; i < 6; i++) this.panelAge[i]++;
     this.booting = Math.max(0, this.booting - 1);
     this.dummyFlash = Math.max(0, this.dummyFlash - 1);
@@ -222,6 +250,8 @@ export class Sim {
   }
 
   private hurtDrone(n: number, from?: Vec) {
+    n *= this.assist.damageScale;
+    if (n <= 0) return;
     if (!hurt(this.vitals, n, this.invulnerable)) return;
     this.events.push('hit');
     this.hurtAge = 0;
@@ -287,7 +317,7 @@ export class Sim {
 
   private stepField(c: Controls, frozen: boolean) {
     const v = this.vitals, F = T.field;
-    const want = !frozen && c.held.has('field') && (this.field.on ? v.energy > 0 : v.energy >= F.reengage);
+    const want = !frozen && this.kit.coil && c.held.has('field') && (this.field.on ? v.energy > 0 : v.energy >= F.reengage);
     if (!want) {
       if (this.field.on && this.field.held) this.fx.push({ t: 'drop', x: this.field.held.body.position.x, y: this.field.held.body.position.y });
       this.dropHeld();
@@ -317,7 +347,7 @@ export class Sim {
       const under = this.standingOn();
       let best: Prop | null = null, bestD = Infinity;
       for (const p of this.world.props) {
-        if (p === under || p.mass > F.grabLimit || p.noDrone > 0) continue;
+        if (p === under || p.mass > this.kit.grabLimit || p.noDrone > 0) continue;
         const pos = p.body.position, dist = Math.hypot(pos.x - o.x, pos.y - o.y);
         if (dist < bestD && this.inField(pos, p.size / 2)) { best = p; bestD = dist; }
       }
@@ -381,7 +411,7 @@ export class Sim {
     const holding = this.field.on && this.field.held;
     this.fireCd -= STEP_MS;
     this.fireBuf = Math.max(0, this.fireBuf - STEP_MS);
-    if (holding || frozen) { this.charge = 0; this.fireWasHeld = held; if (this.fireCd < 0) this.fireCd = 0; return; }
+    if (holding || frozen || !this.kit.gun) { this.charge = 0; this.fireWasHeld = held; if (this.fireCd < 0) this.fireCd = 0; return; }
     if (this.weapon === 'pulse') {
       if (pressed) this.fireBuf = T.probe.bufferMs;
       if ((held || this.fireBuf > 0) && this.fireCd <= 0) {
@@ -476,7 +506,7 @@ export class Sim {
       }
       const p = { x: s.x, y: s.y }, dv = { x: s.vx, y: s.vy };
       let t = 1, end = false;
-      let hit: { e: Enemy } | { prop: Prop } | 'drone' | 'dummy' | 'wall' | null = null;
+      let hit: { e: Enemy } | { prop: Prop } | { target: Target } | 'drone' | 'dummy' | 'wall' | null = null;
       for (const r of this.world.statics) { const u = segRect(p, dv, r); if (u !== undefined && u < t) { t = u; hit = 'wall'; } }
       for (const pr of this.world.props) {
         if (pr.held && s.friendly) continue;
@@ -485,6 +515,11 @@ export class Sim {
       }
       if (s.friendly) {
         if (dummy) { const u = segRect(p, dv, dummy); if (u !== undefined && u < t) { t = u; hit = 'dummy'; } }
+        for (const tg of this.targets) {
+          if (!tg.active) continue;
+          const u = segRect(p, dv, tg.rect);
+          if (u !== undefined && u <= t) { t = u; hit = { target: tg }; }
+        }
         for (const e of this.enemies) {
           if (!e.hittable() || s.hit.has(e)) continue;
           const u = segPoly(p, dv, e.outline());
@@ -506,10 +541,16 @@ export class Sim {
         this.dummyLast = s.damage;
         this.dummyFlash = frames(T.feel.hitFlashMs);
         this.fx.push({ t: 'hit', x: s.x, y: s.y, dx: dir.x, dy: dir.y, n: s.damage, armored: false, enemy: true });
+      } else if (hit && hit !== 'wall' && 'target' in hit) {
+        this.targetHits.push({ id: hit.target.id, n: s.damage });
+        this.fx.push({ t: 'hit', x: s.x, y: s.y, dx: dir.x, dy: dir.y, n: 0, armored: false, enemy: false });
       } else if (hit && hit !== 'wall' && 'e' in hit) {
         const e = hit.e;
         const armored = e instanceof Latch && e.armored(dir);
-        const n = e.damage(s.damage, dir);
+        // Carry Shot: a bolt landing within 0.5 s of the last one on the same enemy carries +4
+        const carry = this.kit.carryShot && s.kind !== 'orb' && this.steps - (this.lastBoltHit.get(e) ?? -999) <= frames(T.story.carryMs) ? T.story.carryBonus : 0;
+        if (s.kind !== 'orb') this.lastBoltHit.set(e, this.steps);
+        const n = e.damage(s.damage + carry, dir);
         s.hit.add(e);
         const k = e.kind === 'latch' ? T.probe.knockHeavy : T.probe.knock;
         e.knock({ x: dir.x * k * (s.kind === 'charged' ? 3 : 1), y: dir.y * k * (s.kind === 'charged' ? 3 : 1) });
@@ -549,7 +590,7 @@ export class Sim {
       const chunk = addProp(this.world, { kind: 'debris', x: e.x, y: e.y }, Math.round(T.feel.debrisS * HZ));
       Matter.Body.setVelocity(chunk.body, { x: vel.x / HZ, y: vel.y / HZ - 3 });
       const sp = (e as unknown as { spawn?: Vec }).spawn;
-      if (sp && this.room.enemies.length) this.respawns.push({ kind: e.kind as EnemyKind, x: sp.x, y: sp.y, t: Math.round(T.enemy.respawnS * HZ) });
+      if (sp && this.respawnEnemies && this.room.enemies.length) this.respawns.push({ kind: e.kind as EnemyKind, x: sp.x, y: sp.y, t: Math.round(T.enemy.respawnS * HZ) });
     }
   }
 

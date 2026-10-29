@@ -100,7 +100,8 @@ export class DroneRig {
         this.ghostT = 0;
         this.thrust = 1;
       } else if (f.t === 'respawn') {
-        this.feet = [];
+        // re-plant the feet under the respawned body
+        this.feet = HIPS.map((hx) => ({ x: cx + hx * face, y: d.y + d.h / 2, planted: true, lift: 0 }));
       }
     }
 
@@ -409,7 +410,9 @@ export class DroneRig {
     if (!dying) {
       const piv = rotate(TURRET.x * squashX, TURRET.y * squashY, tilt, face);
       const px = cx + piv.x, py = cy + piv.y;
-      const ax = sim.aim.x, ay = sim.aim.y;
+      // before the probe comes online (Level 1's first room) the tool arm hangs limp and dark
+      const armed = sim.kit.gun;
+      const ax = armed ? sim.aim.x : face * 0.32, ay = armed ? sim.aim.y : 0.95;
       const back = this.recoil;
       const charging = sim.weapon === 'charged' ? sim.charge : 0;
       c.strokeStyle = PAL.line;
@@ -427,7 +430,7 @@ export class DroneRig {
       c.lineTo(bx, by);
       c.stroke();
       c.lineWidth = 1.5;
-      c.strokeStyle = charging > 0 ? PAL.neon : PAL.trace;
+      c.strokeStyle = !armed ? rgba(PAL.idle, 0.6) : charging > 0 ? PAL.neon : PAL.trace;
       c.beginPath();
       c.moveTo(px + ax * (4 - back), py + ay * (4 - back));
       c.lineTo(bx, by);

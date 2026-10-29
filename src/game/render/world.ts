@@ -4,7 +4,7 @@
 import type { Rect, Room } from '../level/room';
 import type { Prop } from '../physics/world';
 import { rng, type Sim } from '../sim';
-import { TUNING, VIEW_H, VIEW_W } from '../tuning';
+import { VIEW_H, VIEW_W } from '../tuning';
 import { FONT, LINE, PAL, rgba } from './palette';
 
 type C = CanvasRenderingContext2D;
@@ -162,8 +162,8 @@ export class WorldArt {
 
   /** Room signs, painted on the back wall. */
   drawSigns(c: C) {
-    c.fillStyle = 'rgba(244,243,255,0.46)';
-    c.font = `13px ${FONT}`;
+    c.fillStyle = 'rgba(244,243,255,0.66)';
+    c.font = `14px ${FONT}`;
     for (const s of this.room.signs) c.fillText(s.text, s.x, s.y);
   }
 
@@ -174,6 +174,39 @@ export class WorldArt {
       if (s === sim.world.door?.rect) continue;
       if (s.x > view.x + view.w || s.x + s.w < view.x || s.y > view.y + view.h || s.y + s.h < view.y) continue;
       this.block(c, s, view);
+    }
+    // one-way ledges: the same block, with a dashed underside that says "jump up through me"
+    for (const s of this.room.oneWay) {
+      if (s.x > view.x + view.w || s.x + s.w < view.x || s.y > view.y + view.h || s.y + s.h < view.y) continue;
+      this.block(c, s, view);
+      c.save();
+      c.setLineDash([6, 6]);
+      c.strokeStyle = rgba(PAL.trace, 0.45);
+      c.lineWidth = 1.5;
+      c.beginPath();
+      c.moveTo(s.x + 4, s.y + s.h + 3);
+      c.lineTo(s.x + s.w - 4, s.y + s.h + 3);
+      c.stroke();
+      c.restore();
+    }
+    // grounding plates: grey, with the ground symbol, so a Floater over one goes harmless
+    for (const p of this.room.plates) {
+      c.save();
+      c.fillStyle = 'rgba(170,168,196,0.22)';
+      c.fillRect(p.x, p.y, p.w, p.h);
+      c.strokeStyle = 'rgba(214,212,236,0.7)';
+      c.lineWidth = 1.5;
+      c.strokeRect(p.x, p.y, p.w, p.h);
+      const gx = p.x + p.w / 2, gy = p.y - 22;
+      c.beginPath();
+      c.moveTo(gx, gy - 10); c.lineTo(gx, gy);
+      for (const [hw, dy] of [[12, 0], [8, 4], [4, 8]]) { c.moveTo(gx - hw, gy + dy); c.lineTo(gx + hw, gy + dy); }
+      c.stroke();
+      c.fillStyle = 'rgba(214,212,236,0.6)';
+      c.font = `10px ${FONT}`;
+      c.textAlign = 'center';
+      c.fillText('GND', gx, gy - 14);
+      c.restore();
     }
   }
 
@@ -348,7 +381,7 @@ export class WorldArt {
 
 function drawProp(c: C, p: Prop, sim: Sim, t: number) {
   const b = p.body, v = b.vertices;
-  const heavy = p.mass > TUNING.field.grabLimit;
+  const heavy = p.mass > sim.kit.grabLimit;
   let alpha = 1;
   if (p.kind === 'debris' && p.life > 0) alpha = Math.min(1, p.life / 30);
   c.save();

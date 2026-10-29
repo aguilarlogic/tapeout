@@ -15,6 +15,9 @@ test('the desktop app opens on the title screen and starts the story preview', a
     expect(await win.evaluate(() => typeof (globalThis as { require?: unknown }).require)).toBe('undefined');
     await win.getByTestId('story-preview').click();
     await expect(win.getByTestId('game')).toBeVisible();
+    // a fresh save starts the story by naming the player
+    await win.getByRole('textbox', { name: 'Your name' }).fill('Sam');
+    await win.getByRole('button', { name: 'I am new to this' }).click();
     await win.waitForFunction(() => ((window as unknown as { __tapeoutGame?: { sim: { steps: number } } }).__tapeoutGame?.sim.steps ?? 0) > 30);
   } finally {
     await app.close();

@@ -7,7 +7,10 @@ import { prefs } from '../state';
 export type Sfx =
   | 'shot' | 'charged' | 'charge' | 'hit' | 'clank' | 'kill' | 'jump' | 'land' | 'dash' | 'grab' | 'throw' | 'drop' | 'hurt'
   | 'boot' | 'door' | 'orb' | 'reflect' | 'push' | 'swap' | 'fizzle' | 'death' | 'thud' | 'repair'
-  | 'uiHover' | 'uiPress' | 'uiOpen' | 'uiClose';
+  | 'uiHover' | 'uiPress' | 'uiOpen' | 'uiClose'
+  // the story (Level 1)
+  | 'wireGrab' | 'wirePlug' | 'wireSnap' | 'rowTick' | 'pass' | 'notYet' | 'spark' | 'lever' | 'plate' | 'liftHum'
+  | 'portOpen' | 'bossPhase' | 'fanfare' | 'chirp' | 'crack' | 'shatter' | 'lightsOn' | 'reading';
 
 type Wave = OscillatorType | 'noise';
 interface Voice { at?: number; wave: Wave; f: number; to?: number; len: number; level: number; filter?: { type: BiquadFilterType; f: number; to?: number; q?: number } }
@@ -46,11 +49,41 @@ const V: Record<Sfx, Voice[]> = {
   uiPress: [{ wave: 'square', f: 700, to: 1050, len: 0.05, level: 0.03 }],
   uiOpen: [{ wave: 'triangle', f: 440, to: 880, len: 0.12, level: 0.035 }],
   uiClose: [{ wave: 'triangle', f: 880, to: 440, len: 0.12, level: 0.035 }],
+  wireGrab: [{ wave: 'square', f: 520, to: 780, len: 0.05, level: 0.03 }, { wave: 'noise', f: 1, len: 0.03, level: 0.02, filter: { type: 'highpass', f: 4000 } }],
+  wirePlug: [{ wave: 'square', f: 1040, len: 0.03, level: 0.035 }, { at: 0.035, wave: 'sine', f: 180, to: 90, len: 0.07, level: 0.07 }],
+  wireSnap: [{ wave: 'sawtooth', f: 900, to: 200, len: 0.12, level: 0.035, filter: { type: 'lowpass', f: 2500 } }],
+  rowTick: [{ wave: 'triangle', f: 1320, len: 0.05, level: 0.04 }],
+  pass: [{ wave: 'square', f: 523.25, len: 0.08, level: 0.035 }, { at: 0.09, wave: 'square', f: 659.25, len: 0.08, level: 0.035 }, { at: 0.18, wave: 'square', f: 783.99, len: 0.08, level: 0.035 }, { at: 0.27, wave: 'triangle', f: 1046.5, len: 0.35, level: 0.05 }],
+  notYet: [{ wave: 'square', f: 330, len: 0.1, level: 0.03, filter: { type: 'lowpass', f: 1800 } }, { at: 0.12, wave: 'square', f: 247, len: 0.16, level: 0.03, filter: { type: 'lowpass', f: 1500 } }],
+  spark: [{ wave: 'noise', f: 1, len: 0.22, level: 0.07, filter: { type: 'bandpass', f: 3500, to: 800, q: 2 } }, { wave: 'sawtooth', f: 1800, to: 300, len: 0.1, level: 0.02 }],
+  lever: [{ wave: 'noise', f: 1, len: 0.05, level: 0.05, filter: { type: 'lowpass', f: 1200 } }, { at: 0.04, wave: 'square', f: 660, len: 0.04, level: 0.03 }],
+  plate: [{ wave: 'sine', f: 140, to: 90, len: 0.12, level: 0.08 }, { at: 0.05, wave: 'triangle', f: 880, len: 0.06, level: 0.03 }],
+  liftHum: [{ wave: 'sawtooth', f: 55, len: 0.35, level: 0.03, filter: { type: 'lowpass', f: 300 } }],
+  portOpen: [{ wave: 'triangle', f: 330, to: 990, len: 0.18, level: 0.04 }, { at: 0.12, wave: 'square', f: 1320, len: 0.04, level: 0.02 }],
+  bossPhase: [{ wave: 'sawtooth', f: 110, to: 220, len: 0.4, level: 0.06, filter: { type: 'lowpass', f: 1200 } }, { at: 0.1, wave: 'square', f: 880, len: 0.08, level: 0.03 }, { at: 0.2, wave: 'square', f: 1175, len: 0.12, level: 0.03 }],
+  fanfare: [
+    { wave: 'square', f: 523.25, len: 0.1, level: 0.035 }, { at: 0.1, wave: 'square', f: 659.25, len: 0.1, level: 0.035 }, { at: 0.2, wave: 'square', f: 783.99, len: 0.1, level: 0.035 },
+    { at: 0.3, wave: 'square', f: 1046.5, len: 0.22, level: 0.04 }, { at: 0.3, wave: 'triangle', f: 523.25, len: 0.5, level: 0.05 }, { at: 0.55, wave: 'triangle', f: 1318.5, len: 0.5, level: 0.04 },
+  ],
+  chirp: [{ wave: 'sine', f: 1500, to: 2200, len: 0.04, level: 0.025 }, { at: 0.05, wave: 'sine', f: 1900, to: 1400, len: 0.05, level: 0.02 }],
+  crack: [{ wave: 'noise', f: 1, len: 0.12, level: 0.08, filter: { type: 'highpass', f: 1500 } }, { wave: 'square', f: 300, to: 150, len: 0.06, level: 0.03 }],
+  shatter: [{ wave: 'noise', f: 1, len: 0.45, level: 0.1, filter: { type: 'highpass', f: 2500, to: 800 } }, { wave: 'triangle', f: 2400, to: 900, len: 0.2, level: 0.03 }, { at: 0.06, wave: 'triangle', f: 3100, to: 1200, len: 0.2, level: 0.025 }],
+  lightsOn: [{ wave: 'sawtooth', f: 60, to: 120, len: 0.5, level: 0.04, filter: { type: 'lowpass', f: 400, to: 1500 } }, { at: 0.2, wave: 'triangle', f: 1046.5, len: 0.6, level: 0.035 }, { at: 0.3, wave: 'triangle', f: 1568, len: 0.6, level: 0.025 }],
+  reading: [{ wave: 'sine', f: 1200, len: 0.04, level: 0.03 }, { at: 0.06, wave: 'sine', f: 1600, len: 0.06, level: 0.03 }],
 };
 
-// --- the ambient loop: 96 BPM, 24 bars (60 s) of Am F C G, in three 8-bar sections that add voices ---
-const BPM = 96, SIXT = 60 / BPM / 4, BARS = 24;
-const CHORDS = [[57, 60, 64], [53, 57, 60], [48, 52, 55], [55, 59, 62]]; // MIDI: Am F C G
+// --- the music: loops of 24 bars in three 8-bar sections that add voices. The test room's ambient loop is 96 BPM
+// Am F C G; the story adds the Keeper's room theme, the boss, the Loft and the workbench (Level 1 spec, "Sound"). ---
+export type Track = 'test' | 'keeper' | 'boss' | 'loft' | 'bench';
+interface TrackDef { bpm: number; chords: number[][]; from: number; arp: OscillatorType | null; drums: boolean; bass: 2 | 1 }
+const TRACKS: Record<Track, TrackDef> = {
+  test: { bpm: 96, chords: [[57, 60, 64], [53, 57, 60], [48, 52, 55], [55, 59, 62]], from: 0, arp: 'square', drums: true, bass: 2 }, // Am F C G
+  keeper: { bpm: 120, chords: [[52, 55, 59], [48, 52, 55], [55, 59, 62], [50, 54, 57]], from: 0, arp: 'square', drums: true, bass: 2 }, // Em C G D
+  boss: { bpm: 150, chords: [[50, 53, 57], [46, 50, 53], [48, 52, 55], [45, 49, 52]], from: 2, arp: 'sawtooth', drums: true, bass: 1 }, // Dm Bb C A
+  loft: { bpm: 84, chords: [[53, 57, 60, 64], [57, 60, 64, 67], [50, 53, 57, 60], [48, 52, 55, 59]], from: 0, arp: 'triangle', drums: false, bass: 2 }, // Fmaj7 Am7 Dm7 Cmaj7
+  bench: { bpm: 90, chords: [[48, 51, 55], [44, 48, 51], [51, 55, 58], [46, 50, 53]], from: 0, arp: null, drums: false, bass: 2 }, // Cm Ab Eb Bb
+};
+const BARS = 24;
 const midi = (n: number) => 440 * 2 ** ((n - 69) / 12);
 
 export class GameAudio {
@@ -63,6 +96,7 @@ export class GameAudio {
   private musicTimer: ReturnType<typeof setInterval> | null = null;
   private nextNote = 0;
   private step = 0;
+  private track: TrackDef = TRACKS.test;
 
   private init(): AudioContext | null {
     try {
@@ -189,9 +223,12 @@ export class GameAudio {
     } catch { this.hum = null; }
   }
 
-  /** Start the ambient loop, fading in over 2 s. */
-  startMusic() {
+  /** Start a loop, fading in over 2 s. A different track while one plays changes over at once, from its first bar. */
+  startMusic(track: Track = 'test') {
     const c = this.init();
+    const def = TRACKS[track];
+    if (c && this.musicTimer && this.track !== def) { this.track = def; this.step = 0; return; }
+    this.track = def;
     if (!c || !this.music || this.musicTimer) return;
     this.music.gain.cancelScheduledValues(c.currentTime);
     this.music.gain.setValueAtTime(0, c.currentTime);
@@ -220,29 +257,30 @@ export class GameAudio {
     try {
       while (this.nextNote < c.currentTime + 0.3) {
         this.note(c, this.step, this.nextNote);
-        this.nextNote += SIXT;
+        this.nextNote += 60 / this.track.bpm / 4;
         this.step = (this.step + 1) % (BARS * 16);
       }
     } catch { /* keep the game going */ }
   }
 
   private note(c: AudioContext, step: number, t: number) {
-    const bar = Math.floor(step / 16), s16 = step % 16, section = Math.floor(bar / 8);
-    const chord = CHORDS[Math.floor(bar / 2) % 4];
+    const tr = this.track, SIXT = 60 / tr.bpm / 4;
+    const bar = Math.floor(step / 16), s16 = step % 16, section = Math.max(tr.from, Math.floor(bar / 8));
+    const chord = tr.chords[Math.floor(bar / 2) % 4];
     const out = this.music!;
     const tone = (wave: OscillatorType, f: number, len: number, level: number, cutoff = 2000) =>
       this.voice(c, out, { wave, f, len, level, filter: { type: 'lowpass', f: cutoff } }, t, 1, 1);
     // pad: a soft chord on the first beat of each bar
     if (s16 === 0) for (const n of chord) { tone('sawtooth', midi(n), SIXT * 15, 0.018, 900); tone('sawtooth', midi(n) * 1.004, SIXT * 15, 0.014, 700); }
     // bass: root on the eighths, octave on the off-beats
-    if (s16 % 2 === 0) tone('triangle', midi(chord[0] - 24 + (s16 % 4 === 2 ? 12 : 0)), SIXT * 1.6, 0.06, 1200);
+    if (s16 % tr.bass === 0) tone('triangle', midi(chord[0] - 24 + (s16 % 4 === 2 ? 12 : 0)), SIXT * 1.6, 0.06, 1200);
     // arp from the second section on
-    if (section >= 1) {
+    if (section >= 1 && tr.arp) {
       const n = chord[[0, 1, 2, 1][s16 % 4]] + (s16 >= 8 ? 12 : 0);
-      tone('square', midi(n), SIXT * 0.8, 0.012, 2600);
+      tone(tr.arp, midi(n), SIXT * 0.8, tr.arp === 'square' ? 0.012 : 0.009, 2600);
     }
     // hats and a soft kick in the last section
-    if (section >= 2) {
+    if (section >= 2 && tr.drums) {
       if (s16 % 2 === 1) this.voice(c, out, { wave: 'noise', f: 1, len: 0.03, level: 0.012, filter: { type: 'highpass', f: 7000 } }, t, 1, 1);
       if (s16 % 8 === 0) this.voice(c, out, { wave: 'sine', f: 110, to: 45, len: 0.14, level: 0.07 }, t, 1, 1);
     }
