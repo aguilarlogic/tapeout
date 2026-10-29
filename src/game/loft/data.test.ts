@@ -103,6 +103,14 @@ describe('the chip map rows', () => {
     expect(mapRows(done)[0].pct).toBe(11);
   });
 
+  it('adds a later act once one of its places opens, numbered as the places are', () => {
+    expect(mapRows(done).some((r) => r.act === 2)).toBe(false);
+    finish(places.PLACES.filter((p) => p.act === 1).flatMap((p) => scoredIds(p.id)));
+    const act2 = mapRows(done).filter((r) => r.act === 2);
+    expect(act2.length).toBeGreaterThan(0);
+    expect(act2[0]).toMatchObject({ n: 'D1', open: true });
+  });
+
   it('leaves optional challenges out of the percentage', () => {
     finish(['logic-not']);
     expect(mapRows(done).find((r) => r.place === 'inverted-hall')?.pct).toBe(0);

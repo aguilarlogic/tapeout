@@ -185,7 +185,8 @@ test('Act 2: down a Deep Layer hatch and back, and an act 2 arena that fights ba
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(String(e)));
   page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') errors.push(`${m.type()}: ${m.text()}`); });
-  await page.goto(pathToFileURL(resolve('dist/index.html')).href);
+  // ?record exposes the award hook, so a hatch's place can be opened (Phase 5 Spec, section 3: locked hatches stay shut)
+  await page.goto(`${pathToFileURL(resolve('dist/index.html')).href}?record`);
   await expect(page.locator('#os')).not.toBeEmpty();
   await page.getByTestId('story-preview').click();
   await page.getByRole('textbox', { name: 'Your name' }).fill('Sam');
@@ -197,6 +198,7 @@ test('Act 2: down a Deep Layer hatch and back, and an act 2 arena that fights ba
   const exit = await page.evaluate(() => window.__tapeoutGame!.story!.roomsFor('boot-rom').length - 1);
   await page.evaluate((i) => window.__tapeoutGame!.story!.warp('boot-rom', i), exit);
   await page.waitForTimeout(600);
+  await page.evaluate(() => (window as unknown as { __tapeoutAward(id: string): void }).__tapeoutAward('code-c-swap'));
   await page.evaluate(() => { const s = window.__tapeoutGame!.story!; s.useStation(s.room.stations.find((x) => x.kind === 'hatch')!); });
   await page.waitForFunction(() => window.__tapeoutGame!.story!.place === 'firmware-pit' && !window.__tapeoutGame!.story!.fade, null, { timeout: 10000 });
   expect(await where()).toEqual(['firmware-pit', 0]);
@@ -212,5 +214,31 @@ test('Act 2: down a Deep Layer hatch and back, and an act 2 arena that fights ba
   await page.getByTestId('story-card').getByRole('button').click();
   expect(await page.evaluate(() => window.__tapeoutGame!.story!.boss!.phase)).toBe('investigate');
   await page.waitForTimeout(6000);
+  expect(errors).toEqual([]);
+});
+
+test('The Underlayers: the Pipeline hatch stays shut until D5 opens, then drops in with the arrival card', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(String(e)));
+  page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') errors.push(`${m.type()}: ${m.text()}`); });
+  await page.goto(`${pathToFileURL(resolve('dist/index.html')).href}?record`);
+  await expect(page.locator('#os')).not.toBeEmpty();
+  await page.getByTestId('story-preview').click();
+  await page.getByRole('textbox', { name: 'Your name' }).fill('Sam');
+  await page.getByRole('button', { name: 'I am new to this' }).click();
+  await page.waitForFunction(() => window.__tapeoutGame?.ready && !window.__tapeoutGame.story!.waiting, null, { timeout: 15000 });
+  const exit = await page.evaluate(() => window.__tapeoutGame!.story!.roomsFor('pipeline').length - 1);
+  await page.evaluate((i) => window.__tapeoutGame!.story!.warp('pipeline', i), exit);
+  await page.waitForTimeout(600);
+  const hatch = () => page.evaluate(() => { const s = window.__tapeoutGame!.story!; s.useStation(s.room.stations.find((x) => x.kind === 'hatch')!); });
+  await hatch();
+  await page.waitForTimeout(1200);
+  expect(await page.evaluate(() => window.__tapeoutGame!.story!.place)).toBe('pipeline');
+  await page.evaluate(() => (window as unknown as { __tapeoutAward(id: string): void }).__tapeoutAward('ohm'));
+  await hatch();
+  await page.waitForFunction(() => window.__tapeoutGame!.story!.place === 'power-grid' && !window.__tapeoutGame!.story!.fade, null, { timeout: 10000 });
+  await expect(page.getByTestId('story-card')).toContainText('THE UNDERLAYERS');
+  await page.getByTestId('story-card').getByRole('button', { name: 'Go down' }).click();
+  await page.waitForTimeout(1500);
   expect(errors).toEqual([]);
 });

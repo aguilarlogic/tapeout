@@ -23,7 +23,7 @@ import type { AttackCtx } from '../bosses/types';
 import { liftChoices } from '../loft/data';
 import { rngFor, roomsOf, themeOf } from '../world/compose';
 import { MECHANICS } from '../world/mechanics';
-import { PLACES, placeById, placeOf } from '../world/places';
+import { openPlaces, PLACES, placeById, placeDone, placeOf } from '../world/places';
 import { STORY } from '../world/story';
 import type { MechanicDef, PlaceTheme } from '../world/types';
 import { type ActKit, actKit, UP, upgradeFor } from '../world/upgrades';
@@ -280,6 +280,14 @@ export class Director {
     this.boss = null;
     if (room.id === 'arena' || room.role === 'arena') this.startBoss();
     this.out.push({ t: 'enter' }, { t: 'music', track: room.music });
+    // the first landing in the Underlayers (Phase 5 Spec, section 3)
+    if (placeById(place)?.act === 5 && !this.world.cutscenes.includes('underlayers')) {
+      this.world.cutscenes.push('underlayers');
+      this.save();
+      const u = STORY.underlayers;
+      this.out.push({ t: 'card', kind: 'info', title: u.title, lines: [...u.lines], button: u.button });
+      this.waiting = true;
+    }
   }
 
   /** The drone's kit from records: what it can do, and how it looks. */
@@ -291,9 +299,13 @@ export class Director {
     this.act = a;
     const s = this.sim;
     s.kit = {
-      gun: k.gun, coil: k.coil, charged: false, grabLimit: k.grabLimit, carryShot: k.carryShot,
+      gun: k.gun, coil: k.coil, charged: a.weapons.includes('charged'), grabLimit: k.grabLimit + a.grabBonus, carryShot: k.carryShot,
       weapons: a.weapons, probeDamage: a.probeDamage, cannonDamage: a.cannonDamage, counterTo: a.counterTo, weak: a.weak || undefined,
       holster: a.holster && QUIET.has(this.room.role ?? ''), gripEnemies: a.gripEnemies, fieldRadius: a.fieldRadius,
+      damageScale: a.damageScale, behindScale: a.behindScale, phasor: a.phasor || undefined, stillRegen: a.stillRegen,
+      dashHit: a.dashHit || undefined, dashCooldownMs: a.dashCooldownMs, compass: a.compass || undefined,
+      throwChargeS: a.throwChargeS, throwDamage: a.throwDamage, drop: a.drop || undefined, hover: a.hover || undefined,
+      visor: a.visor || undefined, chargedDamage: a.chargedDamage,
       slots: a.slots, burstBolts: a.burstBolts || undefined, loopDrone: a.loopDrone || undefined, rail: a.rail || undefined, sync: a.sync || undefined,
     };
     s.drone.abilities = { doubleJump: a.doubleJump, wallLatch: a.wallLatch, ...(a.doubleJump ? { jump2: a.jump2 / HZ } : {}) };
@@ -995,6 +1007,13 @@ export class Director {
         // a Deep Layer hatch (Phase 4 Spec, section 3): down to its landing, or back up to the exit above it
         const to = st.arg && placeById(st.arg);
         if (!to) break;
+        // a hatch down into a place that is not open yet stays shut (Phase 5 Spec, section 3); the way back up never is
+        const down = PLACES.findIndex((p) => p.id === to.id) > PLACES.findIndex((p) => p.id === this.place);
+        if (down && !openPlaces(this.done).some((p) => p.id === to.id)) {
+          const need = to.after.map((id) => placeById(id)).find((q) => !!q && !placeDone(q, this.done));
+          this.say(STORY.hatchLocked.replace('{place}', need?.name ?? to.name));
+          break;
+        }
         this.out.push({ t: 'sfx', name: 'door', gain: 0.6 });
         this.go(to.id as Place, to.kind === 'deep' && this.place !== to.id && this.room.role === 'exit' ? 0 : roomsOf(to.id).length - 1);
         break;
@@ -1211,6 +1230,30 @@ export class Director {
     this.cut = null;
     this.waiting = false;
     this.enter(place, index);
+  }
+
+  /**
+   * The Gradient Compass's point (world px): the nearest station in this room whose module has no record yet, or the
+   * room's exit once they are all done. Null with no compass, in the Loft, and in an arena.
+   */
+  compassTarget(): { x: number; y: number } | null {
+    const room = this.room;
+    if (!this.sim.kit.compass || this.place === 'loft' || room.boss || room.role === 'arena' || room.id === 'arena') return null;
+    const d = this.sim.drone;
+    let best: Station | null = null, bestD = Infinity;
+    for (const st of room.stations) {
+      if (!st.module || this.done(st.module)) continue;
+      const dist = Math.hypot(st.x - d.x, st.y - d.y);
+      if (dist < bestD) { best = st; bestD = dist; }
+    }
+    if (best) return { x: best.x, y: best.y };
+    return { x: room.exit.x, y: room.exit.y ?? d.y };
+  }
+
+  /** The Spectrum Visor's bar: the live boss's next attack (null outside a composed arena's live fight). */
+  nextAttack(): { progress: number; starting: boolean } | null {
+    if (!this.form || !this.bossBar || !this.room.boss) return null;
+    return this.form.nextAttack();
   }
 
   get bossBar() { return this.boss && this.boss.phase !== 'pager' && this.boss.phase !== 'done' ? this.boss : null; }

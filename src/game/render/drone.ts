@@ -243,6 +243,18 @@ export class DroneRig {
     c.lineJoin = 'round';
     c.lineCap = 'round';
 
+    // resonant hover: a soft 40 × 8 ring of light under the feet, pulsing between 0.3 and 0.6
+    if (d.hovering && !dying) {
+      c.save();
+      c.globalAlpha = alpha * (0.45 + 0.15 * Math.sin(this.t * Math.PI * 2 * 3));
+      c.strokeStyle = PAL.trace;
+      c.lineWidth = 2;
+      c.beginPath();
+      c.ellipse(x, y + d.h / 2 + 2, 20, 4, 0, 0, Math.PI * 2);
+      c.stroke();
+      c.restore();
+    }
+
     // afterimages
     for (const g of this.ghosts) {
       const a = 1 - g.age / A.afterimageFadeMs;

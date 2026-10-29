@@ -7,3 +7,5 @@ import './xblob';
 import './metastable';
 import './swarm';
 import './bubble';
+import './ringer';
+import './shunt';

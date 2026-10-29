@@ -8,6 +8,8 @@ export type Sfx =
   | 'shot' | 'charged' | 'charge' | 'hit' | 'clank' | 'kill' | 'jump' | 'land' | 'dash' | 'grab' | 'throw' | 'drop' | 'hurt'
   | 'boot' | 'door' | 'orb' | 'reflect' | 'push' | 'swap' | 'fizzle' | 'death' | 'thud' | 'repair'
   | 'uiHover' | 'uiPress' | 'uiOpen' | 'uiClose'
+  // the Underlayers (phase 5): Resonant Hover starts
+  | 'hover'
   // the story (Level 1)
   | 'wireGrab' | 'wirePlug' | 'wireSnap' | 'rowTick' | 'pass' | 'notYet' | 'spark' | 'lever' | 'plate' | 'liftHum'
   | 'portOpen' | 'bossPhase' | 'fanfare' | 'chirp' | 'crack' | 'shatter' | 'lightsOn' | 'reading'
@@ -48,6 +50,7 @@ const V: Record<Sfx, Voice[]> = {
   thud: [{ wave: 'sine', f: 110, to: 55, len: 0.08, level: 0.06 }, { wave: 'noise', f: 1, len: 0.05, level: 0.04, filter: { type: 'lowpass', f: 700 } }],
   repair: [{ wave: 'triangle', f: 660, len: 0.06, level: 0.04 }, { at: 0.06, wave: 'triangle', f: 990, len: 0.12, level: 0.04 }],
   uiHover: [{ wave: 'sine', f: 1400, len: 0.025, level: 0.02 }],
+  hover: [{ wave: 'sine', f: 110, len: 0.15, level: 0.03 }],
   uiPress: [{ wave: 'square', f: 700, to: 1050, len: 0.05, level: 0.03 }],
   uiOpen: [{ wave: 'triangle', f: 440, to: 880, len: 0.12, level: 0.035 }],
   uiClose: [{ wave: 'triangle', f: 880, to: 440, len: 0.12, level: 0.035 }],
@@ -101,7 +104,7 @@ const V: Record<Sfx, Voice[]> = {
 
 // --- the music: loops of 24 bars in three 8-bar sections that add voices. The test room's ambient loop is 96 BPM
 // Am F C G; the story adds the Keeper's room theme, the boss, the Loft and the workbench (Level 1 spec, "Sound"). ---
-export type Track = 'test' | 'keeper' | 'boss' | 'loft' | 'bench' | 'core';
+export type Track = 'test' | 'keeper' | 'boss' | 'loft' | 'bench' | 'core' | 'under';
 interface TrackDef { bpm: number; chords: number[][]; from: number; arp: OscillatorType | null; drums: boolean; bass: 2 | 1 }
 const TRACKS: Record<Track, TrackDef> = {
   test: { bpm: 96, chords: [[57, 60, 64], [53, 57, 60], [48, 52, 55], [55, 59, 62]], from: 0, arp: 'square', drums: true, bass: 2 }, // Am F C G
@@ -109,6 +112,7 @@ const TRACKS: Record<Track, TrackDef> = {
   boss: { bpm: 150, chords: [[50, 53, 57], [46, 50, 53], [48, 52, 55], [45, 49, 52]], from: 2, arp: 'sawtooth', drums: true, bass: 1 }, // Dm Bb C A
   loft: { bpm: 84, chords: [[53, 57, 60, 64], [57, 60, 64, 67], [50, 53, 57, 60], [48, 52, 55, 59]], from: 0, arp: 'triangle', drums: false, bass: 2 }, // Fmaj7 Am7 Dm7 Cmaj7
   core: { bpm: 128, chords: [[57, 60, 64], [53, 57, 60], [48, 52, 55], [55, 59, 62]], from: 0, arp: 'square', drums: true, bass: 2 }, // Am F C G
+  under: { bpm: 90, chords: [[50, 53, 57, 60], [46, 50, 53, 57], [43, 46, 50, 53], [45, 48, 52, 55]], from: 0, arp: 'triangle', drums: false, bass: 2 }, // Dm7 Bbmaj7 Gm7 Am7
   bench: { bpm: 90, chords: [[48, 51, 55], [44, 48, 51], [51, 55, 58], [46, 50, 53]], from: 0, arp: null, drums: false, bass: 2 }, // Cm Ab Eb Bb
 };
 const BARS = 24;

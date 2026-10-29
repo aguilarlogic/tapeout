@@ -93,7 +93,7 @@ export type Template = (rng: () => number, opts: TemplateOpts) => Shell;
 export type MechanicKind = 'lamps' | 'inverted' | 'select' | 'clocked' | 'pattern' | 'loop' | 'bus' | 'clocks' | 'stages';
 export interface MechanicSpec { kind: MechanicKind; /** The module whose port follows the discovery room. */ before: string }
 
-export type BackdropKind = 'lamps' | 'gates' | 'carry' | 'clock' | 'rom' | 'core' | 'grid' | 'silicon' | 'cluster' | 'fab' | 'loft';
+export type BackdropKind = 'lamps' | 'gates' | 'carry' | 'clock' | 'rom' | 'core' | 'under' | 'grid' | 'silicon' | 'cluster' | 'fab' | 'loft';
 
 /** Everything TAPEOUT says in a place. Keys of `rooms`: 'port:<module>', 'panel:<module>', 'bench:<first module>',
  * 'gate:<module>', 'annex', 'discovery', 'fight', 'traverse', 'upgrade:<upgrade id>'. */

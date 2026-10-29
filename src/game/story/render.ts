@@ -1111,7 +1111,7 @@ export function drawBubble(c: C, d: Director, t: number) {
   c.globalAlpha = inK * (1 - fadeOut);
   c.font = `15px ${FONT}`;
   // top centre, under the HUD (under the boss bar in the arena), clear of the drone and the floor
-  const w = Math.max(240, c.measureText(b.text).width + 40), ax = (VIEW_W - w) / 2 - 8, y = (d.bossBar ? 104 : 66) + (1 - inK) * -8;
+  const w = Math.max(240, c.measureText(b.text).width + 40), ax = (VIEW_W - w) / 2 - 8, y = (d.bossBar ? 104 : 86) + (1 - inK) * -8;
   const x = ax + 36;
   // the avatar: TAPEOUT's eye in a ring, flickering while it is still broken
   const broken = !d.kit.voice;
@@ -1185,9 +1185,17 @@ export function drawBossHud(c: C, d: Director, t: number, showLog: boolean) {
   c.stroke();
   c.fillStyle = b.shielded ? rgba(PAL.idle, 0.8) : PAL.neon;
   c.fillRect(x + 3, y + 3, (W - 6) * (b.hp / b.maxHp), 6);
+  // the Spectrum Visor's bar, 4 px under the health frame: it fills toward the next attack, and flashes warm as one starts
+  const visor = d.sim.kit.visor ? d.nextAttack() : null;
+  if (visor) {
+    c.fillStyle = rgba(PAL.line, 0.12);
+    c.fillRect(x, y + 16, W, 3);
+    c.fillStyle = visor.starting ? rgba(PAL.amber, 1) : rgba(PAL.trace, 0.7);
+    c.fillRect(x, y + 16, visor.starting ? W : W * visor.progress, 3);
+  }
   const left = b.inv.left, frac = Math.max(0, left / b.inv.inc.budget);
   c.fillStyle = rgba(frac < 0.3 ? PAL.hostile : PAL.amber, 0.9);
-  c.fillRect(x + 3, y + 18, (W - 6) * frac, 3);
+  c.fillRect(x + 3, y + (visor ? 23 : 18), (W - 6) * frac, 3);
   c.fillStyle = rgba(PAL.text, 0.75);
   c.font = `11px ${FONT}`;
   const phase = b.phase === 'investigate' ? (b.tempDown > 0 ? 'SHIELD DOWN · HIT IT' : 'TAKE READINGS · THEN THE DEBUG PORT') : b.phase === 'fix' ? 'PICK THE FIX' : 'SHIELD DOWN · FINISH IT';
@@ -1208,6 +1216,38 @@ export function drawBossHud(c: C, d: Director, t: number, showLog: boolean) {
     panel(c, VIEW_W - 560, 152, 540, ['CAUSES', ...causes, '', 'READINGS', ...(notes.length ? notes : ['none yet'])], 1, PAL.amber);
   }
   void t;
+}
+
+/** The Gradient Compass: a chevron at the screen edge (inset 28 px), on the line from the drone toward the next thing to
+ * do, when that is off screen or more than 500 px away. View space; `cam` is the view's top-left in world px, as drawDark
+ * takes it. Its pulse runs in reduced motion too (it is a gentle alpha change, not movement). */
+export function drawCompass(c: C, d: Director, cam: Pt, t: number, still = false) {
+  const tg = d.compassTarget();
+  if (!tg) return;
+  const dr = d.sim.drone, INSET = 28, FAR = 500;
+  const tx = tg.x - cam.x, ty = tg.y - cam.y;
+  const off = tx < 0 || tx > VIEW_W || ty < 0 || ty > VIEW_H;
+  if (!off && Math.hypot(tg.x - dr.x, tg.y - dr.y) <= FAR) return;
+  // the drone's screen position, kept inside the inset box the arrow sits on; the arrow is where the ray leaves that box
+  const L = INSET, R = VIEW_W - INSET, T = INSET, B = VIEW_H - INSET;
+  const ox = Math.min(R, Math.max(L, dr.x - cam.x)), oy = Math.min(B, Math.max(T, dr.y - cam.y));
+  const dx = tx - ox, dy = ty - oy;
+  if (Math.hypot(dx, dy) < 1) return;
+  const s = Math.min(dx > 0 ? (R - ox) / dx : Infinity, dx < 0 ? (L - ox) / dx : Infinity, dy > 0 ? (B - oy) / dy : Infinity, dy < 0 ? (T - oy) / dy : Infinity);
+  const px = ox + dx * s, py = oy + dy * s;
+  const ang = Math.atan2(dy, dx), arm = 12, spread = (40 * Math.PI) / 180;
+  const alpha = still ? 0.8 : 0.8 + 0.1 * Math.sin((t / HZ) * 2.5);
+  c.save();
+  c.strokeStyle = rgba(PAL.trace, alpha);
+  c.lineWidth = 2;
+  c.lineCap = 'round';
+  c.lineJoin = 'round';
+  c.beginPath();
+  c.moveTo(px + arm * Math.cos(ang + Math.PI - spread), py + arm * Math.sin(ang + Math.PI - spread));
+  c.lineTo(px, py);
+  c.lineTo(px + arm * Math.cos(ang + Math.PI + spread), py + arm * Math.sin(ang + Math.PI + spread));
+  c.stroke();
+  c.restore();
 }
 
 function panel(c: C, x: number, y: number, w: number, lines: string[], alpha: number, col: string) {
