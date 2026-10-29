@@ -79,10 +79,12 @@ if (await card.isVisible()) await card.getByRole('button').last().click();
 await story(() => { window.__tapeoutGame.drive = null; });
 await wait(5000);
 
-// 4. the Okabe-Ito palette in a fight: hold fire at the nearest enemy
+// 4. the Okabe-Ito palette in a fight: sign off Bit Zero so the drone has its Probe Pulse, then hold fire at the nearest
+// enemy (Bit Zero's modules then show ✓ in the Learning route below)
 log('fight in Okabe-Ito');
 await story(() => {
   const g = window.__tapeoutGame, s = g.story;
+  for (const id of new Set(s.roomsFor('bit-zero').flatMap((r) => r.modules ?? []))) window.__tapeoutAward(id);
   s.warp('lamp-board', s.roomsFor('lamp-board').findIndex((r) => r.role === 'fight'));
   g.drive = (sim) => {
     const d = sim.drone, e = sim.enemies.filter((x) => x.alive).sort((a, b) => Math.abs(a.x - d.x) - Math.abs(b.x - d.x))[0];

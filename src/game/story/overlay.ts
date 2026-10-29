@@ -185,7 +185,11 @@ export function openProfile(host: OverlayHost, onClose: () => void) {
     button('I have studied some electronics', () => go('student')),
     h('p', { class: 'gm-note' }, 'Either way you start at the first room. Story difficulty for new players, Standard otherwise. You can change it in the pause menu.'));
   done = mount(host, node, null);
-  setTimeout(() => name.focus(), 40);
+  // focus at once, so a player can type from the first frame; again a beat later, in case the canvas took it back. The
+  // perf pass times start to here: the first input a player can type into (Phase 10 Spec, section 4)
+  name.focus();
+  performance.mark('tapeout:first-input');
+  setTimeout(() => { if (document.activeElement !== name) name.focus(); }, 40);
 }
 
 /**

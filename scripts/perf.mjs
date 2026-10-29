@@ -1,13 +1,15 @@
 // The performance pass (Phase 10 Spec, section 4): every room of every place, at 1366 x 768 with the CPU throttled 4x
 // through CDP (a stand-in for the design doc's 2018 laptop with Intel UHD 620 graphics). Run `npm run build` first.
 //   node scripts/perf.mjs [places.json] [place ...]
+// EXE=1 runs the same pass in the desktop app through Playwright's Electron driver (npm run desktop:prep first; on Linux
+// under xvfb-run) and writes test-results/perf-exe.md. ROOMS=place:index,... measures only those rooms.
 // places.json lists the places in play order ({ id, modules }[]; dump it from PLACES and chapterOf). Rooms come from the
 // director, so Bit Zero gets its hand-built eleven.
 // Every module is signed off first through the `?record` hook, so the drone carries every upgrade and each room draws
 // its heaviest effects. In each room the drone holds fire toward the nearest enemy: 10 s in fight, arena and boss rooms,
 // 3 s elsewhere. Writes test-results/perf.md: update and render ms (average and p95), peak bodies, shots and particles,
-// and the JS heap. Also measures start: navigation to the name field showing, ready for input.
-import { chromium } from '@playwright/test';
+// and the JS heap. Also measures start: navigation to the name field taking focus, ready for input.
+import { _electron, chromium } from '@playwright/test';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -16,18 +18,22 @@ const BUDGET = { update: 4, render: 6, bodies: 200, shots: 150, particles: 300, 
 const LONG = new Set(['fight', 'arena', 'xarena', 'bossdoor']);
 const places = JSON.parse(readFileSync(resolve(process.argv[2] ?? 'test-results/places.json'), 'utf8'));
 const only = process.argv.slice(3);
-const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
-const page = await browser.newPage({ viewport: { width: 1366, height: 768 } });
+const exe = process.env.EXE === '1';
+const pick = process.env.ROOMS ? new Set(process.env.ROOMS.split(',')) : null;
+const app = exe ? await _electron.launch({ args: ['desktop/main.cjs'] }) : null;
+const browser = exe ? null : await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
+const page = exe ? await app.firstWindow() : await browser.newPage({ viewport: { width: 1366, height: 768 } });
+if (exe) await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setContentSize(1366, 768));
 const cdp = await page.context().newCDPSession(page);
 await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
 const errors = [];
 page.on('pageerror', (e) => errors.push(String(e.stack ?? e)));
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 
-const t0 = Date.now();
-await page.goto(`${pathToFileURL(resolve('dist/index.html')).href}?record`);
+await page.goto(`${pathToFileURL(resolve(exe ? 'desktop/app/Tapeout.html' : 'dist/index.html')).href}?record`);
 await page.locator('.st-input').waitFor({ state: 'visible' });
-const startMs = Date.now() - t0;
+// the game marks the moment the name field takes focus; polling for it would add the poll's own lag
+const startMs = Math.round(await page.evaluate(() => performance.getEntriesByName('tapeout:first-input')[0]?.startTime ?? performance.now()));
 await page.locator('.st-input').fill('P');
 await page.getByRole('button', { name: 'I am new to this' }).click();
 await page.waitForFunction(() => window.__tapeoutGame?.ready, null, { timeout: 60000 });
@@ -50,6 +56,7 @@ for (const p of places) {
   const roles = await page.evaluate((id) => window.__tapeoutGame.story.roomsFor(id).map((r) => r.role ?? r.id), p.id);
   for (let i = 0; i < roles.length; i++) {
     const role = roles[i];
+    if (pick && !pick.has(`${p.id}:${i}`)) continue;
     await page.evaluate(([id, k]) => { document.querySelectorAll('.gm-screen [role="dialog"]').forEach((d) => d.remove()); window.__tapeoutGame.story.warp(id, k); }, [p.id, i]);
     await page.waitForTimeout(600);
     await page.evaluate(() => window.__tapeoutGame.resetStats());
@@ -70,17 +77,18 @@ for (const p of places) {
     console.log(`${p.id.padEnd(22)} ${String(i).padStart(2)} ${role.padEnd(9)} fps ${s.fps.toFixed(0).padStart(3)} upd ${fmt(s.stepAvg)}/${fmt(s.stepP95)} rnd ${fmt(s.renderAvg)}/${fmt(s.renderP95)} b${peak.bodies} s${peak.shots} p${peak.particles} ${heapMb.toFixed(0)}MB ${over.join(',')}${s.waiting ? ' (card up)' : ''}`);
   }
 }
-await browser.close();
+await (exe ? app.close() : browser.close());
 
 mkdirSync('test-results', { recursive: true });
 const worst = [...rows].sort((a, b) => (b.stepAvg + b.renderAvg) - (a.stepAvg + a.renderAvg));
 const line = (r) => `| ${r.place} | ${r.i} | ${r.role} | ${fmt(r.stepAvg)} | ${fmt(r.stepP95)} | ${fmt(r.renderAvg)} | ${fmt(r.renderP95)} | ${r.peak.bodies} | ${r.peak.shots} | ${r.peak.particles} | ${r.heapMb.toFixed(0)} | ${r.over.join(', ') || 'ok'} |`;
 const head = '| Place | Room | Role | Update avg | Update p95 | Render avg | Render p95 | Bodies | Shots | Particles | Heap MB | Budget |\n| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |';
-writeFileSync('test-results/perf.md', [
-  '# Performance pass', '',
-  `Chromium at 1366 x 768, CPU throttled 4x. Headless Chromium has no GPU, so the canvas draws in software on the main thread:`,
+const outFile = exe ? 'test-results/perf-exe.md' : 'test-results/perf.md';
+writeFileSync(outFile, [
+  exe ? '# Performance pass, desktop app' : '# Performance pass', '',
+  `${exe ? 'The desktop app (Electron)' : 'Chromium'} at 1366 x 768, CPU throttled 4x. The test machine has no GPU, so the canvas draws in software on the main thread:`,
   `render ms here include pixel filling that a laptop's GPU does off the main thread, and the frame rate measures this machine, not the game.`,
-  `Start (navigation to the name field showing): ${startMs} ms (budget ${BUDGET.startMs}).`,
+  `Start (navigation to the name field taking focus): ${startMs} ms (budget ${BUDGET.startMs}).`,
   `Rooms measured: ${rows.length}. Over budget: ${rows.filter((r) => r.over.length).length}. Console errors: ${errors.length}.`, '',
   '## Ten heaviest rooms', '', head, ...worst.slice(0, 10).map(line), '',
   '## Every room', '', head, ...rows.map(line), '',
