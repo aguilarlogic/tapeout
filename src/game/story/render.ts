@@ -339,6 +339,48 @@ function drawAlu(c: C, x: number, y: number, w: number, h: number, lit: boolean,
   }
 }
 
+/** A bench monitor's text, laid out once per module and monitor size: the font size, the title (cut at a word), the
+ * idea's lines and the "opens in" line. Measuring every word each frame was the bench rooms' heaviest draw cost. */
+type BenchText = { size: number; shown: string; rows: number; lines: string[]; opens: string };
+const benchTexts = new Map<string, BenchText>();
+function benchText(c: C, m: string, title: string, mw: number, h: number): BenchText {
+  const key = `${m}|${mw}|${h}`;
+  const hit = benchTexts.get(key);
+  if (hit) return hit;
+  const mod = findModule(m)?.module;
+  const opens = mod ? `// opens in: ${KIND_APP[mod.kind]}` : '';
+  // the title and the "opens in" line shrink to fit the monitor
+  let size = 12;
+  c.font = `${size}px ${FONT}`;
+  while (size > 9 && Math.max(c.measureText(title).width, c.measureText(opens).width) > mw - 28) { size--; c.font = `${size}px ${FONT}`; }
+  // still too long at the smallest size: cut at a word with an ellipsis, never mid-word at the edge
+  let shown = title;
+  if (c.measureText(shown).width > mw - 28) {
+    const ws = title.split(' ');
+    while (ws.length > 2 && c.measureText(`${ws.join(' ')}…`).width > mw - 28) ws.pop();
+    shown = `${ws.join(' ')}…`;
+  }
+  // the idea it teaches, wrapped to the monitor, then where it opens
+  const words = (mod?.concept ?? '').split(/\s+/).filter(Boolean), lines: string[] = [];
+  let cut = false;
+  for (const wd of words) {
+    const last = lines[lines.length - 1];
+    if (last !== undefined && c.measureText(`//   ${last} ${wd}`).width <= mw - 28) lines[lines.length - 1] = `${last} ${wd}`;
+    else if (lines.length < 3) lines.push(wd);
+    else { cut = true; break; }
+  }
+  const rows = Math.min(lines.length, Math.max(0, Math.floor((h - 70) / 16)));
+  // the idea runs past the monitor: end the last shown line at a word, with an ellipsis
+  if (rows > 0 && (cut || rows < lines.length)) {
+    const ws = lines[rows - 1].split(' ');
+    while (ws.length > 1 && c.measureText(`//   ${ws.join(' ')}…`).width > mw - 28) ws.pop();
+    lines[rows - 1] = `${ws.join(' ').replace(/[,;:]$/, '')}…`;
+  }
+  const out = { size, shown, rows, lines, opens: mod && c.measureText(opens).width > mw - 28 ? `// ${KIND_APP[mod.kind]}` : opens };
+  benchTexts.set(key, out);
+  return out;
+}
+
 /** A composed bench's rig: one monitor per module (three at most, side by side), each showing its title and its verdict. */
 function drawBenchRig(c: C, x: number, y: number, w: number, h: number, d: Director, t: number) {
   const x0 = x - w / 2, y0 = y - h / 2;
@@ -353,35 +395,9 @@ function drawBenchRig(c: C, x: number, y: number, w: number, h: number, d: Direc
     c.lineWidth = 2;
     c.stroke();
     const mod = findModule(m)?.module;
-    const opens = mod ? `// opens in: ${KIND_APP[mod.kind]}` : '';
-    // the title and the "opens in" line shrink to fit the monitor
-    let size = 12;
+    const { size, shown, rows, lines, opens } = benchText(c, m, title, mw, h);
     c.font = `${size}px ${FONT}`;
-    while (size > 9 && Math.max(c.measureText(title).width, c.measureText(opens).width) > mw - 28) { size--; c.font = `${size}px ${FONT}`; }
-    // still too long at the smallest size: cut at a word with an ellipsis, never mid-word at the edge
-    let shown = title;
-    if (c.measureText(shown).width > mw - 28) {
-      const ws = title.split(' ');
-      while (ws.length > 2 && c.measureText(`${ws.join(' ')}…`).width > mw - 28) ws.pop();
-      shown = `${ws.join(' ')}…`;
-    }
     const verdict = done ? '// PASS' : '// write me';
-    // the idea it teaches, wrapped to the monitor, then where it opens
-    const words = (mod?.concept ?? '').split(/\s+/).filter(Boolean), lines: string[] = [];
-    let cut = false;
-    for (const wd of words) {
-      const last = lines[lines.length - 1];
-      if (last !== undefined && c.measureText(`//   ${last} ${wd}`).width <= mw - 28) lines[lines.length - 1] = `${last} ${wd}`;
-      else if (lines.length < 3) lines.push(wd);
-      else { cut = true; break; }
-    }
-    const rows = Math.min(lines.length, Math.max(0, Math.floor((h - 70) / 16)));
-    // the idea runs past the monitor: end the last shown line at a word, with an ellipsis
-    if (rows > 0 && (cut || rows < lines.length)) {
-      const ws = lines[rows - 1].split(' ');
-      while (ws.length > 1 && c.measureText(`//   ${ws.join(' ')}…`).width > mw - 28) ws.pop();
-      lines[rows - 1] = `${ws.join(' ').replace(/[,;:]$/, '')}…`;
-    }
     c.save();
     c.beginPath();
     c.rect(mx + 2, y0 + 2, mw - 4, h - 4);
@@ -392,7 +408,7 @@ function drawBenchRig(c: C, x: number, y: number, w: number, h: number, d: Direc
     for (let k = 0; k < rows; k++) c.fillText(`//   ${lines[k]}`, mx + 14, y0 + 44 + k * 16);
     const vy = y0 + h - 18;
     c.fillStyle = rgba(PAL.text, 0.35);
-    if (mod) c.fillText(c.measureText(opens).width > mw - 28 ? `// ${KIND_APP[mod.kind]}` : opens, mx + 14, vy - 18);
+    if (mod) c.fillText(opens, mx + 14, vy - 18);
     c.fillStyle = done ? PAL.ok : rgba(PAL.trace, 0.85);
     c.fillText(verdict, mx + 14, vy);
     if (!done && blink(t / HZ, BLINK_HZ) === 1) c.fillRect(mx + 14 + c.measureText(verdict).width + 4, vy - 11, 7, 13);

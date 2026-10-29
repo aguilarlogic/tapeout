@@ -136,7 +136,7 @@ if (existsSync(perf)) {
   log('perf table');
   const md = readFileSync(perf, 'utf8').split('\n');
   const rows = md.slice(md.indexOf('## Ten heaviest rooms') + 2, md.indexOf('## Every room') - 1).filter((l) => l.startsWith('|'));
-  const head = md.filter((l) => !l.startsWith('|') && l.trim() && !l.startsWith('#')).slice(0, 2);
+  const head = md.filter((l) => !l.startsWith('|') && l.trim() && !l.startsWith('#')).slice(0, 4);
   const cells = (l) => l.split('|').slice(1, -1).map((x) => x.trim());
   const html = `<body style="margin:0;background:#0B0A1A;color:#F4F3FF;font:15px ui-monospace,Menlo,monospace;padding:40px">
     <h2 style="color:#2EF2FF;letter-spacing:2px;margin:0 0 8px">PERFORMANCE PASS</h2>${head.map((h) => `<p style="color:#B8B5CC;margin:4px 0">${h}</p>`).join('')}

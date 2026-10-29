@@ -74,11 +74,13 @@ await browser.close();
 
 mkdirSync('test-results', { recursive: true });
 const worst = [...rows].sort((a, b) => (b.stepAvg + b.renderAvg) - (a.stepAvg + a.renderAvg));
-const line = (r) => `| ${r.place} | ${r.i} | ${r.role} | ${r.fps.toFixed(0)} | ${fmt(r.stepAvg)} | ${fmt(r.stepP95)} | ${fmt(r.renderAvg)} | ${fmt(r.renderP95)} | ${r.peak.bodies} | ${r.peak.shots} | ${r.peak.particles} | ${r.heapMb.toFixed(0)} | ${r.over.join(', ') || 'ok'} |`;
-const head = '| Place | Room | Role | fps | Update avg | Update p95 | Render avg | Render p95 | Bodies | Shots | Particles | Heap MB | Budget |\n| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |';
+const line = (r) => `| ${r.place} | ${r.i} | ${r.role} | ${fmt(r.stepAvg)} | ${fmt(r.stepP95)} | ${fmt(r.renderAvg)} | ${fmt(r.renderP95)} | ${r.peak.bodies} | ${r.peak.shots} | ${r.peak.particles} | ${r.heapMb.toFixed(0)} | ${r.over.join(', ') || 'ok'} |`;
+const head = '| Place | Room | Role | Update avg | Update p95 | Render avg | Render p95 | Bodies | Shots | Particles | Heap MB | Budget |\n| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |';
 writeFileSync('test-results/perf.md', [
   '# Performance pass', '',
-  `Chromium at 1366 x 768, CPU throttled 4x. Start (navigation to the name field showing): ${startMs} ms (budget ${BUDGET.startMs}).`,
+  `Chromium at 1366 x 768, CPU throttled 4x. Headless Chromium has no GPU, so the canvas draws in software on the main thread:`,
+  `render ms here include pixel filling that a laptop's GPU does off the main thread, and the frame rate measures this machine, not the game.`,
+  `Start (navigation to the name field showing): ${startMs} ms (budget ${BUDGET.startMs}).`,
   `Rooms measured: ${rows.length}. Over budget: ${rows.filter((r) => r.over.length).length}. Console errors: ${errors.length}.`, '',
   '## Ten heaviest rooms', '', head, ...worst.slice(0, 10).map(line), '',
   '## Every room', '', head, ...rows.map(line), '',
