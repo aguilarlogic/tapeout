@@ -25,6 +25,7 @@ import { rngFor, roomsOf, themeOf } from '../world/compose';
 import { MECHANICS } from '../world/mechanics';
 import { openPlaces, PLACES, placeById, placeDone, placeOf } from '../world/places';
 import { STORY } from '../world/story';
+import { X_HP, X_LINES, xIncident } from '../world/x';
 import type { MechanicDef, PlaceTheme } from '../world/types';
 import { type ActKit, actKit, UP, upgradeFor } from '../world/upgrades';
 import { racerPending } from '../enemies/racer';
@@ -32,6 +33,7 @@ import { BossFight } from './boss';
 import { LEVEL1, LOFT } from './level1';
 import { blankWorld, kitFor, LOG_CAP, loadWorld, nodeIn, PANEL_NAMES, type Place, type PlaceSave, saveWorld, type StoryKit, startFor, type WorldSave } from './progress';
 import { BOOT_COLD, BOOT_PARTIAL, LINES, PARTIAL_LINES } from './script';
+import { ENDING, HELLO, LAMP_AT_S, SKIP_S, stepLen, TYPE_S } from './ending';
 import type { Music, Station, StationKind, StoryRoom, Terminal } from './types';
 import { combos } from '../../games/logic/circuit';
 import { check, type Check, levelOf, nextWire, runStars, type Wire } from './wirerun';
@@ -105,7 +107,7 @@ interface RoomState {
 export interface Bubble { text: string; age: number }
 export interface Prompt { x: number; y: number; text: string }
 
-type Cut = { kind: 'boot'; lines: string[]; t: number; then: string[] } | { kind: 'exitLift'; t: number; x: number } | null;
+type Cut = { kind: 'boot'; lines: string[]; t: number; then: string[] } | { kind: 'exitLift'; t: number; x: number } | { kind: 'ending'; t: number; step: number } | null;
 
 /** Height of each station's name label above its foot, in px (as drawn in render.ts). */
 const STATION_TOP: Record<string, number> = {
@@ -140,6 +142,10 @@ export class Director {
   /** Room fade: steps into the fade, with the room to load at the midpoint. */
   fade: { t: number; to: { place: Place; index: number } } | null = null;
   cut: Cut = null;
+  /** Level 27's X form being fought (1 to 4), or 0. */
+  xn: 0 | 1 | 2 | 3 | 4 = 0;
+  /** The bit X leaves after its last form: it falls to the floor, and walking into it starts the ending. */
+  bit: { x: number; y: number; vy: number; t: number } | null = null;
   /** Boot text for the screen to type (cold boot or partial memory); empty for a plain resume. */
   bootLines: string[] = BOOT_COLD;
   /** A choice the screen is showing; input waits until it comes back. */
@@ -198,6 +204,13 @@ export class Director {
   private cleared(id: string) { return this.ps().cleared.includes(id); }
   private done = (id: string) => !!levelRecord(id);
   /** The rooms of a place. */
+  /** Coverage Map: the current place's rooms, which were entered, and the one the drone is in (null without it). */
+  coverage(): { seen: boolean[]; at: number } | null {
+    if (!this.act.coverageMap || this.place === 'loft') return null;
+    const v = this.ps().visited ?? [];
+    return { seen: this.roomsFor(this.place).map((_, i) => v.includes(i)), at: this.index };
+  }
+
   roomsFor(place: Place): StoryRoom[] { return place === 'loft' ? [LOFT] : place === 'bit-zero' ? LEVEL1 : roomsOf(place); }
   /** The place's theme (lines, music), for composed places. */
   get theme(): PlaceTheme | undefined { const p = placeById(this.place); return p && p.id !== 'bit-zero' ? themeOf(p) : undefined; }
@@ -249,6 +262,8 @@ export class Director {
     this.bubble = null;
     this.form = null;
     this.formPlatforms.clear();
+    this.xn = 0;
+    this.bit = null;
     // the weapon in hand and the slot order go with the drone from room to room
     const hand = this.sim ? { weapon: this.sim.weapon, picked: this.sim.picked } : null;
     this.sim = new Sim(room, (this.seed = (this.seed * 1664525 + 1013904223) >>> 0), { act: placeById(place)?.act ?? 1, story: Director.difficulty() === 'story' });
@@ -276,12 +291,17 @@ export class Director {
     this.applyPrefs();
     this.restore();
     this.world.at = place === 'loft' ? { place: 'loft', room: 0 } : { place, room: this.index };
+    // the Coverage Map (Phase 7 Spec, section 3): every room entered is kept, upgrade or not
+    if (place !== 'loft') { const ps = this.ps(place), v = (ps.visited ??= []); if (!v.includes(this.index)) v.push(this.index); }
     this.save();
     this.boss = null;
     if (room.id === 'arena' || room.role === 'arena') this.startBoss();
+    if (room.role === 'xarena' && room.xform) this.startX(room.xform);
+    if (room.role === 'ending') this.startEnding();
     this.out.push({ t: 'enter' }, { t: 'music', track: room.music });
-    // the first landing in the Underlayers (Phase 5 Spec, section 3) and in act 3, Silicon (Phase 6 Spec, section 3)
-    const act = placeById(place)?.act, card = act === 5 ? 'underlayers' : act === 3 ? 'silicon' : null;
+    // the first landing in the Underlayers (Phase 5 Spec, section 3), act 3, Silicon (Phase 6 Spec, section 3) and act 4,
+    // the Cluster (Phase 7 Spec, section 3)
+    const act = placeById(place)?.act, card = act === 5 ? 'underlayers' : act === 3 ? 'silicon' : act === 4 ? 'cluster' : null;
     if (card && !this.world.cutscenes.includes(card)) {
       this.world.cutscenes.push(card);
       this.save();
@@ -311,6 +331,9 @@ export class Director {
       mirror: a.mirror || undefined, cooldownScale: a.cooldownScale, parryMs: a.parryMs || undefined, viaThick: a.viaThick || undefined,
       turret: a.turret || undefined, gateS: a.gateS || undefined, scan: a.scan || undefined, tether: a.tether || undefined,
       loopRange: a.loopRange, repairDelayMs: a.repairDelayMs, noiseFilter: a.noiseFilter || undefined, pid: a.pid || undefined,
+      templates: a.templates || undefined, rewind: a.rewind || undefined, crit: a.crit || undefined, newton: a.newton || undefined,
+      agents: a.agents || undefined, mine: a.mine || undefined, specDamage: a.specDamage, sched: a.sched, pockets: a.pockets || undefined,
+      warp: a.warp || undefined, lens: a.lens || undefined,
     };
     s.drone.abilities = { doubleJump: a.doubleJump, wallLatch: a.wallLatch, ...(a.doubleJump ? { jump2: a.jump2 / HZ } : {}) };
     if (!a.beam) this.beamOn = false;
@@ -411,6 +434,69 @@ export class Director {
     this.waiting = true;
   }
 
+  /** Level 27's X arena n (Phase 7 Spec, section 7): a straight fight with the form of one of act n's bosses, no shield,
+   * no investigation and no record. */
+  private startX(n: 1 | 2 | 3 | 4) {
+    const spec = this.room.boss, inc = findIncident(xIncident(profile()?.name ?? '', n));
+    if (!spec || !inc) { this.openGate('door', true); return; }
+    const story = Director.difficulty() === 'story', form = formFor(inc.id);
+    this.xn = n;
+    this.boss = new BossFight(story, this.seed, undefined, inc, X_HP);
+    this.boss.phase = 'finish';
+    this.form = new FormRun({ ...form, name: `X · as ${form.name}` }, spec.rect, story);
+    this.rng = rngFor(this.seed);
+    this.sim.targets.push({ id: 'board', rect: this.boardRect(), active: true });
+    this.say(X_LINES[n]);
+  }
+
+  /** X at 0 HP: it slips away and the next door opens; after the last form it leaves the bit. */
+  private xBeaten() {
+    const n = this.xn, r = this.boardRect();
+    this.sim.targets = this.sim.targets.filter((t) => t.id !== 'board');
+    for (const e of this.sim.enemies) e.alive = false;
+    this.sim.enemies = [];
+    this.sim.respawns = [];
+    this.form = null;
+    this.xn = 0;
+    this.out.push({ t: 'shatter', rect: r }, { t: 'sfx', name: 'shatter' }, { t: 'shake', px: 6, ms: 500 });
+    // the slip line answers the kill at once, over whatever TAPEOUT was still saying
+    this.queue = [];
+    this.bubble = null;
+    this.say(STORY.ending.slip);
+    if (n < 4) { this.openGate('door'); return; }
+    this.bit = { x: r.x + r.w / 2, y: r.y + r.h / 2, vy: 0, t: 0 };
+    this.say(STORY.ending.bit);
+  }
+
+  /** The bit falls to the floor under it; the drone walking into it starts the ending. */
+  private stepBit() {
+    const b = this.bit;
+    if (!b || this.fade) return;
+    b.t++;
+    const floor = Math.min(...this.room.solids.filter((s) => s.x <= b.x && s.x + s.w >= b.x && s.y >= b.y).map((s) => s.y), this.room.h) - 10;
+    b.vy = Math.min(12, b.vy + 0.4);
+    b.y = Math.min(floor, b.y + b.vy);
+    if (b.y >= floor) b.vy = 0;
+    if (overlaps(droneRect(this.sim.drone), { x: b.x - 10, y: b.y - 10, w: 20, h: 20 })) {
+      this.bit = null;
+      this.out.push({ t: 'sfx', name: 'fanfare' });
+      this.go(this.place, this.index + 1);
+    }
+  }
+
+  /** The ending room: black, then the timed steps (story/ending.ts). */
+  private startEnding() {
+    this.cut = { kind: 'ending', t: 0, step: 0 };
+    this.out.push({ t: 'music', track: 'ending' });
+  }
+
+  /** The ending's last step done: the ENDING card, then the Loft. */
+  private endingCard() {
+    const e = STORY.ending.card;
+    this.out.push({ t: 'card', kind: 'info', title: e.title, lines: [...e.lines], button: e.button });
+    this.waiting = true;
+  }
+
   boardRect(): Rect {
     if (this.room.boss) return { ...this.room.boss.rect };
     const b = this.room.props2!.find((p) => p.kind === 'board')!;
@@ -469,6 +555,8 @@ export class Director {
       if (this.fade.t >= half * 2) this.fade = null;
       return blank;
     }
+    const c = this.cut;
+    if (c?.kind === 'ending' && !this.waiting && c.step < ENDING.length && input.pressed.size && c.t >= Math.round(SKIP_S * HZ)) this.nextEndingStep();
     if (this.cut || this.waiting || !this.live) return blank;
     if (input.pressed.has('interact')) this.interact();
     if (input.pressed.has('beam') && this.act.beam) { this.beamOn = !this.beamOn; this.out.push({ t: 'sfx', name: 'beam', gain: 0.5 }); }
@@ -492,6 +580,9 @@ export class Director {
     this.stepTargets();
     this.boss?.step();
     this.stepForm();
+    this.stepBit();
+    // dying in an X arena restarts that form (Phase 7 Spec, section 7, item 2)
+    if (this.xn && this.boss && this.sim.dying === 1) this.boss.hp = this.boss.maxHp;
     this.stepBeam();
     this.updatePrompt();
     this.checkExit();
@@ -510,6 +601,9 @@ export class Director {
       hazard: (r, ms, n) => f.hazard(r, ms, n),
       platform: (r, ms) => f.platform(r, ms),
       sfx: (n) => this.out.push({ t: 'sfx', name: n === 'drop' ? 'bossDrop' : n, gain: 0.8 }),
+      lens: s.kit.lens ? Math.round(s.kit.lens * HZ) : 0,
+      spawn: (k, x, y) => s.spawnLater(k, x, y),
+      soak: (r) => s.soakShots(r),
     };
     // the Synchronizer halves the boss's clock too: its body and attacks step every other step
     if (s.slowT > 0 && s.steps % 2) return;
@@ -564,6 +658,14 @@ export class Director {
   /** The screen closed a card. */
   cardClosed() {
     this.waiting = false;
+    if (this.cut?.kind === 'ending' && this.cut.step >= ENDING.length) {
+      // after the ending (Phase 7 Spec, section 7, item 6): it is kept, and the drone goes home
+      if (!this.world.cutscenes.includes('ending')) this.world.cutscenes.push('ending');
+      this.save();
+      this.cut = null;
+      this.go('loft', 0);
+      return;
+    }
     if (this.boss && this.boss.phase === 'pager') {
       this.boss.phase = 'investigate';
       this.out.push({ t: 'sfx', name: 'bossPhase' });
@@ -1179,6 +1281,7 @@ export class Director {
     if (b.phase !== 'finish' && b.tempDown <= 1) this.sim.targets.find((t) => t.id === 'board')!.active = false;
     if (this.form) this.form.flash = 8;
     if (!b.hit(n)) return;
+    if (this.xn) { this.xBeaten(); return; }
     // beaten: the board lights, the record is written, the debrief
     const st = b.stars();
     const inv = b.inv;
@@ -1226,6 +1329,21 @@ export class Director {
       if (c.t % 30 === 0) this.out.push({ t: 'sfx', name: 'liftHum', gain: 0.4 });
       if (c.t >= T) { this.cut = null; this.go('loft', 0); }
     }
+    if (c.kind === 'ending') {
+      if (c.step >= ENDING.length || this.waiting) return;
+      const id = ENDING[c.step].id;
+      if (id === 'board' && c.t === Math.round(LAMP_AT_S * HZ)) this.out.push({ t: 'sfx', name: 'lightsOn' });
+      if (id === 'hello' && c.t % Math.round(TYPE_S * HZ) === 0 && c.t / Math.round(TYPE_S * HZ) <= HELLO.length && HELLO[c.t / Math.round(TYPE_S * HZ) - 1] !== ' ') this.out.push({ t: 'sfx', name: 'chirp', gain: 0.4 });
+      if (id === 'face' && c.t === 20) this.out.push({ t: 'sfx', name: 'chirp', gain: 0.6 });
+      if (c.t >= stepLen(c.step)) this.nextEndingStep();
+    }
+  }
+  private nextEndingStep() {
+    const c = this.cut;
+    if (c?.kind !== 'ending') return;
+    c.step++;
+    c.t = 0;
+    if (c.step >= ENDING.length) this.endingCard();
   }
 
   /** For tests and the recorder: jump straight to a room. */
@@ -1261,6 +1379,7 @@ export class Director {
   }
 
   get bossBar() { return this.boss && this.boss.phase !== 'pager' && this.boss.phase !== 'done' ? this.boss : null; }
+  get ending() { return this.cut?.kind === 'ending' ? this.cut : null; }
   get exitLift() { return this.cut?.kind === 'exitLift' ? this.cut.t / frames(S.exitLiftS * 1000) : 0; }
 }
 

@@ -65,6 +65,7 @@ export class Brute implements Enemy {
   phase: Phase = 'walk';
   /** Steps left of the wind-up. */
   private wind = 0;
+  private windLen = WIND;
   /** Steps of rest left after a charge. */
   private cool = 0;
   /** Px travelled in this charge. */
@@ -124,7 +125,9 @@ export class Brute implements Enemy {
     const dx = ctx.target.x - this.x, dy = ctx.target.y - this.y;
     if (Math.hypot(dx, dy) <= S.sense) {
       this.phase = 'wind';
-      this.wind = WIND;
+      // Model Lens (Phase 7 Spec, section 3): the wind-up shows sooner, so it lasts that much longer
+      this.windLen = WIND + (ctx.lens ?? 0);
+      this.wind = this.windLen;
       this.stepWind(ctx);
       return;
     }
@@ -135,7 +138,7 @@ export class Brute implements Enemy {
   private stepWind(ctx: EnemyCtx) {
     this.setVx(0);
     this.wind--;
-    this.telegraph = 1 - this.wind / WIND;
+    this.telegraph = 1 - this.wind / this.windLen;
     if (this.wind > 0) return;
     this.telegraph = 0;
     this.face(ctx.target.x - this.x);

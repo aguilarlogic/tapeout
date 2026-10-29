@@ -13,3 +13,7 @@ import './brute';
 import './crosstalk';
 import './hotspot';
 import './wake';
+import './falsepass';
+import './hole';
+import './deadlock';
+import './thrash';

@@ -3,7 +3,7 @@ export interface Rect { x: number; y: number; w: number; h: number }
 export type Dir = 'left' | 'right' | 'up' | 'down';
 /** Body enemies placed by rooms. The first three are the feel-pass test enemies; the rest arrive with the places
  * (phase 3 spec section 6) and are made through enemies/registry.ts. */
-export type EnemyKind = 'glitch' | 'spark' | 'latch' | 'stuckat' | 'stuckat0' | 'racer' | 'crawler' | 'xblob' | 'floater' | 'metastable' | 'swarm' | 'bubble' | 'ringer' | 'shunt' | 'brute' | 'crosstalk' | 'hotspot' | 'wake';
+export type EnemyKind = 'glitch' | 'spark' | 'latch' | 'stuckat' | 'stuckat0' | 'racer' | 'crawler' | 'xblob' | 'floater' | 'metastable' | 'swarm' | 'bubble' | 'ringer' | 'shunt' | 'brute' | 'crosstalk' | 'hotspot' | 'wake' | 'falsepass' | 'hole' | 'deadlock' | 'thrash';
 
 export interface PropSpec {
   kind: 'crate' | 'logic';
@@ -41,6 +41,8 @@ export interface Room {
   barriers?: Rect[];
   /** Copper pads (Phase 6 Spec, section 3): Trace Tether pulls the drone to one; each is its centre. */
   copper?: { x: number; y: number }[];
+  /** Router pads (Phase 7 Spec, section 3): NoC Warp moves the drone from one to the other; each is its floor centre. */
+  routers?: { x: number; y: number }[];
   /** A target dummy (decision 22): its post stands on the floor at x, y. */
   dummy?: { x: number; y: number };
   /** Decorative circuit traces (polylines) drawn on the back wall. */

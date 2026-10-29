@@ -2,7 +2,7 @@
 // the F3 tuning panel and (dev builds only) the F9 debug overlay. Entry fades to black in 300 ms and boots the drone
 // (polish bar P2); quitting fades out the same way.
 import { award } from '../mastery/promotion';
-import { prefs } from '../state';
+import { prefs, profile } from '../state';
 import { prefersReducedMotion } from '../term/typewriter';
 import { h } from '../ui/dom';
 import { GameAudio, type Sfx, type Track } from './audio';
@@ -16,11 +16,13 @@ import { levelRecord } from '../state';
 import { calibRows } from './loft/data';
 import { type LoftActions, openLoftPanel } from './loft/panels';
 import { mk2, UP, UPGRADES } from './world/upgrades';
+import { drawEnding } from './story/ending';
 import { drawBossHud, drawBubble, drawCompass, drawDark, drawExitLift, drawPrompt, drawStoryBack, drawStoryFront } from './story/render';
 import { Loop } from './loop';
 import { pauseMenu } from './pause';
 import { Camera } from './render/camera';
 import { drawAct3Back, drawAct3Front } from './render/act3';
+import { drawAct4Back, drawAct4Front, drawCoverage, noteRewind } from './render/act4';
 import { drawAimLine, drawBeam, drawEnemies, drawField, drawLoopDrone, drawShots, drawSyncTint } from './render/combat';
 import { DroneRig } from './render/drone';
 import { Fx } from './render/fx';
@@ -369,6 +371,19 @@ export class GameScreen {
         case 'turret': a.play('turret'); fx.ring(f.x, f.y - 30, 26, PAL.trace, 14); fx.dust(f.x, f.y, 3, 1); break;
         case 'tether': a.play('tether'); fx.sparks(f.tx, f.ty, f.x - f.tx, f.y - f.ty, 5, PAL.amber, 3); break;
         case 'phase': a.play('phase'); fx.ring(f.x, f.y, 34, PAL.neon, 12); break;
+        // act 4 (Phase 7 Spec, section 8)
+        case 'rewind': a.play('rewind'); noteRewind(f.path); if (f.path.length) fx.ring(f.path[0].x, f.path[0].y, 30, PAL.trace, 16); break;
+        case 'crit': fx.ring(f.x, f.y, 20, PAL.gold, 10); fx.sparks(f.x, f.y, 0, -1, 6, PAL.gold, 4, Math.PI); break;
+        case 'mine': a.play('mine'); fx.dust(f.x, f.y, 3, 1); break;
+        case 'blast':
+          a.play('blast');
+          fx.ring(f.x, f.y, f.r / 1.2, PAL.amber, frames(300));
+          fx.flash(f.x, f.y, 60, PAL.amber, 6);
+          fx.sparks(f.x, f.y, 0, -1, 12, PAL.amber, 6, Math.PI);
+          this.cam.shake(4, 200, noShake);
+          break;
+        case 'pocket': a.play(f.out ? 'grab' : 'pocket'); fx.ring(f.x, f.y, 22, PAL.trace, 10); break;
+        case 'warp': a.play('warp'); fx.ring(f.x, f.y, 40, PAL.trace, 18); fx.sparks(f.x, f.y, 0, -1, 8, PAL.trace, 4, Math.PI); break;
       }
     }
     if (sim.weapon === 'charged' && sim.charge > 0 && sim.charge < 1 && sim.steps % 6 === 0) a.play('charge', 0.4 + sim.charge * 0.6);
@@ -494,6 +509,7 @@ export class GameScreen {
     this.art.drawSolids(c, sim, cam);
     this.art.drawProps(c, sim, t);
     drawAct3Back(c, sim, t);
+    drawAct4Back(c, sim, t);
     if (st) drawStoryFront(c, st, t, { x: dx + sim.drone.facing * 12, y: dy - 4 });
     drawEnemies(c, sim, t, reducedFlash);
     drawBeam(c, sim, t);
@@ -508,6 +524,7 @@ export class GameScreen {
     this.rig.draw(c, sim, dx, dy, { reducedFlash, reduced: this.reduced });
     drawShots(c, sim, alpha);
     drawAct3Front(c, sim, t);
+    drawAct4Front(c, sim, t);
     this.fx.draw(c, alpha, reducedFlash, prefs().damageNumbers);
     if (st) drawPrompt(c, st, t);
     this.art.drawMotes(c, cam);
@@ -519,9 +536,11 @@ export class GameScreen {
     drawSyncTint(c, sim, VIEW_W, VIEW_H, this.reduced);
     const bt = this.bootTimes();
     this.hud.draw(c, sim, Math.max(0, Math.min(1, (this.age - bt.hud) / BOOT.hud)), t);
+    if (st) drawCoverage(c, st.coverage(), VIEW_W);
     if (st) { drawBossHud(c, st, t, this.showLog); drawCompass(c, st, cam, t, this.reduced); drawBubble(c, st, t); drawExitLift(c, st.exitLift); }
+    if (st?.ending) drawEnding(c, VIEW_W, VIEW_H, st.ending.step, st.ending.t, profile()?.name ?? '');
     if (!this.ready || this.age < bt.control + 1) this.drawBoot(c, bt);
-    if (this.ready && !this.paused && (sim.kit.gun || sim.kit.coil)) { const m = this.mouseView(); this.hud.crosshair(c, sim, m.x, m.y); }
+    if (this.ready && !this.paused && !st?.ending && (sim.kit.gun || sim.kit.coil)) { const m = this.mouseView(); this.hud.crosshair(c, sim, m.x, m.y); }
     let black = 0;
     if (this.age < BOOT.fadeIn + BOOT.eye) black = 1 - easeOut((this.age - BOOT.fadeIn) / BOOT.eye);
     if (sim.dying > 0) black = Math.max(black, Math.max(0, (1 - sim.dying / VITALS.deathSteps - 0.6) / 0.4));

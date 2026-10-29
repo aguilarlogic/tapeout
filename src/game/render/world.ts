@@ -130,8 +130,8 @@ export class WorldArt {
     c.fillStyle = g;
     c.fillRect(view.x, view.y, view.w, view.h);
     if (this.backdrop) {
-      // the motif sits at parallax 0.15, drawn in room coordinates like the layers are in theirs
-      const f = 0.15;
+      // the motif sits at parallax 0.15 (the Cluster's at 0.12), drawn in room coordinates like the layers are in theirs
+      const f = this.backdrop === 'cluster' ? 0.12 : 0.15;
       c.save();
       c.translate(cam.x * (1 - f), cam.y * (1 - f));
       this.motif(c, this.backdrop, { x: cam.x * f - 40, y: cam.y * f - 40, w: VIEW_W + 80, h: VIEW_H + 80 });
@@ -365,6 +365,46 @@ export class WorldArt {
             c.arc(x + (CW * i) / (n + 1), top + PIN, 1.5, 0, Math.PI * 2);
           }
           c.fill();
+        }
+        break;
+      }
+      case 'cluster': { // the Cluster (Phase 7 Spec, section 9): 2 x 2 core outlines, 220 x 160 px with radius 8, 120 px apart
+        // across and 100 px down, joined by a mesh through the middle of each side. One packet dot runs the mesh every 2 s;
+        // the clock holds still under reduced motion, so the dot does too. Each cluster repeats every 1000 px
+        const P = 1000, CW = 220, CH = 160, GX = 120, GY = 100, CR = 8, Y = H * 0.25, CLX = CW + GX, CLY = CH + GY, T = this.clock;
+        const cycle = 2 * (GX + GY);
+        for (let sx = Math.max(0, Math.floor((x0 - CLX - CW) / P)) * P; sx < x1; sx += P) {
+          const xs = [sx, sx + CLX], ys = [Y, Y + CLY];
+          c.strokeStyle = rgba(PAL.trace, 0.07);
+          c.lineWidth = 1.5;
+          c.beginPath();
+          for (const x of xs) for (const y of ys) roundedRect(c, x, y, CW, CH, CR);
+          c.stroke();
+          // the mesh, as a loop: top row, right column, bottom row, left column, each a straight segment between cores
+          const mesh: [number, number, number, number][] = [
+            [xs[0] + CW, ys[0] + CH / 2, xs[1], ys[0] + CH / 2],
+            [xs[1] + CW / 2, ys[0] + CH, xs[1] + CW / 2, ys[1]],
+            [xs[1], ys[1] + CH / 2, xs[0] + CW, ys[1] + CH / 2],
+            [xs[0] + CW / 2, ys[1], xs[0] + CW / 2, ys[0] + CH],
+          ];
+          c.lineWidth = 1;
+          c.beginPath();
+          for (const [ax, ay, bx, by] of mesh) { c.moveTo(ax, ay); c.lineTo(bx, by); }
+          c.stroke();
+          // the packet: one lap of the loop every 2 s, each cluster a little out of step with the next
+          let d = ((T / 2 + (sx / P) * 0.37) % 1) * cycle;
+          for (const [ax, ay, bx, by] of mesh) {
+            const len = Math.hypot(bx - ax, by - ay);
+            if (d <= len) {
+              const k = d / len;
+              c.fillStyle = rgba(PAL.trace, 0.08);
+              c.beginPath();
+              c.arc(ax + (bx - ax) * k, ay + (by - ay) * k, 2.5, 0, Math.PI * 2);
+              c.fill();
+              break;
+            }
+            d -= len;
+          }
         }
         break;
       }
@@ -708,6 +748,16 @@ function chamfer(c: C, r: Rect, k: number) {
   c.lineTo(r.x + k, r.y + r.h);
   c.lineTo(r.x, r.y + r.h - k);
   c.lineTo(r.x, r.y + k);
+  c.closePath();
+}
+
+/** A rounded rectangle path of corner radius r, built from arcs. */
+function roundedRect(c: C, x: number, y: number, w: number, h: number, r: number) {
+  c.moveTo(x + r, y);
+  c.arcTo(x + w, y, x + w, y + h, r);
+  c.arcTo(x + w, y + h, x, y + h, r);
+  c.arcTo(x, y + h, x, y, r);
+  c.arcTo(x, y, x + w, y, r);
   c.closePath();
 }
 

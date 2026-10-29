@@ -38,7 +38,7 @@ type Phase = 'tele' | 'start' | 'on';
 
 /** A run's timers: the telegraph length in real steps (1.5x on Story), the real age, and the active clock. */
 export function timed(c: AttackCtx, base: number): Timed {
-  return { tele: c.story ? Math.round(base * 1.5) : base, age: 0, t: 0 };
+  return { tele: (c.story ? Math.round(base * 1.5) : base) + c.lens, age: 0, t: 0 };
 }
 
 /** One real step. 'start' is the first step after the telegraph; 'on' the ones after it. */

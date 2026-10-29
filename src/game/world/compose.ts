@@ -10,6 +10,7 @@ import { MECHANICS } from './mechanics';
 import { PLACES, placeById } from './places';
 import { majorOf, planPlace, type PlanRoom } from './slots';
 import { arena } from './templates/arena';
+import { ending } from './templates/ending';
 import { FIGHT_VARIANTS } from './templates/fight';
 import { ROOMS } from './templates/rooms';
 import { TRAVERSE_VARIANTS } from './templates/traverse';
@@ -17,6 +18,8 @@ import { themeFor as act1Theme } from './themes/act1';
 import { ACT2_THEMES } from './themes/act2';
 import { ACT3A_THEMES } from './themes/act3a';
 import { ACT3B_THEMES } from './themes/act3b';
+import { ACT4A_THEMES } from './themes/act4a';
+import { ACT4B_THEMES } from './themes/act4b';
 import { UNDER_THEMES } from './themes/under';
 import type { BackdropKind, PlaceDef, PlaceTheme, Shell, Template, TemplateOpts } from './types';
 
@@ -36,7 +39,7 @@ const BACKDROP: Record<PlaceDef['act'], BackdropKind> = { 1: 'lamps', 2: 'core',
 
 /** The theme a place without its own (phases 4 to 8 fill these in) is built with. */
 export function themeOf(place: PlaceDef): PlaceTheme {
-  return act1Theme(place.id) ?? [...ACT2_THEMES, ...UNDER_THEMES, ...ACT3A_THEMES, ...ACT3B_THEMES].find((t) => t.place === place.id) ?? {
+  return act1Theme(place.id) ?? [...ACT2_THEMES, ...UNDER_THEMES, ...ACT3A_THEMES, ...ACT3B_THEMES, ...ACT4A_THEMES, ...ACT4B_THEMES].find((t) => t.place === place.id) ?? {
     place: place.id, music: 'keeper', enemies: ['glitch', 'spark', 'latch'], fights: 3, backdrop: BACKDROP[place.act],
     lines: { arrive: [`${place.name}.`], rooms: {}, clear: ['Clear.'], bossIntro: [], bossBeaten: [], leave: [] },
   };
@@ -47,11 +50,11 @@ export const clockAt = (place: PlaceDef) => 27 - PLACES.slice(0, PLACES.indexOf(
 
 /** The label on a module's station. */
 function label(kind: ModKind, title: string): string {
-  const head = kind === 'boss' ? 'GATE TERMINAL' : kind === 'lesson' || kind === 'final' ? 'PORT' : kind === 'logic' || kind === 'cmos' ? 'PATCH PANEL' : kind === 'clab' ? 'CIRCUIT BENCH' : 'WORKBENCH';
+  const head = kind === 'boss' ? 'GATE TERMINAL' : kind === 'lesson' || kind === 'final' ? 'PORT' : kind === 'logic' || kind === 'cmos' ? 'PATCH PANEL' : kind === 'clab' ? 'CIRCUIT BENCH' : kind === 'drills' ? 'INTERVIEW DESK' : 'WORKBENCH';
   return `${head} · ${title.toUpperCase()}`;
 }
 const stationKind = (role: PlanRoom['role'], kind: ModKind): Station['kind'] =>
-  role === 'gate' || role === 'bossdoor' ? 'gate' : role === 'bench' ? 'bench' : kind === 'lesson' || kind === 'final' ? 'port' : 'panel';
+  role === 'gate' || role === 'bossdoor' ? 'gate' : role === 'bench' ? 'bench' : kind === 'lesson' || kind === 'final' || kind === 'drills' ? 'port' : 'panel';
 
 /** Stations on a shell's anchors, one per module. */
 function stationsFor(room: PlanRoom, s: Shell): Station[] {
@@ -96,7 +99,7 @@ export function composePlace(place: PlaceDef, theme: PlaceTheme = themeOf(place)
   let lastTraverse: string | undefined, lastFight: string | undefined, fights = 0;
   return plan.map((room, index): StoryRoom => {
     const id = `${place.id}:${index}:${room.role}`;
-    const music = room.role === 'bench' ? 'bench' : room.role === 'arena' ? 'boss' : theme.music;
+    const music = room.role === 'bench' ? 'bench' : room.role === 'arena' ? 'boss' : room.role === 'xarena' ? 'x' : room.role === 'ending' ? 'ending' : theme.music;
     const base = { id, role: room.role, place: place.id, modules: room.modules, music, backdrop: theme.backdrop };
     if (room.role === 'discovery' && room.mechanic) {
       return { ...MECHANICS[room.mechanic].room(rng), ...base, mechanic: room.mechanic, triggers: lines(theme, room, 200) };
@@ -115,10 +118,14 @@ export function composePlace(place: PlaceDef, theme: PlaceTheme = themeOf(place)
       enemies = enemiesFor(theme, s.anchors.enemies, rng);
     } else if (room.role === 'arena') {
       s = arena(rng, { ...opts, nodes: findIncident(room.incident!)?.instruments.length ?? 4 });
+    } else if (room.role === 'xarena') {
+      s = arena(rng, { ...opts, nodes: 0 });
+    } else if (room.role === 'ending') {
+      s = ending();
     } else {
       s = ROOMS[room.role as keyof typeof ROOMS](rng, { ...opts, stations: Math.max(1, room.modules.length) });
     }
-    const stations = room.role === 'arena' ? arenaStations(room, s) : room.role === 'exit' || room.role === 'landing' ? [...liftStation(s), ...hatchStation(place, room, s)] : stationsFor(room, s);
+    const stations = room.role === 'xarena' || room.role === 'ending' ? [] : room.role === 'arena' ? arenaStations(room, s) : room.role === 'exit' || room.role === 'landing' ? [...liftStation(s), ...hatchStation(place, room, s)] : stationsFor(room, s);
     const rail = room.role === 'traverse' && place.act === 2 ? railFor(s) : null;
     if (rail) stations.push({ id: 'rail0', kind: 'rail', x: rail.x1, y: rail.y1 + RAIL_LIFT, label: 'BUS RAIL', arg: '0' });
     // act 3 on (Phase 6 Spec, section 3): a metal barrier on the floor of traverse rooms from Metal Stack, copper pads
@@ -126,6 +133,8 @@ export function composePlace(place: PlaceDef, theme: PlaceTheme = themeOf(place)
     const at = PLACES.indexOf(place), traverse = room.role === 'traverse';
     const barrier = traverse && at >= PLACES.findIndex((p) => p.id === 'metal-stack') ? barrierFor(s) : null;
     const copper = traverse && at >= PLACES.findIndex((p) => p.id === 'board') ? copperFor(s) : [];
+    // act 4 (Phase 7 Spec, section 3): two router pads in traverse rooms from The Mesh, for the NoC Warp
+    const routers = traverse && at >= PLACES.findIndex((p) => p.id === 'mesh') ? routersFor(s) : [];
     const signs = room.role === 'landing' ? [{ x: 640, y: 200, text: `${place.name.toUpperCase()} · ${place.region.toUpperCase()} · T-${clockAt(place)}` }] : s.signs;
     return {
       ...base,
@@ -141,9 +150,12 @@ export function composePlace(place: PlaceDef, theme: PlaceTheme = themeOf(place)
       ...(room.capstone && major ? { upgrade: major.id } : {}),
       ...(room.role === 'bench' && s.anchors.rig ? { props2: [{ kind: 'rig' as const, x: s.anchors.rig.x, y: s.anchors.rig.y, w: 520, h: 140 }] } : {}),
       ...(room.role === 'arena' && s.anchors.boss ? { boss: { incident: room.incident!, rect: s.anchors.boss } } : {}),
+      // X wears a form chosen when the fight starts; the room keeps the arena's body box under a placeholder incident
+      ...(room.role === 'xarena' && s.anchors.boss ? { boss: { incident: 'x', rect: s.anchors.boss }, xform: room.xform } : {}),
       ...(rail ? { rails: [rail] } : {}),
       ...(barrier ? { barriers: [barrier] } : {}),
       ...(copper.length ? { copper } : {}),
+      ...(routers.length === 2 ? { routers } : {}),
     };
   });
 }
@@ -199,6 +211,28 @@ function copperFor(s: Shell): { x: number; y: number }[] {
     }
   }
   return out;
+}
+
+/** A router pad needs this much clear air over it (the drone stands on it), and this much floor each side. */
+const ROUTER = { clear: 90, half: 26 };
+
+/**
+ * Two router pads on the floor of a traverse room: one just past the spawn, and one as far toward the exit as clear
+ * floor allows (past the room's gaps). Each sits on a floor top with clear air above; a room without two gets none.
+ */
+function routersFor(s: Shell): { x: number; y: number }[] {
+  const spot = (x: number) => {
+    const top = s.solids.filter((b) => b.x <= x - ROUTER.half && b.x + b.w >= x + ROUTER.half && b.y >= ROUTER.clear).map((b) => b.y).sort((a, b) => a - b)[0];
+    if (top === undefined) return null;
+    const air = { x: x - ROUTER.half, y: top - ROUTER.clear, w: ROUTER.half * 2, h: ROUTER.clear - 1 };
+    // never under a crate the room starts with: a pad hidden under a block reads as no pad
+    if (s.anchors.props.some((p) => Math.abs(p.x - x) < ROUTER.half + 40 && p.y < top && p.y > top - ROUTER.clear * 2)) return null;
+    return s.solids.some((b) => overlaps(b, air)) ? null : { x, y: top };
+  };
+  let a: { x: number; y: number } | null = null, b: { x: number; y: number } | null = null;
+  for (let x = s.spawn.x + 140; x < s.w / 2 && !a; x += 20) a = spot(x);
+  for (let x = s.exit.x - 200; x > s.w / 2 && !b; x -= 20) b = spot(x);
+  return a && b ? [a, b] : [];
 }
 
 /** A rail starts this far above the ground at its start station, so the drone barely rises as it clips on. */

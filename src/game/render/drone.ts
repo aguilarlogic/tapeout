@@ -4,6 +4,7 @@
 //
 // Local frame: the chassis centre is the origin, +x is the side the drone faces. The 36 × 48 collision box holds the
 // 34 × 26 chassis at its top and the legs in the 22 px below (decision 2).
+import { warpAlpha } from './act4';
 import type { Rect } from '../level/room';
 import type { Sim } from '../sim';
 import { HZ, TUNING, VITALS } from '../tuning';
@@ -239,6 +240,8 @@ export class DroneRig {
     else if (v.iFrames > 0 && !dying) alpha = Math.floor(this.t * TUNING.vitals.blinkHz * 2) % 2 ? (opts.reducedFlash ? 0.6 : 0.3) : 1;
     // the Power Gate: a still drone powers down to save energy, and shows it by fading (the ring is in render/act3.ts)
     if (sim.gated) alpha *= 0.55;
+    // NoC Warp: the drone fades out at one router pad and in at the other (Phase 7 Spec, section 3)
+    alpha *= warpAlpha(sim);
 
     c.save();
     c.globalAlpha = alpha;

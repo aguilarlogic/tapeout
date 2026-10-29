@@ -1,9 +1,9 @@
 // Boss contracts (Phase 3 Spec, section 6). A boss is one of today's incidents (BossFight keeps every rule of the
 // investigation); its form is a line-art body in the arena that runs attacks from a shared library, one at a time.
-import type { Rect } from '../level/room';
+import type { EnemyKind, Rect } from '../level/room';
 
-export type AttackId = 'bolts' | 'drop' | 'grid' | 'chain' | 'freeze' | 'segments' | 'mirror' | 'push' | 'relay' | 'split' | 'stage' | 'slam' | 'lash' | 'paths' | 'spikes' | 'congest' | 'rush' | 'shift' | 'eye';
-export type BodyKind = 'lamps' | 'gate' | 'chain' | 'wheel' | 'digit' | 'twin' | 'stack' | 'datapath' | 'clocks' | 'worm' | 'cell' | 'serpent' | 'titan' | 'polygon' | 'knot' | 'sleeper' | 'snake' | 'transceivers';
+export type AttackId = 'bolts' | 'drop' | 'grid' | 'chain' | 'freeze' | 'segments' | 'mirror' | 'push' | 'relay' | 'split' | 'stage' | 'slam' | 'lash' | 'paths' | 'spikes' | 'congest' | 'rush' | 'shift' | 'eye' | 'walls' | 'holes' | 'agents' | 'assume' | 'reorder' | 'evict' | 'jam' | 'predict';
+export type BodyKind = 'lamps' | 'gate' | 'chain' | 'wheel' | 'digit' | 'twin' | 'stack' | 'datapath' | 'clocks' | 'worm' | 'cell' | 'serpent' | 'titan' | 'polygon' | 'knot' | 'sleeper' | 'snake' | 'transceivers' | 'scoreboard' | 'ring' | 'trio' | 'engine' | 'window' | 'tower' | 'mesh' | 'hologram';
 
 export interface BossForm {
   incident: string;
@@ -34,6 +34,12 @@ export interface AttackCtx {
   /** A temporary platform the drone can stand on, for `ms` (the Bad Call's push). */
   platform(r: Rect, ms: number): void;
   sfx(n: 'laser' | 'drop' | 'chain' | 'freeze' | 'mirror' | 'turret'): void;
+  /** Model Lens: steps added to every telegraph (0 without the upgrade). timed() adds it. */
+  lens: number;
+  /** Spawn a bug in the arena (the Coverage Holes). */
+  spawn(kind: EnemyKind, x: number, y: number): void;
+  /** Friendly shots that hit `r` this step: they are used up, and their total damage is returned (PASS walls). */
+  soak(r: Rect): number;
 }
 
 /** One attack: started, stepped at 60 Hz until it says it is done, drawn on top of the arena. */

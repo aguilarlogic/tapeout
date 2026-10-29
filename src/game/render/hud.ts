@@ -6,11 +6,11 @@ import { frames } from '../tuning';
 import { easeOut, FONT, PAL, rgba } from './palette';
 
 /** The gadget on F, by id. */
-const GADGET_NAME: Record<Gadget, string> = { sync: 'SYNC', turret: 'TURRET' };
+const GADGET_NAME: Record<Gadget, string> = { sync: 'SYNC', turret: 'TURRET', mine: 'MINE' };
 
 /** The weapon's name, shown under its readout for 1.2 s after a swap and faded over the last 0.3 s. */
-const SHORT: Record<Weapon, string> = { pulse: 'PULSE', charged: 'CHARGED', fan: 'FAN', cannon: 'CANNON', burst: 'BURST' };
-const WEAPON_NAME: Record<Weapon, string> = { pulse: 'PULSE PROBE', charged: 'CHARGED PROBE', fan: 'FAN DECODER', cannon: 'ALU CANNON', burst: 'PIPELINE BURST' };
+const SHORT: Record<Weapon, string> = { pulse: 'PULSE', charged: 'CHARGED', fan: 'FAN', cannon: 'CANNON', burst: 'BURST', spec: 'SPEC' };
+const WEAPON_NAME: Record<Weapon, string> = { pulse: 'PULSE PROBE', charged: 'CHARGED PROBE', fan: 'FAN DECODER', cannon: 'ALU CANNON', burst: 'PIPELINE BURST', spec: 'SPECULATIVE SHOT' };
 const NAME_STEPS = frames(1200), NAME_FADE = frames(300);
 
 export class Hud {

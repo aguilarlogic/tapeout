@@ -11,7 +11,8 @@ export const WORLD_KEY = 'tapeout.world.v1';
 export type Place = string;
 
 /** What the world remembers of one place. */
-export interface PlaceSave { discoveries: string[]; cleared: string[] }
+/** `visited`: room indexes entered (Phase 7 Spec, section 3: the Coverage Map); absent in older saves. */
+export interface PlaceSave { discoveries: string[]; cleared: string[]; visited?: number[] }
 
 export interface WorldSave {
   version: 1;
@@ -41,7 +42,7 @@ export function loadWorld(store: Pick<Storage, 'getItem'> | undefined = globalTh
     if (w.version !== 1 || !w.at) return undefined;
     const b = blankWorld();
     const places: Record<string, PlaceSave> = {};
-    for (const [id, ps] of Object.entries({ ...w.places })) places[id] = { discoveries: [...(ps?.discoveries ?? [])], cleared: [...(ps?.cleared ?? [])] };
+    for (const [id, ps] of Object.entries({ ...w.places })) places[id] = { discoveries: [...(ps?.discoveries ?? [])], cleared: [...(ps?.cleared ?? [])], visited: [...(ps?.visited ?? [])] };
     return { ...b, ...w, places: { ...places, 'bit-zero': { ...b.places['bit-zero'], ...w.places?.['bit-zero'] } } } as WorldSave;
   } catch {
     return undefined;

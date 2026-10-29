@@ -44,6 +44,8 @@ export interface Prefs {
   invincible: boolean;
   autoFire: boolean;
   infiniteEnergy: boolean;
+  /** Where a fresh load opens (Phase 7 Spec, section 3): the story game (the default) or the Classic Desktop. */
+  startIn?: 'game' | 'desktop';
 }
 
 export interface Progress {

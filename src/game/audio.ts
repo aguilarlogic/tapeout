@@ -16,7 +16,9 @@ export type Sfx =
   // act 1 (phase 3): enemies, boss attacks, the beam
   | 'turret' | 'revive' | 'split' | 'laser' | 'bossDrop' | 'chain' | 'freeze' | 'mirror' | 'beam'
   // act 3 (phase 6): Slack Parry, Scan Visor, Via Phase, Trace Tether
-  | 'parry' | 'scan' | 'phase' | 'tether';
+  | 'parry' | 'scan' | 'phase' | 'tether'
+  // act 4 (phase 7): Rewind, Assertion Mine, Cache Pockets, NoC Warp
+  | 'rewind' | 'mine' | 'blast' | 'pocket' | 'warp';
 
 type Wave = OscillatorType | 'noise';
 interface Voice { at?: number; wave: Wave; f: number; to?: number; len: number; level: number; filter?: { type: BiquadFilterType; f: number; to?: number; q?: number } }
@@ -110,18 +112,36 @@ const V: Record<Sfx, Voice[]> = {
   scan: [{ wave: 'sine', f: 300, to: 1500, len: 0.35, level: 0.035 }, { at: 0.1, wave: 'triangle', f: 1500, len: 0.12, level: 0.02 }],
   phase: [{ wave: 'noise', f: 1, len: 0.18, level: 0.04, filter: { type: 'bandpass', f: 1200 } }, { wave: 'sine', f: 220, to: 660, len: 0.18, level: 0.03 }],
   tether: [{ wave: 'triangle', f: 900, to: 300, len: 0.14, level: 0.04 }, { at: 0.12, wave: 'square', f: 300, len: 0.03, level: 0.025 }],
+  rewind: [{ wave: 'sawtooth', f: 1200, to: 200, len: 0.3, level: 0.03, filter: { type: 'lowpass', f: 3000 } }, { at: 0.22, wave: 'sine', f: 660, len: 0.15, level: 0.04 }],
+  mine: [{ wave: 'square', f: 440, len: 0.04, level: 0.03 }, { at: 0.06, wave: 'square', f: 880, len: 0.04, level: 0.025 }],
+  blast: [{ wave: 'noise', f: 1, len: 0.4, level: 0.12, filter: { type: 'lowpass', f: 2400, to: 200 } }, { wave: 'sine', f: 120, to: 40, len: 0.3, level: 0.08 }],
+  pocket: [{ wave: 'triangle', f: 600, to: 1500, len: 0.1, level: 0.035 }, { at: 0.08, wave: 'square', f: 1500, len: 0.03, level: 0.02 }],
+  warp: [{ wave: 'sine', f: 200, to: 1600, len: 0.25, level: 0.04 }, { wave: 'noise', f: 1, len: 0.2, level: 0.03, filter: { type: 'bandpass', f: 2000, to: 500 } }],
 };
 
 // --- the music: loops of 24 bars in three 8-bar sections that add voices. The test room's ambient loop is 96 BPM
 // Am F C G; the story adds the Keeper's room theme, the boss, the Loft and the workbench (Level 1 spec, "Sound"). ---
-export type Track = 'test' | 'keeper' | 'boss' | 'loft' | 'bench' | 'core' | 'under' | 'silicon';
+export type Track = 'test' | 'keeper' | 'boss' | 'loft' | 'bench' | 'core' | 'under' | 'silicon' | 'cluster' | 'x' | 'ending';
 export interface TrackDef {
-  bpm: number; chords: number[][]; from: number; arp: OscillatorType | null; drums: boolean; bass: 2 | 1;
+  bpm: number; chords: number[][]; from: number; arp: OscillatorType | null; drums: boolean; bass: 0 | 1 | 2;
   /** Optional 16-step gate for the pad: a chord stab plays on each 1 step, so the pad is chopped in 16ths (Silicon). */
   gate?: number[];
+  /** Optional 16-step kick pattern, 1 where a kick plays. Without it the kick is on steps 0 and 8 of each bar. */
+  kick?: number[];
+  /** Optional four-entry order into the chord for the arp. Without it the arp goes 0, 1, 2, 1. */
+  arpOrder?: number[];
+  /** Optional frequency ratio for a second lead voice, so the lead is detuned (X). */
+  detune?: number;
 }
 /** The Silicon pad gate: 10 of the 16 sixteenths of a bar are open; the first step of the bar is always open. */
 const SILICON_GATE = [1, 0, 1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 0];
+/** The Cluster pad gate, the same idea as Silicon's: 10 of 16 open, the first step of the bar always open. */
+const CLUSTER_GATE = [1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 0, 1];
+/** Four on the floor: a kick on every beat. */
+const FLOOR_KICK = [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0];
+/** X's broken beat: kicks on steps 0, 3, 6, 10 and 13, syncopated and never two in a row. */
+const X_KICK = [1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 0];
+const ARP_ORDER = [0, 1, 2, 1];
 export const TRACKS: Record<Track, TrackDef> = {
   test: { bpm: 96, chords: [[57, 60, 64], [53, 57, 60], [48, 52, 55], [55, 59, 62]], from: 0, arp: 'square', drums: true, bass: 2 }, // Am F C G
   keeper: { bpm: 120, chords: [[52, 55, 59], [48, 52, 55], [55, 59, 62], [50, 54, 57]], from: 0, arp: 'square', drums: true, bass: 2 }, // Em C G D
@@ -131,6 +151,12 @@ export const TRACKS: Record<Track, TrackDef> = {
   under: { bpm: 90, chords: [[50, 53, 57, 60], [46, 50, 53, 57], [43, 46, 50, 53], [45, 48, 52, 55]], from: 0, arp: 'triangle', drums: false, bass: 2 }, // Dm7 Bbmaj7 Gm7 Am7
   bench: { bpm: 90, chords: [[48, 51, 55], [44, 48, 51], [51, 55, 58], [46, 50, 53]], from: 0, arp: null, drums: false, bass: 2 }, // Cm Ab Eb Bb
   silicon: { bpm: 132, chords: [[64, 67, 71], [60, 64, 67], [62, 66, 69], [59, 62, 66]], from: 0, arp: 'square', drums: true, bass: 1, gate: SILICON_GATE }, // Em C D Bm
+  // Phase 7 Spec, section 9: the Cluster, the same form as Silicon, with four on the floor and a gated pad
+  cluster: { bpm: 138, chords: [[66, 69, 73], [62, 66, 69], [64, 68, 71], [61, 64, 68]], from: 0, arp: 'square', drums: true, bass: 1, gate: CLUSTER_GATE, kick: FLOOR_KICK }, // F#m D E C#m
+  // Phase 7 Spec, section 9: X, a broken beat with a detuned square lead that falls through its four notes
+  x: { bpm: 160, chords: [[50, 53, 57, 62], [46, 50, 53, 58], [43, 46, 50, 55], [45, 48, 52, 57]], from: 0, arp: 'square', drums: true, bass: 1, kick: X_KICK, arpOrder: [3, 2, 1, 0], detune: 1.007 }, // Dm Bb Gm Am
+  // Phase 7 Spec, section 9: the ending, no beat and no bass, just the Loft's pad over a slow tempo
+  ending: { bpm: 60, chords: [[53, 57, 60, 64], [57, 60, 64, 67], [50, 53, 57, 60], [48, 52, 55, 59]], from: 0, arp: null, drums: false, bass: 0 }, // Fmaj7 Am7 Dm7 Cmaj7
 };
 /** The pad-only variants: the same loop with no arp and no drums, as the bench track is. Deep Layers D12 to D15 use
  * 'silicon' this way. Built once, so a variant keeps its identity and a restart is only a real change of track. */
@@ -150,10 +176,28 @@ export class GameAudio {
   private nextNote = 0;
   private step = 0;
   private track: TrackDef = TRACKS.test;
+  /** Music was asked for and not stopped since: it starts on the first gesture if the page could not play yet. */
+  private wantMusic = false;
+  private armed = false;
+
+  /** The game is the first screen (Phase 7 Spec, section 3), so it can open before any click or key. A browser will not
+   * start sound before one, so until then the context waits, and the first gesture starts it and any music asked for. */
+  private arm() {
+    if (this.armed) return;
+    this.armed = true;
+    const go = () => {
+      for (const e of ['pointerdown', 'keydown'] as const) window.removeEventListener(e, go, true);
+      const c = this.init();
+      if (c && this.wantMusic && !this.musicTimer) this.beginMusic(c);
+    };
+    for (const e of ['pointerdown', 'keydown'] as const) window.addEventListener(e, go, true);
+  }
 
   private init(): AudioContext | null {
     try {
       if (!this.ctx) {
+        const ua = (globalThis.navigator as { userActivation?: { hasBeenActive: boolean } } | undefined)?.userActivation;
+        if (ua && !ua.hasBeenActive) { this.arm(); return null; }
         const w = globalThis as { AudioContext?: new () => AudioContext; webkitAudioContext?: new () => AudioContext };
         const Ctor = w.AudioContext ?? w.webkitAudioContext;
         if (!Ctor) return null;
@@ -283,7 +327,12 @@ export class GameAudio {
     const def = padOnly ? PAD_ONLY[track] : TRACKS[track];
     if (c && this.musicTimer && this.track !== def) { this.track = def; this.step = 0; return; }
     this.track = def;
+    this.wantMusic = true;
     if (!c || !this.music || this.musicTimer) return;
+    this.beginMusic(c);
+  }
+  private beginMusic(c: AudioContext) {
+    if (!this.music) return;
     this.music.gain.cancelScheduledValues(c.currentTime);
     this.music.gain.setValueAtTime(0, c.currentTime);
     this.music.gain.linearRampToValueAtTime(this.musicLevel(), c.currentTime + 2);
@@ -293,6 +342,7 @@ export class GameAudio {
   }
 
   stopMusic(fadeS = 0.4) {
+    this.wantMusic = false;
     if (!this.ctx || !this.music || !this.musicTimer) return;
     clearInterval(this.musicTimer);
     this.musicTimer = null;
@@ -327,17 +377,19 @@ export class GameAudio {
     // pad: a soft chord on the first beat of each bar; a gated track (Silicon) chops it, a stab on each open 16th
     if (tr.gate) { if (tr.gate[s16]) for (const n of chord) tone('sawtooth', midi(n), SIXT * 0.9, 0.01, 900); }
     else if (s16 === 0) for (const n of chord) { tone('sawtooth', midi(n), SIXT * 15, 0.018, 900); tone('sawtooth', midi(n) * 1.004, SIXT * 15, 0.014, 700); }
-    // bass: root on the eighths, octave on the off-beats
-    if (s16 % tr.bass === 0) tone('triangle', midi(chord[0] - 24 + (s16 % 4 === 2 ? 12 : 0)), SIXT * 1.6, 0.06, 1200);
-    // arp from the second section on
+    // bass: root on the eighths, octave on the off-beats (a track with bass 0 has none)
+    if (tr.bass && s16 % tr.bass === 0) tone('triangle', midi(chord[0] - 24 + (s16 % 4 === 2 ? 12 : 0)), SIXT * 1.6, 0.06, 1200);
+    // arp from the second section on; a detuned lead doubles it on a second voice a little sharp
     if (section >= 1 && tr.arp) {
-      const n = chord[[0, 1, 2, 1][s16 % 4]] + (s16 >= 8 ? 12 : 0);
-      tone(tr.arp, midi(n), SIXT * 0.8, tr.arp === 'square' ? 0.012 : 0.009, 2600);
+      const n = chord[(tr.arpOrder ?? ARP_ORDER)[s16 % 4]] + (s16 >= 8 ? 12 : 0), level = tr.arp === 'square' ? 0.012 : 0.009;
+      tone(tr.arp, midi(n), SIXT * 0.8, level, 2600);
+      if (tr.detune) tone(tr.arp, midi(n) * tr.detune, SIXT * 0.8, level, 2600);
     }
-    // hats and a soft kick in the last section
+    // hats and a soft kick in the last section; the kick follows the track's pattern when it has one
     if (section >= 2 && tr.drums) {
       if (s16 % 2 === 1) this.voice(c, out, { wave: 'noise', f: 1, len: 0.03, level: 0.012, filter: { type: 'highpass', f: 7000 } }, t, 1, 1);
-      if (s16 % 8 === 0) this.voice(c, out, { wave: 'sine', f: 110, to: 45, len: 0.14, level: 0.07 }, t, 1, 1);
+      const kick = tr.kick ? tr.kick[s16] === 1 : s16 % 8 === 0;
+      if (kick) this.voice(c, out, { wave: 'sine', f: 110, to: 45, len: 0.14, level: 0.07 }, t, 1, 1);
     }
   }
 

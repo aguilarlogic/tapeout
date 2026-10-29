@@ -42,9 +42,9 @@ export function pauseMenu(hooks: PauseHooks): HTMLElement {
       resume,
       btn('Settings', settings),
       hooks.story ? btn('Difficulty and assists', assists) : null,
-      btn('Quit to title', hooks.quit),
+      btn(hooks.story ? 'Classic desktop' : 'Quit to title', hooks.quit),
       h('p', { class: 'gm-note' }, hooks.story
-        ? 'A preview of the new story game: Level 1, Bit Zero. Your progress saves as you go and counts in the course too.'
+        ? 'Your progress saves as you go and counts in the course too. The Classic Desktop holds every lesson and lab outside the story.'
         : 'The test room: try the drone, its guns and the Field Coil. Your course progress is not touched.')), resume);
   };
 
@@ -91,6 +91,10 @@ export function pauseMenu(hooks: PauseHooks): HTMLElement {
           const order = ['system', 'on', 'off'] as const;
           setPrefs({ reducedMotion: order[(order.indexOf(rm) + 1) % 3] });
           hooks.onSettings();
+          settings();
+        }, 'toggle'),
+        btn(`Start in: ${prefs().startIn === 'desktop' ? 'Classic desktop' : 'The game'}`, () => {
+          setPrefs({ startIn: prefs().startIn === 'desktop' ? 'game' : 'desktop' });
           settings();
         }, 'toggle')),
       slider('Master volume', 'volume'),

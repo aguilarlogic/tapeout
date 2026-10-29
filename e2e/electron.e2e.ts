@@ -13,7 +13,7 @@ test('the desktop app opens on the title screen and starts the story preview', a
     expect(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getTitle())).toBe('Tapeout');
     // the page has no Node and no way out of the sandbox
     expect(await win.evaluate(() => typeof (globalThis as { require?: unknown }).require)).toBe('undefined');
-    await win.getByTestId('story-preview').click();
+    await win.getByTestId('game').waitFor();
     await expect(win.getByTestId('game')).toBeVisible();
     // a fresh save starts the story by naming the player
     await win.getByRole('textbox', { name: 'Your name' }).fill('Sam');

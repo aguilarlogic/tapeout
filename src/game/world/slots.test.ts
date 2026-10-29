@@ -34,13 +34,19 @@ describe('every place', () => {
     it(`${p.id}: scores each module once, in order, between a landing and an exit`, () => {
       const rooms = planPlace(p, themeFor(p.id) ?? generic);
       expect(rooms[0].role).toBe('landing');
-      expect(rooms[rooms.length - 1].role).toBe('exit');
+      expect(rooms[rooms.length - 1].role).toBe(p.id === 'tapeout' ? 'ending' : 'exit');
       const scored = rooms.flatMap((r) => r.modules);
       expect(scored).toEqual(chapterOf(p).modules.filter((m) => m.kind !== 'practice').map((m) => m.id));
       expect(rooms.filter((r) => r.capstone).length).toBeLessThanOrEqual(1);
       for (let i = 1; i < rooms.length; i++) if (rooms[i].role === 'arena') expect(rooms[i - 1].role).toBe('bossdoor');
     });
   }
+  it('Level 27 is the Interview, the Review, four X arenas and the ending (Phase 7 Spec, section 2)', () => {
+    const rooms = planPlace(placeById('tapeout')!, themeFor('tapeout') ?? generic);
+    expect(rooms.map((r) => `${r.role}${r.modules.length ? ` ${r.modules.join(' ')}` : ''}${r.xform ? ` ${r.xform}` : ''}`)).toEqual([
+      'landing', 'port drills', 'traverse', 'fight', 'gate final', 'xarena 1', 'xarena 2', 'xarena 3', 'xarena 4', 'ending',
+    ]);
+  });
   it('study places have no rooms', () => {
     for (const p of PLACES.filter((x) => x.kind === 'study')) expect(planPlace(p, generic)).toEqual([]);
   });

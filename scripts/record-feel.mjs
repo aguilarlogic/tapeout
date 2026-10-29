@@ -20,7 +20,7 @@ page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') 
 await page.goto(pathToFileURL(resolve('dist/index.html')).href);
 await page.locator('#os').waitFor();
 const tClick = Date.now();
-await page.getByTestId('story-preview').click();
+await page.getByTestId('game').waitFor();
 await page.waitForTimeout(1600);
 await page.screenshot({ path: join(out, '1-boot.png') });
 await page.waitForFunction(() => window.__tapeoutGame?.ready, null, { timeout: 15000 });

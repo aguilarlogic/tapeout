@@ -5,23 +5,31 @@ import { describe, expect, it } from 'vitest';
 import type { Rect } from '../../level/room';
 import { overlaps } from '../../physics/geom';
 import type { StoryRoom } from '../../story/types';
-import { crateSide } from '../../tuning';
+import { crateSide, frames } from '../../tuning';
 import { floorY, r } from '../templates/kit';
 import type { MechanicDef, MechanicKind, MechCtx } from '../types';
 import { MECHANICS } from './index';
+import { AGENTS, BLOCK_SIDE, DRIVER, HALF, NUMBERS, PLATE } from './agents';
+import { B_BLOCK, BINS, C_BLOCK, CUPS } from './bins';
 import { BUS } from './bus';
+import { CACHE } from './cache';
 import { CLOCKED } from './clocked';
 import { CLOCKS } from './clocks';
+import { FORMAL } from './formal';
 import { GATING } from './gating';
 import { INVERTED } from './inverted';
 import { LAMPS } from './lamps';
 import { LOOP } from './loop';
+import { MODEL } from './model';
 import { PATTERN } from './pattern';
 import { blockRect, PLACEMENT, SLOT_X } from './placement';
 import { PULLNET } from './pullnet';
+import { BLOCK_Y, DROP_ORDER, REORDER, SLOT_X as REORDER_SLOT_X } from './reorder';
 import { REPEATER, SOCKETS } from './repeater';
 import { RETURN } from './return';
+import { ROUTING } from './routing';
 import { SCAN } from './scan';
+import { SCOREBOARD, SOCKET } from './scoreboard';
 import { SELECT } from './select';
 import { SLACK } from './slack';
 import { HAZARD_TICK, STAGES, TICK_STEPS } from './stages';
@@ -30,6 +38,7 @@ import { VIAS } from './vias';
 const KINDS: MechanicKind[] = [
   'lamps', 'inverted', 'select', 'clocked', 'pattern', 'loop', 'bus', 'clocks', 'stages',
   'pullnet', 'repeater', 'slack', 'vias', 'placement', 'gating', 'scan', 'return',
+  'scoreboard', 'bins', 'agents', 'formal', 'reorder', 'cache', 'routing', 'model',
 ];
 const FLOOR = floorY(720);
 /** A lift at rest on the floor, and fully risen (360 px above the floor). */
@@ -351,6 +360,180 @@ function playReturn(rg: Rig) {
   tick(RETURN, s, rg);
 }
 
+/** The CHK crate as it sits in the scoreboard's socket: a mass 1 crate (28 px), its top on the socket's top. */
+const CHK_IN_SOCKET: Rect = { x: SOCKET.x + SOCKET.w / 2 - 14, y: SOCKET.y, w: 28, h: 28 };
+
+function playScoreboard(rg: Rig) {
+  const s = SCOREBOARD.init();
+  rg.c.props = [CHK_IN_SOCKET]; // the checker is connected
+  tick(SCOREBOARD, s, rg, 30);
+  rg.c.used = 'fix'; // FIX on: the scoreboard compares the real answer, and the door opens
+  tick(SCOREBOARD, s, rg);
+  for (let x = 140; x <= 1460; x += 10) {
+    feet(rg, x, FLOOR);
+    tick(SCOREBOARD, s, rg);
+  }
+}
+
+/** The drone's standing spots under bins A, B and C (its centre x). B and C stand on the ledges' tops. */
+const BIN_SPOT_A = 290, BIN_SPOT_B = 450, BIN_SPOT_C = 630;
+
+function playBins(rg: Rig) {
+  const s = BINS.init();
+  place(rg, BIN_SPOT_A, FLOOR, true); // A lights under the drone
+  tick(BINS, s, rg);
+  place(rg, BIN_SPOT_B, B_BLOCK.y, true); // B, on the lower ledge
+  tick(BINS, s, rg);
+  place(rg, BIN_SPOT_C, C_BLOCK.y, true); // C, on the upper ledge
+  tick(BINS, s, rg);
+  rg.c.props = [{ x: CUPS[3].x + 14, y: CUPS[3].y, w: 28, h: 28 }]; // a crate through the slot lights D
+  tick(BINS, s, rg);
+  rg.c.props = [];
+  for (let x = 140; x <= 1460; x += 10) {
+    place(rg, x, FLOOR, true);
+    tick(BINS, s, rg);
+  }
+}
+
+/** A block of the agents beat (mass 1), centred at (x, y). */
+const agentBlock = (x: number, y: number): Rect => ({ x: x - HALF, y: y - HALF, w: BLOCK_SIDE, h: BLOCK_SIDE });
+const PLATE_CX = PLATE.x + PLATE.w / 2, DRIVER_CX = DRIVER.x + DRIVER.w / 2;
+
+function playAgents(rg: Rig) {
+  const s = AGENTS.init();
+  // the room's blocks, 3, 1, 2 from left to right on the shelf; a block is out of the props while the drone carries it
+  const pos = AGENTS.room(rng).props.map((p): { x: number; y: number } => ({ x: p.x, y: p.y }));
+  const put = (held = -1) => {
+    rg.c.props = pos.flatMap((p, i) => (i === held ? [] : [agentBlock(p.x, p.y)]));
+    tick(AGENTS, s, rg);
+  };
+  /** Pushes block n: carries it onto the plate, steps off the DRIVER pad and onto it, then waits for the belt. */
+  const send = (n: number) => {
+    const i = NUMBERS.indexOf(n);
+    put(i);
+    pos[i] = { x: PLATE_CX, y: FLOOR - HALF - 1 };
+    put();
+    feet(rg, DRIVER_CX - 60, FLOOR);
+    put();
+    feet(rg, DRIVER_CX, FLOOR);
+    put();
+    tick(AGENTS, s, rg, 150);
+  };
+  send(1);
+  send(2);
+  send(3); // 3 of 3: the door opens
+  for (let x = DRIVER_CX; x <= 1460; x += 10) {
+    feet(rg, x, FLOOR);
+    tick(AGENTS, s, rg);
+  }
+}
+
+/** Formal: the prover's sweep of one corridor, and the CEX block's hits to bring the door down. */
+const FORMAL_SWEEP = 90, CEX_HITS = 6;
+
+function playFormal(rg: Rig) {
+  const s = FORMAL.init();
+  rg.c.used = 'assume'; // drop ASSUME: the wall opens, and the sweep finds the counterexample
+  tick(FORMAL, s, rg);
+  tick(FORMAL, s, rg, FORMAL_SWEEP * 3);
+  for (let i = 0; i < CEX_HITS; i++) { // six shots on the CEX block
+    rg.c.hit = ['cex'];
+    tick(FORMAL, s, rg);
+  }
+  for (let x = 140; x <= 1460; x += 10) {
+    feet(rg, x, FLOOR);
+    tick(FORMAL, s, rg);
+  }
+}
+
+/** A 40 px prop centred on (x, y): the reorder blocks and the cache KEY. */
+const rectAt = (x: number, y: number): Rect => ({ x: x - 20, y: y - 20, w: 40, h: 40 });
+/** The reorder blocks' tray (a 40 px block on a 40 px tray in the pit) and the four shelves the chute drops them on. */
+const REORDER_TRAY_Y = FLOOR + 40 - 21;
+const REORDER_SHELF_X = [450, 550, 650, 750];
+/** Retiring one lamp takes 400 ms. */
+const RETIRE_EVERY = frames(400);
+
+function playReorder(rg: Rig) {
+  const s = REORDER.init();
+  // the four blocks start in the tray, block 1 to block 4, each on its chute shelf's x
+  const pos: ({ x: number; y: number } | null)[] = [1, 2, 3, 4].map((n) => ({ x: REORDER_SHELF_X[DROP_ORDER.indexOf(n)], y: REORDER_TRAY_Y }));
+  const put = () => {
+    rg.c.props = pos.flatMap((p) => (p === null ? [] : [rectAt(p.x, p.y)]));
+    tick(REORDER, s, rg);
+  };
+  put();
+  // carry each block home to its own slot, one at a time: a step carried, a step set down
+  for (let n = 1; n <= 4; n++) {
+    pos[n - 1] = null;
+    put();
+    pos[n - 1] = { x: REORDER_SLOT_X[n - 1], y: BLOCK_Y };
+    put();
+  }
+  tick(REORDER, s, rg, 4 * RETIRE_EVERY); // the lamps retire, and the door opens
+  for (let x = 140; x <= 1460; x += 20) {
+    feet(rg, x, FLOOR);
+    tick(REORDER, s, rg);
+  }
+}
+
+/** Cache: the KEY's centre on the memory shelf and the cache shelf (a 60 px ledge), and on its slot's floor. */
+const KEY_MEMORY_X = 200, KEY_CACHE_X = 1200, KEY_SLOT_X = 1300;
+const KEY_LEDGE_Y = FLOOR - 60 - 21, KEY_FLOOR_Y = FLOOR - 21;
+
+function playCache(rg: Rig) {
+  const s = CACHE.init();
+  rg.c.props = [rectAt(KEY_MEMORY_X, KEY_LEDGE_Y)]; // the KEY starts in memory
+  tick(CACHE, s, rg);
+  tick(CACHE, s, rg, 60);
+  rg.c.props = [rectAt(KEY_CACHE_X, KEY_LEDGE_Y)]; // carried to the cache: no timer runs yet
+  tick(CACHE, s, rg);
+  rg.c.used = 'request'; // REQUEST starts the 3 s timer
+  tick(CACHE, s, rg);
+  rg.c.props = [];
+  tick(CACHE, s, rg, 60);
+  rg.c.props = [rectAt(KEY_SLOT_X, KEY_FLOOR_Y)]; // the KEY reaches its slot in time: the door opens
+  tick(CACHE, s, rg);
+  for (let x = 140; x <= 1460; x += 20) {
+    feet(rg, x, FLOOR);
+    tick(CACHE, s, rg);
+  }
+}
+
+/** Routing: SRC's top and x, the crate's centre, the door's left edge, and one dwell at a router (0.6 s). */
+const SRC_X = 460, SRC_TOP = 540, DOOR_X = 1400;
+const ROUTER_DWELL = frames(600);
+
+/** A crate (28 px) resting on a router's top with its centre at x. */
+const crateOn = (x: number, top: number): Rect => ({ x: x - 14, y: top - 28, w: 28, h: 28 });
+
+function playRouting(rg: Rig) {
+  const s = ROUTING.init();
+  place(rg, 140, FLOOR, true);
+  rg.c.props = [crateOn(SRC_X, SRC_TOP)]; // a crate on SRC sends the packet
+  tick(ROUTING, s, rg);
+  rg.c.used = 'arrow'; // ARROW on R1 points it at DEST
+  tick(ROUTING, s, rg);
+  tick(ROUTING, s, rg, ROUTER_DWELL - 1);
+  tick(ROUTING, s, rg, ROUTER_DWELL); // the packet is home, and the door opens
+  place(rg, DOOR_X + 100, FLOOR, true);
+  tick(ROUTING, s, rg, 600);
+}
+
+/** Model: the platform's top and one way across in steps (6 s). */
+const MODEL_PLAT_Y = 500, MODEL_CROSS = frames(6000);
+
+function playModel(rg: Rig) {
+  const s = MODEL.init();
+  // ride the real platform across, without CALIBRATE: the drone stands on it each step, then walks off on the far floor
+  for (let i = 0; i < MODEL_CROSS; i++) {
+    place(rg, rg.gate('plat').x + 60, MODEL_PLAT_Y, true);
+    tick(MODEL, s, rg);
+  }
+  place(rg, 1100, FLOOR, true);
+  tick(MODEL, s, rg);
+}
+
 const PLAYS: Record<MechanicKind, (rg: Rig) => void> = {
   lamps: playLamps,
   inverted: playInverted,
@@ -369,6 +552,14 @@ const PLAYS: Record<MechanicKind, (rg: Rig) => void> = {
   gating: playGating,
   scan: playScan,
   return: playReturn,
+  scoreboard: playScoreboard,
+  bins: playBins,
+  agents: playAgents,
+  formal: playFormal,
+  reorder: playReorder,
+  cache: playCache,
+  routing: playRouting,
+  model: playModel,
 };
 
 // A canvas that accepts every call: the draw code runs, its pixels are not checked.

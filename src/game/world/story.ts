@@ -59,6 +59,10 @@ export interface StoryLines {
   /** The card on the first landing in the Underlayers. */
   underlayers: { title: string; lines: readonly string[]; button: string };
   silicon: { title: string; lines: readonly string[]; button: string };
+  /** Act 4's card (Phase 7 Spec, section 3). */
+  cluster: { title: string; lines: readonly string[]; button: string };
+  /** Level 27's ending (Phase 7 Spec, section 7). */
+  ending: { slip: string; bit: string; card: { title: string; lines: readonly string[]; button: string } };
   /** E at a bus rail without the Datapath Rail. */
   railLocked: string;
 }
@@ -107,6 +111,16 @@ export const STORY: StoryLines = {
       'Then the chip meets its board.',
     ],
     button: 'Go on',
+  },
+  cluster: {
+    title: 'THE CLUSTER',
+    lines: ['Four cores share one memory.', 'Nobody checked how they share it.', 'Find where X hides. Then corner it.'],
+    button: 'Go on',
+  },
+  ending: {
+    slip: 'X slips away.',
+    bit: 'It is just a bit now, a 1. Pick it up.',
+    card: { title: 'ENDING', lines: ['ADA is shipping.', 'Other teams need help.', 'The Fab opens soon.'], button: 'Back to the Loft' },
   },
   railLocked: 'A bus rail. The Datapath has the clip you need to ride it.',
 };

@@ -15,7 +15,7 @@ const page = await ctx.newPage();
 const t0 = Date.now();
 await page.goto(pathToFileURL(resolve('dist/index.html')).href);
 await page.locator('#os').waitFor();
-await page.getByTestId('story-preview').click();
+await page.getByTestId('game').waitFor();
 await page.waitForFunction(() => window.__tapeoutGame?.ready, null, { timeout: 15000 });
 const tReady = Date.now();
 await page.evaluate(() => {

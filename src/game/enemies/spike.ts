@@ -3,7 +3,7 @@
 import type { Dir, Rect } from '../level/room';
 import { SPIKE } from '../tuning';
 import type { Vec } from '../physics/geom';
-import type { Enemy } from './types';
+import type { Enemy, EnemyCtx } from './types';
 
 export type SpikePhase = 'rest' | 'warn' | 'strike';
 const THICK = 10;
@@ -40,11 +40,14 @@ export class GlitchSpike implements Enemy {
     return n;
   }
   knock() { /* anchored to the floor */ }
-  step() {
-    this.telegraph = this.alive && this.phase === 'warn' ? 1 - this.t / SPIKE.warn : 0;
+  step(ctx?: EnemyCtx) {
+    // Model Lens (Phase 7 Spec, section 3): the warning line shows `lens` steps sooner; the strike keeps its beat
+    const lens = Math.min(ctx?.lens ?? 0, SPIKE.rest - 1);
+    this.telegraph = this.alive && this.phase === 'warn' ? 1 - this.t / this.warnLen : 0;
     if (!this.alive || --this.t > 0) return;
-    if (this.phase === 'rest') { this.phase = 'warn'; this.t = SPIKE.warn; }
+    if (this.phase === 'rest') { this.phase = 'warn'; this.warnLen = SPIKE.warn + lens; this.t = this.warnLen; }
     else if (this.phase === 'warn') { this.phase = 'strike'; this.t = SPIKE.visible; }
-    else { this.phase = 'rest'; this.t = SPIKE.rest; }
+    else { this.phase = 'rest'; this.t = SPIKE.rest - lens; }
   }
+  private warnLen = SPIKE.warn;
 }

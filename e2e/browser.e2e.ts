@@ -1,5 +1,5 @@
 // Opens the built Tapeout.html. The test room (#/story/test): plays a few seconds and checks the frame budget (60 fps:
-// the work of one frame, steps plus drawing, must fit in 16.7 ms). Level 1: starts the story from the desktop button,
+// the work of one frame, steps plus drawing, must fit in 16.7 ms). Level 1: a fresh load opens the story (the first screen),
 // closes the first wire loop with the keyboard, opens and closes a wall port, and reaches the Loft.
 import { expect, test } from '@playwright/test';
 import { pathToFileURL } from 'node:url';
@@ -14,9 +14,8 @@ test('the test room plays within the frame budget', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(String(e)));
   page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') errors.push(`${m.type()}: ${m.text()}`); });
-  await page.goto(pathToFileURL(resolve('dist/index.html')).href);
+  await page.goto(`${pathToFileURL(resolve('dist/index.html')).href}#/story/test`);
   await expect(page.locator('#os')).not.toBeEmpty();
-  await page.evaluate(() => (location.hash = '#/story/test'));
   await expect(page.getByTestId('game')).toBeVisible();
   await page.waitForFunction(() => window.__tapeoutGame && window.__tapeoutGame.ready, null, { timeout: 15000 });
 
@@ -71,7 +70,7 @@ test('Level 1: the first wire, a wall port, and the Loft', async ({ page }) => {
   page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') errors.push(`${m.type()}: ${m.text()}`); });
   await page.goto(pathToFileURL(resolve('dist/index.html')).href);
   await expect(page.locator('#os')).not.toBeEmpty();
-  await page.getByTestId('story-preview').click();
+  await page.getByTestId('game').waitFor();
   await expect(page.getByTestId('game')).toBeVisible();
   // a new player names themselves first
   await expect(page.getByTestId('story-profile')).toBeVisible();
@@ -134,8 +133,11 @@ test('Level 1: the first wire, a wall port, and the Loft', async ({ page }) => {
   await page.getByRole('dialog', { name: 'Paused' }).getByRole('button', { name: 'Difficulty and assists' }).click();
   await expect(page.getByRole('button', { name: /Difficulty: Story/ })).toBeVisible();
   await page.getByRole('button', { name: 'Back', exact: true }).click();
-  await page.getByRole('button', { name: 'Quit to title' }).click();
+  await page.getByRole('button', { name: 'Classic desktop' }).click();
   await expect(page.getByTestId('game')).toHaveCount(0);
+  // the desktop's button goes back into the game
+  await page.getByTestId('story-preview').click();
+  await expect(page.getByTestId('game')).toBeVisible();
   expect(errors).toEqual([]);
 });
 
@@ -145,7 +147,7 @@ test('Act 1 places: a port, a fight, an arena that fights back, and the chip map
   page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') errors.push(`${m.type()}: ${m.text()}`); });
   await page.goto(pathToFileURL(resolve('dist/index.html')).href);
   await expect(page.locator('#os')).not.toBeEmpty();
-  await page.getByTestId('story-preview').click();
+  await page.getByTestId('game').waitFor();
   await page.getByRole('textbox', { name: 'Your name' }).fill('Sam');
   await page.getByRole('button', { name: 'I am new to this' }).click();
   await page.waitForFunction(() => window.__tapeoutGame?.ready && !window.__tapeoutGame.story!.waiting, null, { timeout: 15000 });
@@ -188,7 +190,7 @@ test('Act 2: down a Deep Layer hatch and back, and an act 2 arena that fights ba
   // ?record exposes the award hook, so a hatch's place can be opened (Phase 5 Spec, section 3: locked hatches stay shut)
   await page.goto(`${pathToFileURL(resolve('dist/index.html')).href}?record`);
   await expect(page.locator('#os')).not.toBeEmpty();
-  await page.getByTestId('story-preview').click();
+  await page.getByTestId('game').waitFor();
   await page.getByRole('textbox', { name: 'Your name' }).fill('Sam');
   await page.getByRole('button', { name: 'I am new to this' }).click();
   await page.waitForFunction(() => window.__tapeoutGame?.ready && !window.__tapeoutGame.story!.waiting, null, { timeout: 15000 });
@@ -223,7 +225,7 @@ test('The Underlayers: the Pipeline hatch stays shut until D5 opens, then drops 
   page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') errors.push(`${m.type()}: ${m.text()}`); });
   await page.goto(`${pathToFileURL(resolve('dist/index.html')).href}?record`);
   await expect(page.locator('#os')).not.toBeEmpty();
-  await page.getByTestId('story-preview').click();
+  await page.getByTestId('game').waitFor();
   await page.getByRole('textbox', { name: 'Your name' }).fill('Sam');
   await page.getByRole('button', { name: 'I am new to this' }).click();
   await page.waitForFunction(() => window.__tapeoutGame?.ready && !window.__tapeoutGame.story!.waiting, null, { timeout: 15000 });
@@ -249,7 +251,7 @@ test('Silicon: the arrival card on the first act 3 landing, a metal barrier room
   page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') errors.push(`${m.type()}: ${m.text()}`); });
   await page.goto(`${pathToFileURL(resolve('dist/index.html')).href}?record`);
   await expect(page.locator('#os')).not.toBeEmpty();
-  await page.getByTestId('story-preview').click();
+  await page.getByTestId('game').waitFor();
   await page.getByRole('textbox', { name: 'Your name' }).fill('Sam');
   await page.getByRole('button', { name: 'I am new to this' }).click();
   await page.waitForFunction(() => window.__tapeoutGame?.ready && !window.__tapeoutGame.story!.waiting, null, { timeout: 15000 });

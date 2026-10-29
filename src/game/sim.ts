@@ -49,7 +49,7 @@ export interface Shot {
   homeOn: Enemy | null;
 }
 
-export type Weapon = 'pulse' | 'charged' | 'fan' | 'cannon' | 'burst';
+export type Weapon = 'pulse' | 'charged' | 'fan' | 'cannon' | 'burst' | 'spec';
 export const WEAPONS: Weapon[] = ['pulse', 'charged'];
 
 /** What the Field Coil is doing this step. */
@@ -93,7 +93,19 @@ export type Fx =
   /** Trace Tether: the line shoots out to a copper pad. */
   | { t: 'tether'; x: number; y: number; tx: number; ty: number }
   /** Via Phase: the drone dashes through a barrier. */
-  | { t: 'phase'; x: number; y: number };
+  | { t: 'phase'; x: number; y: number }
+  // --- act 4, the Cluster (Phase 7 Spec, section 8) ---
+  /** Rewind: the drone jumps back along `path` (oldest first). */
+  | { t: 'rewind'; path: Vec[] }
+  /** Monte Carlo Crit: a double hit. */
+  | { t: 'crit'; x: number; y: number }
+  /** Assertion Mine: laid, and its blast. */
+  | { t: 'mine'; x: number; y: number }
+  | { t: 'blast'; x: number; y: number; r: number }
+  /** Cache Pockets: a block goes in or comes out. */
+  | { t: 'pocket'; x: number; y: number; out: boolean }
+  /** NoC Warp: the drone leaves one router pad and arrives at the other. */
+  | { t: 'warp'; x: number; y: number };
 
 /** Deterministic random numbers (mulberry32), so a test run is the same every time. */
 export function rng(seed: number) {
@@ -197,12 +209,37 @@ export interface Kit {
   noiseFilter?: boolean;
   /** PID Stabilizer: no ALU Cannon kick, and the hover holds height. */
   pid?: boolean;
+  // --- act 4, the Cluster (Phase 7 Spec, section 8); left out, the drone works as before ---
+  /** Templates: one more turret and mine. */
+  templates?: boolean;
+  /** Rewind: cooldown, s (R). */
+  rewind?: number;
+  /** Monte Carlo Crit: chance a hit deals double. */
+  crit?: number;
+  /** Newton Aim: charged shots lead a moving target. */
+  newton?: boolean;
+  /** Agent Pair: the monitor's mark bonus (the driver fires as well). */
+  agents?: number;
+  /** Assertion Mine: blast damage (a third gadget). */
+  mine?: number;
+  /** Speculative Shot damage. */
+  specDamage?: number;
+  /** Scheduler: the Synchronizer's cooldown × this. */
+  sched?: number;
+  /** Cache Pockets: blocks C can hold. */
+  pockets?: number;
+  /** NoC Warp: E on a router pad. */
+  warp?: boolean;
+  /** Model Lens: warnings this many seconds sooner. */
+  lens?: number;
 }
 
 /** The gadgets F uses; G switches between those owned. */
-export type Gadget = 'sync' | 'turret';
+export type Gadget = 'sync' | 'turret' | 'mine';
 /** A Buffer Turret: where it stands (its post's foot), steps of life left, ms to its next shot. */
 export interface Turret { x: number; y: number; life: number; cd: number }
+/** An Assertion Mine: where it lies (its foot), and steps since it was laid. */
+export interface Mine { x: number; y: number; age: number }
 
 /** A bus rail (Phase 4 Spec, section 7): the drone hangs RAIL_HANG px under it while it rides. */
 export interface RailLine { x1: number; y1: number; x2: number; y2: number }
@@ -330,7 +367,24 @@ export class Sim {
   /** Metal barriers, as movers that leave the world while a Via Phase dash passes. */
   barriers: Mover[] = [];
   /** The gadgets owned, in the order G cycles them. */
-  get gadgets(): Gadget[] { return [...(this.kit.sync ? ['sync' as const] : []), ...(this.kit.turret ? ['turret' as const] : [])]; }
+  get gadgets(): Gadget[] { return [...(this.kit.sync ? ['sync' as const] : []), ...(this.kit.turret ? ['turret' as const] : []), ...(this.kit.mine ? ['mine' as const] : [])]; }
+  // --- act 4, the Cluster (Phase 7 Spec, sections 3 and 8) ---
+  /** Rewind: where the drone was each step (newest last, the last 3 s), and steps until R works again. */
+  private history: { x: number; y: number; integrity: number }[] = [];
+  rewindCd = 0;
+  /** Assertion Mines lying in the room. */
+  mines: Mine[] = [];
+  /** Cache Pockets: the blocks put away, last in first out. */
+  pocketed: Prop[] = [];
+  /** Agent Pair: the driver and the monitor (null while hidden), the bug the monitor marks, and the driver's cooldown. */
+  agentPos: { driver: Vec; monitor: Vec } | null = null;
+  marked: Enemy | null = null;
+  private agentCd = 0;
+  /** NoC Warp: steps into the warp (0: none), and the pad it goes to. */
+  warpT = 0;
+  private warpTo: Vec | null = null;
+  /** Each enemy's centre last step, for Newton Aim's lead. */
+  private lastPos = new Map<Enemy, Vec>();
   /** The weapons the drone can switch between now. */
   get weapons(): Weapon[] { return this.kit.weapons ?? (this.kit.charged ? ['pulse', 'charged'] : ['pulse']); }
   /** Weapons in the order they were last picked, most recent first (Phase 4 Spec, section 7: the slot rule). */
@@ -441,6 +495,8 @@ export class Sim {
     this.stalled = !frozen && this.enemies.some((e) => e.alive && !!e.field && Math.hypot(e.x - d.x, e.y - d.y) < e.field);
     d.slow = this.stalled ? 0.5 : 1;
     this.stepGadgets(ctl, frozen);
+    this.stepRewind(ctl, frozen);
+    this.stepWarp(ctl, frozen);
     if (!frozen && c.pressed.has('field') && this.kit.coil) this.fieldPressStep = this.steps;
     this.stepBarriers();
     // the Kickback Dash cooldown: set here, not once, since the Director replaces drone.abilities on every applyKit
@@ -457,6 +513,7 @@ export class Sim {
     if (r.jumped) { this.events.push('jump'); this.fx.push({ t: 'jump', x: d.x, y: d.y + d.h / 2 }); }
     if (!this.stepTether(ctl, frozen)) this.stepField(ctl, frozen);
     else this.dropHeld();
+    this.stepPockets(ctl, frozen);
     this.stepScan(ctl, frozen);
     const ctx = this.ctx();
     // the Synchronizer halves the enemies' clock: their brains run every other step and their bodies move half as far
@@ -487,6 +544,8 @@ export class Sim {
     if (!frozen) this.stepBurst();
     this.stepLoopDrone(frozen);
     this.stepTurrets(frozen);
+    this.stepAgents(frozen);
+    this.stepMines(frozen);
     this.stepThrown();
     this.stepContacts();
     this.stepEmitters();
@@ -507,6 +566,7 @@ export class Sim {
     this.booting = Math.max(0, this.booting - 1);
     this.dummyFlash = Math.max(0, this.dummyFlash - 1);
     this.stepDeath();
+    this.lastPos = new Map(this.enemies.map((e) => [e, { x: e.x, y: e.y }]));
   }
 
   private hurtDrone(n: number, from?: Vec, src?: Enemy | null) {
@@ -618,6 +678,8 @@ export class Sim {
         const cd = this.pushCd.get(e) ?? 0;
         if (this.steps < cd) continue;
         if (!this.inField(e, e.body.bounds.max.x - e.body.bounds.min.x)) continue;
+        // the field's grab breaks a Deadlock pair's hold (Phase 7 Spec, section 5)
+        e.jolt?.();
         const n = norm({ x: e.x - o.x, y: e.y - o.y });
         e.knock({ x: n.x * F.pushSpeed, y: n.y * F.pushSpeed - 120 });
         v.energy = Math.max(0, v.energy - F.pushCost);
@@ -714,7 +776,12 @@ export class Sim {
   }
   private fire(kind: 'bolt' | 'charged') {
     if (kind === 'bolt') this.shoot('bolt', (this.rand() * 2 - 1) * T.probe.spread * deg, T.probe.speed, T.probe.life * T.probe.speed, this.kit.probeDamage ?? T.probe.damage, 1, 1, 'pulse');
-    else this.shoot('charged', 0, T.charged.speed, T.charged.range, this.kit.chargedDamage ?? T.charged.damage, T.charged.pierce, 3, 'charged');
+    else {
+      // Newton Aim: lead the bug nearest the aim point
+      const lead = this.kit.newton ? this.leadAngle(T.charged.speed) : null;
+      const off = lead === null ? 0 : Math.atan2(Math.sin(lead - Math.atan2(this.aim.y, this.aim.x)), Math.cos(lead - Math.atan2(this.aim.y, this.aim.x)));
+      this.shoot('charged', off, T.charged.speed, T.charged.range, this.kit.chargedDamage ?? T.charged.damage, T.charged.pierce, 3, 'charged');
+    }
   }
   /** One shot from the muzzle: `off` radians off the aim, speed in px/s, range in px. */
   private shoot(kind: 'bolt' | 'charged', off: number, speed: number, range: number, damage: number, pierce: number, knockMul: number, weapon: Weapon, fx = true) {
@@ -749,11 +816,12 @@ export class Sim {
         this.fireBuf = 0;
       }
       if (this.fireCd < 0) this.fireCd = 0;
-    } else if (this.weapon === 'pulse' || this.weapon === 'fan' || this.weapon === 'cannon') {
-      const rate = this.weapon === 'pulse' ? this.probeRate() : this.weapon === 'fan' ? UP.fan.rate : UP.cannon.rate;
+    } else if (this.weapon === 'pulse' || this.weapon === 'fan' || this.weapon === 'cannon' || this.weapon === 'spec') {
+      const rate = this.weapon === 'pulse' ? this.probeRate() : this.weapon === 'fan' ? UP.fan.rate : this.weapon === 'spec' ? UP.spec.rate : UP.cannon.rate;
       if (pressed) this.fireBuf = T.probe.bufferMs;
       if ((held || this.fireBuf > 0) && this.fireCd <= 0) {
         if (this.weapon === 'pulse') this.fire('bolt');
+        else if (this.weapon === 'spec') this.fireSpec();
         else if (this.weapon === 'fan') for (let i = 0; i < UP.fan.bolts; i++) this.shoot('bolt', (i - 1) * (UP.fan.spreadDeg / 2) * deg, UP.fan.speed, UP.fan.range, UP.fan.damage, 1, 1, 'fan', i === 1);
         else if (spend(this.vitals, UP.cannon.energy)) { this.shoot('charged', 0, UP.cannon.speed, UP.cannon.range, this.kit.cannonDamage ?? UP.cannon.damage, 1, UP.cannon.knock / T.probe.knock, 'cannon'); this.cannonKick(); }
         else { const m = this.muzzle(); this.fx.push({ t: 'fizzle', x: m.x, y: m.y }); }
@@ -780,6 +848,20 @@ export class Sim {
     this.fireWasHeld = held;
   }
 
+  /** Speculative Shot: a slow bolt that homes on the nearest hittable bug in reach (at UP.spec.turnDegS). */
+  private fireSpec() {
+    const S = UP.spec;
+    this.shoot('bolt', 0, S.speed, S.range, this.kit.specDamage ?? S.damage, 1, 1, 'spec');
+    const s = this.shots[this.shots.length - 1];
+    let best: Enemy | null = null, bd: number = S.range;
+    for (const e of this.enemies) {
+      if (!e.alive || !e.hittable()) continue;
+      const dist = Math.hypot(e.x - s.x, e.y - s.y);
+      if (dist < bd) { best = e; bd = dist; }
+    }
+    s.homeOn = best;
+  }
+
   /** Pipeline Burst: the armed bolts leave 80 ms apart, the first on the step the burst is armed. */
   private stepBurst() {
     if (this.burstLeft <= 0) return;
@@ -798,6 +880,161 @@ export class Sim {
     if (!frozen && gs.length > 1 && c.pressed.has('gadgetNext')) { this.gadget = gs[(gs.indexOf(this.gadget) + 1) % gs.length]; this.fx.push({ t: 'swap', weapon: this.weapon }); }
     this.stepSync(c, frozen || this.gadget !== 'sync');
     if (!frozen && this.gadget === 'turret' && c.pressed.has('gadget')) this.placeTurret();
+    if (!frozen && this.gadget === 'mine' && c.pressed.has('gadget')) this.layMine();
+  }
+
+  /** Assertion Mine (F): a mine at the drone's feet; the oldest goes when one more than the limit is laid. */
+  private layMine() {
+    const d = this.drone;
+    if (!this.kit.mine) return;
+    if (!spend(this.vitals, UP.mine.energy)) { this.fx.push({ t: 'fizzle', x: d.x, y: d.y }); return; }
+    if (this.mines.length >= UP.mine.max + (this.kit.templates ? 1 : 0)) this.mines.shift();
+    const m: Mine = { x: d.x, y: d.y + d.h / 2, age: 0 };
+    this.mines.push(m);
+    this.fx.push({ t: 'mine', x: m.x, y: m.y });
+  }
+
+  /** Armed mines go off when a bug comes within the trigger range: every hittable bug in the blast takes the damage. */
+  private stepMines(frozen: boolean) {
+    if (frozen || !this.mines.length) return;
+    const M = UP.mine, arm = Math.round(M.armS * HZ);
+    for (const m of this.mines) {
+      if (++m.age < arm) continue;
+      const c = { x: m.x, y: m.y - 10 };
+      if (!this.enemies.some((e) => e.alive && Math.hypot(e.x - c.x, e.y - c.y) <= M.trigger)) continue;
+      m.age = -1;
+      for (const e of this.enemies) {
+        if (!e.alive || !e.hittable() || Math.hypot(e.x - c.x, e.y - c.y) > M.radius) continue;
+        const dir = norm({ x: e.x - c.x, y: e.y - c.y || -1 });
+        const n = e.damage(this.kit.mine ?? M.damage, dir);
+        e.knock({ x: dir.x * 400, y: dir.y * 400 - 150 });
+        this.fx.push({ t: 'hit', x: e.x, y: e.y, dx: dir.x, dy: dir.y, n, armored: false, enemy: true });
+        this.onEnemyDamaged(e, dir);
+      }
+      this.fx.push({ t: 'blast', x: c.x, y: c.y, r: M.radius });
+    }
+    this.mines = this.mines.filter((m) => m.age >= 0);
+  }
+
+  /** Rewind (R): back to where the drone was 3 s ago, with the hull it had then (or now, if that is more). */
+  private stepRewind(c: Controls, frozen: boolean) {
+    const d = this.drone, v = this.vitals;
+    if (this.rewindCd > 0) this.rewindCd--;
+    if (frozen) { this.history = []; return; }
+    this.history.push({ x: d.x, y: d.y, integrity: v.integrity });
+    if (this.history.length > Math.round(UP.rewind.backS * HZ)) this.history.shift();
+    if (!this.kit.rewind || this.rewindCd > 0 || !c.pressed.has('rewind') || this.history.length < 2) return;
+    const to = this.history[0];
+    this.dropHeld();
+    this.tethered = null;
+    this.riding = null;
+    this.fx.push({ t: 'rewind', path: this.history.filter((_, i) => i % 6 === 0).map((h) => ({ x: h.x, y: h.y })) });
+    placeDrone(d, to.x, to.y);
+    v.integrity = Math.max(v.integrity, to.integrity);
+    v.iFrames = Math.max(v.iFrames, frames(500));
+    this.history = [];
+    this.rewindCd = Math.round(this.kit.rewind * HZ);
+  }
+
+  /** Cache Pockets (C): put the held block away, or with nothing held take the last one out in front of the drone. */
+  private stepPockets(c: Controls, frozen: boolean) {
+    const n = this.kit.pockets;
+    if (!n || frozen || !c.pressed.has('pocket')) return;
+    const f = this.field;
+    if (f.on && f.held) {
+      const p = f.held;
+      if (this.pocketed.length >= n) { this.fx.push({ t: 'fizzle', x: p.body.position.x, y: p.body.position.y }); return; }
+      this.fx.push({ t: 'pocket', x: p.body.position.x, y: p.body.position.y, out: false });
+      setHeld(p, false);
+      this.field = { on: true, held: null, charge: 0 };
+      removeProp(this.world, p);
+      this.pocketed.push(p);
+      return;
+    }
+    const p = this.pocketed.pop();
+    if (!p) return;
+    const o = this.core(), at = { x: o.x + this.aim.x * T.field.holdDist, y: o.y + this.aim.y * T.field.holdDist };
+    Matter.Body.setPosition(p.body, at);
+    Matter.Body.setVelocity(p.body, { x: 0, y: 0 });
+    Matter.Composite.add(this.world.engine.world, p.body);
+    this.world.props.push(p);
+    if (f.on && !this.heldEnemy) { f.held = p; f.charge = 0; setHeld(p, true); }
+    this.fx.push({ t: 'pocket', x: at.x, y: at.y, out: true });
+  }
+
+  /** NoC Warp (E on a router pad): a fade out, the move to the room's other pad, and a fade in. */
+  private stepWarp(c: Controls, frozen: boolean) {
+    const d = this.drone, F = Math.round(UP.warp.fadeS * HZ);
+    if (this.warpT > 0) {
+      this.warpT++;
+      Matter.Body.setVelocity(d.body, { x: 0, y: 0 });
+      if (this.warpT === F && this.warpTo) { placeDrone(d, this.warpTo.x, this.warpTo.y - d.h / 2 - 1); this.fx.push({ t: 'warp', x: d.x, y: d.y }); }
+      if (this.warpT >= F * 2) { this.warpT = 0; this.warpTo = null; }
+      return;
+    }
+    const pads = this.room.routers ?? [];
+    if (!this.kit.warp || frozen || pads.length < 2 || !c.pressed.has('interact') || !d.grounded) return;
+    const feet = d.y + d.h / 2, on = pads.findIndex((p) => Math.abs(p.x - d.x) <= 26 && Math.abs(p.y - feet) <= 12);
+    if (on < 0) return;
+    this.dropHeld();
+    this.warpTo = pads[(on + 1) % pads.length];
+    this.warpT = 1;
+    this.fx.push({ t: 'warp', x: d.x, y: d.y });
+  }
+
+  /** Is the drone on a router pad it can warp from (for the HUD's E prompt)? */
+  onRouter(): boolean {
+    const d = this.drone, feet = d.y + d.h / 2;
+    return !!this.kit.warp && (this.room.routers ?? []).length > 1 && (this.room.routers ?? []).some((p) => Math.abs(p.x - d.x) <= 26 && Math.abs(p.y - feet) <= 12);
+  }
+
+  /** Agent Pair: the driver shoots the nearest bug in reach; the monitor marks the bug nearest the aim point. */
+  private stepAgents(frozen: boolean) {
+    if (!this.kit.agents || frozen) { this.agentPos = null; this.marked = null; return; }
+    const d = this.drone, A = UP.agents, a = this.loopAngle + Math.PI / 2 + this.steps * ((Math.PI * 2) / (3 * HZ));
+    const at = (k: number) => ({ x: d.x + Math.cos(a + k) * A.orbit, y: d.y - 18 + Math.sin(a + k) * A.orbit * 0.4 });
+    this.agentPos = { driver: at(0), monitor: at(Math.PI) };
+    let mk: Enemy | null = null, md = 200;
+    for (const e of this.enemies) {
+      if (!e.alive) continue;
+      const dist = Math.hypot(e.x - this.aimAt.x, e.y - this.aimAt.y);
+      if (dist < md) { mk = e; md = dist; }
+    }
+    this.marked = mk;
+    this.agentCd -= STEP_MS;
+    if (this.agentCd > 0) return;
+    const p = this.agentPos.driver;
+    let best: Enemy | null = null, bd: number = A.range;
+    for (const e of this.enemies) {
+      if (!e.alive || !e.hittable()) continue;
+      const dist = Math.hypot(e.x - p.x, e.y - p.y);
+      if (dist < bd && this.sight(p, { x: e.x, y: e.y })) { best = e; bd = dist; }
+    }
+    if (!best) { this.agentCd = 0; return; }
+    const ang = Math.atan2(best.y - p.y, best.x - p.x), sp = A.speed / HZ;
+    const s = this.take();
+    Object.assign(s, { x: p.x, y: p.y, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp, left: Math.round((A.range * 1.2 / A.speed) * HZ), damage: A.damage, friendly: true, kind: 'bolt', pierce: 1, knockMul: 0.5, home: 0, reflected: false, dead: false });
+    s.hit.clear();
+    this.shots.push(s);
+    this.fx.push({ t: 'shot', x: p.x, y: p.y, dx: Math.cos(ang), dy: Math.sin(ang), weapon: 'pulse' });
+    this.agentCd = 1000 / A.rate;
+  }
+
+  /** Newton Aim: the angle (radians) to fire a shot of `speed` px/s at so it meets the enemy nearest the aim point
+   * where that enemy will be, from its motion over the last step. Null with no enemy within 160 px of the aim point. */
+  private leadAngle(speed: number): number | null {
+    let best: Enemy | null = null, bd = 160;
+    for (const e of this.enemies) {
+      if (!e.alive || !e.hittable()) continue;
+      const dist = Math.hypot(e.x - this.aimAt.x, e.y - this.aimAt.y);
+      if (dist < bd) { best = e; bd = dist; }
+    }
+    if (!best) return null;
+    const m = this.muzzle(), last = this.lastPos.get(best) ?? { x: best.x, y: best.y };
+    const vx = best.x - last.x, vy = best.y - last.y, sp = speed / HZ;
+    let tx = best.x, ty = best.y;
+    for (let i = 0; i < 3; i++) { const t = Math.hypot(tx - m.x, ty - m.y) / sp; tx = best.x + vx * t; ty = best.y + vy * t; }
+    return Math.atan2(ty - m.y, tx - m.x);
   }
 
   /** Buffer Turret (F): a turret at the drone's feet; the oldest goes when a fourth is set down. */
@@ -805,7 +1042,7 @@ export class Sim {
     const d = this.drone, life = this.kit.turret;
     if (!life) return;
     if (!spend(this.vitals, UP.turret.energy)) { this.fx.push({ t: 'fizzle', x: d.x, y: d.y }); return; }
-    if (this.turrets.length >= UP.turret.max) this.turrets.shift();
+    if (this.turrets.length >= UP.turret.max + (this.kit.templates ? 1 : 0)) this.turrets.shift();
     const t: Turret = { x: d.x, y: d.y + d.h / 2, life: Math.round(life * HZ), cd: 0 };
     this.turrets.push(t);
     this.fx.push({ t: 'turret', x: t.x, y: t.y });
@@ -923,7 +1160,7 @@ export class Sim {
     const d = this.drone;
     if (this.slowCd > 0 || !spend(this.vitals, UP.sync.energy)) { this.fx.push({ t: 'fizzle', x: d.x, y: d.y }); return; }
     this.slowT = Math.round(sec * HZ);
-    this.slowCd = Math.round(UP.sync.cooldownS * HZ);
+    this.slowCd = Math.round(UP.sync.cooldownS * (this.kit.sched ?? 1) * HZ);
     this.fx.push({ t: 'sync', x: d.x, y: d.y });
     for (const e of this.enemies) if (e.alive && Math.abs(e.x - d.x) < 960 && Math.abs(e.y - d.y) < 560) e.resolve?.(this.slowT);
   }
@@ -992,6 +1229,23 @@ export class Sim {
     this.fx.push({ t: 'orb', x, y });
   }
 
+  /** Spawn a bug at the end of this step (boss attacks: the Coverage Holes). */
+  spawnLater(kind: EnemyKind, x: number, y: number) {
+    this.spawned.push(...this.makeEnemies(kind, x, y));
+  }
+
+  /** Friendly shots inside `r` are used up; returns their total damage (the PASS walls). */
+  soakShots(r: Rect): number {
+    let n = 0;
+    for (const s of this.shots) {
+      if (s.dead || !s.friendly || s.x < r.x || s.x > r.x + r.w || s.y < r.y || s.y > r.y + r.h) continue;
+      n += s.damage;
+      s.dead = true;
+      this.fx.push({ t: 'fizzle', x: s.x, y: s.y });
+    }
+    return n;
+  }
+
   /** Hurt the drone if it overlaps `area` (boss attacks and hazards); i-frames and the dash still protect it. */
   hurtIn(area: Rect, n: number) {
     if (this.dying === 0 && overlaps(droneRect(this.drone), area)) this.hurtDrone(n, { x: area.x + area.w / 2, y: area.y + area.h / 2 });
@@ -1012,6 +1266,7 @@ export class Sim {
       spawn: (kind, x, y, opts) => { this.spawned.push(...this.makeEnemies(kind, x, y, opts)); },
       others: () => this.enemies.filter((e) => e.alive),
       lamp: { cone: this.lampCone, scan: this.scanT > 0 ? { x: d.x, y: d.y, r: this.kit.scan ?? 0 } : null },
+      lens: this.kit.lens ? Math.round(this.kit.lens * HZ) : 0,
     };
   }
 
@@ -1141,7 +1396,11 @@ export class Sim {
         if (s.kind !== 'orb') this.lastBoltHit.set(e, this.steps);
         const weakHit = !!this.kit.weak && (CENTRE_WEAK.has(e.kind) ? Math.hypot(s.x - e.x, s.y - e.y) <= 10 : Math.sign(dir.x) === e.facing);
         const scan = this.scanT > 0 && this.scanned.has(e) ? UP.scan.damage : 1;
-        const n = e.damage(Math.round((s.damage + carry) * (weakHit ? this.kit.weak! : 1) * scan), dir);
+        // Monte Carlo Crit doubles one hit in ten; Agent Pair's monitor adds its mark
+        const crit = this.kit.crit && s.kind !== 'orb' && this.rand() < this.kit.crit ? UP.crit.mul : 1;
+        const mark = this.marked === e ? 1 + (this.kit.agents ?? 0) : 1;
+        const n = e.damage(Math.round((s.damage + carry) * (weakHit ? this.kit.weak! : 1) * scan * crit * mark), dir);
+        if (crit > 1) this.fx.push({ t: 'crit', x: s.x, y: s.y });
         s.hit.add(e);
         if (s.kind === 'bolt' && s.knockMul === 1) this.streak++;
         const k = (e.kind === 'latch' ? T.probe.knockHeavy : T.probe.knock) * s.knockMul;
@@ -1237,8 +1496,10 @@ export class Sim {
         const last = prop.hits.get(enemy) ?? -999;
         if (this.steps - last < frames(T.field.propHitCooldownMs)) continue;
         const n = this.throwHit(propDamage(prop.mass, rel), this.thrownProps.has(prop));
+        if (this.thrownProps.has(prop)) enemy.jolt?.();
         if (n <= 0) continue;
         prop.hits.set(enemy, this.steps);
+        enemy.jolt?.();
         const dir = norm({ x: enemy.x - prop.body.position.x, y: enemy.y - prop.body.position.y });
         enemy.damage(n);
         this.fx.push({ t: 'hit', x: (enemy.x + prop.body.position.x) / 2, y: (enemy.y + prop.body.position.y) / 2, dx: dir.x, dy: dir.y, n, armored: false, enemy: true });

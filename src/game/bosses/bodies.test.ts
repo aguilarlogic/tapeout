@@ -7,7 +7,8 @@ import { FORMS_ACT2 } from './forms-act2';
 import type { BodyKind, BodyState } from './types';
 
 const KINDS: BodyKind[] = ['lamps', 'gate', 'chain', 'wheel', 'digit', 'twin', 'stack', 'datapath', 'clocks', 'worm',
-  'cell', 'serpent', 'titan', 'polygon', 'knot', 'sleeper', 'snake', 'transceivers'];
+  'cell', 'serpent', 'titan', 'polygon', 'knot', 'sleeper', 'snake', 'transceivers',
+  'scoreboard', 'ring', 'trio', 'engine', 'window', 'tower', 'mesh', 'hologram'];
 const BOX: Rect = { x: 0, y: 0, w: 520, h: 260 };
 const BASE: BodyState = { t: 0, hp: 1, shielded: false, enraged: false, flash: 0, attack: null, telegraph: 0, lit: [false, false, false, false], away: 0 };
 const STATES: [string, Partial<BodyState>][] = [
