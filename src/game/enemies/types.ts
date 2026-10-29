@@ -2,7 +2,7 @@
 // the Field Coil's push and thrown props move them physically (decision 4); phase 1's Floater and Glitch Spike move
 // themselves.
 import type Matter from 'matter-js';
-import type { Rect } from '../level/room';
+import type { EnemyKind, Rect } from '../level/room';
 import type { Vec } from '../physics/geom';
 
 export interface EnemyCtx {
@@ -18,6 +18,12 @@ export interface EnemyCtx {
   shoot(x: number, y: number, vx: number, vy: number, damage: number): void;
   /** Hurt the drone (it ignores this while invulnerable), knocked away from `from`. */
   hurtDrone(n: number, from: Vec): void;
+  /** Add an enemy to the room (an X-Blob's children). It joins on the next step. */
+  spawn(kind: EnemyKind, x: number, y: number, opts?: { gen?: number; vx?: number; vy?: number }): void;
+  /** The room's other live enemies (an X-Blob marks the ones it touches). */
+  others(): Enemy[];
+  /** The drone's headlamp: on, and when Beam Toggle has it in cone mode, the cone (apex, aim angle, half-angle, reach). */
+  lamp: { cone: { x: number; y: number; a: number; half: number; reach: number } | null };
 }
 
 export interface Enemy {
@@ -36,6 +42,14 @@ export interface Enemy {
   flash: number;
   /** 0..1 while an attack is being telegraphed, else 0. */
   telegraph: number;
+  /** Marked by an X-Blob: +50% HP, drawn in the X colour (phase 3 spec section 6). */
+  xed?: boolean;
+  /** X-Blob generation: 0 splits into two 1s, 1 into two 2s, 2 does not split. */
+  gen?: number;
+  /** Mass for the Inverted Grip (phase 3 spec section 7): 3 or less can be grabbed; absent means too heavy. */
+  gripMass?: number;
+  /** Drawn faint until revealed (the hidden Stuck-At Turret); 0..1, 1 when fully seen. */
+  seen?: number;
   /** Can shots and thrown objects hit it right now? */
   hittable(): boolean;
   /** Does touching it hurt right now, and for how much? 0 means harmless. */

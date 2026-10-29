@@ -4,6 +4,9 @@
 import Matter from 'matter-js';
 import { Glitch, Latch, Spark } from './enemies/bugs';
 import { Floater } from './enemies/floater';
+import './enemies/all';
+import { racerPending } from './enemies/racer';
+import { ENEMY } from './enemies/registry';
 import { GlitchSpike } from './enemies/spike';
 import type { Enemy, EnemyCtx } from './enemies/types';
 import type { EnemyKind, Rect, Room } from './level/room';
@@ -12,6 +15,10 @@ import { addProp, boundsRect, CAT, createWorld, type Prop, removeProp, setHeld, 
 import { type Controls, createDrone, type Drone, droneRect, placeDrone, settleDrone, stepDrone } from './player/drone';
 import { createVitals, hurt, spend, tickVitals } from './player/stats';
 import { DAMAGE, DRONE, EMITTER, frames, HZ, propDamage, STEP_MS, throwSpeed, TUNING, VITALS } from './tuning';
+import { UP } from './world/upgrades';
+
+/** Inverted Grip lifts bugs up to this grip mass. */
+const UP_GRIP = UP.gripMass;
 
 const T = TUNING;
 const deg = Math.PI / 180;
@@ -25,12 +32,14 @@ export interface Shot {
   kind: 'bolt' | 'charged' | 'orb';
   /** Enemies a charged bolt can still pierce. */
   pierce: number;
+  /** Knockback on hit, times the Pulse Probe's (the ALU Cannon hits harder). */
+  knockMul: number;
   hit: Set<Enemy>;
   reflected: boolean;
   dead: boolean;
 }
 
-export type Weapon = 'pulse' | 'charged';
+export type Weapon = 'pulse' | 'charged' | 'fan' | 'cannon';
 export const WEAPONS: Weapon[] = ['pulse', 'charged'];
 
 /** What the Field Coil is doing this step. */
@@ -82,7 +91,31 @@ export interface Kit {
   grabLimit: number;
   /** Carry Shot: a second hit on the same enemy within 0.5 s deals +4. */
   carryShot: boolean;
+  // --- act 1 upgrades (Phase 3 Spec, section 7); left out, the drone works as in Level 1 ---
+  /** Weapons Q, the wheel and the number keys cycle through (Selector). Default: the Pulse Probe, and the Charged
+   * Probe when `charged`. */
+  weapons?: Weapon[];
+  /** Pulse Probe damage (Full-Adder Coupling: 12). */
+  probeDamage?: number;
+  /** Counter Fire: the rate the Pulse Probe climbs to over 4 hits in a row (0 or left out: off). */
+  counterTo?: number;
+  /** Comparator Sight: weak-point multiplier (left out: no weak points, no health bars). */
+  weak?: number;
+  /** Enable Lock: the gun is folded away (quiet rooms). */
+  holster?: boolean;
+  /** Inverted Grip: the Field Coil also grabs enemies of grip mass 3 or less. */
+  gripEnemies?: boolean;
+  /** Field Coil reach (Inverted Grip Mk II: 108). */
+  fieldRadius?: number;
+  /** ALU Cannon damage (Mk II: 48). */
+  cannonDamage?: number;
 }
+
+/** Enemies the sim keeps in its list: the living, and dead Racers their partner can still revive. */
+const kept = (e: Enemy) => e.alive || racerPending(e);
+
+/** Walkers take weak-point hits from behind; these take them near the centre. */
+const CENTRE_WEAK = new Set(['floater', 'stuckat', 'stuckat0', 'xblob']);
 
 /** A shootable story fixture (an X crust, an instrument node, the boss board). Shots that hit one are reported in
  * `targetHits`; the story decides what they do. */
@@ -147,7 +180,22 @@ export class Sim {
   /** Carry Shot: the step each enemy was last hit by a bolt. */
   private lastBoltHit = new Map<Enemy, number>();
 
-  constructor(public room: Room, seed = 1) {
+  /** The act and difficulty enemies are made for (registry kinds scale their HP by both). */
+  make: { act: number; story: boolean } = { act: 1, story: false };
+  /** Beam Toggle's cone, when the headlamp is in cone mode (the story sets it each step). */
+  lampCone: EnemyCtx['lamp']['cone'] = null;
+  /** Enemies added during a step (X-Blob children); they join after it. */
+  private spawned: Enemy[] = [];
+  /** Counter Fire: hits in a row by Pulse bolts (a bolt that expires without a hit resets it). */
+  streak = 0;
+  /** Inverted Grip: the enemy the field holds, and enemies thrown and still flying (they hurt what they hit). */
+  heldEnemy: Enemy | null = null;
+  private thrown = new Map<Enemy, number>();
+  /** The weapons the drone can switch between now. */
+  get weapons(): Weapon[] { return this.kit.weapons ?? (this.kit.charged ? ['pulse', 'charged'] : ['pulse']); }
+
+  constructor(public room: Room, seed = 1, make?: { act: number; story: boolean }) {
+    if (make) this.make = make;
     this.rand = rng(seed);
     this.world = createWorld(room);
     this.drone = createDrone(this.world, room.spawn.x, room.spawn.y);
@@ -163,7 +211,7 @@ export class Sim {
     for (const e of this.enemies) if (e.body) Matter.Composite.remove(this.world.engine.world, e.body);
     this.respawns = [];
     this.enemies = [
-      ...this.room.enemies.map((s) => this.makeEnemy(s.kind, s.x, s.y)),
+      ...this.room.enemies.flatMap((s) => this.makeEnemies(s.kind, s.x, s.y)),
       ...this.room.floaters.map((f) => new Floater(f.x, f.y, { x: f.x, y: f.y }, this.rand)),
       ...this.room.spikes.map((s) => new GlitchSpike(s.x, s.y, s.dir, s.offset)),
     ];
@@ -172,10 +220,25 @@ export class Sim {
   private gravity = () => { const g = this.world.engine.gravity; return g.y * (g.scale ?? 0.001); };
 
   makeEnemy(kind: EnemyKind, x: number, y: number): Enemy {
-    const e = kind === 'glitch' ? new Glitch(x, y) : kind === 'spark' ? new Spark(x, y, this.gravity) : new Latch(x, y);
-    Matter.Composite.add(this.world.engine.world, e.body);
-    (e as unknown as { spawn: Vec }).spawn = { x, y };
-    return e;
+    return this.makeEnemies(kind, x, y)[0];
+  }
+
+  /** The enemies one anchor makes: the test enemies directly, every other kind through the registry. */
+  makeEnemies(kind: EnemyKind, x: number, y: number, opts?: { gen?: number; vx?: number; vy?: number }): Enemy[] {
+    let made: Enemy[];
+    if (kind === 'glitch' || kind === 'spark' || kind === 'latch') made = [kind === 'glitch' ? new Glitch(x, y) : kind === 'spark' ? new Spark(x, y, this.gravity) : new Latch(x, y)];
+    else if (kind === 'floater') made = [new Floater(x, y, { x, y }, this.rand)];
+    else {
+      const entry = ENEMY[kind];
+      if (!entry) throw new Error(`no enemy registered for ${kind}`);
+      const m = entry.make(x, y, { gravity: this.gravity(), rand: this.rand, ...this.make }, opts);
+      made = Array.isArray(m) ? m : [m];
+    }
+    for (const e of made) {
+      if (e.body) Matter.Composite.add(this.world.engine.world, e.body);
+      (e as unknown as { spawn: Vec }).spawn = { x, y };
+    }
+    return made;
   }
 
   get invulnerable() {
@@ -213,10 +276,16 @@ export class Sim {
     const ctl: Controls = { ...c, aim: this.aim };
     const wasGrounded = d.grounded, fallSpeed = d.vy * HZ;
 
-    if (!frozen && this.kit.charged && c.pressed.has('weapon')) {
-      this.weapon = WEAPONS[(WEAPONS.indexOf(this.weapon) + 1) % WEAPONS.length];
-      this.charge = 0;
-      this.fx.push({ t: 'swap', weapon: this.weapon });
+    const ws = this.weapons;
+    if (!ws.includes(this.weapon)) this.weapon = ws[0];
+    if (!frozen && ws.length > 1) {
+      const slot = (['slot1', 'slot2', 'slot3'] as const).findIndex((a) => c.pressed.has(a));
+      const next = c.pressed.has('weapon') ? ws[(ws.indexOf(this.weapon) + 1) % ws.length] : slot >= 0 ? ws[slot] : undefined;
+      if (next && next !== this.weapon) {
+        this.weapon = next;
+        this.charge = 0;
+        this.fx.push({ t: 'swap', weapon: this.weapon });
+      }
     }
 
     const r = stepDrone(d, ctl, this.world, v.energy, frozen);
@@ -226,6 +295,7 @@ export class Sim {
     this.stepField(ctl, frozen);
     const ctx = this.ctx();
     for (const e of this.enemies) e.step(ctx);
+    if (this.spawned.length) { this.enemies.push(...this.spawned); this.spawned = []; }
     stepWorld(this.world);
     settleDrone(d, this.world, this.room);
     if (!wasGrounded && d.grounded && !frozen) { this.events.push('land'); this.fx.push({ t: 'land', x: d.x, y: d.y + d.h / 2, speed: Math.max(0, fallSpeed) }); }
@@ -234,6 +304,7 @@ export class Sim {
     }
 
     this.stepWeapon(ctl, frozen);
+    this.stepThrown();
     this.stepContacts();
     this.stepEmitters();
     this.stepShots();
@@ -296,10 +367,16 @@ export class Sim {
   inField(p: Vec, margin = 0): boolean {
     if (!this.field.on) return false;
     const o = this.core(), dx = p.x - o.x, dy = p.y - o.y, dist = Math.hypot(dx, dy);
-    return dist <= T.field.radius + margin && (dist < 8 || angleTo(this.aim, { x: dx, y: dy }) <= (T.field.arc / 2) * deg);
+    return dist <= (this.kit.fieldRadius ?? T.field.radius) + margin && (dist < 8 || angleTo(this.aim, { x: dx, y: dy }) <= (T.field.arc / 2) * deg);
   }
 
   private dropHeld(vel?: Vec) {
+    const he = this.heldEnemy;
+    if (he?.body) {
+      Matter.Body.setVelocity(he.body, vel ?? { x: 0, y: 0 });
+      if (vel) this.thrown.set(he, this.steps + frames(1500));
+    }
+    this.heldEnemy = null;
     if (this.field.on && this.field.held) {
       const p = this.field.held;
       if (vel) Matter.Body.setVelocity(p.body, vel);
@@ -357,7 +434,39 @@ export class Sim {
         setHeld(best, true);
         this.events.push('grab');
         this.fx.push({ t: 'grab', x: best.body.position.x, y: best.body.position.y });
+      } else if (this.kit.gripEnemies && !this.heldEnemy) {
+        // Inverted Grip: the nearest small bug in the arc
+        let near: Enemy | null = null, nd = Infinity;
+        for (const e of this.enemies) {
+          if (!e.alive || !e.body || (e.gripMass ?? Infinity) > UP_GRIP) continue;
+          const dist = Math.hypot(e.x - o.x, e.y - o.y);
+          if (dist < nd && this.inField(e, 16)) { near = e; nd = dist; }
+        }
+        if (near) {
+          this.heldEnemy = near;
+          f.charge = 0;
+          this.events.push('grab');
+          this.fx.push({ t: 'grab', x: near.x, y: near.y });
+        }
       }
+    }
+    const he = this.heldEnemy;
+    if (he?.body) {
+      if (!he.alive) { this.heldEnemy = null; return; }
+      const b = he.body, target = { x: o.x + this.aim.x * F.holdDist, y: o.y + this.aim.y * F.holdDist };
+      Matter.Body.setVelocity(b, { x: (target.x - b.position.x) * 0.3 + this.drone.vx, y: (target.y - b.position.y) * 0.3 + this.drone.vy });
+      he.knock({ x: 0, y: 0 }); // held bugs are stunned
+      if (c.held.has('fire')) f.charge = Math.min(1, f.charge + 1 / (F.chargeS * HZ));
+      else if (this.fireWasHeld) {
+        const sp = throwSpeed(f.charge) / HZ;
+        this.fx.push({ t: 'throw', x: b.position.x, y: b.position.y, charge: f.charge });
+        this.dropHeld({ x: this.aim.x * sp, y: this.aim.y * sp });
+        this.field = { on: true, held: null, charge: 0 };
+        this.fireCd = 1000 / T.probe.rate;
+        this.fireBuf = 0;
+        this.events.push('throw');
+      }
+      return;
     }
     if (f.held) {
       const p = f.held, b = p.body;
@@ -394,16 +503,24 @@ export class Sim {
     if (this.pool.length < SHOT_POOL) this.pool.push(s);
   }
   private fire(kind: 'bolt' | 'charged') {
-    const m = this.muzzle(), P = kind === 'bolt' ? T.probe : T.charged;
-    const spread = kind === 'bolt' ? (this.rand() * 2 - 1) * T.probe.spread * deg : 0;
-    const a = Math.atan2(this.aim.y, this.aim.x) + spread, sp = P.speed / HZ;
+    if (kind === 'bolt') this.shoot('bolt', (this.rand() * 2 - 1) * T.probe.spread * deg, T.probe.speed, T.probe.life * T.probe.speed, this.kit.probeDamage ?? T.probe.damage, 1, 1, 'pulse');
+    else this.shoot('charged', 0, T.charged.speed, T.charged.range, T.charged.damage, T.charged.pierce, 3, 'charged');
+  }
+  /** One shot from the muzzle: `off` radians off the aim, speed in px/s, range in px. */
+  private shoot(kind: 'bolt' | 'charged', off: number, speed: number, range: number, damage: number, pierce: number, knockMul: number, weapon: Weapon, fx = true) {
+    const m = this.muzzle(), a = Math.atan2(this.aim.y, this.aim.x) + off, sp = speed / HZ;
     const s = this.take();
-    const life = kind === 'bolt' ? Math.round(T.probe.life * HZ) : Math.round((T.charged.range / T.charged.speed) * HZ);
-    Object.assign(s, { x: m.x, y: m.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, left: life, damage: P.damage, friendly: true, kind, pierce: kind === 'charged' ? T.charged.pierce : 1, reflected: false, dead: false });
+    Object.assign(s, { x: m.x, y: m.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, left: Math.round((range / speed) * HZ), damage, friendly: true, kind, pierce, knockMul, reflected: false, dead: false });
     s.hit.clear();
     this.shots.push(s);
+    if (!fx) return;
     this.events.push('shot');
-    this.fx.push({ t: 'shot', x: m.x, y: m.y, dx: Math.cos(a), dy: Math.sin(a), weapon: kind === 'bolt' ? 'pulse' : 'charged' });
+    this.fx.push({ t: 'shot', x: m.x, y: m.y, dx: Math.cos(a), dy: Math.sin(a), weapon });
+  }
+  /** The Pulse Probe's rate now: Counter Fire climbs with hits in a row. */
+  probeRate(): number {
+    const to = this.kit.counterTo;
+    return to ? T.probe.rate + (to - T.probe.rate) * Math.min(this.streak, UP.counter.hits) / UP.counter.hits : T.probe.rate;
   }
 
   private stepWeapon(c: Controls, frozen: boolean) {
@@ -411,12 +528,16 @@ export class Sim {
     const holding = this.field.on && this.field.held;
     this.fireCd -= STEP_MS;
     this.fireBuf = Math.max(0, this.fireBuf - STEP_MS);
-    if (holding || frozen || !this.kit.gun) { this.charge = 0; this.fireWasHeld = held; if (this.fireCd < 0) this.fireCd = 0; return; }
-    if (this.weapon === 'pulse') {
+    if (holding || this.heldEnemy || frozen || !this.kit.gun || this.kit.holster) { this.charge = 0; this.fireWasHeld = held; if (this.fireCd < 0) this.fireCd = 0; return; }
+    if (this.weapon === 'pulse' || this.weapon === 'fan' || this.weapon === 'cannon') {
+      const rate = this.weapon === 'pulse' ? this.probeRate() : this.weapon === 'fan' ? UP.fan.rate : UP.cannon.rate;
       if (pressed) this.fireBuf = T.probe.bufferMs;
       if ((held || this.fireBuf > 0) && this.fireCd <= 0) {
-        this.fire('bolt');
-        this.fireCd += 1000 / T.probe.rate;
+        if (this.weapon === 'pulse') this.fire('bolt');
+        else if (this.weapon === 'fan') for (let i = 0; i < UP.fan.bolts; i++) this.shoot('bolt', (i - 1) * (UP.fan.spreadDeg / 2) * deg, UP.fan.speed, UP.fan.range, UP.fan.damage, 1, 1, 'fan', i === 1);
+        else if (spend(this.vitals, UP.cannon.energy)) this.shoot('charged', 0, UP.cannon.speed, UP.cannon.range, this.kit.cannonDamage ?? UP.cannon.damage, 1, UP.cannon.knock / T.probe.knock, 'cannon');
+        else { const m = this.muzzle(); this.fx.push({ t: 'fizzle', x: m.x, y: m.y }); }
+        this.fireCd += 1000 / rate;
         this.fireBuf = 0;
       }
       if (!held && this.fireCd < 0) this.fireCd = 0;
@@ -438,6 +559,20 @@ export class Sim {
     this.fireWasHeld = held;
   }
 
+  /** An enemy shot (px/s): enemies and boss attacks fire these. */
+  hostileShot(x: number, y: number, vx: number, vy: number, damage: number) {
+    const s = this.take();
+    Object.assign(s, { x, y, vx: vx / HZ, vy: vy / HZ, left: HZ * 4, damage, friendly: false, kind: 'orb', pierce: 1, knockMul: 1, reflected: false, dead: false });
+    s.hit.clear();
+    this.shots.push(s);
+    this.fx.push({ t: 'orb', x, y });
+  }
+
+  /** Hurt the drone if it overlaps `area` (boss attacks and hazards); i-frames and the dash still protect it. */
+  hurtIn(area: Rect, n: number) {
+    if (this.dying === 0 && overlaps(droneRect(this.drone), area)) this.hurtDrone(n, { x: area.x + area.w / 2, y: area.y + area.h / 2 });
+  }
+
   private ctx(): EnemyCtx {
     const d = this.drone;
     return {
@@ -447,14 +582,11 @@ export class Sim {
       solids: this.world.statics,
       plates: this.room.plates,
       sight: (a, b) => this.sight(a, b),
-      shoot: (x, y, vx, vy, damage) => {
-        const s = this.take();
-        Object.assign(s, { x, y, vx: vx / HZ, vy: vy / HZ, left: HZ * 4, damage, friendly: false, kind: 'orb', pierce: 1, reflected: false, dead: false });
-        s.hit.clear();
-        this.shots.push(s);
-        this.fx.push({ t: 'orb', x, y });
-      },
+      shoot: (x, y, vx, vy, damage) => this.hostileShot(x, y, vx, vy, damage),
       hurtDrone: (n, from) => { if (this.dying === 0) this.hurtDrone(n, from); },
+      spawn: (kind, x, y, opts) => { this.spawned.push(...this.makeEnemies(kind, x, y, opts)); },
+      others: () => this.enemies.filter((e) => e.alive),
+      lamp: { cone: this.lampCone },
     };
   }
 
@@ -468,7 +600,7 @@ export class Sim {
     if (this.dying) return;
     const r = droneRect(this.drone);
     for (const e of this.enemies) {
-      const dmg = e.touchDamage();
+      const dmg = e === this.heldEnemy ? 0 : e.touchDamage();
       if (dmg && polyRect(e.outline(), r)) this.hurtDrone(dmg, { x: e.x, y: e.y });
     }
   }
@@ -550,10 +682,12 @@ export class Sim {
         // Carry Shot: a bolt landing within 0.5 s of the last one on the same enemy carries +4
         const carry = this.kit.carryShot && s.kind !== 'orb' && this.steps - (this.lastBoltHit.get(e) ?? -999) <= frames(T.story.carryMs) ? T.story.carryBonus : 0;
         if (s.kind !== 'orb') this.lastBoltHit.set(e, this.steps);
-        const n = e.damage(s.damage + carry, dir);
+        const weakHit = !!this.kit.weak && (CENTRE_WEAK.has(e.kind) ? Math.hypot(s.x - e.x, s.y - e.y) <= 10 : Math.sign(dir.x) === e.facing);
+        const n = e.damage(Math.round((s.damage + carry) * (weakHit ? this.kit.weak! : 1)), dir);
         s.hit.add(e);
-        const k = e.kind === 'latch' ? T.probe.knockHeavy : T.probe.knock;
-        e.knock({ x: dir.x * k * (s.kind === 'charged' ? 3 : 1), y: dir.y * k * (s.kind === 'charged' ? 3 : 1) });
+        if (s.kind === 'bolt' && s.knockMul === 1) this.streak++;
+        const k = (e.kind === 'latch' ? T.probe.knockHeavy : T.probe.knock) * s.knockMul;
+        e.knock({ x: dir.x * k, y: dir.y * k });
         this.fx.push({ t: 'hit', x: s.x, y: s.y, dx: dir.x, dy: dir.y, n, armored, enemy: true });
         this.onEnemyDamaged(e, dir);
         if (s.kind === 'charged' && --s.pierce > 0) { end = false; s.x += dir.x * 2; s.y += dir.y * 2; }
@@ -565,7 +699,10 @@ export class Sim {
         this.fx.push({ t: 'hit', x: s.x, y: s.y, dx: dir.x, dy: dir.y, n: 0, armored: false, enemy: false });
       }
       if (!end) { s.x += s.vx * (1 - t); s.y += s.vy * (1 - t); }
-      if (end || --s.left <= 0) s.dead = true;
+      if (end || --s.left <= 0) {
+        if (!end && s.friendly && s.kind === 'bolt' && !s.hit.size) this.streak = 0; // Counter Fire: a miss resets it
+        s.dead = true;
+      }
     }
     const live: Shot[] = [];
     for (const s of this.shots) (s.dead ? this.free(s) : live.push(s));
@@ -583,6 +720,8 @@ export class Sim {
   private onEnemyDamaged(e: Enemy, dir: Vec) {
     if (e.alive) return;
     this.events.push('kill');
+    // a Racer whose partner can still revive it keeps its body where it fell
+    if (racerPending(e)) { this.fx.push({ t: 'kill', x: e.x, y: e.y, outline: e.outline(), vx: dir.x * 60, vy: dir.y * 60, kind: e.kind }); return; }
     const vel = e.body ? { x: e.body.velocity.x * HZ + dir.x * 120, y: e.body.velocity.y * HZ + dir.y * 120 } : { x: dir.x * 120, y: dir.y * 120 };
     this.fx.push({ t: 'kill', x: e.x, y: e.y, outline: e.outline(), vx: vel.x, vy: vel.y, kind: e.kind });
     if (e.body) {
@@ -614,6 +753,24 @@ export class Sim {
         this.onEnemyDamaged(enemy, dir);
       } else if (prop && !enemy && rel > 260 && prop.kind !== 'debris') {
         this.fx.push({ t: 'thud', x: prop.body.position.x, y: prop.body.position.y, speed: rel });
+      }
+    }
+  }
+  /** Inverted Grip: a thrown bug hurts the first other bug it reaches, and itself, like a thrown crate. */
+  private stepThrown() {
+    for (const [e, until] of this.thrown) {
+      if (!e.alive || !e.body || this.steps > until) { this.thrown.delete(e); continue; }
+      const v = e.body.velocity, speed = Math.hypot(v.x, v.y) * HZ;
+      const other = this.enemies.find((o) => o !== e && o.alive && o.hittable() && Math.hypot(o.x - e.x, o.y - e.y) < 34);
+      if (!other) continue;
+      const n = propDamage(e.gripMass ?? 1, speed);
+      this.thrown.delete(e);
+      if (n <= 0) continue;
+      const dir = norm({ x: other.x - e.x, y: other.y - e.y });
+      for (const hit of [other, e]) {
+        hit.damage(n, dir);
+        this.fx.push({ t: 'hit', x: hit.x, y: hit.y, dx: dir.x, dy: dir.y, n, armored: false, enemy: true });
+        this.onEnemyDamaged(hit, dir);
       }
     }
   }
@@ -672,18 +829,18 @@ export class Sim {
       this.events.push('pit');
     }
     // anything that fell out of the room (a thrown crate through a gap) comes back to its start
-    for (const e of this.enemies) if (e.body && e.y > this.room.h + 200) { e.alive = false; this.onEnemyDamaged(e, { x: 0, y: 1 }); }
+    for (const e of this.enemies) if (e.alive && e.body && e.y > this.room.h + 200) { e.alive = false; this.onEnemyDamaged(e, { x: 0, y: 1 }); }
   }
 
   private stepRespawns() {
     for (const r of this.respawns) {
       if (--r.t > 0) continue;
       const e = this.makeEnemy(r.kind, r.x, r.y);
-      this.enemies = [...this.enemies.filter((x) => x.alive), e];
+      this.enemies = [...this.enemies.filter(kept), e];
       this.fx.push({ t: 'enemyBoot', x: r.x, y: r.y });
     }
     this.respawns = this.respawns.filter((r) => r.t > 0);
-    if (this.enemies.length > 64) this.enemies = this.enemies.filter((e) => e.alive);
+    if (this.enemies.length > 64) this.enemies = this.enemies.filter(kept);
   }
 
   /** Repair the next broken panel (the tuning panel's button; in the story, upgrades do this). */
@@ -716,7 +873,7 @@ export class Sim {
 }
 
 function blankShot(): Shot {
-  return { x: 0, y: 0, vx: 0, vy: 0, left: 0, damage: 0, friendly: true, kind: 'bolt', pierce: 1, hit: new Set(), reflected: false, dead: true };
+  return { x: 0, y: 0, vx: 0, vy: 0, left: 0, damage: 0, friendly: true, kind: 'bolt', pierce: 1, knockMul: 1, hit: new Set(), reflected: false, dead: true };
 }
 
 /** Does a convex polygon overlap a rect? */

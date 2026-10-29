@@ -1,10 +1,12 @@
 // The world's art (polish bar P3): three parallax layers of circuit traces with glow pulses, chip-layout platforms
 // (inner trace pattern, bright top edge, 3 px chamfers), props in amber, the door, plate, pad and target dummy,
-// drifting dust motes and a soft vignette. World coordinates unless a function says otherwise.
+// drifting dust motes, a soft vignette and a faint per-room backdrop motif. World coordinates unless a function says
+// otherwise.
 import type { Rect, Room } from '../level/room';
 import type { Prop } from '../physics/world';
 import { rng, type Sim } from '../sim';
 import { VIEW_H, VIEW_W } from '../tuning';
+import type { BackdropKind } from '../world/types';
 import { FONT, LINE, PAL, rgba } from './palette';
 
 type C = CanvasRenderingContext2D;
@@ -62,9 +64,12 @@ export class WorldArt {
   private motes: { x: number; y: number; vx: number; vy: number; r: number; a: number }[] = [];
   private rand: () => number;
   private vignette: CanvasGradient | null = null;
+  /** The room's backdrop motif, when it has one (composed rooms carry it; Level 1's rooms do not). */
+  private backdrop: BackdropKind | undefined;
 
   constructor(private room: Room, seed = 3) {
     this.rand = rng(seed);
+    this.backdrop = (room as Room & { backdrop?: BackdropKind }).backdrop;
     const r = this.rand;
     this.layers = [
       { f: 0.2, alpha: 0.10, width: 1.5, count: 26 },
@@ -114,6 +119,14 @@ export class WorldArt {
     g.addColorStop(1, PAL.bgDeep);
     c.fillStyle = g;
     c.fillRect(view.x, view.y, view.w, view.h);
+    if (this.backdrop) {
+      // the motif sits at parallax 0.15, drawn in room coordinates like the layers are in theirs
+      const f = 0.15;
+      c.save();
+      c.translate(cam.x * (1 - f), cam.y * (1 - f));
+      this.motif(c, this.backdrop, { x: cam.x * f - 40, y: cam.y * f - 40, w: VIEW_W + 80, h: VIEW_H + 80 });
+      c.restore();
+    }
     for (const L of this.layers) {
       c.save();
       // a layer at factor f moves f px per world px: draw it at world = layer + cam·(1 − f)
@@ -124,6 +137,75 @@ export class WorldArt {
       c.restore();
     }
     this.drawTraces(c, this.roomTraces, view, 0.5, LINE.trace, 1);
+  }
+
+  /** A room's faint motif, in room coordinates and culled to `vis`. Strokes stay at 0.08 alpha or below so they never
+   * fight the foreground; the kinds without a motif draw nothing. */
+  private motif(c: C, kind: BackdropKind, vis: Rect) {
+    const W = this.room.w, H = this.room.h, x0 = Math.max(0, vis.x), x1 = Math.min(W, vis.x + vis.w);
+    c.lineWidth = 1.5;
+    c.lineJoin = 'round';
+    switch (kind) {
+      case 'lamps': { // a row of 8 dim lamps
+        c.strokeStyle = rgba(PAL.amber, 0.08);
+        c.beginPath();
+        for (let i = 0; i < 8; i++) {
+          const x = (W * (i + 0.5)) / 8;
+          c.moveTo(x + 18, H * 0.3);
+          c.arc(x, H * 0.3, 18, 0, Math.PI * 2);
+        }
+        c.stroke();
+        break;
+      }
+      case 'gates': { // big AND and OR gates, alternating
+        c.strokeStyle = rgba(PAL.trace, 0.07);
+        c.beginPath();
+        for (let i = 0; i < 4; i++) gate(c, (W * (i + 0.5)) / 4 - 110, H * 0.55 - 110, 220, i % 2 === 0);
+        c.stroke();
+        break;
+      }
+      case 'carry': { // a chain of arrows along one line
+        const y = H * 0.7;
+        c.strokeStyle = rgba(PAL.trace, 0.07);
+        c.beginPath();
+        c.moveTo(x0, y);
+        c.lineTo(x1, y);
+        for (let x = Math.ceil(x0 / 140) * 140 + 100; x < x1; x += 140) {
+          c.moveTo(x - 10, y - 8);
+          c.lineTo(x, y);
+          c.lineTo(x - 10, y + 8);
+        }
+        c.stroke();
+        break;
+      }
+      case 'clock': { // a square-wave line
+        const hi = H * 0.2 - 14, lo = H * 0.2 + 14;
+        c.strokeStyle = rgba(PAL.trace, 0.08);
+        c.beginPath();
+        c.moveTo(Math.floor(x0 / 80) * 80, lo);
+        for (let x = Math.floor(x0 / 80) * 80; x < x1; x += 80) {
+          c.lineTo(x, hi);
+          c.lineTo(x + 40, hi);
+          c.lineTo(x + 40, lo);
+          c.lineTo(x + 80, lo);
+        }
+        c.stroke();
+        break;
+      }
+      case 'rom': { // a grid of small dots
+        const G = 48;
+        c.fillStyle = rgba(PAL.trace, 0.07);
+        c.beginPath();
+        for (let x = Math.floor(x0 / G) * G; x <= x1; x += G) {
+          for (let y = 0; y <= H; y += G) {
+            c.moveTo(x + 1.5, y);
+            c.arc(x, y, 1.5, 0, Math.PI * 2);
+          }
+        }
+        c.fill();
+        break;
+      }
+    }
   }
 
   private drawTraces(c: C, traces: Trace[], view: Rect, alpha: number, width: number, depth: number) {
@@ -432,6 +514,24 @@ function drawProp(c: C, p: Prop, sim: Sim, t: number) {
   }
   c.restore();
   void t;
+}
+
+/** A logic gate on the path: AND (flat back, round front) or OR (curved back), with its input and output leads. */
+function gate(c: C, x: number, y: number, s: number, and: boolean) {
+  c.moveTo(x, y);
+  if (and) {
+    c.lineTo(x + s / 2, y);
+    c.arc(x + s / 2, y + s / 2, s / 2, -Math.PI / 2, Math.PI / 2);
+    c.lineTo(x, y + s);
+  } else {
+    c.quadraticCurveTo(x + s * 0.4, y + s / 2, x, y + s);
+    c.quadraticCurveTo(x + s * 0.9, y + s * 0.95, x + s, y + s / 2);
+    c.quadraticCurveTo(x + s * 0.9, y + s * 0.05, x, y);
+  }
+  c.closePath();
+  c.moveTo(x - s * 0.3, y + s * 0.3); c.lineTo(x, y + s * 0.3);
+  c.moveTo(x - s * 0.3, y + s * 0.7); c.lineTo(x, y + s * 0.7);
+  c.moveTo(x + s, y + s / 2); c.lineTo(x + s * 1.3, y + s / 2);
 }
 
 /** A rect path with chamfered corners. */

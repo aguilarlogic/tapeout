@@ -278,24 +278,29 @@ export const WORKBENCH: StoryRoom = {
 export const LEVEL1: StoryRoom[] = [DARK_BAY, BIT_WALL, GATE_HALL, LIFT_SHAFT, FLOATER_SHAFT, TWIN_MOTORS, BIT0_CHAMBER, FIRST_FIGHT, BOSS_DOOR, ARENA, WORKBENCH];
 
 // --- The Loft -----------------------------------------------------------------------------------------------------
-const FL = 640;
+// Home base (Phase 3 Spec, section 8). The ground floor keeps Level 1's stations; three one-way steps on the right
+// lead to the upper floor with the Calibration Range, the Patrol Board and a window strip. No enemies, ever.
+const FL = 1040, UPPER = 560;
 export const LOFT: StoryRoom = {
   ...none,
-  id: 'loft', name: 'The Loft', w: 2400, h: 720, music: 'loft', modules: [],
+  id: 'loft', name: 'The Loft', w: 2400, h: 1120, music: 'loft', modules: [],
   spawn: { x: 2260, y: FL - 24 },
-  solids: [...shell(2400, 720, { door: 0 }), r(0, FL - 20, 140, 20)],
+  solids: [...shell(2400, 1120, { door: 0 }), r(0, FL - 20, 140, 20), r(0, UPPER, 1500, 40)],
+  oneWay: [r(1780, FL - 140, 140, 16), r(1620, FL - 280, 140, 16), r(1500, FL - 420, 140, 16)],
   stations: [
     { id: 'archive', kind: 'archive', x: 260, y: FL, label: 'ARCHIVE' },
     { id: 'review', kind: 'review', x: 640, y: FL, label: 'REVIEW DESK' },
-    { id: 'board', kind: 'board', x: 880, y: FL, label: 'CHALKBOARD · VOLTS AND AMPS' },
+    { id: 'board', kind: 'board', x: 880, y: FL, label: 'CHALKBOARD · STUDY' },
     { id: 'map', kind: 'map', x: 1200, y: FL, label: 'CHIP MAP' },
     { id: 'crt', kind: 'crt', x: 1540, y: FL, label: 'OLD DESKTOP' },
     { id: 'arcade', kind: 'arcade', x: 1760, y: FL, label: 'ARCADE' },
     { id: 'interview', kind: 'interview', x: 1980, y: FL, label: 'INTERVIEW ROOM' },
     { id: 'lift', kind: 'lift', x: 2260, y: FL, label: 'LIFT' },
+    { id: 'calib', kind: 'calib', x: 300, y: UPPER, label: 'CALIBRATION RANGE' },
+    { id: 'patrol', kind: 'patrol', x: 900, y: UPPER, label: 'PATROL BOARD' },
   ],
-  props2: [{ kind: 'window', x: 1200, y: 236, w: 760, h: 300 }],
+  props2: [{ kind: 'window', x: 1250, y: 330, w: 420, h: 200 }],
   triggers: [],
-  traces: [trace(0, 600, 560, 20), trace(1600, 2400, 560, 20)],
+  traces: [trace(0, 600, 960, 20), trace(1600, 2400, 960, 20), trace(0, 1500, 480, 20)],
   exit: { x: 99999 },
 };

@@ -1,6 +1,7 @@
 // Story rooms: a Room (geometry, props, enemies) plus what the story hangs on it: wire-run terminals, ports, panels,
 // benches, levers, plates, moving solids, dialogue triggers and the exit. Plain data, in world px (y grows downward).
 import type { Rect, Room } from '../level/room';
+import type { BackdropKind, MechanicKind, RoomRole } from '../world/types';
 
 /** A wire-run terminal: a stand on the floor with one pin of the level's circuit. `pin` is a circuit pin ref
  * ("in.y", "g.a"); `role` says how it is drawn. */
@@ -17,8 +18,8 @@ export interface WireRun {
 }
 
 export type StationKind =
-  | 'port' | 'panel' | 'bench' | 'lever' | 'debug' | 'node'
-  | 'archive' | 'review' | 'board' | 'map' | 'crt' | 'arcade' | 'interview' | 'lift';
+  | 'port' | 'panel' | 'bench' | 'lever' | 'debug' | 'node' | 'gate'
+  | 'archive' | 'review' | 'board' | 'map' | 'crt' | 'arcade' | 'interview' | 'lift' | 'calib' | 'patrol';
 
 /** Something the drone presses E at. `module` is the module it scores, `arg` an instrument reading or a lesson. */
 export interface Station { id: string; kind: StationKind; x: number; y: number; label: string; module?: string; arg?: string }
@@ -51,4 +52,21 @@ export interface StoryRoom extends Room {
   music: Music;
   /** A decorative fixture the art draws: the lamp, the lift sensor, the ALU, the board, the bench rig. */
   props2?: { kind: 'lamp' | 'sensor' | 'alu' | 'board' | 'rig' | 'window' | 'plaque' | 'coilgate'; x: number; y: number; w?: number; h?: number }[];
+  // --- composed places (Phase 3 Spec, section 2); Level 1's rooms leave these out ---
+  /** What the room is for; the director's generic paths key on it. */
+  role?: RoomRole;
+  /** The place id this room belongs to. */
+  place?: string;
+  /** A discovery room's mechanic. */
+  mechanic?: MechanicKind;
+  /** Shootable story fixtures (a discovery room's lamps), by id. */
+  targets?: { id: string; rect: Rect }[];
+  /** The arena's boss body and incident. */
+  boss?: { incident: string; rect: Rect };
+  /** The upgrade a capstone bench grants (drawn on the rig). */
+  upgrade?: string;
+  /** The modules in this room that never lock its exit (annex panels). */
+  optional?: string[];
+  /** The backdrop motif behind the room. */
+  backdrop?: BackdropKind;
 }

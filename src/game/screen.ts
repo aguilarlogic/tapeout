@@ -11,11 +11,16 @@ import { InputDevice } from './input/device';
 import { TEST_ROOM } from './level/testroom';
 import { Director } from './story/director';
 import { gameMount, openCard, openChoice, openLab, openLoft, openPort, openProfile, type OverlayHost } from './story/overlay';
+import { openModule } from './story/open';
+import { levelRecord } from '../state';
+import { calibRows } from './loft/data';
+import { type LoftActions, openLoftPanel } from './loft/panels';
+import { mk2, UPGRADES } from './world/upgrades';
 import { drawBossHud, drawBubble, drawDark, drawExitLift, drawPrompt, drawStoryBack, drawStoryFront } from './story/render';
 import { Loop } from './loop';
 import { pauseMenu } from './pause';
 import { Camera } from './render/camera';
-import { drawAimLine, drawEnemies, drawField, drawShots } from './render/combat';
+import { drawAimLine, drawBeam, drawEnemies, drawField, drawShots } from './render/combat';
 import { DroneRig } from './render/drone';
 import { Fx } from './render/fx';
 import { Hud } from './render/hud';
@@ -392,7 +397,8 @@ export class GameScreen {
           this.hud.syncKit(this.sim);
           break;
         case 'overlay':
-          if (o.kind === 'panel' || o.kind === 'bench') openLab(host, o.kind, o.module, (passed) => st.overlayClosed(o.module, passed));
+          if (o.kind === 'module') openModule(host, o.module, () => {}, (passed) => st.overlayClosed(o.module, passed));
+          else if (o.kind === 'panel' || o.kind === 'bench') openLab(host, o.kind, o.module, (passed) => st.overlayClosed(o.module, passed));
           else openPort(host, o.module, (ok) => { if (ok) st.lampOn(); }, (passed) => st.overlayClosed(o.module, passed));
           break;
         case 'card': openCard(host, o, () => st.cardClosed()); break;
@@ -401,6 +407,10 @@ export class GameScreen {
         case 'loft':
           if (o.station === 'crt') { this.quit(); break; }
           if (o.station === 'interview') break;
+          if (o.station === 'map' || o.station === 'board' || o.station === 'review' || o.station === 'calib' || o.station === 'patrol') {
+            openLoftPanel(host, o.station, this.loftActions(), () => { st.waiting = false; });
+            break;
+          }
           openLoft(host, o.station, {
             log: st.world.heard,
             openLesson: (id) => { st.waiting = true; openPort(host, id, () => {}, (passed) => st.overlayClosed(id, passed)); },
@@ -409,6 +419,22 @@ export class GameScreen {
           break;
       }
     }
+  }
+
+  /** What the Loft's panels can do: open a module at its station's window, ride to a place, run the Daily Mix. */
+  private loftActions(): LoftActions {
+    const st = this.story!, host = this.host, done = (id: string) => !!levelRecord(id);
+    return {
+      openModule: (id) => { st.waiting = true; openModule(host, id, () => {}, (passed) => st.overlayClosed(id, passed)); },
+      go: (place) => st.go(place, 0),
+      openMix: () => { st.waiting = true; openPort(host, 'mix', () => {}, () => { st.waiting = false; st.applyKit(true); }, { label: 'DAILY MIX', practice: true }); },
+      mk2: (chapter) => {
+        const ids = calibRows(done).find((r) => r.chapter === chapter)?.banks.map((b) => b.id) ?? [];
+        const u = UPGRADES.find((x) => x.mk2?.banks.some((b) => ids.includes(b)));
+        const m = u ? mk2(u.id, done) : null;
+        return u && m ? { name: u.name, ...m } : null;
+      },
+    };
   }
 
   /** For the recorder and tests: the arcade's frame inside the game. */
@@ -452,6 +478,7 @@ export class GameScreen {
     this.art.drawProps(c, sim, t);
     if (st) drawStoryFront(c, st, t, { x: dx + sim.drone.facing * 12, y: dy - 4 });
     drawEnemies(c, sim, t, reducedFlash);
+    drawBeam(c, sim, t);
     const core = { x: dx, y: dy - sim.drone.h / 2 + 13 };
     const emitter = { x: dx - sim.drone.facing * 9, y: core.y - 1 };
     drawField(c, sim, core.x, core.y, emitter.x, emitter.y, t, this.fieldPower);

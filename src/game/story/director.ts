@@ -1,8 +1,12 @@
-// The story director: runs Level 1 room by room around the Sim. It owns the room's story state (wires, plates,
-// doors, the lift, the bridge, lamps, lights), TAPEOUT's lines, the E key, rewards, room transitions, the save node and
-// the boss. The Sim stays the physics and combat it was; the director sets its kit and reads its target hits.
+// The story director: runs the story room by room around the Sim: Level 1's hand-built rooms, the Loft, and every
+// composed place (Phase 3 Spec, section 2), whose rooms it runs by their role, never by their id. It owns the room's
+// story state (wires, plates, doors, the lift, the bridge, lamps, lights, discovery puzzles), TAPEOUT's lines, the E key,
+// rewards and upgrades, room transitions, the save node and the bosses. The Sim stays the physics and combat it was;
+// the director sets its kit and reads its target hits.
 // No DOM in here: overlays and sound leave as `out` records the game screen turns into windows and noise.
 import Matter from 'matter-js';
+import { recommended } from '../../curriculum';
+import { findIncident } from '../../incidents';
 import { award } from '../../mastery/promotion';
 import { levelRecord, load, prefs, profile } from '../../state';
 import { recordLabFirstWire, recordLabTest } from '../../steplog';
@@ -13,9 +17,20 @@ import { addMover, boundsRect, type Mover, moveMover, setPresent } from '../phys
 import { droneRect } from '../player/drone';
 import { Sim } from '../sim';
 import { frames, HZ, TUNING } from '../tuning';
+import { FormRun } from '../bosses/form';
+import { formFor } from '../bosses/forms-act1';
+import type { AttackCtx } from '../bosses/types';
+import { liftChoices } from '../loft/data';
+import { rngFor, roomsOf, themeOf } from '../world/compose';
+import { MECHANICS } from '../world/mechanics';
+import { PLACES, placeById, placeOf } from '../world/places';
+import { STORY } from '../world/story';
+import type { MechanicDef, PlaceTheme } from '../world/types';
+import { type ActKit, actKit, UP, upgradeFor } from '../world/upgrades';
+import { racerPending } from '../enemies/racer';
 import { BossFight } from './boss';
 import { LEVEL1, LOFT } from './level1';
-import { blankWorld, kitFor, LOG_CAP, loadWorld, PANEL_NAMES, type Place, saveWorld, type StoryKit, startFor, type WorldSave } from './progress';
+import { blankWorld, kitFor, LOG_CAP, loadWorld, nodeIn, PANEL_NAMES, type Place, type PlaceSave, saveWorld, type StoryKit, startFor, type WorldSave } from './progress';
 import { BOOT_COLD, BOOT_PARTIAL, LINES, PARTIAL_LINES } from './script';
 import type { Music, Station, StationKind, StoryRoom, Terminal } from './types';
 import { combos } from '../../games/logic/circuit';
@@ -25,12 +40,13 @@ const S = TUNING.story;
 
 export type StorySfx =
   | 'wireGrab' | 'wirePlug' | 'wireSnap' | 'rowTick' | 'pass' | 'notYet' | 'spark' | 'lever' | 'plate' | 'liftHum'
-  | 'portOpen' | 'bossPhase' | 'fanfare' | 'chirp' | 'door' | 'crack' | 'shatter' | 'lightsOn' | 'reading';
+  | 'portOpen' | 'bossPhase' | 'fanfare' | 'chirp' | 'door' | 'crack' | 'shatter' | 'lightsOn' | 'reading'
+  | 'turret' | 'laser' | 'bossDrop' | 'chain' | 'freeze' | 'mirror' | 'beam' | 'repair';
 
 export type StoryOut =
   | { t: 'sfx'; name: StorySfx; gain?: number }
-  | { t: 'overlay'; kind: 'port' | 'panel' | 'bench' | 'study'; module: string }
-  | { t: 'choose'; kind: 'cause' | 'fix' | 'loftLift' | 'guard'; title: string; options: { text: string; dim?: boolean }[] }
+  | { t: 'overlay'; kind: 'port' | 'panel' | 'bench' | 'study' | 'module'; module: string }
+  | { t: 'choose'; kind: Choice; title: string; options: { text: string; dim?: boolean }[] }
   | { t: 'card'; kind: 'pager' | 'upgrade' | 'debrief' | 'info'; title: string; lines: string[]; stars?: number; button?: string }
   | { t: 'loft'; station: StationKind }
   | { t: 'profile' }
@@ -38,6 +54,15 @@ export type StoryOut =
   | { t: 'shake'; px: number; ms: number }
   | { t: 'shatter'; rect: Rect }
   | { t: 'enter' };
+
+export type Choice = 'cause' | 'fix' | 'loftLift' | 'guard' | 'node';
+
+/** Rooms where Enable Lock folds the gun away. */
+const QUIET = new Set(['port', 'panel', 'annex', 'bench', 'gate']);
+/** The main-path bosses after the Dark Demo Board: each one beaten adds integrity. */
+const ACT_BOSSES = PLACES.filter((p) => p.kind === 'main' && p.id !== 'bit-zero').flatMap((p) => p.bosses);
+/** Steps a boss door with no checkpoint waits before it opens. */
+const DOOR_WAIT_MS = 1200;
 
 /** One wire on the floor, between two terminal pins. */
 interface RoomState {
@@ -67,16 +92,23 @@ interface RoomState {
   cleared: boolean;
   fired: Set<string>;
   t: number; // steps in this room
+  /** Composed rooms: the discovery puzzle running here. */
+  mech: { def: MechanicDef<unknown>; state: unknown; solved: boolean; used: string | null; hits: string[]; nudged: boolean } | null;
+  /** Step a module in this room passed (the traces power up and a pulse runs to the door), or -1. */
+  powered: number;
+  /** Step the capstone's part started flying into the drone, or -1. */
+  partFly: number;
 }
 
 export interface Bubble { text: string; age: number }
 export interface Prompt { x: number; y: number; text: string }
 
-type Cut = { kind: 'boot'; lines: string[]; t: number; then: string[] } | { kind: 'exitLift'; t: number } | null;
+type Cut = { kind: 'boot'; lines: string[]; t: number; then: string[] } | { kind: 'exitLift'; t: number; x: number } | null;
 
 /** Height of each station's name label above its foot, in px (as drawn in render.ts). */
 const STATION_TOP: Record<string, number> = {
   port: 184, panel: 224, bench: 130, lever: 120, node: 84, debug: 102, board: 264, map: 216, archive: 236, interview: 236, arcade: 236, lift: 236,
+  gate: 184, calib: 236, patrol: 236,
 };
 
 export class Director {
@@ -87,7 +119,18 @@ export class Director {
   rs!: RoomState;
   world: WorldSave;
   kit!: StoryKit;
+  /** What act 1's upgrades add (from records). */
+  act!: ActKit;
   boss: BossFight | null = null;
+  /** A composed arena's boss body and its attacks. */
+  form: FormRun | null = null;
+  private rng: () => number = rngFor(1);
+  /** The places on the Loft lift's card, in order (the last option is "Stay in the Loft"). */
+  private liftOpts: { place: string; text: string; dim: boolean }[] = [];
+  /** The node whose argument card is open. */
+  private nodeCmd: string | null = null;
+  /** Beam Toggle: the headlamp is in its long cone. */
+  beamOn = false;
   out: StoryOut[] = [];
   bubble: Bubble | null = null;
   private queue: string[] = [];
@@ -107,35 +150,55 @@ export class Director {
     this.seed = seed;
     const done = (id: string) => !!levelRecord(id);
     const w = loadWorld(store);
-    const start = startFor(w, done, Object.keys(load().levels).some((k) => !k.startsWith('mini.')));
+    const start = startFor(w, done, Object.keys(load().levels).some((k) => !k.startsWith('mini.')), Director.beyond(done));
     this.world = w ?? blankWorld();
     let lines: string[] = [];
     if (start.kind === 'cold') this.bootLines = BOOT_COLD;
     else if (start.kind === 'migrate') {
       this.bootLines = BOOT_PARTIAL;
       this.world.at = start.at;
-      for (const d of start.discoveries) this.discover(d);
+      for (const d of start.discoveries) this.discover(d, start.at.place);
       lines = PARTIAL_LINES;
     } else this.bootLines = [];
     const at = this.world.at;
-    this.enter(at.place, at.place === 'loft' ? 0 : Math.min(at.room, LEVEL1.length - 1));
+    this.enter(at.place, at.room);
     if (lines.length) this.say(...lines);
     if (!profile()) this.out.push({ t: 'profile' });
   }
 
+  /**
+   * Where a player past Level 1 with no world save wakes (Phase 3 Spec, section 9): the act 1 place holding their next
+   * module, after its last finished room, with the discoveries before it. Later places wait for their phases: the Loft.
+   */
+  static beyond(done: (id: string) => boolean): { place: string; room: number; discoveries: string[] } | undefined {
+    const next = recommended(), p = next ? placeOf(next.id) : undefined;
+    if (!p || p.kind !== 'main' || p.act !== 1 || p.id === 'bit-zero') return undefined;
+    const rooms = roomsOf(p.id), room = nodeIn(rooms, done);
+    return { place: p.id, room, discoveries: rooms.slice(0, room).flatMap((r) => (r.mechanic ? [`${p.id}:${r.mechanic}`] : [])) };
+  }
+
   // --- the save ---
   private save() { saveWorld(this.world, this.store); }
-  discover(id: string) {
-    const d = this.world.places['bit-zero'].discoveries;
+  /** A place's saved state (the Loft shares Level 1's, where its one discovery lives). */
+  private ps(place: Place = this.place): PlaceSave {
+    const k = place === 'loft' ? 'bit-zero' : place;
+    return (this.world.places[k] ??= { discoveries: [], cleared: [] });
+  }
+  discover(id: string, place: Place = this.place) {
+    const d = this.ps(place).discoveries;
     if (!d.includes(id)) { d.push(id); this.save(); }
   }
-  private has(id: string) { return this.world.places['bit-zero'].discoveries.includes(id); }
+  private has(id: string) { return this.ps().discoveries.includes(id); }
   private clear(id: string) {
-    const c = this.world.places['bit-zero'].cleared;
+    const c = this.ps().cleared;
     if (!c.includes(id)) { c.push(id); this.save(); }
   }
-  private cleared(id: string) { return this.world.places['bit-zero'].cleared.includes(id); }
+  private cleared(id: string) { return this.ps().cleared.includes(id); }
   private done = (id: string) => !!levelRecord(id);
+  /** The rooms of a place. */
+  roomsFor(place: Place): StoryRoom[] { return place === 'loft' ? [LOFT] : place === 'bit-zero' ? LEVEL1 : roomsOf(place); }
+  /** The place's theme (lines, music), for composed places. */
+  get theme(): PlaceTheme | undefined { const p = placeById(this.place); return p && p.id !== 'bit-zero' ? themeOf(p) : undefined; }
 
   /** Difficulty from prefs, or from the profile (new and student players start on Story). */
   static difficulty(): 'story' | 'standard' {
@@ -174,49 +237,64 @@ export class Director {
   // --- rooms ---
   /** Load a room: a fresh Sim, the kit from records, story solids, and whatever is already solved. */
   enter(place: Place, index: number) {
+    const rooms = this.roomsFor(place);
     this.place = place;
-    this.index = index;
-    this.room = place === 'loft' ? LOFT : LEVEL1[index];
+    this.index = Math.max(0, Math.min(index, rooms.length - 1));
+    this.room = rooms[this.index];
     const room = this.room;
     // lines belong to their room: a new room starts quiet
     this.queue = [];
     this.bubble = null;
-    this.sim = new Sim(room, (this.seed = (this.seed * 1664525 + 1013904223) >>> 0));
+    this.form = null;
+    this.sim = new Sim(room, (this.seed = (this.seed * 1664525 + 1013904223) >>> 0), { act: placeById(place)?.act ?? 1, story: Director.difficulty() === 'story' });
     this.sim.respawnEnemies = room.id === 'arena';
     this.sim.panels = [false, false, false, false, false, false];
     const rs: RoomState = {
       wires: [], carrying: null, check: { state: 'open' }, strip: null, spark: 0, passed: false, attempts: 0, firstWire: false,
       openedAt: Date.now(), hintStage: 0, sinceTry: 0, ghost: null, light: room.dark ? 0 : 1, lightTo: room.dark ? 0 : 1,
       gates: new Map(), plateT: 0, latched: false, nudged: false, lamps: 0, levers: {}, lift: 0, bridge: 0, cleared: false,
-      fired: new Set(), t: 0,
+      fired: new Set(), t: 0, mech: null, powered: -1, partFly: -1,
     };
     this.rs = rs;
     for (const g of room.gates) {
       const m = addMover(this.sim.world, g.id, g.rect, g.kind !== 'bridge');
       rs.gates.set(g.id, { m, open: 0, opening: false, hp: g.kind === 'crust' ? S.crustHp : 0 });
     }
-    this.sim.targets = room.gates.filter((g) => g.kind === 'crust').map((g) => ({ id: g.id, rect: g.rect, active: true }));
+    this.sim.targets = [
+      ...room.gates.filter((g) => g.kind === 'crust').map((g) => ({ id: g.id, rect: g.rect, active: true })),
+      ...(room.targets ?? []).map((t) => ({ id: t.id, rect: t.rect, active: true })),
+    ];
+    if (room.mechanic) { const def = MECHANICS[room.mechanic]; rs.mech = { def, state: def.init(), solved: false, used: null, hits: [], nudged: false }; }
     for (const st of room.stations) if (st.kind === 'lever') rs.levers[st.id] = false;
     this.applyKit();
     this.applyPrefs();
     this.restore();
-    if (place === 'bit-zero') { this.world.at = { place, room: index }; this.save(); }
-    else { this.world.at = { place: 'loft', room: 0 }; this.save(); }
+    this.world.at = place === 'loft' ? { place: 'loft', room: 0 } : { place, room: this.index };
+    this.save();
     this.boss = null;
-    if (room.id === 'arena') this.startBoss();
+    if (room.id === 'arena' || room.role === 'arena') this.startBoss();
     this.out.push({ t: 'enter' }, { t: 'music', track: room.music });
   }
 
   /** The drone's kit from records: what it can do, and how it looks. */
   applyKit(announce = false) {
-    const k = kitFor(this.done, this.world.places['bit-zero'].discoveries, this.world.cutscenes);
+    const k = kitFor(this.done, this.ps('bit-zero').discoveries, this.world.cutscenes);
+    const a = actKit(this.done, ACT_BOSSES);
     const before = this.kit;
     this.kit = k;
+    this.act = a;
     const s = this.sim;
-    s.kit = { gun: k.gun, coil: k.coil, charged: false, grabLimit: k.grabLimit, carryShot: k.carryShot };
-    s.drone.abilities = { doubleJump: false, wallLatch: false };
+    s.kit = {
+      gun: k.gun, coil: k.coil, charged: false, grabLimit: k.grabLimit, carryShot: k.carryShot,
+      weapons: a.weapons, probeDamage: a.probeDamage, cannonDamage: a.cannonDamage, counterTo: a.counterTo, weak: a.weak || undefined,
+      holster: a.holster && QUIET.has(this.room.role ?? ''), gripEnemies: a.gripEnemies, fieldRadius: a.fieldRadius,
+    };
+    s.drone.abilities = { doubleJump: a.doubleJump, wallLatch: a.wallLatch, ...(a.doubleJump ? { jump2: a.jump2 / HZ } : {}) };
+    if (!a.beam) this.beamOn = false;
     const v = s.vitals;
-    if (v.maxIntegrity !== k.maxIntegrity) { const up = k.maxIntegrity - v.maxIntegrity; v.maxIntegrity = k.maxIntegrity; if (up > 0) v.integrity += up; }
+    const maxI = Math.min(UP.integrityCap, k.maxIntegrity + a.integrityBonus);
+    if (v.maxIntegrity !== maxI) { const up = maxI - v.maxIntegrity; v.maxIntegrity = maxI; if (up > 0) v.integrity += up; }
+    if (v.maxEnergy !== a.energyMax) { const up = a.energyMax - v.maxEnergy; v.maxEnergy = a.energyMax; if (up > 0) v.energy += up; }
     k.panels.forEach((on, i) => {
       if (on && !s.panels[i]) {
         s.panels[i] = true;
@@ -259,7 +337,26 @@ export class Director {
         rs.passed = passed;
         break;
     }
+    if (room.role) this.restoreRole();
     if (rs.passed) rs.check = { state: 'pass', verdict: { ok: true, rows: [], errors: [], count: 0 } };
+  }
+
+  /** Composed rooms on entry: open what is already done (Phase 3 Spec, section 2). */
+  private restoreRole() {
+    const room = this.room, rs = this.rs;
+    const scored = room.modules.filter((m) => !room.optional?.includes(m));
+    if (scored.length && scored.every(this.done)) { rs.passed = true; this.openGate('door', true); }
+    if (room.role === 'annex') rs.passed = true;
+    if (room.role === 'fight' && this.cleared(room.id)) {
+      rs.cleared = true;
+      this.openGate('door', true);
+      for (const e of this.sim.enemies) e.alive = false;
+      this.sim.enemies = [];
+    }
+    if (room.role === 'discovery' && room.mechanic && this.has(`${this.place}:${room.mechanic}`)) {
+      rs.mech!.solved = true;
+      this.openGate('exit', true);
+    }
   }
 
   /** Start the next room with a fade (the drone walked out, or a lift arrived). */
@@ -270,8 +367,17 @@ export class Director {
   }
 
   private startBoss() {
-    if (this.done('inc-demo-board')) { this.openGate('door', true); this.sim.enemies = []; return; }
-    this.boss = new BossFight(Director.difficulty() === 'story', this.seed);
+    const spec = this.room.boss;
+    const inc = spec ? findIncident(spec.incident) : undefined;
+    if (this.done(inc?.id ?? 'inc-demo-board')) { this.openGate('door', true); this.sim.enemies = []; return; }
+    const story = Director.difficulty() === 'story';
+    if (spec && inc) {
+      // a composed arena: health grows 50 a level after the board's 400; the body fights back
+      const n = PLACES.filter((p) => p.kind === 'main').findIndex((p) => p.id === this.place) + 1;
+      this.boss = new BossFight(story, this.seed, undefined, inc, 400 + 50 * (Math.max(1, n) - 1));
+      this.form = new FormRun(formFor(inc.id), spec.rect, story);
+      this.rng = rngFor(this.seed);
+    } else this.boss = new BossFight(story, this.seed);
     this.sim.targets.push({ id: 'board', rect: this.boardRect(), active: false });
     // shooting a node takes its reading, the same as E beside it
     for (const st of this.room.stations) if (st.kind === 'node') this.sim.targets.push({ id: `node:${st.arg}`, rect: { x: st.x - 16, y: st.y - 74, w: 32, h: 56 }, active: true });
@@ -280,6 +386,7 @@ export class Director {
   }
 
   boardRect(): Rect {
+    if (this.room.boss) return { ...this.room.boss.rect };
     const b = this.room.props2!.find((p) => p.kind === 'board')!;
     return { x: b.x - b.w! / 2, y: b.y - b.h! / 2, w: b.w!, h: b.h! };
   }
@@ -292,6 +399,14 @@ export class Director {
     if (instant) { g.open = 1; setPresent(this.sim.world, g.m, false); return; }
     this.out.push({ t: 'sfx', name: 'door' }, { t: 'shake', px: 2, ms: 300 });
   }
+  /** Shut a door again (the discovery puzzles' doors open and close). */
+  closeGate(id: string) {
+    const g = this.rs.gates.get(id);
+    if (!g || !g.opening) return;
+    g.opening = false;
+    setPresent(this.sim.world, g.m, true);
+    this.out.push({ t: 'sfx', name: 'door', gain: 0.5 });
+  }
   private removeGate(id: string) {
     const g = this.rs.gates.get(id);
     if (!g) return;
@@ -303,8 +418,11 @@ export class Director {
   private stepGates() {
     for (const [id, g] of this.rs.gates) {
       const kind = this.room.gates.find((x) => x.id === id)!.kind;
-      if (kind === 'bridge' || kind === 'lift' || kind === 'crust' || !g.opening || g.open >= 1) continue;
-      g.open = Math.min(1, g.open + 1 / frames(kind === 'shutter' ? S.shutterMs : S.doorMs));
+      if (kind === 'bridge' || kind === 'lift' || kind === 'crust') continue;
+      const to = g.opening ? 1 : 0;
+      if (g.open === to) continue;
+      const v = 1 / frames(kind === 'shutter' ? S.shutterMs : S.doorMs);
+      g.open = to > g.open ? Math.min(1, g.open + v) : Math.max(0, g.open - v);
       const k = 1 - (1 - g.open) ** 3;
       moveMover(g.m, g.m.home.x, g.m.home.y - g.m.home.h * k);
       if (g.open >= 1) setPresent(this.sim.world, g.m, false);
@@ -327,6 +445,7 @@ export class Director {
     }
     if (this.cut || this.waiting || !this.live) return blank;
     if (input.pressed.has('interact')) this.interact();
+    if (input.pressed.has('beam') && this.act.beam) { this.beamOn = !this.beamOn; this.out.push({ t: 'sfx', name: 'beam', gain: 0.5 }); }
     if (prefs().autoFire && this.sim.kit.gun && !input.held.has('field')) input.held.add('fire');
     return input;
   }
@@ -346,8 +465,34 @@ export class Director {
     this.stepRoom();
     this.stepTargets();
     this.boss?.step();
+    this.stepForm();
+    this.stepBeam();
     this.updatePrompt();
     this.checkExit();
+  }
+
+  /** A composed boss's body attacks while the fight is on (held while a card is open or before the pager closes). */
+  private stepForm() {
+    const f = this.form, b = this.boss, room = this.room;
+    if (!f || !b || !room.boss) return;
+    const s = this.sim;
+    const c: AttackCtx = {
+      rand: this.rng, story: Director.difficulty() === 'story', drone: droneRect(s.drone), trail: f.trail,
+      arena: { x: 0, y: 0, w: room.w, h: room.h }, boss: room.boss.rect, floors: [...room.solids, ...room.oneWay],
+      shoot: (x, y, vx, vy, n) => s.hostileShot(x, y, vx, vy, n),
+      hurt: (r, n) => s.hurtIn(r, n),
+      hazard: (r, ms, n) => f.hazard(r, ms, n),
+      sfx: (n) => this.out.push({ t: 'sfx', name: n === 'drop' ? 'bossDrop' : n, gain: 0.8 }),
+    };
+    f.step(c, b.phase === 'finish' ? 'finish' : b.enraged > 0 ? 'enraged' : 'calm', this.waiting || b.phase === 'pager' || b.phase === 'done');
+  }
+
+  /** Beam Toggle: the headlamp's long cone follows the aim. */
+  private stepBeam() {
+    const s = this.sim;
+    if (!this.beamOn) { s.lampCone = null; return; }
+    const p = s.pivot();
+    s.lampCone = { x: p.x, y: p.y, a: Math.atan2(s.aim.y, s.aim.x), half: (UP.beam.halfDeg * Math.PI) / 180, reach: UP.beam.reach };
   }
 
   private stepTriggers() {
@@ -379,7 +524,7 @@ export class Director {
     if (this.boss && this.boss.phase === 'pager') {
       this.boss.phase = 'investigate';
       this.out.push({ t: 'sfx', name: 'bossPhase' });
-      this.say(LINES.pager, LINES.readings);
+      this.say(this.bl('pager'), this.bl('readings'), ...(this.room.role ? this.theme?.lines.bossIntro ?? [] : []));
     }
   }
 
@@ -392,7 +537,7 @@ export class Director {
     if (run && !this.rs.passed && !this.rs.strip) for (const term of run.terminals) if (near(term.x, term.y)) out.push({ t: 'terminal', term, dx: Math.abs(term.x - d.x) });
     for (const st of this.room.stations) {
       if (!near(st.x, st.y)) continue;
-      if (st.kind === 'lever' && !this.rs.passed) continue; // until the check passes, the lever's spot is a terminal
+      if (st.kind === 'lever' && !this.rs.passed && !this.room.mechanic) continue; // until the check passes, the lever's spot is a terminal
       if (st.kind === 'node' && (!this.boss || this.boss.phase !== 'investigate')) continue;
       if (st.kind === 'debug' && (!this.boss || this.boss.phase !== 'investigate')) continue;
       if (st.kind === 'lift' && this.room.id === 'workbench' && !this.done('half-adder-v')) continue;
@@ -528,6 +673,7 @@ export class Director {
   reward(module: string) {
     const rs = this.rs;
     this.applyKit(true);
+    if (this.room.role) { this.rewardRole(module); return; }
     const panel = ['first-wire', 'first-not', 'first-and', 'logic-half', 'inc-demo-board', 'half-adder-v'].indexOf(module);
     if (panel >= 0) this.out.push({ t: 'sfx', name: 'fanfare', gain: 0.8 });
     switch (module) {
@@ -574,9 +720,35 @@ export class Director {
     }
   }
 
+  /** A composed room's module passed: its line, the door when every scored module is in, the upgrade card. */
+  private rewardRole(module: string) {
+    const rs = this.rs, room = this.room;
+    const st = room.stations.find((s) => s.module === module);
+    const line = st?.kind === 'gate' ? STORY.gatePass : st?.kind === 'bench' ? STORY.benchPass : st?.kind === 'panel' ? STORY.panelPass : STORY.portPass;
+    this.say(line);
+    const scored = room.modules.filter((m) => !room.optional?.includes(m));
+    if (!rs.passed && scored.length && scored.every(this.done)) {
+      rs.passed = true;
+      rs.powered = rs.t;
+      this.openGate('door');
+    }
+    const u = upgradeFor(module);
+    if (!u) return;
+    if (room.upgrade === u.id) rs.partFly = rs.t;
+    const plates = u.id === 'nand-plating' ? u.source.filter(this.done).length : 0;
+    this.out.push({ t: 'sfx', name: 'fanfare', gain: 0.8 });
+    this.card('upgrade', u.name.toUpperCase(), [
+      u.effect,
+      ...(plates ? [`Plate ${plates} of ${u.source.length}.`] : []),
+      ...(this.theme?.lines.rooms[`upgrade:${u.id}`] ?? [STORY.upgradeGeneric]).slice(0, 1),
+      `Repaired: ${placeById(this.place)?.region ?? 'the chip'}.`,
+    ]);
+  }
+
   // --- room mechanics ---
   private stepRoom() {
     const rs = this.rs, d = this.sim.drone, room = this.room;
+    if (room.role) { this.stepRole(); return; }
     switch (room.id) {
       case 'gate-hall': {
         if (rs.latched) break;
@@ -642,6 +814,60 @@ export class Director {
   plates: boolean[] = [];
   liftOccupied = false;
 
+  /** Composed rooms, by role: fights clear, boss doors open, puzzles run. */
+  private stepRole() {
+    const rs = this.rs, room = this.room;
+    if (room.role === 'bossdoor' && !room.modules.length && rs.t === frames(DOOR_WAIT_MS)) this.openGate('door');
+    if (room.role === 'fight' && !rs.cleared) {
+      const foes = this.sim.enemies.filter((e) => e.kind !== 'spike');
+      if (foes.length && foes.every((e) => !e.alive && !racerPending(e))) {
+        rs.cleared = true;
+        this.clear(room.id);
+        this.openGate('door');
+        const lines = this.theme?.lines.clear ?? STORY.fightClear;
+        this.say(lines[rs.t % lines.length]);
+      }
+    }
+    const m = rs.mech;
+    if (m && !m.solved) {
+      m.def.step(m.state, this.mechCtx(m));
+      m.used = null;
+      m.hits = [];
+      if (!m.solved && !m.nudged && rs.t > frames(S.nudgeS * 1000)) { m.nudged = true; this.say(m.def.nudge); }
+    }
+  }
+
+  /** What a discovery puzzle sees and can do this step. */
+  private mechCtx(m: NonNullable<RoomState['mech']>) {
+    const d = this.sim.drone, rs = this.rs;
+    const gate = (id: string) => rs.gates.get(id);
+    return {
+      t: rs.t, story: Director.difficulty() === 'story', drone: droneRect(d), grounded: d.grounded,
+      props: this.sim.world.props.filter((p) => !p.held && p.kind !== 'debris').map((p) => boundsRect(p.body)),
+      used: m.used, hit: m.hits,
+      rect: (id: string) => ({ ...(gate(id)?.m.rect ?? { x: 0, y: 0, w: 0, h: 0 }) }),
+      move: (id: string, x: number, y: number) => {
+        const g = gate(id);
+        if (!g) return;
+        const r = g.m.rect, on = d.grounded && d.x > r.x - 10 && d.x < r.x + r.w + 10 && Math.abs(d.y + d.h / 2 - r.y) < 6;
+        const dx = x - r.x, dy = y - r.y;
+        moveMover(g.m, x, y);
+        if (on) { Matter.Body.translate(d.body, { x: dx, y: dy }); d.x += dx; d.y += dy; }
+      },
+      open: (id: string) => this.openGate(id),
+      close: (id: string) => this.closeGate(id),
+      sfx: (n: 'lever' | 'plate' | 'rowTick' | 'door' | 'liftHum' | 'pass') => this.out.push({ t: 'sfx', name: n, gain: n === 'liftHum' ? 0.4 : 1 }),
+      say: (line: string) => this.say(line),
+      solve: () => {
+        if (m.solved) return;
+        m.solved = true;
+        this.discover(`${this.place}:${this.room.mechanic}`);
+        this.openGate('exit');
+        this.out.push({ t: 'sfx', name: 'pass' });
+      },
+    };
+  }
+
   // --- read by the renderer ---
   /** A module has a record (the stations glow green once passed). */
   kitDone(id: string) { return this.done(id); }
@@ -680,7 +906,8 @@ export class Director {
   private stepTargets() {
     for (const h of this.sim.targetHits) {
       if (h.id === 'board') { this.hitBoard(h.n); continue; }
-      if (h.id.startsWith('node:')) { this.takeReading(h.id.slice(5)); continue; }
+      if (h.id.startsWith('node:')) { if (this.room.role) this.shootNode(h.id.slice(5)); else this.takeReading(h.id.slice(5)); continue; }
+      if (this.rs.mech) { this.rs.mech.hits.push(h.id); continue; }
       const g = this.rs.gates.get(h.id);
       if (!g || g.open >= 1) continue;
       const before = g.hp;
@@ -696,12 +923,19 @@ export class Director {
 
   private checkExit() {
     const d = this.sim.drone, ex = this.room.exit;
-    if (this.place !== 'bit-zero' || this.fade || d.x < ex.x || (ex.y !== undefined && d.y > ex.y)) return;
-    this.go('bit-zero', this.index + 1);
+    if (this.place === 'loft' || this.room.role === 'exit' || this.fade || this.cut || d.x < ex.x || (ex.y !== undefined && d.y > ex.y)) return;
+    if (this.index + 1 >= this.roomsFor(this.place).length) return;
+    this.go(this.place, this.index + 1);
   }
 
   // --- stations ---
   private useStation(st: Station) {
+    if (this.room.role && st.module && (st.kind === 'port' || st.kind === 'panel' || st.kind === 'bench' || st.kind === 'gate')) {
+      // a composed room's station opens its module where it lives: the terminal, or the lab window
+      this.out.push({ t: 'sfx', name: 'portOpen' }, { t: 'overlay', kind: 'module', module: st.module });
+      this.waiting = true;
+      return;
+    }
     switch (st.kind) {
       case 'port':
         this.out.push({ t: 'sfx', name: 'portOpen' }, { t: 'overlay', kind: 'port', module: st.module! });
@@ -714,23 +948,50 @@ export class Director {
         break;
       case 'lever':
         this.rs.levers[st.id] = !this.rs.levers[st.id];
+        if (this.rs.mech) this.rs.mech.used = st.id;
         this.out.push({ t: 'sfx', name: 'lever' });
         break;
       case 'node':
-        this.takeReading(st.arg!);
+        this.useNode(st.arg!);
         break;
       case 'debug':
         this.openCauses();
         break;
       case 'lift':
-        if (this.room.id === 'workbench') this.startExitLift();
-        else this.out.push({ t: 'choose', kind: 'loftLift', title: 'THE LIFT', options: [{ text: 'Replay Bit Zero' }, { text: 'Level 2 · still being built', dim: true }, { text: 'Stay in the Loft' }] }), (this.waiting = true);
+        if (this.room.id === 'workbench') this.startExitLift(1140);
+        else if (this.room.role === 'exit' || this.room.role === 'landing') this.startExitLift(st.x);
+        else {
+          this.liftOpts = liftChoices(this.done);
+          this.out.push({ t: 'choose', kind: 'loftLift', title: 'THE LIFT', options: [...this.liftOpts.map((o) => ({ text: o.text, dim: o.dim })), { text: 'Stay in the Loft' }] });
+          this.waiting = true;
+        }
         break;
-      default:
-        this.say(LOFT_LINES[st.kind] ?? '');
+      default: {
+        const line = LOFT_LINES[st.kind];
+        if (line) this.say(line);
         this.out.push({ t: 'loft', station: st.kind });
         if (st.kind !== 'interview' && st.kind !== 'crt') this.waiting = true;
+      }
     }
+  }
+
+  /** E at a node, or a shot into it: an instrument with arguments asks which, one without reads at once. */
+  private useNode(cmd: string) {
+    const ins = this.boss?.incident.instruments.find((i) => i.cmd === cmd);
+    if (!this.boss || this.boss.phase !== 'investigate' || !ins) return;
+    if (!ins.args?.length) { this.takeReading(cmd); return; }
+    this.nodeCmd = cmd;
+    this.out.push({ t: 'choose', kind: 'node', title: `${cmd.toUpperCase()} · WHERE?`, options: ins.args.map((a) => ({ text: a, dim: this.boss!.log.some((r) => r.key === `${cmd} ${a}`) })) });
+    this.waiting = true;
+  }
+
+  /** A shot into a node reads its next argument not yet read (no card mid-fight). */
+  private shootNode(cmd: string) {
+    const ins = this.boss?.incident.instruments.find((i) => i.cmd === cmd);
+    if (!ins) return;
+    if (!ins.args?.length) { this.takeReading(cmd); return; }
+    const next = ins.args.find((a) => !this.boss!.log.some((r) => r.key === `${cmd} ${a}`)) ?? ins.args[0];
+    this.takeReading(`${cmd} ${next}`);
   }
 
   /** The screen closed an overlay. `passed`: the module's record appeared or improved while it was open. */
@@ -738,6 +999,7 @@ export class Director {
     this.waiting = false;
     this.applyKit(true);
     if (passed) { this.out.push({ t: 'sfx', name: 'pass' }); this.reward(module); }
+    else if (this.room.role === 'gate' && !this.done(module)) this.say(STORY.gateLocked.replace(/^\{score\}% so far\. /, ''));
   }
 
   /** Bit Wall: a correct answer in the port lights the next lamp. */
@@ -755,25 +1017,35 @@ export class Director {
     if (!r) return;
     this.lastReading = { arg, text: r.text, ruledOut: r.ruledOut.map((id) => b.incident.causes.find((c) => c.id === id)!.name), age: 0, repeat: r.repeat, left: r.left };
     this.out.push({ t: 'sfx', name: 'reading' });
-    if (!r.repeat && r.left === 1) this.say(LINES.oneFits);
+    if (!r.repeat && r.left === 1) this.say(this.bl('oneFits'));
     if (b.inv.left <= 0) this.bossLate();
   }
   lastReading: { arg: string; text: string; ruledOut: string[]; age: number; repeat: boolean; left: number } | null = null;
 
   private openCauses() {
     const b = this.boss!;
-    this.say(LINES.pickCause);
+    this.say(this.bl('pickCause'));
     this.out.push({ t: 'choose', kind: 'cause', title: 'ROOT CAUSE', options: b.causes().map((c) => ({ text: c.out ? `${c.name} (wrong call)` : c.struck ? `${c.name} (crossed off)` : c.name, dim: c.out || c.struck })) });
     this.waiting = true;
   }
 
   /** The screen picked an option on a choice card (or -1 for "back"). */
-  chose(kind: 'cause' | 'fix' | 'loftLift' | 'guard', i: number) {
+  chose(kind: Choice, i: number) {
     this.waiting = false;
     const b = this.boss;
     if (kind === 'loftLift') {
-      if (i === 0) this.go('bit-zero', 0);
-      else if (i === 1) this.say(LINES.level2);
+      const o = this.liftOpts[i];
+      if (!o) return; // "Stay in the Loft", or back
+      if (o.dim) { this.say(o.text.split(' · ')[1] ? `${o.text.split(' · ')[1]} first.` : 'Not yet.'); return; }
+      if (placeById(o.place)?.kind === 'study') { this.say(LINES.board); this.out.push({ t: 'loft', station: 'board' }); this.waiting = true; return; }
+      this.say(STORY.liftNext.replace('{place}', placeById(o.place)?.name ?? o.place));
+      this.go(o.place, 0);
+      return;
+    }
+    if (kind === 'node') {
+      const cmd = this.nodeCmd, arg = cmd ? this.boss?.incident.instruments.find((x) => x.cmd === cmd)?.args?.[i] : undefined;
+      this.nodeCmd = null;
+      if (cmd && arg) this.takeReading(`${cmd} ${arg}`);
       return;
     }
     if (!b || i < 0) return;
@@ -788,9 +1060,9 @@ export class Director {
         return;
       }
       const res = b.diagnose(pick);
-      if (res === 'wrong') { this.say(LINES.angry); this.out.push({ t: 'sfx', name: 'notYet' }, { t: 'shake', px: 4, ms: 300 }); this.sim.enemies.forEach((e) => (e.flash = 8)); }
+      if (res === 'wrong') { this.say(this.bl('angry')); this.out.push({ t: 'sfx', name: 'notYet' }, { t: 'shake', px: 4, ms: 300 }); this.sim.enemies.forEach((e) => (e.flash = 8)); }
       else if (res === 'late') this.bossLate();
-      else if (res === 'guessed') { this.say(LINES.sentBack); this.card('debrief', 'SENT BACK BY THE REVIEW BOARD', [`It was: ${b.inv.cause.name}.`, b.inv.missed ? `What would have proved it: ${b.inv.missed.ins.cmd} ${b.inv.missed.arg}. It splits the causes your readings still allowed.` : 'One more reading would have proved it.', 'The board goes dark again, with a new fault. Prove it this time.']); b.restart(); }
+      else if (res === 'guessed') { this.say(this.bl('sentBack')); this.card('debrief', 'SENT BACK BY THE REVIEW BOARD', [`It was: ${b.inv.cause.name}.`, b.inv.missed ? `What would have proved it: ${b.inv.missed.ins.cmd} ${b.inv.missed.arg}. It splits the causes your readings still allowed.` : 'One more reading would have proved it.', 'The board goes dark again, with a new fault. Prove it this time.']); b.restart(); }
       else {
         this.out.push({ t: 'sfx', name: 'bossPhase' });
         this.out.push({ t: 'choose', kind: 'fix', title: 'WHICH FIX GOES IN?', options: b.fixes().map((o) => ({ text: o.text })) });
@@ -802,12 +1074,12 @@ export class Director {
       const res = b.fix(i);
       if (res === 'right') {
         this.sim.targets.find((t) => t.id === 'board')!.active = true;
-        this.say(LINES.shieldDown, LINES.finish);
+        this.say(this.bl('shieldDown'), this.bl('finish'));
         this.out.push({ t: 'sfx', name: 'bossPhase' }, { t: 'shake', px: 5, ms: 400 });
       } else if (res === 'late') this.bossLate();
       else {
         this.sim.targets.find((t) => t.id === 'board')!.active = true;
-        this.say(LINES.shieldSoon);
+        this.say(this.bl('shieldSoon'));
         this.out.push({ t: 'sfx', name: 'notYet' });
         this.out.push({ t: 'choose', kind: 'fix', title: 'THAT DID NOT HOLD · WHICH FIX GOES IN?', options: b.fixes().map((o) => ({ text: o.text })) });
         this.waiting = true;
@@ -816,9 +1088,16 @@ export class Director {
   }
   private pendingCause: string | null = null;
 
+  /** A boss line: Level 1 keeps its own script, every other arena the generic full voice (and its theme's). */
+  private bl(k: 'pager' | 'readings' | 'oneFits' | 'pickCause' | 'angry' | 'sentBack' | 'shieldDown' | 'finish' | 'shieldSoon' | 'tooSlow' | 'lit'): string {
+    if (!this.room.role) return LINES[k];
+    const m = { pager: 'bossPager', readings: 'bossReadings', oneFits: 'bossOneFits', pickCause: 'bossPickCause', angry: 'bossWrong', sentBack: 'bossSentBack', shieldDown: 'bossShieldDown', finish: 'bossFinish', shieldSoon: 'bossShieldSoon', tooSlow: 'bossTooSlow', lit: 'bossBeaten' } as const;
+    return STORY[m[k]];
+  }
+
   private bossLate() {
     const b = this.boss!;
-    this.say(LINES.tooSlow);
+    this.say(this.bl('tooSlow'));
     this.card('debrief', 'OUT OF BENCH TIME', [`It was: ${b.inv.cause.name}.`, 'The open day is tomorrow and the clock ran out. The board goes dark again with a new fault.', 'Let one more reading settle it before you commit.']);
     b.restart();
     this.sim.targets.find((t) => t.id === 'board')!.active = false;
@@ -829,6 +1108,7 @@ export class Director {
     if (!b) return;
     if (b.phase !== 'finish' && b.tempDown <= 0) { this.out.push({ t: 'sfx', name: 'reading', gain: 0.3 }); return; }
     if (b.phase !== 'finish' && b.tempDown <= 1) this.sim.targets.find((t) => t.id === 'board')!.active = false;
+    if (this.form) this.form.flash = 8;
     if (!b.hit(n)) return;
     // beaten: the board lights, the record is written, the debrief
     const st = b.stars();
@@ -838,8 +1118,11 @@ export class Director {
     for (const e of this.sim.enemies) e.alive = false;
     this.sim.enemies = [];
     this.sim.respawns = [];
-    this.out.push({ t: 'sfx', name: 'shatter' }, { t: 'sfx', name: 'fanfare' }, { t: 'shake', px: 6, ms: 500 }, { t: 'music', track: 'keeper' });
-    this.say(LINES.lit);
+    const composed = !!this.room.role;
+    this.form = null;
+    this.out.push({ t: 'sfx', name: 'shatter' }, { t: 'sfx', name: 'fanfare' }, { t: 'shake', px: 6, ms: 500 }, { t: 'music', track: composed ? this.theme?.music ?? 'keeper' : 'keeper' });
+    if (composed) this.say(STORY.bossBeaten, ...(this.theme?.lines.bossBeaten ?? []));
+    else this.say(LINES.lit);
     this.openGate('door');
     this.applyKit(true);
     const hm = (m: number) => `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m`;
@@ -848,13 +1131,13 @@ export class Director {
       `What happened: ${inv.cause.story}`,
       `The fix: ${inv.cause.fix}`,
       `Your path: ${[...inv.notes.keys()].join(' → ') || 'straight to a diagnosis'}`,
-      `Upgrade: integrity ${TUNING.vitals.health} → ${S.bossIntegrity}. Repaired: ${PANEL_NAMES[4]} panel.`,
+      composed ? `Upgrade: +${UP.bossIntegrity} integrity. Repaired: ${placeById(this.place)?.region ?? 'the chip'}.` : `Upgrade: integrity ${TUNING.vitals.health} → ${S.bossIntegrity}. Repaired: ${PANEL_NAMES[4]} panel.`,
     ], st);
   }
 
   // --- cutscenes ---
-  private startExitLift() {
-    this.cut = { kind: 'exitLift', t: 0 };
+  private startExitLift(x: number) {
+    this.cut = { kind: 'exitLift', t: 0, x };
     this.out.push({ t: 'sfx', name: 'liftHum' }, { t: 'music', track: 'loft' });
   }
   private stepCut() {
@@ -864,10 +1147,13 @@ export class Director {
     if (c.kind === 'exitLift') {
       const T = frames(S.exitLiftS * 1000);
       // the drone rides the lift up out of the room; TAPEOUT's voice comes back on the way
-      if (c.t === 1) Matter.Body.setPosition(this.sim.drone.body, { x: 1140, y: this.sim.drone.y });
+      if (c.t === 1) { Matter.Body.setPosition(this.sim.drone.body, { x: c.x, y: this.sim.drone.y }); this.sim.drone.x = c.x; }
       const d = this.sim.drone;
       if (c.t < T * 0.35) { Matter.Body.translate(d.body, { x: 0, y: -1.2 }); d.y -= 1.2; }
-      if (c.t === Math.round(T * 0.2)) { this.world.cutscenes.push('exit-lift'); this.save(); this.applyKit(); this.say(...LINES.exitLift); }
+      if (c.t === Math.round(T * 0.2)) {
+        if (this.place === 'bit-zero') { if (!this.world.cutscenes.includes('exit-lift')) this.world.cutscenes.push('exit-lift'); this.save(); this.applyKit(); this.say(...LINES.exitLift); }
+        else this.say(STORY.liftHome);
+      }
       if (c.t % 30 === 0) this.out.push({ t: 'sfx', name: 'liftHum', gain: 0.4 });
       if (c.t >= T) { this.cut = null; this.go('loft', 0); }
     }

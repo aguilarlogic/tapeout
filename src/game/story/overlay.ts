@@ -84,7 +84,7 @@ export function gameMount(host: OverlayHost): Mount {
  * The wall port: TAPEOUT's terminal, running one lesson. `onClose(passed)`: passed when the lesson's record appeared or
  * improved while the port was open.
  */
-export function openPort(host: OverlayHost, module: string, onAnswer: (ok: boolean) => void, onClose: (passed: boolean) => void) {
+export function openPort(host: OverlayHost, module: string, onAnswer: (ok: boolean) => void, onClose: (passed: boolean) => void, o: { label?: string; practice?: boolean } = {}) {
   const before = recordKey(module);
   const term = new Terminal();
   const shell = new Shell(term, () => {}, { embedded: true, onAnswer, launch: (id, o) => launchGame(id, { ...o, mount: gameMount(host) }) });
@@ -96,7 +96,7 @@ export function openPort(host: OverlayHost, module: string, onAnswer: (ok: boole
     off();
     onClose(recordKey(module) !== before && !!levelRecord(module));
   };
-  const node = frame(`PORT · ${title.toUpperCase()}`, 'TAPEOUT terminal', h('div', { class: 'st-term' }, term.el), close, 'Unplug · Esc');
+  const node = frame(`${o.label ?? 'PORT'} · ${title.toUpperCase()}`, 'TAPEOUT terminal', h('div', { class: 'st-term' }, term.el), close, 'Unplug · Esc');
   node.dataset.testid = 'port';
   done = mount(host, node, close);
   // when the lesson signs off, the port says so and offers to unplug
@@ -105,18 +105,21 @@ export function openPort(host: OverlayHost, module: string, onAnswer: (ok: boole
       node.querySelector('.st-frame-head')!.append(button('Done · unplug', close, 'primary mini st-unplug'));
     }
   });
-  setTimeout(() => { term.focus(); void shell.runLesson(module); }, 60);
+  setTimeout(() => { term.focus(); void (o.practice ? shell.exec(`practice ${module}`) : shell.runLesson(module)); }, 60);
 }
 
-/** The patch panel (Logic Lab) or the bench (Verilog lab), framed. Closes itself a moment after a pass. */
-export function openLab(host: OverlayHost, kind: 'panel' | 'bench', module: string, onClose: (passed: boolean) => void) {
+/**
+ * The patch panel (Logic Lab) or the bench (Verilog lab), framed. Closes itself a moment after a pass. `o` names another
+ * lab page and its frame label (story/open.ts opens every lab kind through here).
+ */
+export function openLab(host: OverlayHost, kind: 'panel' | 'bench', module: string, onClose: (passed: boolean) => void, o: { page?: (id: string) => HTMLElement; label?: string; sub?: string } = {}) {
   const before = recordKey(module);
-  const page = kind === 'panel' ? logicPage(module) : rtlPage(module);
+  const page = (o.page ?? (kind === 'panel' ? logicPage : rtlPage))(module);
   const title = findModule(module)?.module.title ?? module;
   let done: () => void = () => {};
   let off = () => {};
   const close = () => { done(); off(); onClose(recordKey(module) !== before && !!levelRecord(module)); };
-  const node = frame(`${kind === 'panel' ? 'PATCH PANEL' : 'WORKBENCH'} · ${title.toUpperCase()}`, kind === 'panel' ? 'Logic Lab' : 'Verilog lab', h('div', { class: `st-lab lab-${kind}` }, page), close, 'Close · Esc');
+  const node = frame(`${o.label ?? (kind === 'panel' ? 'PATCH PANEL' : 'WORKBENCH')} · ${title.toUpperCase()}`, o.sub ?? (kind === 'panel' ? 'Logic Lab' : 'Verilog lab'), h('div', { class: `st-lab lab-${kind}` }, page), close, 'Close · Esc');
   node.dataset.testid = kind;
   done = mount(host, node, close);
   off = onChange(() => {

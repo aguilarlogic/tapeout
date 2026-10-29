@@ -7,13 +7,18 @@ import { LEVEL1 } from './level1';
 
 export const WORLD_KEY = 'tapeout.world.v1';
 
-export type Place = 'bit-zero' | 'loft';
+/** 'bit-zero' (Level 1), 'loft', or any place id in world/places.ts. */
+export type Place = string;
+
+/** What the world remembers of one place. */
+export interface PlaceSave { discoveries: string[]; cleared: string[] }
 
 export interface WorldSave {
   version: 1;
   /** The save node: the room the drone wakes in. */
   at: { place: Place; room: number };
-  places: { 'bit-zero': { discoveries: string[]; cleared: string[] } };
+  /** Keyed by place id; Level 1's entry keeps the shape it had in phase 2. */
+  places: Record<string, PlaceSave> & { 'bit-zero': PlaceSave };
   cutscenes: string[];
   /** Everything TAPEOUT has said, oldest first, for the Archive's story log (capped). */
   heard: string[];
@@ -35,7 +40,9 @@ export function loadWorld(store: Pick<Storage, 'getItem'> | undefined = globalTh
     const w = JSON.parse(raw) as Partial<WorldSave>;
     if (w.version !== 1 || !w.at) return undefined;
     const b = blankWorld();
-    return { ...b, ...w, places: { 'bit-zero': { ...b.places['bit-zero'], ...w.places?.['bit-zero'] } } } as WorldSave;
+    const places: Record<string, PlaceSave> = {};
+    for (const [id, ps] of Object.entries({ ...w.places })) places[id] = { discoveries: [...(ps?.discoveries ?? [])], cleared: [...(ps?.cleared ?? [])] };
+    return { ...b, ...w, places: { ...places, 'bit-zero': { ...b.places['bit-zero'], ...w.places?.['bit-zero'] } } } as WorldSave;
   } catch {
     return undefined;
   }
@@ -79,10 +86,30 @@ export type Start =
   | { kind: 'resume'; at: WorldSave['at'] } // a world save: wake at its node
   | { kind: 'migrate'; at: WorldSave['at']; discoveries: string[] }; // progress but no world save: partial memory
 
-/** Where the story starts for a player (Level 1 spec, migration rules). */
-export function startFor(world: WorldSave | undefined, done: Done, anyProgress: boolean): Start {
+/**
+ * The save node in a composed place: the room after the last room whose scored modules are all done, with every
+ * scored room before it done too (nodeFor's rule over any room list).
+ */
+export function nodeIn(rooms: readonly { modules: string[]; optional?: string[] }[], done: Done): number {
+  let node = 0;
+  for (let i = 0; i < rooms.length; i++) {
+    const mods = rooms[i].modules.filter((m) => !rooms[i].optional?.includes(m));
+    if (!mods.length) continue;
+    if (!mods.every(done)) break;
+    node = i + 1;
+  }
+  return Math.min(node, rooms.length - 1);
+}
+
+/**
+ * Where the story starts for a player (Level 1 spec, migration rules; Phase 3 Spec, section 9). `beyond` is where a
+ * player past Level 1 with no world save wakes: the place holding their next module and the room in it (or none, for
+ * the Loft), with the discoveries of the rooms before that.
+ */
+export function startFor(world: WorldSave | undefined, done: Done, anyProgress: boolean, beyond?: { place: string; room: number; discoveries: string[] }): Start {
   if (world) return { kind: 'resume', at: world.at };
   if (!anyProgress) return { kind: 'cold' };
+  if (level1Done(done) && beyond) return { kind: 'migrate', at: { place: beyond.place, room: beyond.room }, discoveries: beyond.discoveries };
   if (level1Done(done)) return { kind: 'migrate', at: { place: 'loft', room: 0 }, discoveries: discoveriesFor(LEVEL1.length) };
   const node = nodeFor(done);
   return { kind: 'migrate', at: { place: 'bit-zero', room: node }, discoveries: discoveriesFor(node) };

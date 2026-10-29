@@ -1,9 +1,11 @@
-// The Dark Demo Board (Level 1 spec, "Boss"): today's inc-demo-board investigation, played in the arena. The
-// Investigation (src/incidents/engine.ts) keeps every rule: the budget, the readings and their cost, the crossing-off,
-// a guess sent back, the fix menu, the stars. This class adds the fight around it: phases, the board's shield and
-// health, the enrage after a wrong call, and the per-node read cooldown. Pure: the director feeds it steps.
+// A boss fight (Level 1 spec, "Boss"; Phase 3 Spec, section 6): one of today's incident investigations, played in an
+// arena. Level 1's is the Dark Demo Board. The Investigation (src/incidents/engine.ts) keeps every rule: the budget,
+// the readings and their cost, the crossing-off, a guess sent back, the fix menu, the stars. This class adds the fight
+// around it: phases, the boss's shield and health, the enrage after a wrong call, and the per-node read cooldown.
+// Pure: the director feeds it steps.
 import { demoBoardIncident } from '../../incidents/first';
 import { type FixOption, Investigation, seeded } from '../../incidents/engine';
+import type { Incident } from '../../incidents/types';
 import { frames, TUNING } from '../tuning';
 
 export type BossPhase = 'pager' | 'investigate' | 'fix' | 'finish' | 'done';
@@ -29,14 +31,14 @@ export class BossFight {
   /** How many times the board went dark again (a guess sent back, or the clock ran out). */
   restarts = 0;
 
-  constructor(story: boolean, private seed = (Date.now() >>> 0) || 1, cause?: string) {
+  /** Any incident can be the boss (Phase 3 Spec, section 6); `hp` is its Standard health (Level 1: the board's). */
+  constructor(story: boolean, private seed = (Date.now() >>> 0) || 1, cause?: string, readonly incident: Incident = demoBoardIncident, hp: number = TUNING.story.boss.hp) {
     const B = TUNING.story.boss;
-    this.maxHp = Math.round(B.hp * (story ? B.storyHp : 1));
+    this.maxHp = Math.round(hp * (story ? B.storyHp : 1));
     this.hp = this.maxHp;
-    this.inv = new Investigation(demoBoardIncident, seed, cause);
+    this.inv = new Investigation(incident, seed, cause);
   }
 
-  get incident() { return demoBoardIncident; }
   /** The shield is down for good once the right fix is in. */
   get shielded() { return this.phase !== 'finish' && this.tempDown <= 0; }
 
@@ -112,7 +114,7 @@ export class BossFight {
   restart() {
     this.restarts++;
     this.seed = (this.seed * 1103515245 + 12345) >>> 0 || 7;
-    this.inv = new Investigation(demoBoardIncident, this.seed);
+    this.inv = new Investigation(this.incident, this.seed);
     this.phase = 'investigate';
     this.hp = this.maxHp;
     this.log = [];
