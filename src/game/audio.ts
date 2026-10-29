@@ -119,6 +119,14 @@ const V: Record<Sfx, Voice[]> = {
   warp: [{ wave: 'sine', f: 200, to: 1600, len: 0.25, level: 0.04 }, { wave: 'noise', f: 1, len: 0.2, level: 0.03, filter: { type: 'bandpass', f: 2000, to: 500 } }],
 };
 
+/** The caption for each sound that carries meaning (Phase 10 Spec, section 2.4). TAPEOUT's chirp has none, because its
+ * bubble shows the words. Enemy wind-ups draw telegraph lines, so they have none either. */
+export const CAPTION: Partial<Record<Sfx, string>> = {
+  hurt: '[hit]', death: '[drone down]', portOpen: '[port opens]', bossPhase: '[boss changes phase]', fanfare: '[upgrade]',
+  reading: '[reading taken]', pass: '[passed]', notYet: '[not yet]', door: '[door]', lightsOn: '[lights on]',
+  liftHum: '[lift moving]', crack: '[cracking]', shatter: '[shattered]', charge: '[charging]', repair: '[repaired]',
+};
+
 // --- the music: loops of 24 bars in three 8-bar sections that add voices. The test room's ambient loop is 96 BPM
 // Am F C G; the story adds the Keeper's room theme, the boss, the Loft and the workbench (Level 1 spec, "Sound"). ---
 export type Track = 'test' | 'keeper' | 'boss' | 'loft' | 'bench' | 'core' | 'under' | 'silicon' | 'cluster' | 'x' | 'ending' | 'wings';
@@ -188,6 +196,8 @@ export class GameAudio {
   /** Music was asked for and not stopped since: it starts on the first gesture if the page could not play yet. */
   private wantMusic = false;
   private armed = false;
+  /** Told of every sound asked for, muted or not, so the captions can name it (Phase 10 Spec, section 2.4). */
+  onPlay: ((name: Sfx) => void) | null = null;
 
   /** The game is the first screen (Phase 7 Spec, section 3), so it can open before any click or key. A browser will not
    * start sound before one, so until then the context waits, and the first gesture starts it and any music asked for. */
@@ -248,6 +258,7 @@ export class GameAudio {
   private musicLevel() { return ((prefs().musicVolume ?? 60) / 100) * 0.5; }
 
   play(name: Sfx, gain = 1) {
+    this.onPlay?.(name);
     const c = this.init();
     if (!c || !this.sfx || !this.noise) return;
     try {

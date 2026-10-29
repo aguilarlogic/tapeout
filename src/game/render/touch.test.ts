@@ -53,6 +53,17 @@ describe('drawTouch', () => {
     expect(sets).toEqual([]);
   });
 
+  it('fades the stick by its own alpha, and leaves it out at 0 (Phase 10 Spec, section 5)', () => {
+    const stick = { ox: 200, oy: 500, kx: 210, ky: 500 };
+    const gone = spyCanvas();
+    drawTouch(gone.c, { ...base, buttons: [], stick, stickAlpha: 0 });
+    expect(count(gone.calls, 'arc')).toBe(0);
+    const half = spyCanvas();
+    drawTouch(half.c, { ...base, buttons: [], stick, stickAlpha: 0.5 });
+    expect(count(half.calls, 'arc')).toBeGreaterThan(0);
+    expect(half.sets.some((k) => k.name === 'globalAlpha' && k.args[0] === 0.5)).toBe(true);
+  });
+
   it('draws each button\'s label text', () => {
     const { c, calls } = spyCanvas();
     const buttons = [button('DASH', 1200, 660, 24), button('USE', 1140, 660, 24), button('NOTES', 1200, 40, 26)];

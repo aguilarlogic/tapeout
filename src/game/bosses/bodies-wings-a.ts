@@ -3,7 +3,7 @@
 // with a glow, a PAL.fill inside, amber for the part about to attack, cracks for damage, a white flash on a hit, a dashed
 // shield ring) and draw inside the arena's boss rect. The attacks in attacks-wings-a.ts draw their own bands, waves and
 // bits on top of these bodies.
-import { FONT, LINE, PAL, rgba } from '../render/palette';
+import { blink, FONT, LINE, PAL, rgba } from '../render/palette';
 import { HZ } from '../tuning';
 import { centre, circle, cracks, flash, glow, rrect, shield, silhouette, telegraph } from './bodies';
 import type { Ext } from './bodies';
@@ -112,6 +112,8 @@ const GRID_W = COLS * CELL + (COLS - 1) * CELL_GAP, GRID_H = ROWS * CELL + (ROWS
 /** Every 7th cell from the 4th (5 in all) flickers between 0 and 1, changing every 0.4 s. The rest stay put. */
 const FLICKER = (i: number) => i % 7 === 3;
 const FLICKER_STEP = 24;
+/** The flicker's blink rate in Hz: one full on-off cycle every two steps. */
+const FLICKER_HZ = HZ / (2 * FLICKER_STEP);
 
 /** The memory array: an 8 x 4 grid of cells, a few flickering between 0 and 1. Each cell shows its value, so the state is
  *  not colour alone. The flips attack glows the top row as it telegraphs, the bolts attack the frame. */
@@ -139,7 +141,8 @@ export const memarray: BodyDrawer = (g, box, s) => {
   for (let i = 0; i < COLS * ROWS; i++) {
     const r = cellAt(i);
     const flicker = FLICKER(i);
-    const one = flicker ? ((Math.floor(s.t / FLICKER_STEP) + i) & 1) === 1 : i % 3 === 1;
+    // each flickering cell is offset by its index, so the five do not flip together
+    const one = flicker ? blink(s.t / HZ + (i * FLICKER_STEP) / HZ, FLICKER_HZ) === 1 : i % 3 === 1;
     g.beginPath();
     rrect(g, r.x, r.y, r.w, r.h, CELL_R);
     g.fillStyle = PAL.fill;

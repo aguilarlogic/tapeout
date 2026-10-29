@@ -2,7 +2,7 @@
 // layout, a 16th-note bass and a gated pad; the Wings track (Phase 8 Spec, section 7) is the same form at 124 BPM with a
 // plucked arp and a half-time snare. The pad-only variants drop the arp and the drums.
 import { describe, expect, it } from 'vitest';
-import { PAD_ONLY, TRACKS } from './audio';
+import { CAPTION, PAD_ONLY, TRACKS } from './audio';
 
 /** The pitch classes of E natural minor: E F# G A B C D. */
 const E_MINOR = [4, 6, 7, 9, 11, 0, 2];
@@ -70,5 +70,20 @@ describe('the wings track', () => {
     expect(PAD_ONLY.wings.bass).toBe(TRACKS.wings.bass);
     expect(PAD_ONLY.wings.gate).toEqual(TRACKS.wings.gate);
     expect(PAD_ONLY.wings.bpm).toBe(124);
+  });
+});
+
+describe('the captions', () => {
+  it('has exactly the 15 captions of the Phase 10 spec table', () => {
+    expect(CAPTION).toEqual({
+      hurt: '[hit]', death: '[drone down]', portOpen: '[port opens]', bossPhase: '[boss changes phase]', fanfare: '[upgrade]',
+      reading: '[reading taken]', pass: '[passed]', notYet: '[not yet]', door: '[door]', lightsOn: '[lights on]',
+      liftHum: '[lift moving]', crack: '[cracking]', shatter: '[shattered]', charge: '[charging]', repair: '[repaired]',
+    });
+    expect(Object.keys(CAPTION)).toHaveLength(15);
+  });
+
+  it('gives the chirp no caption, because its bubble shows the words', () => {
+    expect(CAPTION.chirp).toBeUndefined();
   });
 });

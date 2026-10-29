@@ -5,9 +5,9 @@
 // lights on exactly that tick. The STALL EX lever holds stage 3 and everything behind it for one tick: crate 2 gets
 // its second EX tick, crate 3 waits in ID, and then the belt moves on. A jam flashes the two crates red, drops the
 // belt and restarts after 1.5 s.
-import { easeInOut, FONT, LINE, PAL, ROLE } from '../../render/palette';
+import { blink, easeInOut, FONT, LINE, PAL, ROLE } from '../../render/palette';
 import type { Station, StoryRoom } from '../../story/types';
-import { frames } from '../../tuning';
+import { frames, HZ } from '../../tuning';
 import { floorY, r, shell, spawnAt, trace } from '../templates/kit';
 import type { MechanicDef, MechCtx } from '../types';
 
@@ -22,6 +22,8 @@ const IN = 0, PLATE_POS = 5;
 const SHELF_X = 260, STAGE_W = 220, STAGES_N = 5, BELT_Y = 380;
 /** Crate side, px. */
 const SIDE = 40;
+/** The red of a jammed pair blinks at this rate in Hz while the belt restarts. */
+const JAM_BLINK_HZ = 5;
 /** The plate by the exit (its top edge is the floor's top less 8 px), and the crate centres that land on it. */
 const PLATE = { x: 1200, w: 160, y: F - 8 };
 const LANDS = [1230, 1280, 1330];
@@ -308,7 +310,7 @@ export const STAGES: MechanicDef<StagesState> = {
       const y0 = topY(c.prev), y1 = topY(c.pos);
       const cx = x0 + (x1 - x0) * e;
       const top = y0 + (y1 - y0) * e + fall;
-      const red = c.hit && s.restart > 0 && Math.floor(s.restart / 6) % 2 === 0;
+      const red = c.hit && s.restart > 0 && blink(s.restart / HZ, JAM_BLINK_HZ) === 1;
       g.fillStyle = PAL.fill;
       g.strokeStyle = red ? PAL.hostile : ROLE.prop;
       g.fillRect(cx - SIDE / 2, top, SIDE, SIDE);

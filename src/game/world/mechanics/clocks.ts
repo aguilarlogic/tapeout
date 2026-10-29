@@ -44,11 +44,11 @@ const LIFT = frames(500), HOLD = frames(2000);
 /** The far ledge by the exit: solid, 40 px thick, its top 520 px down. */
 const LEDGE = r(1300, 520, 90, 40);
 const SPAWN = spawnAt(140, F);
-/** The clock lamps and the square waves under them. */
+/** The clock lamps and the square waves under them. Each colour is a getter, so it follows the live palette. */
 const LAMP_Y = 96, LAMP_R = 22, WAVE_Y = 176, WAVE_AMP = 12;
 const CLOCK_VIEW = [
-  { name: 'A', rate: RATE_A, lampX: 400, x0: 40, x1: 760, colour: PAL.trace },
-  { name: 'B', rate: RATE_B, lampX: 1100, x0: 840, x1: 1380, colour: PAL.ok },
+  { name: 'A', rate: RATE_A, lampX: 400, x0: 40, x1: 760, get colour() { return PAL.trace; } },
+  { name: 'B', rate: RATE_B, lampX: 1100, x0: 840, x1: 1380, get colour() { return PAL.ok; } },
 ];
 
 type PadPhase = 'rest' | 'rise' | 'up' | 'fall';

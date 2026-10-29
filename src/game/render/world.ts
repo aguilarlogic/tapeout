@@ -450,11 +450,14 @@ export class WorldArt {
     c.beginPath();
     for (const t of vis) t.pts.forEach((p, i) => (i ? c.lineTo(p.x, p.y) : c.moveTo(p.x, p.y)));
     c.stroke();
-    // vias at the ends
+    // vias at the ends, in one path: one fill for the whole layer, not two per trace
     c.fillStyle = rgba(depth < 1 ? '#6F6AA8' : PAL.trace, alpha * 1.4);
+    const r = width + 1.5;
+    c.beginPath();
     for (const t of vis) {
-      for (const p of [t.pts[0], t.pts[t.pts.length - 1]]) { c.beginPath(); c.arc(p.x, p.y, width + 1.5, 0, Math.PI * 2); c.fill(); }
+      for (const p of [t.pts[0], t.pts[t.pts.length - 1]]) { c.moveTo(p.x + r, p.y); c.arc(p.x, p.y, r, 0, Math.PI * 2); }
     }
+    c.fill();
     // travelling glow pulses, additive
     c.save();
     c.globalCompositeOperation = 'lighter';
@@ -551,12 +554,15 @@ export class WorldArt {
       }
     }
     c.stroke();
+    // the stubs' vias, in one path
+    c.beginPath();
     for (let gx = Math.floor(x0 / G) * G; gx < x1; gx += G) {
       for (let gy = Math.floor(y0 / G) * G; gy < y1; gy += G) {
         if (gy < s.y + 6 || gy > s.y + s.h - 6 || gx < s.x + 4 || gx > s.x + s.w - 4) continue;
-        if (hash(gy, gx) < 0.12) c.fillRect(gx - 1.5, gy - 1.5, 3, 3);
+        if (hash(gy, gx) < 0.12) c.rect(gx - 1.5, gy - 1.5, 3, 3);
       }
     }
+    c.fill();
     c.restore();
     // outline, then the bright top edge with a soft halo
     c.strokeStyle = 'rgba(232,230,245,0.55)';

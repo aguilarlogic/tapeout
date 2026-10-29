@@ -1,7 +1,7 @@
 // The ending's drawing (Phase 7 Spec, section 7, item 5): the centred line of text, the Level 1 demo board with its lamp and
 // display, TAPEOUT's eye on its face, and the credits roll. Pure drawing: every function takes its state as arguments and
 // keeps none, so the ending room (story/ending.ts) owns the timing and these only paint one frame.
-import { FONT, PAL, rgba } from '../render/palette';
+import { FONT, PAL, px, rgba } from '../render/palette';
 
 type C = CanvasRenderingContext2D;
 
@@ -69,7 +69,7 @@ export function drawEndingText(c: C, w: number, h: number, text: string, k: numb
   const a = unit(k);
   if (a <= 0) return;
   c.save();
-  c.font = `${E.text}px ${FONT}`;
+  c.font = `${px(E.text)}px ${FONT}`;
   c.textAlign = 'center';
   c.textBaseline = 'middle';
   c.fillStyle = rgba('#FFFFFF', a);
@@ -127,7 +127,7 @@ export function drawDemoBoard(c: C, x: number, y: number, lampOn: boolean, typed
   c.lineWidth = 1.5;
   c.stroke();
   if (typed) {
-    c.font = `15px ${FONT}`;
+    c.font = `${px(15)}px ${FONT}`;
     c.textAlign = 'left';
     c.textBaseline = 'middle';
     c.fillStyle = PAL.trace;
@@ -161,7 +161,7 @@ export function drawTapeoutFace(c: C, x: number, y: number, k: number) {
 /** The credits roll: one line per entry, centred, with `scroll` px already risen from the bottom edge. An empty string is
  * a gap. Lines above or below the view are skipped, so a long roll costs no more than a screen. */
 export function drawCredits(c: C, w: number, h: number, lines: readonly string[], scroll: number) {
-  const { lead, size } = E.credits;
+  const lead = px(E.credits.lead), size = px(E.credits.size);
   c.save();
   c.font = `${size}px ${FONT}`;
   c.textAlign = 'center';

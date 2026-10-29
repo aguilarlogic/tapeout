@@ -14,6 +14,7 @@ import { progressReport } from '../../term/wrap';
 import { Shell } from '../../term/shell';
 import { Terminal } from '../../term/terminal';
 import { h } from '../../ui/dom';
+import { learningRoute } from './route';
 import type { StationKind } from './types';
 
 export interface OverlayHost {
@@ -164,11 +165,13 @@ export function openChoice(host: OverlayHost, c: { title: string; lines?: string
 /** First run in the game with no profile yet: a name, and where to start. */
 export function openProfile(host: OverlayHost, onClose: () => void) {
   let done: () => void = () => {};
-  const name = h('input', { class: 'st-input', type: 'text', maxlength: '24', placeholder: 'your name', 'aria-label': 'Your name', autocomplete: 'off' }) as HTMLInputElement;
-  const note = h('p', { class: 'gm-status' });
+  const name = h('input', { class: 'st-input', type: 'text', maxlength: '24', placeholder: 'your name', 'aria-label': 'Your name', 'aria-describedby': 'st-name-note', autocomplete: 'off' }) as HTMLInputElement;
+  // the error is words, announced as it appears, and the field is marked invalid until a name is typed (WCAG 3.3.1)
+  const note = h('p', { class: 'gm-status', id: 'st-name-note', role: 'status' });
+  name.addEventListener('input', () => name.removeAttribute('aria-invalid'));
   const go = (background: Profile['background']) => {
     const n = name.value.trim().replace(/[<>]/g, '').slice(0, 24);
-    if (!n) { note.textContent = 'Type a name first. Even a repair tech has one.'; name.focus(); return; }
+    if (!n) { note.textContent = 'Type a name first. Even a repair tech has one.'; name.setAttribute('aria-invalid', 'true'); name.focus(); return; }
     setProfile({ name: n, background, goal: 'unsure', since: Date.now() });
     done();
     onClose();
@@ -182,11 +185,42 @@ export function openProfile(host: OverlayHost, onClose: () => void) {
     button('I have studied some electronics', () => go('student')),
     h('p', { class: 'gm-note' }, 'Either way you start at the first room. Story difficulty for new players, Standard otherwise. You can change it in the pause menu.'));
   done = mount(host, node, null);
-  setTimeout(() => name.focus(), 40);
+  // focus at once, so a player can type from the first frame; again a beat later, in case the canvas took it back. The
+  // perf pass times start to here: the first input a player can type into (Phase 10 Spec, section 4)
+  name.focus();
+  performance.mark('tapeout:first-input');
+  setTimeout(() => { if (document.activeElement !== name) name.focus(); }, 40);
+}
+
+/**
+ * The Learning route (Phase 10 Spec, section 2.7): every open place in play order, each a heading and its modules as
+ * buttons. A module button calls `open` (the story's module opener, which reports back through its onClose); when the
+ * module closes, the list comes back with focus on that button. "Back to the map" and Escape call `back`.
+ */
+export function openLearningRoute(host: OverlayHost, open: (id: string, onClose: (passed: boolean) => void) => void, back: () => void, focus?: string) {
+  let done: () => void = () => {};
+  const toMap = () => { done(); back(); };
+  const pick = (id: string) => { done(); open(id, () => openLearningRoute(host, open, back, id)); };
+  const btns = new Map<string, HTMLButtonElement>();
+  const body = h('div', null, ...learningRoute((id) => !!levelRecord(id)).flatMap(({ place, modules }) => [
+    h('h3', null, place.name),
+    h('ul', { class: 'st-route' }, ...modules.map((m) => {
+      const b = h('button', { class: `gm-btn ${m.done ? '' : 'primary'}`, onclick: () => pick(m.id) }, `${m.title}${m.done ? ' ✓' : ''} `, h('span', { class: 'dim' }, m.kind));
+      btns.set(m.id, b);
+      return h('li', null, b);
+    })),
+  ]));
+  const node = h('div', { class: 'gm-panel wide st-card gm-enter', role: 'dialog', 'aria-label': 'Learning route', 'data-testid': 'story-route' },
+    h('h2', null, 'LEARNING ROUTE'),
+    body,
+    h('div', { class: 'gm-row' }, h('span'), button('Back to the map', toMap, 'primary')));
+  done = mount(host, node, toMap);
+  const first = focus ? btns.get(focus) : [...btns.values()][0];
+  setTimeout(() => first?.focus(), 30);
 }
 
 /** The Loft's stations that open a panel. */
-export function openLoft(host: OverlayHost, kind: StationKind, a: { log: string[]; openLesson: (id: string) => void; settings: () => void }, onClose: () => void) {
+export function openLoft(host: OverlayHost, kind: StationKind, a: { log: string[]; openLesson: (id: string) => void; settings: () => void; openModule?: (id: string, onClose: (passed: boolean) => void) => void }, onClose: () => void) {
   let done: () => void = () => {};
   const close = () => { done(); onClose(); };
   let body: HTMLElement;
@@ -222,13 +256,16 @@ export function openLoft(host: OverlayHost, kind: StationKind, a: { log: string[
       title = 'THE CHIP MAP';
       const chip = CHIPS[0];
       const p = chipProgress(chip);
+      const route = a.openModule;
       body = h('div', null,
         h('p', { class: 'st-line' }, `${chip.name}: ${p.built} of ${p.total} parts built. Each block lights as you repair it.`),
         h('div', { class: 'st-map' }, ...chip.blocks.map((b) => {
           const states = b.slots.map((s) => slotProgress(s).state);
           const cls = states.every((s) => s === 'built') ? 'built' : states.some((s) => s !== 'empty') ? 'half' : 'empty';
           return h('div', { class: `st-block ${cls}` }, h('b', null, b.name), h('span', { class: 'dim' }, cls === 'built' ? 'working' : cls === 'half' ? 'half lit' : 'dark'));
-        })));
+        })),
+        // the route needs the story's module opener (it gives back the room's rewards); without one it is not offered
+        route ? h('div', { class: 'gm-row wrap' }, button('Learning route', () => { done(); openLearningRoute(host, route, () => openLoft(host, 'map', a, onClose)); })) : null);
       break;
     }
     case 'arcade': {

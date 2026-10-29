@@ -21,6 +21,8 @@ export interface LoftActions {
   openMix(): void;
   /** The Mk II a chapter's banks unlock: its state, or null when the chapter has none. */
   mk2(chapter: string): { name: string; online: boolean; done: number; total: number } | null;
+  /** Opens the Learning route (Phase 10 Spec, section 2.7): every open module, by place. */
+  route?(): void;
 }
 
 const recorded = (id: string) => !!levelRecord(id);
@@ -66,6 +68,7 @@ function chipMap(a: LoftActions, choose: (run: () => void) => void): HTMLElement
       const cls = states.every((s) => s === 'built') ? 'built' : states.some((s) => s !== 'empty') ? 'half' : 'empty';
       return h('div', { class: `st-block ${cls}` }, h('b', null, b.name), h('span', { class: 'dim' }, cls === 'built' ? 'working' : cls === 'half' ? 'half lit' : 'dark'));
     })),
+    a.route ? h('div', { class: 'gm-row' }, h('span', { class: 'dim' }, 'Every lesson and lab you can open, place by place.'), button('Learning route', () => choose(() => a.route?.()), 'primary')) : null,
     ...actGroups(mapRows(recorded)).flatMap(([act, rows]) => [
       h('h3', null, ACT_NAME[act]),
       h('ul', { class: 'st-log st-places' }, ...rows.map((r) => h('li', null,

@@ -3,7 +3,7 @@
 // get a fill and an additive glow pass, as render/hall.ts does. Everything is multiplied by the fade alpha.
 import type { TouchButton } from '../input/touch';
 import { HZ } from '../tuning';
-import { FONT, LINE, PAL, rgba } from './palette';
+import { FONT, LINE, PAL, px, rgba } from './palette';
 
 type C = CanvasRenderingContext2D;
 const TAU = Math.PI * 2;
@@ -31,6 +31,8 @@ export interface TouchDraw {
   buttons: readonly TouchButton[];
   held: ReadonlySet<string>;
   stick: { ox: number; oy: number; kx: number; ky: number } | null;
+  /** The stick's own fade, 0..1 (it eases in when a thumb lands and out over 150 ms when it lifts); 1 when left out. */
+  stickAlpha?: number;
   alpha: number;
   t: number;
 }
@@ -204,7 +206,7 @@ function drawButton(c: C, b: TouchButton, held: boolean, t: number) {
   disc(c, b.x, b.y, r);
   c.stroke();
   ICONS.get(b.label)?.(c, b.x, b.y + r * ICON_DY, r * ICON_SIZE);
-  c.font = `${LABEL_PX}px ${FONT}`;
+  c.font = `${px(LABEL_PX)}px ${FONT}`;
   c.textAlign = 'center';
   c.textBaseline = 'middle';
   c.fillStyle = rgba(PAL.text, 0.9);
@@ -219,7 +221,8 @@ export function drawTouch(c: C, d: TouchDraw): void {
   if (!(alpha > 0)) return;
   c.save();
   c.globalAlpha = alpha;
-  if (d.stick) drawStick(c, d.stick);
+  const sa = Math.min(1, Math.max(0, d.stickAlpha ?? 1));
+  if (d.stick && sa > 0) { c.globalAlpha = alpha * sa; drawStick(c, d.stick); c.globalAlpha = alpha; }
   for (const b of d.buttons) drawButton(c, b, d.held.has(b.id), d.t);
   c.restore();
 }

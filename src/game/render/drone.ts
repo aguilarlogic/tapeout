@@ -10,11 +10,15 @@ import type { Rect } from '../level/room';
 import type { Sim } from '../sim';
 import { HZ, TUNING, VITALS } from '../tuning';
 import type { Fx } from './fx';
-import { PAL, rgba } from './palette';
+import { blink, PAL, rgba } from './palette';
 
 type C = CanvasRenderingContext2D;
 const A = TUNING.anim;
 const DT = 1 / HZ;
+/** The boot flicker's on-off rate in Hz (the chassis dims every other tenth of a second). */
+const BOOT_FLICKER_HZ = 10;
+/** The boot flicker's rate for the eye's lens, in Hz. */
+const BOOT_EYE_HZ = 12;
 
 /** The rounded-hex chassis outline, 34 × 26. */
 const HULL: [number, number][] = [[-11, -13], [11, -13], [17, 0], [11, 13], [-11, 13], [-17, 0]];
@@ -237,8 +241,8 @@ export class DroneRig {
 
     // boot flicker and i-frame flicker
     let alpha = 1;
-    if (sim.booting > 0) alpha = (Math.floor(this.t * 30) % 3 === 0 ? 0.25 : 1) * (1 - sim.booting / VITALS.bootSteps) + 0.15;
-    else if (v.iFrames > 0 && !dying) alpha = Math.floor(this.t * TUNING.vitals.blinkHz * 2) % 2 ? (opts.reducedFlash ? 0.6 : 0.3) : 1;
+    if (sim.booting > 0) alpha = (blink(this.t, BOOT_FLICKER_HZ) ? 1 : 0.25) * (1 - sim.booting / VITALS.bootSteps) + 0.15;
+    else if (v.iFrames > 0 && !dying) alpha = blink(this.t, TUNING.vitals.blinkHz) ? 1 : (opts.reducedFlash ? 0.6 : 0.3);
     // the Power Gate: a still drone powers down to save energy, and shows it by fading (the ring is in render/act3.ts)
     if (sim.gated) alpha *= 0.55;
     // NoC Warp: the drone fades out at one router pad and in at the other (Phase 7 Spec, section 3)
@@ -412,7 +416,7 @@ export class DroneRig {
     c.beginPath();
     c.arc(EYE.x, EYE.y, A.eye / 2 + 2, 0, Math.PI * 2);
     c.fill();
-    const eyeA = dying ? 1 - k : sim.booting > 0 ? (Math.floor(this.t * 24) % 2 ? 0.2 : 1) : 1;
+    const eyeA = dying ? 1 - k : sim.booting > 0 ? (blink(this.t, BOOT_EYE_HZ) ? 1 : 0.2) : 1;
     const open = this.blink > 0 ? Math.abs(Math.cos((this.blink / 0.13) * Math.PI)) : 1;
     c.save();
     c.globalCompositeOperation = 'lighter';
