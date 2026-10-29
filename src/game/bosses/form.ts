@@ -4,8 +4,7 @@
 import type { Rect } from '../level/room';
 import { overlaps } from '../physics/geom';
 import { HZ } from '../tuning';
-import { ATTACKS } from './attacks';
-import { BODIES } from './bodies';
+import { ATTACKS, BODIES } from './table';
 import type { Attack, AttackCtx, BodyState, BossForm } from './types';
 
 /** Seconds between attacks: calm, enraged, finish. */
@@ -24,6 +23,8 @@ export class FormRun {
   /** Live hazards: a rect that hurts on touch until `until` (steps). */
   hazards: { r: Rect; until: number; dmg: number }[] = [];
   flash = 0;
+  /** Live platforms from the push attack: solid to stand on until `until` (steps). The director mirrors them into the sim. */
+  platforms: { r: Rect; until: number }[] = [];
 
   constructor(readonly form: BossForm, readonly box: Rect, private story: boolean) {
     this.wait = this.gap('calm');
@@ -38,6 +39,7 @@ export class FormRun {
     this.trail.push({ x: c.drone.x, y: c.drone.y });
     if (this.trail.length > TRAIL) this.trail.shift();
     this.hazards = this.hazards.filter((h) => h.until > this.t);
+    this.platforms = this.platforms.filter((p) => p.until > this.t);
     for (const h of this.hazards) c.hurt(h.r, h.dmg);
     if (hold) return;
     const speed = mood === 'finish' ? 1.4 : mood === 'enraged' ? 1.25 : 1;
@@ -52,6 +54,9 @@ export class FormRun {
 
   /** Add a hazard for `ms` (the freeze attack's frosted platforms). */
   hazard(r: Rect, ms: number, dmg: number) { this.hazards.push({ r, until: this.t + Math.round((ms / 1000) * HZ), dmg }); }
+
+  /** Add a platform for `ms` (the Bad Call's push). */
+  platform(r: Rect, ms: number) { this.platforms.push({ r, until: this.t + Math.round((ms / 1000) * HZ) }); }
 
   /** Whether a rect overlaps a live hazard (for tests). */
   hits(r: Rect) { return this.hazards.some((h) => overlaps(h.r, r)); }

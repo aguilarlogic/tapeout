@@ -7,7 +7,7 @@
 // boss is played for real.
 import { chromium } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, readdirSync, renameSync, unlinkSync } from 'node:fs';
+import { mkdirSync, readFileSync, readdirSync, renameSync, unlinkSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -176,9 +176,15 @@ const station = async (testid, id, show) => {
 
 /** Each act 1 place's scored modules, in order (from world/places.ts), and the names the lift shows. */
 const MODULES = {"bit-zero": ["first-wire", "bits", "bool", "first-not", "first-and", "logic-half", "inc-demo-board", "gates", "half-adder-v"], "volts-and-amps": ["electricity", "resistance"], "lamp-board": ["bitadd", "twos", "inc-lamp-board"], "inverted-hall": ["demorgan", "inc-logic"], "carry-chain": ["mux", "logic-enable", "logic-mux", "decoder", "logic-dec", "adder", "logic-full", "compare", "logic-cmp", "inc-adder"], "clockwork": ["seq", "logic-dff", "logic-toggle", "logic-counter", "fsm", "boss-logic", "inc-controller"], "boot-rom": ["verilog", "full-adder-v", "mux2", "adder4", "verilog-seq", "mux4", "prio", "hex", "seg7", "reg8", "bcd", "shift", "edge", "seqdet", "popcount", "gray", "fifo", "adder8", "alu8", "regfile4", "pc8", "cpu-decode", "cpu-tiny", "boss-numbers", "inc-numbers", "boss-hdl", "inc-rtl"]};
+const NAMES = {"lamp-board": "The Lamp Board", "inverted-hall": "The Inverted Hall", "carry-chain": "Carry Chain", "clockwork": "Clockwork", "boot-rom": "Boot ROM"};
+// MODS=<json file> adds later acts' places ({ MODULES, NAMES }, in play order) to the tables above
+if (process.env.MODS) {
+  const extra = JSON.parse(readFileSync(process.env.MODS, 'utf8'));
+  for (const [k, v] of Object.entries(extra.MODULES)) MODULES[k] ??= v;
+  for (const [k, v] of Object.entries(extra.NAMES)) NAMES[k] ??= v;
+}
 const ORDER = Object.keys(MODULES);
 const seenRoles = {};
-const NAMES = {"lamp-board": "The Lamp Board", "inverted-hall": "The Inverted Hall", "carry-chain": "Carry Chain", "clockwork": "Clockwork", "boot-rom": "Boot ROM"};
 
 
 /** Platforms of the room the drone can stand on (tops of solids and one-way ledges; tall thin walls left out). */
@@ -325,13 +331,15 @@ try {
       await story(([p, k]) => window.__tapeoutGame.story.warp(p, k), [place, Number(process.env.WARP)]);
       await wait(30);
     } else {
+      // places between the recorded ones (a Deep Layer not on the list) are signed off, so the lift opens the next
+      await story((ids) => { for (const id of ids) window.__tapeoutAward(id); }, ORDER.slice(0, ORDER.indexOf(place)).filter((p) => !places.includes(p)).flatMap((p) => MODULES[p] ?? []));
       const lift = (await roomNow()).stations.find((x) => x.kind === 'lift');
       await walk(lift.x, { tol: 14 });
       await still(`${place}-00-loft`);
       await press();
       await page.getByTestId('story-choice').waitFor();
       await page.waitForTimeout(1800);
-      const name = NAMES[place];
+      const name = NAMES[place].replace(/[()]/g, '\\$&');
       await page.getByTestId('story-choice').getByRole('button', { name: new RegExp(`^(Continue: )?${name}$`) }).first().click();
       await page.waitForFunction((p) => window.__tapeoutGame.story.place === p && !window.__tapeoutGame.story.fade, place, { timeout: 20000 });
     }
@@ -341,8 +349,10 @@ try {
       // highlights (every place after the first): the puzzle, the first fight, a bench, the boss and the way out are
       // played; the other rooms are signed off and skipped
       const seen = (seenRoles[place] ??= new Set());
-      const keep = place === places[0] || (['discovery', 'arena', 'exit'].includes(r.role) || (['fight', 'bench'].includes(r.role) && !seen.has(r.role)));
+      const rail = r.role === 'traverse' && r.stations.some((x) => x.kind === 'rail') && (await story(() => !!window.__tapeoutGame.sim.kit.rail));
+      const keep = (place === places[0] && process.env.HIGHLIGHTS !== 'all') || (['discovery', 'arena', 'exit'].includes(r.role) || (['fight', 'bench'].includes(r.role) && !seen.has(r.role))) || (rail && !seen.has('rail'));
       seen.add(r.role);
+      if (rail && keep) seen.add('rail');
       if (!keep) {
         const mods = (await story(() => window.__tapeoutGame.story.room.modules));
         await story((ids) => { for (const id of ids) window.__tapeoutAward(id); }, mods);
@@ -369,6 +379,15 @@ try {
         await story(() => { const s = window.__tapeoutGame.story; s.discover(`${s.place}:${s.room.mechanic}`); s.rs.mech.solved = true; for (const id of s.rs.gates.keys()) s.openGate(id); });
         await wait(60);
       }
+      if (rail) {
+        // a bus rail: clip on and ride it across
+        const st = r.stations.find((x) => x.kind === 'rail');
+        await walk(st.x, { tol: 14 });
+        await press();
+        await wait(30);
+        await page.waitForFunction(() => !window.__tapeoutGame.sim.riding, null, { timeout: 20000 });
+        await wait(30);
+      }
       if (r.role === 'fight') await run({ type: 'fight' }, 90000);
       if (r.role === 'arena') await arena(place);
       if (['port', 'panel', 'bench', 'gate', 'bossdoor'].includes(r.role)) {
@@ -378,7 +397,13 @@ try {
         }
       }
       if (r.role === 'bossdoor') await wait(90);
-      await leave();
+      // a room the bot cannot cross (a moving-platform pit, a programmed lift) is cut, not failed: on to the next room
+      try { await leave(); } catch (e) {
+        log(`${place} room ${r.index}: bot could not cross (${e.message.split('\n')[0]}), cut to the next room`);
+        await story(() => { window.__bot.cmd = { type: 'wait', n: 0, t: 0, done: true }; });
+        await story((i) => { const s = window.__tapeoutGame.story; s.warp(s.place, i); }, r.index + 1);
+        await wait(40);
+      }
     }
   }
   // the chip map, back home

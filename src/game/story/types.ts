@@ -19,7 +19,7 @@ export interface WireRun {
 
 export type StationKind =
   | 'port' | 'panel' | 'bench' | 'lever' | 'debug' | 'node' | 'gate'
-  | 'archive' | 'review' | 'board' | 'map' | 'crt' | 'arcade' | 'interview' | 'lift' | 'calib' | 'patrol';
+  | 'archive' | 'review' | 'board' | 'map' | 'crt' | 'arcade' | 'interview' | 'lift' | 'calib' | 'patrol' | 'hatch' | 'rail';
 
 /** Something the drone presses E at. `module` is the module it scores, `arg` an instrument reading or a lesson. */
 export interface Station { id: string; kind: StationKind; x: number; y: number; label: string; module?: string; arg?: string }
@@ -31,7 +31,7 @@ export interface Gate { id: string; kind: GateKind; rect: Rect }
 /** Lines TAPEOUT says when the drone first passes x (and y, when given: the drone must be above it). */
 export interface Trigger { id: string; x: number; y?: number; lines: string[] }
 
-export type Music = 'keeper' | 'boss' | 'loft' | 'bench';
+export type Music = 'keeper' | 'boss' | 'loft' | 'bench' | 'core';
 
 export interface StoryRoom extends Room {
   id: string;
@@ -52,6 +52,9 @@ export interface StoryRoom extends Room {
   music: Music;
   /** A decorative fixture the art draws: the lamp, the lift sensor, the ALU, the board, the bench rig. */
   props2?: { kind: 'lamp' | 'sensor' | 'alu' | 'board' | 'rig' | 'window' | 'plaque' | 'coilgate'; x: number; y: number; w?: number; h?: number }[];
+  /** Bus rails the drone can ride with the Datapath Rail (Phase 4 Spec, section 7). A 'rail' station's arg is the
+   * rail's index. */
+  rails?: { x1: number; y1: number; x2: number; y2: number }[];
   // --- composed places (Phase 3 Spec, section 2); Level 1's rooms leave these out ---
   /** What the room is for; the director's generic paths key on it. */
   role?: RoomRole;

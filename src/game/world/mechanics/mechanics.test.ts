@@ -9,13 +9,17 @@ import { crateSide } from '../../tuning';
 import { floorY, r } from '../templates/kit';
 import type { MechanicDef, MechanicKind, MechCtx } from '../types';
 import { MECHANICS } from './index';
+import { BUS } from './bus';
 import { CLOCKED } from './clocked';
+import { CLOCKS } from './clocks';
 import { INVERTED } from './inverted';
 import { LAMPS } from './lamps';
+import { LOOP } from './loop';
 import { PATTERN } from './pattern';
 import { SELECT } from './select';
+import { HAZARD_TICK, STAGES, TICK_STEPS } from './stages';
 
-const KINDS: MechanicKind[] = ['lamps', 'inverted', 'select', 'clocked', 'pattern'];
+const KINDS: MechanicKind[] = ['lamps', 'inverted', 'select', 'clocked', 'pattern', 'loop', 'bus', 'clocks', 'stages'];
 const FLOOR = floorY(720);
 /** A lift at rest on the floor, and fully risen (360 px above the floor). */
 const REST = FLOOR - 24, UP = FLOOR - 360;
@@ -58,6 +62,8 @@ function rig(room: StoryRoom): Rig {
     close: (id) => { log.push(`close:${id}`); },
     sfx: (n) => { log.push(`sfx:${n}`); },
     say: (line) => { log.push(`say:${line}`); },
+    warp(x, y) { c.drone = { ...c.drone, x: x - c.drone.w / 2, y: y - c.drone.h / 2 }; log.push('warp'); },
+    hurt: (n) => { log.push(`hurt:${n}`); },
     solve: () => { log.push('solve'); },
   };
   return { c, log, gate };
@@ -97,8 +103,11 @@ function expectRoom(room: StoryRoom, kind: MechanicKind) {
   expect(room.exit.x).toBe(room.w - 40);
   const exit = room.gates.find((g) => g.id === 'exit');
   expect(exit?.kind).toBe('door');
-  expect(exit?.rect).toEqual(r(room.w - 200, floor - 200, 48, 200));
-  expect(room.solids).toContainEqual(r(room.w - 200, 0, 48, floor - 200));
+  // the exit door is 48 x 200 at the right, standing on the floor or on a ledge, with the wall solid above it
+  const door = exit!.rect;
+  expect([door.x, door.w, door.h]).toEqual([room.w - 200, 48, 200]);
+  expect(door.y + door.h === floor || room.solids.some((s) => s.y === door.y + door.h && s.x <= door.x && s.x + s.w >= door.x)).toBe(true);
+  expect(room.solids).toContainEqual(r(room.w - 200, 0, 48, door.y));
   expect(room.spawn.y + 24).toBe(floor);
   expect(room.spawn.x).toBeGreaterThan(0);
   expect(room.spawn.x).toBeLessThan(room.w);
@@ -158,12 +167,68 @@ function playPattern(rg: Rig) {
   tick(PATTERN, s, rg, 30);
 }
 
+function playLoop(rg: Rig) {
+  const s = LOOP.init();
+  for (let i = 0; i < 2; i++) {
+    rg.c.used = 'step';
+    tick(LOOP, s, rg);
+    tick(LOOP, s, rg, 40);
+  }
+  rg.c.drone = { x: 1100 - 18, y: 320 - 48, w: 36, h: 48 };
+  rg.c.grounded = true;
+  tick(LOOP, s, rg, 2);
+}
+
+/** Puts the fake drone's feet at (x, y). */
+function feet(rg: Rig, x: number, y: number, grounded = true) {
+  rg.c.drone = { x: x - 18, y: y - 48, w: 36, h: 48 };
+  rg.c.grounded = grounded;
+}
+
+function playBus(rg: Rig) {
+  const s = BUS.init();
+  feet(rg, 200, 580);
+  rg.c.used = 'railA';
+  tick(BUS, s, rg, 60);
+  feet(rg, 940, 580);
+  rg.c.used = 'sel';
+  tick(BUS, s, rg);
+  feet(rg, 820, 580);
+  rg.c.used = 'railB';
+  tick(BUS, s, rg, 60);
+  feet(rg, 1370, 380);
+  tick(BUS, s, rg, 2);
+}
+
+function playClocks(rg: Rig) {
+  const s = CLOCKS.init();
+  feet(rg, 790, 440);
+  tick(CLOCKS, s, rg, 110);
+  feet(rg, 820, 260);
+  tick(CLOCKS, s, rg);
+  feet(rg, 1350, 520);
+  tick(CLOCKS, s, rg, 2);
+}
+
+function playStages(rg: Rig) {
+  const s = STAGES.init();
+  // stall EX in the middle of the hazard tick, when its lamp is amber
+  tick(STAGES, s, rg, HAZARD_TICK * TICK_STEPS + TICK_STEPS / 2);
+  rg.c.used = 'stall';
+  tick(STAGES, s, rg);
+  tick(STAGES, s, rg, 1800);
+}
+
 const PLAYS: Record<MechanicKind, (rg: Rig) => void> = {
   lamps: playLamps,
   inverted: playInverted,
   select: playSelect,
   clocked: playClocked,
   pattern: playPattern,
+  loop: playLoop,
+  bus: playBus,
+  clocks: playClocks,
+  stages: playStages,
 };
 
 // A canvas that accepts every call: the draw code runs, its pixels are not checked.

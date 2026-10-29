@@ -39,7 +39,7 @@ export interface Shot {
   dead: boolean;
 }
 
-export type Weapon = 'pulse' | 'charged' | 'fan' | 'cannon';
+export type Weapon = 'pulse' | 'charged' | 'fan' | 'cannon' | 'burst';
 export const WEAPONS: Weapon[] = ['pulse', 'charged'];
 
 /** What the Field Coil is doing this step. */
@@ -67,6 +67,8 @@ export type Fx =
   | { t: 'swap'; weapon: Weapon }
   | { t: 'fizzle'; x: number; y: number }
   | { t: 'repair'; panel: number }
+  | { t: 'sync'; x: number; y: number }
+  | { t: 'rail'; x: number; y: number }
   | { t: 'enemyBoot'; x: number; y: number };
 
 /** Deterministic random numbers (mulberry32), so a test run is the same every time. */
@@ -109,7 +111,24 @@ export interface Kit {
   fieldRadius?: number;
   /** ALU Cannon damage (Mk II: 48). */
   cannonDamage?: number;
+  // --- act 2 upgrades (Phase 4 Spec, section 7) ---
+  /** Weapon slots the HUD lists and the number keys pick (left out: every owned weapon). Q still cycles them all. */
+  slots?: number;
+  /** Pipeline Burst: bolts a burst. */
+  burstBolts?: number;
+  /** Loop Drone: damage a bolt (left out: no companion). */
+  loopDrone?: number;
+  /** Datapath Rail: ride speed px/s (left out: rails cannot be ridden). */
+  rail?: number;
+  /** Synchronizer: seconds of slow time on F (left out: no gadget). */
+  sync?: number;
 }
+
+/** A bus rail (Phase 4 Spec, section 7): the drone hangs RAIL_HANG px under it while it rides. */
+export interface RailLine { x1: number; y1: number; x2: number; y2: number }
+export const RAIL_HANG = 30;
+/** The rail's y at x (a straight line). */
+export const railY = (r: RailLine, x: number) => r.y1 + (r.y2 - r.y1) * ((x - r.x1) / (r.x2 - r.x1 || 1));
 
 /** Enemies the sim keeps in its list: the living, and dead Racers their partner can still revive. */
 const kept = (e: Enemy) => e.alive || racerPending(e);
@@ -191,8 +210,30 @@ export class Sim {
   /** Inverted Grip: the enemy the field holds, and enemies thrown and still flying (they hurt what they hit). */
   heldEnemy: Enemy | null = null;
   private thrown = new Map<Enemy, number>();
+  /** Synchronizer: steps of slow time left, and steps until it can be used again. */
+  slowT = 0;
+  slowCd = 0;
+  /** Pipeline Burst: bolts still to fire in this burst, and ms until the next. */
+  private burstLeft = 0;
+  private burstT = 0;
+  /** Loop Drone: its place on the orbit (radians) and ms until its next bolt; `loopPos` is null while it is hidden. */
+  loopAngle = 0;
+  private loopCd = 0;
+  loopPos: Vec | null = null;
+  /** Datapath Rail: the rail being ridden, where along it (x), and which way. */
+  riding: { rail: RailLine; x: number; dir: 1 | -1 } | null = null;
+  /** Stall Bubble: the drone is inside a field this step (it runs at half speed). */
+  stalled = false;
   /** The weapons the drone can switch between now. */
   get weapons(): Weapon[] { return this.kit.weapons ?? (this.kit.charged ? ['pulse', 'charged'] : ['pulse']); }
+  /** Weapons in the order they were last picked, most recent first (Phase 4 Spec, section 7: the slot rule). */
+  picked: Weapon[] = [];
+  /** The slots the HUD shows and the number keys pick: the most recently picked weapons, in the order owned. */
+  get slotted(): Weapon[] {
+    const ws = this.weapons, n = Math.min(this.kit.slots ?? ws.length, ws.length);
+    const keep = [...this.picked.filter((w) => ws.includes(w)), ...ws.filter((w) => !this.picked.includes(w))].slice(0, n);
+    return ws.filter((w) => keep.includes(w));
+  }
 
   constructor(public room: Room, seed = 1, make?: { act: number; story: boolean }) {
     if (make) this.make = make;
@@ -280,23 +321,35 @@ export class Sim {
     if (!ws.includes(this.weapon)) this.weapon = ws[0];
     if (!frozen && ws.length > 1) {
       const slot = (['slot1', 'slot2', 'slot3'] as const).findIndex((a) => c.pressed.has(a));
-      const next = c.pressed.has('weapon') ? ws[(ws.indexOf(this.weapon) + 1) % ws.length] : slot >= 0 ? ws[slot] : undefined;
+      const next = c.pressed.has('weapon') ? ws[(ws.indexOf(this.weapon) + 1) % ws.length] : slot >= 0 ? this.slotted[slot] : undefined;
       if (next && next !== this.weapon) {
         this.weapon = next;
+        this.picked = [next, ...this.picked.filter((w) => w !== next)];
         this.charge = 0;
         this.fx.push({ t: 'swap', weapon: this.weapon });
       }
     }
 
+    this.stalled = !frozen && this.enemies.some((e) => e.alive && !!e.field && Math.hypot(e.x - d.x, e.y - d.y) < e.field);
+    d.slow = this.stalled ? 0.5 : 1;
+    this.stepSync(ctl, frozen);
     const r = stepDrone(d, ctl, this.world, v.energy, frozen);
     if (!frozen) d.facing = aimAt.x >= d.x ? 1 : -1;
     if (r.dashed) { spend(v, DRONE.dashEnergy); this.events.push('dash'); this.fx.push({ t: 'dash', x: d.x, y: d.y }); }
     if (r.jumped) { this.events.push('jump'); this.fx.push({ t: 'jump', x: d.x, y: d.y + d.h / 2 }); }
     this.stepField(ctl, frozen);
     const ctx = this.ctx();
-    for (const e of this.enemies) e.step(ctx);
+    // the Synchronizer halves the enemies' clock: their brains run every other step and their bodies move half as far
+    const slow = this.slowT > 0, tick = !slow || this.steps % 2 === 0;
+    const before = slow ? this.enemies.map((e) => (e.body ? { x: e.body.position.x, y: e.body.position.y } : null)) : [];
+    for (const e of this.enemies) if (tick) e.step(ctx);
     if (this.spawned.length) { this.enemies.push(...this.spawned); this.spawned = []; }
     stepWorld(this.world);
+    if (slow) this.enemies.forEach((e, i) => {
+      const b = before[i];
+      if (b && e.body) Matter.Body.setPosition(e.body, { x: b.x + (e.body.position.x - b.x) * UP.sync.scale, y: b.y + (e.body.position.y - b.y) * UP.sync.scale });
+    });
+    this.stepRail(ctl, frozen);
     settleDrone(d, this.world, this.room);
     if (!wasGrounded && d.grounded && !frozen) { this.events.push('land'); this.fx.push({ t: 'land', x: d.x, y: d.y + d.h / 2, speed: Math.max(0, fallSpeed) }); }
     if (d.grounded && !d.onOneWay && !this.room.hazards.some((h) => overlaps(droneRect(d), { ...h, y: h.y - 40, h: h.h + 40 }))) {
@@ -304,6 +357,8 @@ export class Sim {
     }
 
     this.stepWeapon(ctl, frozen);
+    if (!frozen) this.stepBurst();
+    this.stepLoopDrone(frozen);
     this.stepThrown();
     this.stepContacts();
     this.stepEmitters();
@@ -529,7 +584,16 @@ export class Sim {
     this.fireCd -= STEP_MS;
     this.fireBuf = Math.max(0, this.fireBuf - STEP_MS);
     if (holding || this.heldEnemy || frozen || !this.kit.gun || this.kit.holster) { this.charge = 0; this.fireWasHeld = held; if (this.fireCd < 0) this.fireCd = 0; return; }
-    if (this.weapon === 'pulse' || this.weapon === 'fan' || this.weapon === 'cannon') {
+    if (this.weapon === 'burst') {
+      if (pressed) this.fireBuf = T.probe.bufferMs;
+      if ((held || this.fireBuf > 0) && this.fireCd <= 0 && this.burstLeft === 0) {
+        if (spend(this.vitals, UP.burst.energy)) { this.burstLeft = this.kit.burstBolts ?? UP.burst.bolts; this.burstT = STEP_MS; }
+        else { const m = this.muzzle(); this.fx.push({ t: 'fizzle', x: m.x, y: m.y }); }
+        this.fireCd = UP.burst.cooldownS * 1000;
+        this.fireBuf = 0;
+      }
+      if (this.fireCd < 0) this.fireCd = 0;
+    } else if (this.weapon === 'pulse' || this.weapon === 'fan' || this.weapon === 'cannon') {
       const rate = this.weapon === 'pulse' ? this.probeRate() : this.weapon === 'fan' ? UP.fan.rate : UP.cannon.rate;
       if (pressed) this.fireBuf = T.probe.bufferMs;
       if ((held || this.fireBuf > 0) && this.fireCd <= 0) {
@@ -557,6 +621,86 @@ export class Sim {
       if (this.fireCd < 0) this.fireCd = 0;
     }
     this.fireWasHeld = held;
+  }
+
+  /** Pipeline Burst: the armed bolts leave 80 ms apart, the first on the step the burst is armed. */
+  private stepBurst() {
+    if (this.burstLeft <= 0) return;
+    this.burstT -= STEP_MS;
+    if (this.burstT > 0) return;
+    const B = UP.burst;
+    this.shoot('bolt', (this.rand() * 2 - 1) * T.probe.spread * deg, B.speed, B.range, B.damage, 1, 1, 'burst');
+    this.burstLeft--;
+    this.burstT += B.gapMs;
+  }
+
+  /** Synchronizer (F): half-speed enemies for a few seconds; Metastables in view resolve and stay hittable. */
+  private stepSync(c: Controls, frozen: boolean) {
+    if (this.slowT > 0) this.slowT--;
+    if (this.slowCd > 0) this.slowCd--;
+    const sec = this.kit.sync;
+    if (!sec || frozen || !c.pressed.has('gadget')) return;
+    const d = this.drone;
+    if (this.slowCd > 0 || !spend(this.vitals, UP.sync.energy)) { this.fx.push({ t: 'fizzle', x: d.x, y: d.y }); return; }
+    this.slowT = Math.round(sec * HZ);
+    this.slowCd = Math.round(UP.sync.cooldownS * HZ);
+    this.fx.push({ t: 'sync', x: d.x, y: d.y });
+    for (const e of this.enemies) if (e.alive && Math.abs(e.x - d.x) < 960 && Math.abs(e.y - d.y) < 560) e.resolve?.(this.slowT);
+  }
+
+  /** Datapath Rail: clip on at a rail's end (the story calls this from a rail station). */
+  ride(rail: RailLine) {
+    if (!this.kit.rail || this.riding) return false;
+    const d = this.drone, dir: 1 | -1 = Math.abs(d.x - rail.x1) <= Math.abs(d.x - rail.x2) ? (rail.x2 > rail.x1 ? 1 : -1) : (rail.x2 > rail.x1 ? -1 : 1);
+    this.riding = { rail, x: dir === (rail.x2 > rail.x1 ? 1 : -1) ? rail.x1 : rail.x2, dir };
+    this.fx.push({ t: 'rail', x: d.x, y: d.y });
+    return true;
+  }
+
+  private stepRail(c: Controls, frozen: boolean) {
+    const ride = this.riding;
+    if (!ride) return;
+    const d = this.drone, sp = this.kit.rail ?? UP.rail.speed, r = ride.rail;
+    const lo = Math.min(r.x1, r.x2), hi = Math.max(r.x1, r.x2);
+    ride.x += (ride.dir * sp) / HZ;
+    const end = ride.x <= lo || ride.x >= hi;
+    ride.x = Math.max(lo, Math.min(hi, ride.x));
+    const y = railY(r, ride.x) + RAIL_HANG;
+    Matter.Body.setPosition(d.body, { x: ride.x, y });
+    d.x = ride.x;
+    d.y = y;
+    // jumping off keeps the speed; so does reaching the end
+    const jump = c.pressed.has('jump') && !frozen;
+    Matter.Body.setVelocity(d.body, { x: (ride.dir * sp) / HZ, y: jump ? -DRONE.jump * 0.6 : 0 });
+    d.vx = (ride.dir * sp) / HZ;
+    d.vy = jump ? -DRONE.jump * 0.6 : 0;
+    if (end || jump || frozen) this.riding = null;
+  }
+
+  /** Loop Drone: orbits at 60 px and fires at the nearest enemy in reach it can see, twice a second. */
+  private stepLoopDrone(frozen: boolean) {
+    const dmg = this.kit.loopDrone;
+    if (!dmg || this.kit.holster || frozen) { this.loopPos = null; return; }
+    const d = this.drone, L = UP.loopDrone;
+    this.loopAngle += (Math.PI * 2) / (2.4 * HZ);
+    this.loopPos = { x: d.x + Math.cos(this.loopAngle) * L.orbit, y: d.y - 10 + Math.sin(this.loopAngle) * L.orbit * 0.45 };
+    this.loopCd -= STEP_MS;
+    if (this.loopCd > 0) return;
+    const p = this.loopPos;
+    let best: Enemy | null = null, bd: number = L.range;
+    for (const e of this.enemies) {
+      if (!e.alive || !e.hittable()) continue;
+      const dist = Math.hypot(e.x - p.x, e.y - p.y);
+      if (dist < bd && this.ctx().sight(p, { x: e.x, y: e.y })) { best = e; bd = dist; }
+    }
+    if (!best) { this.loopCd = 0; return; }
+    const a = Math.atan2(best.y - p.y, best.x - p.x), sp = L.speed / HZ;
+    const s = this.take();
+    Object.assign(s, { x: p.x, y: p.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, left: Math.round((L.range * 1.2 / L.speed) * HZ), damage: dmg, friendly: true, kind: 'bolt', pierce: 1, knockMul: 0.5, reflected: false, dead: false });
+    s.hit.clear();
+    this.shots.push(s);
+    this.fx.push({ t: 'shot', x: p.x, y: p.y, dx: Math.cos(a), dy: Math.sin(a), weapon: 'pulse' });
+    this.loopCd = 1000 / L.rate;
   }
 
   /** An enemy shot (px/s): enemies and boss attacks fire these. */
@@ -623,6 +767,9 @@ export class Sim {
 
   private stepShots() {
     const d = this.drone, dr = droneRect(d), dummy = this.dummyRect();
+    // the Synchronizer: enemy shots fly at half speed (and live twice as long, so they still reach as far)
+    const slowed = this.slowT > 0 ? this.shots.filter((s) => !s.friendly) : [];
+    for (const s of slowed) { s.vx *= UP.sync.scale; s.vy *= UP.sync.scale; if (this.steps % 2) s.left++; }
     for (const s of this.shots) {
       // reflect enemy orbs that enter the field (plan F, decision 8)
       if (!s.friendly && this.inField({ x: s.x, y: s.y }, 6)) {
@@ -704,6 +851,7 @@ export class Sim {
         s.dead = true;
       }
     }
+    for (const s of slowed) { s.vx /= UP.sync.scale; s.vy /= UP.sync.scale; }
     const live: Shot[] = [];
     for (const s of this.shots) (s.dead ? this.free(s) : live.push(s));
     this.shots = live;

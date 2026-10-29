@@ -8,7 +8,7 @@ import type { PlaceDef } from '../world/types';
 
 /** A place's name on the lift and the chip map: a study room is the chalkboard. */
 function liftName(p: PlaceDef): string {
-  return p.kind === 'study' ? `${p.name} (Chalkboard)` : p.name;
+  return p.kind === 'study' ? `${p.name} (Chalkboard)` : p.kind === 'deep' ? `${p.name} (Deep Layer)` : p.name;
 }
 
 /** The modules that count toward a place: not optional and not practice (the same rule as placeDone). */
@@ -16,14 +16,19 @@ function scoredOf(chapter: Chapter): Module[] {
   return chapter.modules.filter((m) => !m.optional && m.kind !== 'practice');
 }
 
+/** Locked places the lift lists, dimmed, after the open ones. */
+export const LOCKED_SHOWN = 3;
+
 /**
  * The lift's choice card. First "Continue" to the place that holds recommended(), when that place is open and listed.
- * Then every open main or study place in PLACES order, ticked when finished. Then the locked ones, dimmed, each with
- * the first unfinished place it needs.
+ * Then every open main or study place in PLACES order, ticked when finished. Then the next LOCKED_SHOWN locked ones, dimmed,
+ * each with the first unfinished place it needs.
  */
 export function liftChoices(done: (id: string) => boolean): { place: string; text: string; dim: boolean }[] {
   const open = new Set(openPlaces(done).map((p) => p.id));
-  const listed = PLACES.filter((p) => p.kind === 'main' || p.kind === 'study');
+  // Deep Layers ride the lift too, in play order, so a returning player never walks a level to reach one (Phase 4 Spec,
+  // section 3)
+  const listed = PLACES.filter((p) => p.kind === 'main' || p.kind === 'study' || p.kind === 'deep');
   const out: { place: string; text: string; dim: boolean }[] = [];
   const next = recommended();
   const nextPlace = next ? placeOf(next.id) : undefined;
@@ -33,11 +38,14 @@ export function liftChoices(done: (id: string) => boolean): { place: string; tex
   for (const p of listed) {
     if (open.has(p.id)) out.push({ place: p.id, text: `${liftName(p)}${placeDone(p, done) ? ' ✓' : ''}`, dim: false });
   }
+  // the next few locked places only, so the list stays short as the chip grows (Phase 4 self-review)
+  let locked = 0;
   for (const p of listed) {
-    if (open.has(p.id)) continue;
+    if (open.has(p.id) || locked >= LOCKED_SHOWN) continue;
     const need = p.after.map((id) => placeById(id)).find((q): q is PlaceDef => !!q && !placeDone(q, done));
     if (!need) continue;
     out.push({ place: p.id, text: `${liftName(p)} · Needs: ${need.name}`, dim: true });
+    locked++;
   }
   return out;
 }

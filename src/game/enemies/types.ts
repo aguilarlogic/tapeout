@@ -50,6 +50,10 @@ export interface Enemy {
   gripMass?: number;
   /** Drawn faint until revealed (the hidden Stuck-At Turret); 0..1, 1 when fully seen. */
   seen?: number;
+  /** Stall Bubble: the radius of its field, in px; inside it the drone runs at half speed. */
+  field?: number;
+  /** Metastable: the Synchronizer holds it resolved and hittable for this many steps. */
+  resolve?(steps: number): void;
   /** Can shots and thrown objects hit it right now? */
   hittable(): boolean;
   /** Does touching it hurt right now, and for how much? 0 means harmless. */

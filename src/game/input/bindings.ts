@@ -24,7 +24,7 @@ export const ACTIONS: { id: Action; label: string; later?: boolean }[] = [
   { id: 'slot2', label: 'Weapon slot 2' },
   { id: 'slot3', label: 'Weapon slot 3' },
   { id: 'beam', label: 'Beam Toggle' },
-  { id: 'gadget', label: 'Gadget', later: true },
+  { id: 'gadget', label: 'Gadget' },
   { id: 'scan', label: 'Scan', later: true },
   { id: 'rewind', label: 'Rewind', later: true },
   { id: 'sync', label: 'Sync', later: true },

@@ -16,7 +16,7 @@ const state = await import('../../state');
 const recall = await import('../../recall');
 const places = await import('../world/places');
 const { ALL_MODULES } = await import('../../curriculum');
-const { calibRows, liftChoices, mapRows, reviewDue, studyRows } = await import('./data');
+const { calibRows, liftChoices, LOCKED_SHOWN, mapRows, reviewDue, studyRows } = await import('./data');
 
 const DAY = 86400000;
 const done = (id: string) => !!state.levelRecord(id);
@@ -48,9 +48,11 @@ describe('the lift choices', () => {
     expect(rows).toContainEqual({ place: 'volts-and-amps', text: 'Volts and Amps (Chalkboard) · Needs: Bit Zero', dim: true });
   });
 
-  it('lists only main and study places', () => {
-    const ids = liftChoices(done).map((r) => r.place);
-    expect(ids).not.toContain('firmware-pit');
+  it('lists main, study and deep places, not wings or side areas', () => {
+    for (const p of ['bit-zero', 'volts-and-amps', 'lamp-board', 'inverted-hall', 'carry-chain', 'clockwork']) finish(scoredIds(p));
+    const rows = liftChoices(done), ids = rows.map((r) => r.place);
+    expect(ids).toContain('firmware-pit');
+    expect(rows.find((r) => r.place === 'firmware-pit')?.text).toMatch(/^Firmware Pit \(Deep Layer\)/);
     expect(ids).not.toContain('analog-wing');
     expect(ids).not.toContain('hiring-hall');
   });
@@ -66,6 +68,11 @@ describe('the lift choices', () => {
   it('keeps The Lamp Board locked after Bit Zero alone, since it needs Volts and Amps', () => {
     finish(scoredIds('bit-zero'));
     expect(liftChoices(done)).toContainEqual({ place: 'lamp-board', text: 'The Lamp Board · Needs: Volts and Amps', dim: true });
+  });
+
+  it('lists only the next few locked places, so the lift stays short', () => {
+    const rows = liftChoices(done);
+    expect(rows.filter((r) => r.dim).length).toBe(LOCKED_SHOWN);
   });
 
   it('opens The Lamp Board once Volts and Amps is finished, and continues there', () => {

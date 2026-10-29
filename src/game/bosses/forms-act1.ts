@@ -1,5 +1,6 @@
 // The act 1 bosses' forms (Phase 3 Spec, section 6): which body each incident wears in its arena, and which attacks it
 // runs, in turn.
+import { FORMS_ACT2 } from './forms-act2';
 import type { BossForm } from './types';
 
 export const FORMS_ACT1: BossForm[] = [
@@ -11,6 +12,9 @@ export const FORMS_ACT1: BossForm[] = [
   { incident: 'inc-rtl', name: 'The Regression That Lied', body: 'twin', attacks: ['mirror', 'grid'] },
 ];
 
-/** The form an incident fights in; a later act's incident without its own form wears the lamps and fires bolts. */
+/** The form an incident fights in (acts 1 and 2). A later act's incident with no form of its own wears the lamps and
+ *  fires bolts. */
 export const formFor = (incident: string): BossForm =>
-  FORMS_ACT1.find((f) => f.incident === incident) ?? { incident, name: incident, body: 'lamps', attacks: ['bolts', 'drop'] };
+  [...FORMS_ACT1, ...FORMS_ACT2].find((f) => f.incident === incident) ?? {
+    incident, name: incident, body: 'lamps', attacks: ['bolts', 'drop'],
+  };

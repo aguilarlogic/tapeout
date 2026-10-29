@@ -6,7 +6,8 @@ import { frames } from '../tuning';
 import { easeOut, FONT, PAL, rgba } from './palette';
 
 /** The weapon's name, shown under its readout for 1.2 s after a swap and faded over the last 0.3 s. */
-const WEAPON_NAME: Record<Weapon, string> = { pulse: 'PULSE PROBE', charged: 'CHARGED PROBE', fan: 'FAN DECODER', cannon: 'ALU CANNON' };
+const SHORT: Record<Weapon, string> = { pulse: 'PULSE', charged: 'CHARGED', fan: 'FAN', cannon: 'CANNON', burst: 'BURST' };
+const WEAPON_NAME: Record<Weapon, string> = { pulse: 'PULSE PROBE', charged: 'CHARGED PROBE', fan: 'FAN DECODER', cannon: 'ALU CANNON', burst: 'PIPELINE BURST' };
 const NAME_STEPS = frames(1200), NAME_FADE = frames(300);
 
 export class Hud {
@@ -91,8 +92,17 @@ export class Hud {
       c.moveTo(wx + 20, wy - 3); c.lineTo(wx + 24, wy); c.lineTo(wx + 20, wy + 3);
     }
     c.stroke();
-    c.fillStyle = rgba(PAL.text, 0.7);
-    c.fillText(({ pulse: 'PULSE', charged: 'CHARGED', fan: 'FAN', cannon: 'CANNON' } as const)[sim.weapon], wx + 30, wy);
+    // one weapon: its short name; two or more (the Selector): the slots, numbered for their keys, the one in hand lit
+    const slots = sim.weapons.length > 1 ? sim.slotted : [sim.weapon];
+    let tx = wx + 30;
+    slots.forEach((w, i) => {
+      const on = w === sim.weapon, label = slots.length > 1 ? `${i + 1} ${SHORT[w]}` : SHORT[w];
+      c.fillStyle = on ? rgba(PAL.text, 0.85) : rgba(PAL.text, 0.35);
+      c.fillText(label, tx, wy);
+      const tw = c.measureText(label).width;
+      if (on && slots.length > 1) { c.fillStyle = rgba(w === 'charged' ? PAL.neon : PAL.trace, 0.8); c.fillRect(tx, wy + 7, tw, 1.5); }
+      tx += tw + 12;
+    });
     // the weapon's name, under the readout, after a swap
     if (this.nameT < NAME_STEPS) {
       c.globalAlpha = s * this.gunA * Math.min(1, (NAME_STEPS - this.nameT) / NAME_FADE);

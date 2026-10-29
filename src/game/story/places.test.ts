@@ -127,7 +127,11 @@ describe('act 1 places', () => {
     // level 3: 400 + 50 × 2 = 500, × 0.75 on Story (the default for a new player)
     const story = Director.difficulty() === 'story';
     expect(b.maxHp).toBe(Math.round(500 * (story ? TUNING.story.boss.storyHp : 1)));
-    expect(d.out.some((o) => o.t === 'card' && o.kind === 'pager')).toBe(true);
+    const pager = d.out.find((o) => o.t === 'card' && o.kind === 'pager');
+    expect(pager).toBeTruthy();
+    // the title carries the page's own severity, and the body does not repeat it
+    const sev = /SEV-\d/.exec(b.incident.pager)![0];
+    if (pager && pager.t === 'card') { expect(pager.title).toBe(`PAGER · ${sev}`); expect(pager.lines[0]).not.toMatch(/^PAGER/); }
     expect(d.form).not.toBeNull();
     d.cardClosed();
     expect(b.phase).toBe('investigate');
