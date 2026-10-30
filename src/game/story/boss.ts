@@ -5,7 +5,7 @@
 // Pure: the director feeds it steps.
 import { demoBoardIncident } from '../../incidents/first';
 import { type FixOption, Investigation, seeded } from '../../incidents/engine';
-import type { Incident } from '../../incidents/types';
+import { type Incident, WRONG_COST } from '../../incidents/types';
 import { frames, TUNING } from '../tuning';
 
 export type BossPhase = 'pager' | 'investigate' | 'fix' | 'finish' | 'done';
@@ -30,6 +30,9 @@ export class BossFight {
   private steps = 0;
   /** How many times the board went dark again (a guess sent back, or the clock ran out). */
   restarts = 0;
+  /** The first boss teaches (Boss Fix Plan): a wrong call costs `TUNING.story.boss.gentleWrongMin`, the clock running out
+   * never resets the board, a right guess goes on to the fix for one star, and a wrong fix never drops the shield. */
+  gentle = false;
 
   /** Any incident can be the boss (Phase 3 Spec, section 6); `hp` is its Standard health (Level 1: the board's). */
   constructor(story: boolean, private seed = (Date.now() >>> 0) || 1, cause?: string, readonly incident: Incident = demoBoardIncident, hp: number = TUNING.story.boss.hp) {
@@ -78,10 +81,11 @@ export class BossFight {
   diagnose(id: string): 'wrong' | 'guessed' | 'right' | 'late' {
     const ok = this.inv.diagnose(id);
     if (!ok) {
+      if (this.gentle) { this.inv.spent -= WRONG_COST - TUNING.story.boss.gentleWrongMin; return 'wrong'; }
       this.enraged = frames(TUNING.story.boss.enrageMs);
       return this.inv.left <= 0 ? 'late' : 'wrong';
     }
-    if (this.inv.guessed) return 'guessed';
+    if (this.inv.guessed && !this.gentle) return 'guessed';
     this.phase = 'fix';
     return 'right';
   }
@@ -96,6 +100,7 @@ export class BossFight {
     const o = this.fixes()[i];
     if (this.inv.applyFix(o)) { this.phase = 'finish'; return 'right'; }
     this.fixOpts = this.fixes().filter((x) => x !== o);
+    if (this.gentle) { this.inv.spent -= WRONG_COST - TUNING.story.boss.gentleWrongMin; return 'wrong'; }
     this.tempDown = frames(TUNING.story.boss.bandaidShieldMs);
     return this.inv.left <= 0 ? 'late' : 'wrong';
   }
@@ -125,7 +130,11 @@ export class BossFight {
     this.tempDown = 0;
   }
 
-  stars() { return this.inv.stars(); }
+  /** Gentle: a guess or a late finish still signs the board off, for one star (0 would write no record). */
+  stars() {
+    if (this.gentle && this.inv.solved && (this.inv.guessed || this.inv.left < 0)) return 1;
+    return this.inv.stars();
+  }
 
   /** What a careful expert would have spent on the same case (the debrief's benchmark). */
   expertMinutes(): number {

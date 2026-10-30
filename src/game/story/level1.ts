@@ -228,11 +228,13 @@ export const BOSS_DOOR: StoryRoom = {
 
 // --- 10. Demo Board Arena -----------------------------------------------------------------------------------------
 const F10 = 820;
-/** Instrument nodes, in the incident's order: flip 00..11, probe a..led-pin, meter led, look. */
+/** Instrument nodes, in the incident's order: flip 00..11, probe a..led-pin, meter led, look. All stand on the floor
+ * (Boss Fix Plan, item 4): the switch bank on the left, the probe bank on the right, the LED test and the look either
+ * side of the debug port. */
 const NODES: [string, string, number, number][] = [
-  ['flip', '00', 150, F10], ['flip', '01', 300, F10 - 140], ['flip', '10', 150, F10 - 280], ['flip', '11', 300, F10 - 420],
-  ['probe', 'a', 1770, F10], ['probe', 'b', 1620, F10 - 140], ['probe', 'and-out', 1770, F10 - 280], ['probe', 'led-pin', 1620, F10 - 420],
-  ['meter', 'led', 640, F10 - 140], ['look', '', 1280, F10 - 140],
+  ['flip', '00', 120, F10], ['flip', '01', 230, F10], ['flip', '10', 340, F10], ['flip', '11', 450, F10],
+  ['probe', 'a', 1470, F10], ['probe', 'b', 1580, F10], ['probe', 'and-out', 1690, F10], ['probe', 'led-pin', 1800, F10],
+  ['meter', 'led', 700, F10], ['look', '', 1220, F10],
 ];
 export const ARENA: StoryRoom = {
   ...none,
@@ -241,10 +243,8 @@ export const ARENA: StoryRoom = {
   solids: [
     ...shell(1920, 900, { door: 220 }),
     r(1872, 0, 48, F10 - 220), // the wall above the way out
-    // the node platforms up each side
-    r(240, F10 - 140, 140, 20), r(90, F10 - 280, 140, 20), r(240, F10 - 420, 140, 20),
-    r(1540, F10 - 140, 140, 20), r(1690, F10 - 280, 140, 20), r(1540, F10 - 420, 140, 20),
-    r(560, F10 - 140, 160, 20), r(1200, F10 - 140, 160, 20),
+    // ledges for the finish fight, clear of the node banks below
+    r(560, F10 - 170, 160, 20), r(1200, F10 - 170, 160, 20), r(250, F10 - 300, 160, 20), r(1510, F10 - 300, 160, 20),
   ],
   stations: [
     ...NODES.map(([cmd, arg, x, y]) => ({ id: `node:${cmd}${arg ? ` ${arg}` : ''}`, kind: 'node' as const, x, y, label: `${cmd.toUpperCase()}${arg ? ` ${arg.toUpperCase()}` : ''}`, arg: `${cmd}${arg ? ` ${arg}` : ''}` })),
@@ -253,6 +253,11 @@ export const ARENA: StoryRoom = {
   enemies: [{ kind: 'glitch', x: 600, y: F10 - 16 }, { kind: 'glitch', x: 1320, y: F10 - 16 }],
   gates: [{ id: 'door', kind: 'door', rect: r(1872, F10 - 220, 48, 220) }],
   props2: [{ kind: 'board', x: 960, y: 370, w: 520, h: 240 }],
+  // high on the back wall, clear of the suspects board and the reading card below them
+  signs: [
+    { x: 285, y: F10 - 350, text: 'SWITCHES · SET A AND B, WATCH THE LIGHTS' },
+    { x: 1580, y: F10 - 350, text: 'PROBES · IS THIS WIRE 1 OR 0?' },
+  ],
   traces: [trace(0, 700, 700), trace(1220, 1920, 700), trace(0, 1920, 90, -30)],
   exit: { x: 1900 },
 };

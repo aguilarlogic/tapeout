@@ -654,7 +654,7 @@ export class GameScreen {
           else openPort(host, o.module, (ok) => { if (ok) st.lampOn(); }, (passed) => st.overlayClosed(o.module, passed));
           break;
         case 'card': openCard(host, o, () => st.cardClosed()); break;
-        case 'choose': openChoice(host, { title: o.title, options: o.options, back: o.kind === 'cause' || o.kind === 'loftLift' ? 'Back' : undefined }, (i) => st.chose(o.kind, i)); break;
+        case 'choose': openChoice(host, { title: o.title, lines: o.lines, options: o.options, back: o.kind === 'cause' || o.kind === 'loftLift' ? 'Back' : undefined }, (i) => st.chose(o.kind, i)); break;
         case 'profile': st.waiting = true; openProfile(host, () => { st.waiting = false; st.applyPrefs(); }); break;
         case 'loft':
           if (o.station === 'crt') { this.quit(); break; }

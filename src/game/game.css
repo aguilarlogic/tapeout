@@ -115,6 +115,9 @@
 }
 .st-lab { height: 100%; }
 .st-lab.lab-bench { padding: 12px; overflow: auto; background: var(--bg, #0b0f14); }
+/* inside the game a lab is a bench, not a web page: no site crumbs, page-to-page links, exports or simulator caveats */
+.st-lab .level-head .crumbs, .st-lab .level-head .title-row a.btn, .st-lab .model-note, .st-lab .toolbar button[title^="Download"] { display: none; }
+.st-choice .st-line { margin: 0 0 6px; font-size: calc(13px * var(--gm-text)); line-height: 1.5; color: #E1DFF2; }
 .st-mini { padding: 16px; overflow: auto; height: 100%; background: var(--panel, #11161d); color: var(--text, #e6edf3); }
 .st-card .st-line { margin: 0; font-size: calc(14px * var(--gm-text)); line-height: 1.55; color: #E1DFF2; }
 .st-card.upgrade { border-color: rgba(61, 255, 162, 0.75); box-shadow: 0 0 28px rgba(61, 255, 162, 0.18); }
