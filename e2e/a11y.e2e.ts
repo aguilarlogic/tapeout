@@ -258,6 +258,12 @@ test('13 Workbench (Verilog) lab', async ({ page }) => {
   expect(i, 'an early room with a bench station').toBeGreaterThanOrEqual(0);
   await warp(page, place, i);
   await useKind(page, 'bench');
+  // Level 1's first bench opens behind a card that says what a bench is (Boss Fix Plan, item 11)
+  const first = page.getByTestId('story-card');
+  if (await first.waitFor({ timeout: 1500 }).then(() => true, () => false)) {
+    await expectClean(page, 'Workbench first card', '[data-testid="story-card"]');
+    await first.getByRole('button').last().click();
+  }
   await expect(page.getByTestId('bench')).toBeVisible();
   await expectClean(page, 'Workbench (Verilog) lab', '[data-testid="bench"]');
 });

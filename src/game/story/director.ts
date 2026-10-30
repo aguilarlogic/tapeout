@@ -14,6 +14,7 @@ import { levelRecord, load, prefs, profile } from '../../state';
 import { recordLabFirstWire, recordLabTest } from '../../steplog';
 import { type Action, type Bindings, DEFAULTS } from '../input/bindings';
 import type { Rect } from '../level/room';
+import type { FixOption } from '../../incidents/engine';
 import { overlaps } from '../physics/geom';
 import { addMover, boundsRect, type Mover, moveMover, setPresent } from '../physics/world';
 import { droneRect } from '../player/drone';
@@ -34,7 +35,7 @@ import { racerPending } from '../enemies/racer';
 import { BossFight } from './boss';
 import { LEVEL1, LOFT } from './level1';
 import { blankWorld, kitFor, LOG_CAP, loadWorld, nodeIn, PANEL_NAMES, type Place, type PlaceSave, saveWorld, type StoryKit, startFor, type WorldSave } from './progress';
-import { BOOT_COLD, BOOT_PARTIAL, LINES, PARTIAL_LINES } from './script';
+import { BENCH_CARD, BOOT_COLD, BOOT_PARTIAL, LINES, PARTIAL_LINES } from './script';
 import { ENDING, HELLO, LAMP_AT_S, SKIP_S, stepLen, TYPE_S } from './ending';
 import { badges, notYet, panelOf, withCount } from './hall';
 import type { Music, Station, StationKind, StoryRoom, Terminal } from './types';
@@ -42,16 +43,18 @@ import { combos } from '../../games/logic/circuit';
 import { check, type Check, levelOf, nextWire, runStars, type Wire } from './wirerun';
 
 const S = TUNING.story;
+/** A Level 1 node's name as its sign shows it ("PROBE AND-OUT"). */
+const nodeName = (cmd: string, arg?: string) => `${cmd}${arg ? ` ${arg}` : ''}`.toUpperCase();
 
 export type StorySfx =
   | 'wireGrab' | 'wirePlug' | 'wireSnap' | 'rowTick' | 'pass' | 'notYet' | 'spark' | 'lever' | 'plate' | 'liftHum'
   | 'portOpen' | 'bossPhase' | 'fanfare' | 'chirp' | 'door' | 'crack' | 'shatter' | 'lightsOn' | 'reading'
-  | 'turret' | 'laser' | 'bossDrop' | 'chain' | 'freeze' | 'mirror' | 'beam' | 'repair';
+  | 'turret' | 'laser' | 'bossDrop' | 'chain' | 'freeze' | 'mirror' | 'beam' | 'repair' | 'clank';
 
 export type StoryOut =
   | { t: 'sfx'; name: StorySfx; gain?: number }
   | { t: 'overlay'; kind: 'port' | 'panel' | 'bench' | 'study' | 'module'; module: string }
-  | { t: 'choose'; kind: Choice; title: string; options: { text: string; dim?: boolean }[] }
+  | { t: 'choose'; kind: Choice; title: string; lines?: string[]; options: { text: string; dim?: boolean }[] }
   | { t: 'card'; kind: 'pager' | 'upgrade' | 'debrief' | 'info'; title: string; lines: string[]; stars?: number; button?: string }
   | { t: 'loft'; station: StationKind }
   | { t: 'profile' }
@@ -438,10 +441,20 @@ export class Director {
       this.boss = new BossFight(story, this.seed, undefined, inc, BOSS_HP[act] ?? 400 + 50 * (Math.max(1, n) - 1));
       this.form = new FormRun(formFor(inc.id), spec.rect, story);
       this.rng = rngFor(this.seed);
-    } else this.boss = new BossFight(story, this.seed);
-    this.sim.targets.push({ id: 'board', rect: this.boardRect(), active: false });
-    // shooting a node takes its reading, the same as E beside it
-    for (const st of this.room.stations) if (st.kind === 'node') this.sim.targets.push({ id: `node:${st.arg}`, rect: { x: st.x - 16, y: st.y - 74, w: 32, h: 56 }, active: true });
+    } else {
+      // the Dark Demo Board teaches (Boss Fix Plan): E reads a node (a stray shot never spends bench time), the Glitches
+      // stay dead until the fix is in, and the gentle rules keep a beginner's mistakes cheap
+      this.boss = new BossFight(story, this.seed);
+      this.boss.gentle = true;
+      // no adds while the player reads (b found the Glitches tedious): one small wave at the finish, no respawns
+      this.sim.respawnEnemies = false;
+      for (const e of this.sim.enemies) e.alive = false;
+      this.sim.enemies = [];
+    }
+    // the board is always a target: a shot into the shield is answered with a SHIELDED flash
+    this.sim.targets.push({ id: 'board', rect: this.boardRect(), active: true });
+    // in a composed arena, shooting a node takes its reading, the same as E beside it
+    if (!this.boss.gentle) for (const st of this.room.stations) if (st.kind === 'node') this.sim.targets.push({ id: `node:${st.arg}`, rect: { x: st.x - 16, y: st.y - 74, w: 32, h: 56 }, active: true });
     // the card's title carries the page's own severity, and the body drops the repeated "PAGER · SEV-n · " prefix
     const page = /^PAGER · (SEV-\d) · (.*)$/s.exec(this.boss.incident.pager);
     this.out.push({ t: 'card', kind: 'pager', title: `PAGER · ${page?.[1] ?? 'SEV-2'}`, lines: [page?.[2] ?? this.boss.incident.pager], button: 'Take the call' });
@@ -593,6 +606,7 @@ export class Director {
     this.stepRoom();
     this.stepTargets();
     this.boss?.step();
+    this.stepSparks();
     this.stepForm();
     this.stepBit();
     // dying in an X arena restarts that form (Phase 7 Spec, section 7, item 2)
@@ -672,9 +686,13 @@ export class Director {
     this.waiting = true;
   }
 
+  /** A station to open once the card in front of it closes. */
+  private afterCard: Station | null = null;
+
   /** The screen closed a card. */
   cardClosed() {
     this.waiting = false;
+    if (this.afterCard) { const st = this.afterCard; this.afterCard = null; this.useStation(st); return; }
     if (this.cut?.kind === 'ending' && this.cut.step >= ENDING.length) {
       // after the ending (Phase 7 Spec, section 7, item 6): it is kept, and the drone goes home
       if (!this.world.cutscenes.includes('ending')) this.world.cutscenes.push('ending');
@@ -1120,6 +1138,13 @@ export class Director {
         break;
       case 'panel':
       case 'bench':
+        // the first bench says what a bench is before the lab opens (Boss Fix Plan, item 11)
+        if (st.kind === 'bench' && this.room.id === 'workbench' && !this.rs.fired.has('benchCard') && !this.done(st.module!)) {
+          this.rs.fired.add('benchCard');
+          this.afterCard = st;
+          this.card('info', 'THE WORKBENCH', BENCH_CARD);
+          break;
+        }
         this.out.push({ t: 'sfx', name: 'portOpen' }, { t: 'overlay', kind: st.kind, module: st.module! });
         this.waiting = true;
         break;
@@ -1183,9 +1208,11 @@ export class Director {
 
   /** E at a node, or a shot into it: an instrument with arguments asks which, one without reads at once. */
   private useNode(cmd: string) {
-    const ins = this.boss?.incident.instruments.find((i) => i.cmd === cmd);
+    const [name, arg] = cmd.split(' ');
+    const ins = this.boss?.incident.instruments.find((i) => i.cmd === name);
     if (!this.boss || this.boss.phase !== 'investigate' || !ins) return;
-    if (!ins.args?.length) { this.takeReading(cmd); return; }
+    // Level 1's nodes each stand for one reading ("flip 00"): E takes it at once
+    if (arg || !ins.args?.length) { this.takeReading(cmd); return; }
     this.nodeCmd = cmd;
     this.out.push({ t: 'choose', kind: 'node', title: `${cmd.toUpperCase()} · WHERE?`, options: ins.args.map((a) => ({ text: a, dim: this.boss!.log.some((r) => r.key === `${cmd} ${a}`) })) });
     this.waiting = true;
@@ -1224,7 +1251,8 @@ export class Director {
     this.lastReading = { arg, text: r.text, ruledOut: r.ruledOut.map((id) => b.incident.causes.find((c) => c.id === id)!.name), age: 0, repeat: r.repeat, left: r.left };
     this.out.push({ t: 'sfx', name: 'reading' });
     if (!r.repeat && r.left === 1) this.say(this.bl('oneFits'));
-    if (b.inv.left <= 0) this.bossLate();
+    else if (b.gentle && !r.repeat && b.log.length === 1) this.say(LINES.firstReading);
+    if (b.inv.left <= 0 && !b.gentle) this.bossLate();
   }
   lastReading: { arg: string; text: string; ruledOut: string[]; age: number; repeat: boolean; left: number } | null = null;
 
@@ -1261,12 +1289,19 @@ export class Director {
       const fits = b.fits();
       if (kind === 'cause' && fits.length > 1 && fits.includes(pick)) {
         this.pendingCause = pick;
-        this.out.push({ t: 'choose', kind: 'guard', title: `${fits.length} CAUSES STILL FIT EVERY READING`, options: [{ text: 'Take another reading' }, { text: 'Diagnose anyway' }] });
+        const split = b.inv.bestNext(fits);
+        const names = fits.map((id) => b.incident.causes.find((c) => c.id === id)!.name);
+        this.out.push({
+          t: 'choose', kind: 'guard', title: `${fits.length} SUSPECTS STILL FIT EVERY READING`,
+          lines: b.gentle ? [...names.map((n) => `• ${n}`), split ? `The ${nodeName(split.ins.cmd, split.arg)} reading tells them apart.` : ''].filter(Boolean) : undefined,
+          options: [{ text: b.gentle && split ? `Take the ${nodeName(split.ins.cmd, split.arg)} reading` : 'Take another reading' }, { text: 'Diagnose anyway' }],
+        });
         this.waiting = true;
         return;
       }
       const res = b.diagnose(pick);
-      if (res === 'wrong') { this.say(this.bl('angry')); this.out.push({ t: 'sfx', name: 'notYet' }, { t: 'shake', px: 4, ms: 300 }); this.sim.enemies.forEach((e) => (e.flash = 8)); }
+      if (res === 'wrong' && b.gentle) { this.say(LINES.wrongCause.replace('{min}', String(TUNING.story.boss.gentleWrongMin))); this.out.push({ t: 'sfx', name: 'notYet' }, { t: 'shake', px: 3, ms: 250 }); }
+      else if (res === 'wrong') { this.say(this.bl('angry')); this.out.push({ t: 'sfx', name: 'notYet' }, { t: 'shake', px: 4, ms: 300 }); this.sim.enemies.forEach((e) => (e.flash = 8)); }
       else if (res === 'late') this.bossLate();
       else if (res === 'guessed') { this.say(this.bl('sentBack')); this.card('debrief', 'SENT BACK BY THE REVIEW BOARD', [`It was: ${b.inv.cause.name}.`, b.inv.missed ? `What would have proved it: ${b.inv.missed.ins.cmd} ${b.inv.missed.arg}. It splits the causes your readings still allowed.` : 'One more reading would have proved it.', 'The board goes dark again, with a new fault. Prove it this time.']); b.restart(); }
       else {
@@ -1277,12 +1312,26 @@ export class Director {
       return;
     }
     if (kind === 'fix') {
+      this.lastFix = b.fixes()[i] ?? null;
       const res = b.fix(i);
       if (res === 'right') {
         this.sim.targets.find((t) => t.id === 'board')!.active = true;
         this.say(this.bl('shieldDown'), this.bl('finish'));
         this.out.push({ t: 'sfx', name: 'bossPhase' }, { t: 'shake', px: 5, ms: 400 });
+        if (b.gentle) {
+          // the shield shatters and the board fights back: sparks, and the Glitches come back for good
+          this.out.push({ t: 'shatter', rect: this.boardRect() }, { t: 'sfx', name: 'shatter' }, { t: 'music', track: 'boss' });
+          for (const e of this.room.enemies) this.sim.spawnLater(e.kind, e.x, e.y);
+          this.sparkT = frames(TUNING.story.boss.sparkMs);
+        }
       } else if (res === 'late') this.bossLate();
+      else if (b.gentle) {
+        const why = this.lastFix?.why;
+        this.say(LINES.wrongFix);
+        this.out.push({ t: 'sfx', name: 'notYet' });
+        this.out.push({ t: 'choose', kind: 'fix', title: 'THAT DID NOT HOLD · PICK AGAIN', lines: why ? [why] : undefined, options: b.fixes().map((o) => ({ text: o.text })) });
+        this.waiting = true;
+      }
       else {
         this.sim.targets.find((t) => t.id === 'board')!.active = true;
         this.say(this.bl('shieldSoon'));
@@ -1293,6 +1342,24 @@ export class Director {
     }
   }
   private pendingCause: string | null = null;
+  private lastFix: FixOption | null = null;
+  /** Steps to the board's next spark in a gentle finish. */
+  private sparkT = 0;
+  /** Steps left of the SHIELDED flash after a shot into the shield. */
+  shieldPing = 0;
+
+  /** The Dark Demo Board's finish (Boss Fix Plan, item 9): a slow spark at the drone every `sparkMs`. */
+  private stepSparks() {
+    const b = this.boss;
+    if (this.shieldPing > 0) this.shieldPing--;
+    if (!b?.gentle || b.phase !== 'finish' || this.waiting || this.fade) return;
+    if (--this.sparkT > 0) return;
+    this.sparkT = frames(TUNING.story.boss.sparkMs);
+    const B = TUNING.story.boss, r = this.boardRect(), from = { x: r.x + r.w / 2, y: r.y + r.h - 20 }, d = this.sim.drone;
+    const dx = d.x - from.x, dy = d.y - from.y, l = Math.hypot(dx, dy) || 1;
+    this.sim.hostileShot(from.x, from.y, (dx / l) * B.sparkSpeed, (dy / l) * B.sparkSpeed, B.sparkDamage);
+    this.out.push({ t: 'sfx', name: 'laser', gain: 0.5 });
+  }
 
   /** A boss line: Level 1 keeps its own script, every other arena the generic full voice (and its theme's). */
   private bl(k: 'pager' | 'readings' | 'oneFits' | 'pickCause' | 'angry' | 'sentBack' | 'shieldDown' | 'finish' | 'shieldSoon' | 'tooSlow' | 'lit'): string {
@@ -1312,7 +1379,11 @@ export class Director {
   private hitBoard(n: number) {
     const b = this.boss;
     if (!b) return;
-    if (b.phase !== 'finish' && b.tempDown <= 0) { this.out.push({ t: 'sfx', name: 'reading', gain: 0.3 }); return; }
+    if (b.phase !== 'finish' && b.tempDown <= 0) {
+      if (this.shieldPing <= 0) this.out.push({ t: 'sfx', name: 'clank', gain: 0.6 });
+      this.shieldPing = frames(900);
+      return;
+    }
     if (b.phase !== 'finish' && b.tempDown <= 1) this.sim.targets.find((t) => t.id === 'board')!.active = false;
     if (this.form) this.form.flash = 8;
     if (!b.hit(n)) return;
@@ -1334,7 +1405,7 @@ export class Director {
     this.applyKit(true);
     const hm = (m: number) => `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m`;
     this.card('debrief', st ? 'INCIDENT RESOLVED' : 'RESOLVED, BUT LATE', [
-      `${hm(inv.spent)} used of ${hm(inv.inc.budget)} · ${inv.notes.size} readings · ${inv.mistakes} wrong calls · a careful expert: about ${hm(b.expertMinutes())} · ${gained ? `+${gained} XP` : 'no new XP'}`,
+      `${hm(inv.spent)} used of ${hm(inv.inc.budget)} · ${inv.notes.size} reading${inv.notes.size === 1 ? '' : 's'} · ${inv.mistakes} wrong call${inv.mistakes === 1 ? '' : 's'} · a careful expert: about ${hm(b.expertMinutes())} · ${gained ? `+${gained} XP` : 'no new XP'}`,
       `What happened: ${inv.cause.story}`,
       `The fix: ${inv.cause.fix}`,
       `Your path: ${[...inv.notes.keys()].join(' → ') || 'straight to a diagnosis'}`,

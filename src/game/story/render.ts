@@ -542,7 +542,7 @@ function drawSunset(c: C, x: number, y: number, w: number, h: number, t: number)
 function drawBoard(c: C, d: Director, x: number, y: number, w: number, h: number, t: number) {
   const b = d.boss, x0 = x - w / 2, y0 = y - h / 2;
   const beaten = !b || b.phase === 'done';
-  const enraged = !!b && b.enraged > 0;
+  const enraged = !!b && b.enraged > 0 && !b.gentle;
   const red = enraged ? PAL.hostile : PAL.neon;
   if (beaten) halo(c, x, y, w * 0.8, PAL.gold, 0.14);
   chamfer(c, x0, y0, w, h, 14);
@@ -624,6 +624,66 @@ function drawBoard(c: C, d: Director, x: number, y: number, w: number, h: number
       for (let s = 0; s < 4; s++) { px += ((i * 13 + s * 7) % 11) * 4 - 20; py += ((i * 5 + s * 11) % 9) * 4 - 16; c.lineTo(px, py); }
     });
     c.stroke();
+  }
+  if (b?.gentle && (b.phase === 'investigate' || b.phase === 'fix')) drawBoardMarks(c, d, x, y, x0, w, t);
+}
+
+/** Level 1's readings, drawn where they were taken on the board (Boss Fix Plan, item 3): the switches show the last
+ * flip, a probed wire its 1 or 0, the LED test its arrow, the look a ring. A SHIELDED flash answers a shot into it. */
+function drawBoardMarks(c: C, d: Director, x: number, y: number, x0: number, w: number, t: number) {
+  const b = d.boss!, notes = b.inv.notes, fresh = d.lastReading && d.lastReading.age < HZ ? d.lastReading.arg : '';
+  const tag = (key: string, tx: number, ty: number, text: string, good: boolean) => {
+    const col = good ? PAL.ok : PAL.hostile, pop = key === fresh ? 1 + 0.4 * (1 - d.lastReading!.age / HZ) : 1;
+    c.save();
+    c.font = `bold ${px(12 * pop)}px ${FONT}`;
+    const tw = c.measureText(text).width + 12;
+    chamfer(c, tx - tw / 2, ty - 11 * pop, tw, 22 * pop, 4);
+    c.fillStyle = rgba(PAL.bgDeep, 0.92);
+    c.fill();
+    c.strokeStyle = col;
+    c.lineWidth = 1.5;
+    c.stroke();
+    c.fillStyle = col;
+    c.textAlign = 'center';
+    c.fillText(text, tx, ty + 4 * pop);
+    c.restore();
+  };
+  // the last flip: A and B beside their switches
+  const flip = [...b.log].reverse().find((r) => r.key.startsWith('flip '));
+  if (flip) {
+    const [a, bb] = flip.key.slice(5);
+    tag(flip.key, x0 + 92, y - 30, `A=${a}`, true);
+    tag(flip.key, x0 + 92, y + 80, `B=${bb}`, true);
+  }
+  const probe: [string, number, number][] = [['a', x0 + 150, y - 52], ['b', x0 + 150, y + 58], ['and-out', x + 84, y + 40], ['led-pin', x0 + w - 120, y + 58]];
+  for (const [arg, tx, ty] of probe) {
+    const n = notes.get(`probe ${arg}`);
+    if (n) { const one = /: 1 \(high\)$/.test(n); tag(`probe ${arg}`, tx, ty, one ? '1' : '0', one); }
+  }
+  const m = notes.get('meter led');
+  if (m) tag('meter led', x0 + w - 60, y + 124, /reverse/.test(m) ? 'LED BACKWARDS' : /open/.test(m) ? 'LED OPEN' : 'LED OK', /forward/.test(m));
+  const look = notes.get('look');
+  if (look) {
+    const bridge = /blob/.test(look), back = /other way round/.test(look);
+    c.beginPath();
+    c.arc(bridge ? x + 6 : x0 + w - 60, bridge ? y + 40 : y + 80, 34, 0, Math.PI * 2);
+    c.strokeStyle = rgba(bridge || back ? PAL.hostile : PAL.ok, 0.8);
+    c.lineWidth = 2;
+    c.stroke();
+    tag('look', x + 6, y - 104, bridge ? 'SOLDER BRIDGE' : back ? 'LED TURNED ROUND' : 'NO BRIDGE · LED ROUND RIGHT', !bridge && !back);
+  }
+  if (d.shieldPing > 0) {
+    const a = Math.min(1, d.shieldPing / 20);
+    c.save();
+    c.globalAlpha = a;
+    c.font = `bold ${px(18)}px ${FONT}`;
+    c.textAlign = 'center';
+    c.fillStyle = PAL.hostile;
+    c.fillText('SHIELDED', x, y - 6 + Math.sin(t * 0.5) * 1.5);
+    c.font = `${px(12)}px ${FONT}`;
+    c.fillStyle = PAL.text;
+    c.fillText('find the fault first', x, y + 16);
+    c.restore();
   }
 }
 
@@ -1315,6 +1375,12 @@ export function drawPrompt(c: C, d: Director, t: number) {
 
 /** The lab line under the boss bar: the phase, the lab clock and the key for notes. */
 function bossStatus(d: Director, b: NonNullable<Director['bossBar']>): string {
+  const notes0 = d.device.kind === 'touch' ? 'NOTES button' : `${actionLabel('map', d.device.kind, d.device.bindings).toUpperCase()}: notes`;
+  if (b.gentle) {
+    const g = b.phase === 'finish' ? 'SHIELD DOWN · SHOOT THE BOARD' : b.phase === 'fix' ? 'PICK THE FIX'
+      : d.shieldPing > 0 ? 'SHIELD UP · FIND THE FAULT FIRST' : b.fits().length === 1 ? 'ONE SUSPECT LEFT · E AT THE DEBUG PORT' : 'FIND THE FAULT · E AT A PYLON TAKES A READING';
+    return b.phase === 'finish' ? g : `${g}  ·  bench time ${Math.max(0, b.inv.left)} min  ·  ${notes0}`;
+  }
   const phase = b.phase === 'investigate' ? (b.tempDown > 0 ? 'SHIELD DOWN · HIT IT' : 'TAKE READINGS · THEN THE DEBUG PORT') : b.phase === 'fix' ? 'PICK THE FIX' : 'SHIELD DOWN · FINISH IT';
   const notes = d.device.kind === 'touch' ? 'NOTES button' : `${actionLabel('map', d.device.kind, d.device.bindings).toUpperCase()}: notes`;
   return `${phase}  ·  lab time ${Math.max(0, b.inv.left)} min  ·  ${notes}`;
@@ -1335,9 +1401,9 @@ export function drawBossHud(c: C, d: Director, t: number, showLog: boolean) {
   c.fill();
   c.font = `${px(12)}px ${FONT}`;
   c.textAlign = 'center';
-  c.fillStyle = b.enraged > 0 ? PAL.hostile : PAL.neon;
+  c.fillStyle = b.enraged > 0 && !b.gentle ? PAL.hostile : PAL.neon;
   const name = (d.form?.form.name ?? 'The Dark Demo Board').toUpperCase();
-  c.fillText(b.enraged > 0 ? `${name} · ENRAGED` : name, VIEW_W / 2, y - px(6));
+  c.fillText(b.enraged > 0 && !b.gentle ? `${name} · ENRAGED` : name, VIEW_W / 2, y - px(6));
   chamfer(c, x, y, W, 12, 3);
   c.fillStyle = rgba(PAL.bgDeep, 0.7);
   c.fill();
@@ -1369,9 +1435,16 @@ export function drawBossHud(c: C, d: Director, t: number, showLog: boolean) {
   c.font = `${px(11)}px ${FONT}`;
   c.fillText(status, VIEW_W / 2, y + px(36));
   c.restore();
+  if (b.gentle && b.phase !== 'finish') drawSuspects(c, d, b);
   // the latest reading, for a few seconds
   const r = d.lastReading;
-  if (r && r.age < 6 * HZ) {
+  if (r && r.age < 6 * HZ && b.gentle) {
+    r.age++;
+    const lines = [`${r.arg.toUpperCase()}${r.repeat ? ' (from your notes)' : ''}`, ...r.text.split('\n')];
+    if (r.ruledOut.length) lines.push(`Crosses off ${r.ruledOut.length === 1 ? '1 suspect' : `${r.ruledOut.length} suspects`}.`);
+    else if (!r.repeat) lines.push('Crosses nothing off: every suspect fits this.');
+    panel(c, VIEW_W - 400, 330, 380, lines, Math.min(1, r.age / 8) * Math.min(1, (6 * HZ - r.age) / 20), PAL.trace);
+  } else if (r && r.age < 6 * HZ) {
     r.age++;
     const lines = [`${r.arg.toUpperCase()}${r.repeat ? ' (from your notes)' : ''}`, ...r.text.split('\n')];
     if (r.ruledOut.length) lines.push(`Rules out: ${r.ruledOut.join('; ')}`);
@@ -1384,6 +1457,47 @@ export function drawBossHud(c: C, d: Director, t: number, showLog: boolean) {
     panel(c, VIEW_W - 560, 152, 540, ['CAUSES', ...causes, '', 'READINGS', ...(notes.length ? notes : ['none yet'])], 1, PAL.amber);
   }
   void t;
+}
+
+/** Level 1's suspects board (Boss Fix Plan, item 2): every cause, struck out as readings rule it out, flashing as it goes. */
+function drawSuspects(c: C, d: Director, b: NonNullable<Director['bossBar']>) {
+  const causes = b.causes(), left = causes.filter((k) => !k.struck && !k.out).length;
+  const r = d.lastReading, freshOut = r && r.age < HZ ? r.ruledOut : [];
+  const X = 20, Y = 330, W = 330, LH = px(17); // under the board, so it never covers it
+  c.save();
+  c.font = `${px(11)}px ${FONT}`;
+  // wrap each name to the panel
+  const rows = causes.map((k) => {
+    const words = k.name.split(' '), out: string[] = [];
+    let line = '';
+    for (const w of words) { const t = line ? `${line} ${w}` : w; if (c.measureText(t).width > W - 46 && line) { out.push(line); line = w; } else line = t; }
+    out.push(line);
+    return { k, out };
+  });
+  const H = px(30) + rows.reduce((n, x) => n + x.out.length * LH + 4, 0) + 8;
+  chamfer(c, X, Y, W, H, 6);
+  c.fillStyle = rgba(PAL.bgDeep, 0.86);
+  c.fill();
+  c.strokeStyle = rgba(left === 1 ? PAL.ok : PAL.amber, 0.8);
+  c.lineWidth = 1.5;
+  c.stroke();
+  c.font = `bold ${px(12)}px ${FONT}`;
+  c.fillStyle = left === 1 ? PAL.ok : PAL.amber;
+  c.textAlign = 'left';
+  c.fillText(left === 1 ? '1 SUSPECT LEFT' : `${left} SUSPECTS`, X + 14, Y + px(20));
+  c.font = `${px(11)}px ${FONT}`;
+  let y = Y + px(30) + LH - 4;
+  for (const { k, out } of rows) {
+    const gone = k.struck || k.out, flash = freshOut.includes(k.name);
+    c.fillStyle = flash ? PAL.hostile : gone ? rgba(PAL.text, 0.32) : PAL.text;
+    c.fillText(gone ? '✗' : '•', X + 14, y);
+    for (const [i, l] of out.entries()) {
+      c.fillText(l, X + 32, y + i * LH);
+      if (gone) { const lw = c.measureText(l).width; c.fillRect(X + 32, y + i * LH - px(4), lw, 1.5); }
+    }
+    y += out.length * LH + 4;
+  }
+  c.restore();
 }
 
 /** The Gradient Compass: a chevron at the screen edge (inset 28 px), on the line from the drone toward the next thing to

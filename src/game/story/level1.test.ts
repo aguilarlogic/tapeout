@@ -385,18 +385,72 @@ describe('playing Level 1 headless', () => {
     expect(d.sim.vitals.maxIntegrity).toBe(TUNING.story.bossIntegrity);
   });
 
-  it('a guess is sent back and the board goes dark with a new fault', () => {
+  it('the first boss is gentle: a right guess goes on to the fix for one star, never back to a dark board', () => {
+    for (const id of ['first-wire', 'bits', 'bool', 'first-not', 'first-and', 'logic-half']) award(id, 10, 3);
+    const d = director();
+    d.warp('bit-zero', 9);
+    const b = d.boss!;
+    expect(b.gentle).toBe(true);
+    d.cardClosed();
+    const right = b.inv.cause.id;
+    d.chose('cause', b.causes().findIndex((c) => c.id === right));
+    // more than one cause still fits: the guard asks first, naming the reading that tells them apart
+    const guard = d.out.filter((o) => o.t === 'choose').pop() as { lines?: string[]; options: { text: string }[] };
+    expect(guard.options[0].text).toMatch(/^Take the .* reading$/);
+    expect(guard.lines?.some((l) => /tells them apart/.test(l))).toBe(true);
+    d.chose('guard', 1);
+    expect(b.restarts).toBe(0);
+    expect(b.phase).toBe('fix');
+    d.chose('fix', b.fixes().findIndex((o) => o.right));
+    (d as unknown as { hitBoard(n: number): void }).hitBoard(10_000);
+    expect(b.phase).toBe('done');
+    expect(levelRecord('inc-demo-board')?.stars).toBe(1);
+  });
+
+  it('the first boss: E at a node reads it, shots never do, no Glitches while reading, a wrong call costs 10 minutes', () => {
     for (const id of ['first-wire', 'bits', 'bool', 'first-not', 'first-and', 'logic-half']) award(id, 10, 3);
     const d = director();
     d.warp('bit-zero', 9);
     const b = d.boss!;
     d.cardClosed();
-    const right = b.inv.cause.id;
-    d.chose('cause', b.causes().findIndex((c) => c.id === right));
-    // more than one cause still fits: the guard asks first
-    d.chose('guard', 1);
-    expect(levelRecord('inc-demo-board')).toBeUndefined();
-    expect(b.restarts).toBe(1);
+    expect(d.sim.enemies.filter((e) => e.alive && e.kind === 'glitch')).toHaveLength(0);
+    expect(d.sim.targets.some((t) => t.id.startsWith('node:'))).toBe(false);
+    // every node stands on the floor, within E's reach from it
+    for (const st of d.room.stations.filter((x) => x.kind === 'node')) expect(st.y).toBe(820);
+    walkTo(d, 120);
+    press(d);
+    expect(b.log.map((r) => r.key)).toEqual(['flip 00']);
+    expect(b.inv.left).toBe(55);
+    const wrong = b.causes().findIndex((c) => c.id !== b.inv.cause.id);
+    d.out.length = 0;
+    d.chose('cause', wrong);
+    if (d.out.some((o) => o.t === 'choose' && o.kind === 'guard')) d.chose('guard', 1);
+    expect(b.inv.left).toBe(45);
+    expect(b.restarts).toBe(0);
+    // the clock running out never resets the board
+    b.inv.spent = 70;
+    walkTo(d, 230);
+    press(d);
+    expect(b.restarts).toBe(0);
+    expect(b.phase).toBe('investigate');
+  });
+
+  it('the first boss fights back after the fix: two Glitches, sparks at the drone, no respawns', () => {
+    for (const id of ['first-wire', 'bits', 'bool', 'first-not', 'first-and', 'logic-half']) award(id, 10, 3);
+    const d = director();
+    d.warp('bit-zero', 9);
+    const b = d.boss!;
+    d.cardClosed();
+    const priv = d as unknown as { takeReading(a: string): void };
+    for (let g = 0; g < 20 && b.fits().length > 1; g++) { const nx = b.inv.bestNext()!; priv.takeReading(`${nx.ins.cmd}${nx.arg ? ` ${nx.arg}` : ''}`); run(d, 40); }
+    d.chose('cause', b.causes().findIndex((c) => c.id === b.fits()[0]));
+    d.chose('fix', b.fixes().findIndex((o) => o.right));
+    run(d, 2);
+    expect(d.sim.enemies.filter((e) => e.alive && e.kind === 'glitch')).toHaveLength(2);
+    expect(d.sim.respawnEnemies).toBe(false);
+    const before = d.sim.shots.filter((s) => !s.friendly && !s.dead).length;
+    run(d, Math.round(TUNING.story.boss.sparkMs * 0.06) + 2);
+    expect(d.sim.shots.filter((s) => !s.friendly && !s.dead).length).toBeGreaterThan(before);
   });
 
   it('the exit lift waits for the bench, then plays and lands in the Loft', () => {

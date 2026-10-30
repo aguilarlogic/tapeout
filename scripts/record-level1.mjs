@@ -319,36 +319,8 @@ try {
     await nextRoom('arena');
   }
   // 10. The Dark Demo Board: readings at the nodes, the cause, the fix, then the board
-  // the arena's node platforms are solid: climb beside them, ledge by ledge, then E at the node
-  const ARENA_LEDGES = {
-    left: [[240, 680, 140], [90, 540, 140], [240, 400, 140]],
-    right: [[1540, 680, 140], [1690, 540, 140], [1540, 400, 140]],
-  };
-  const climb = async (path, side) => {
-    let cur = null;
-    for (const [x0, top, w] of path) {
-      const mid = x0 + w / 2;
-      for (let tries = 0; tries < 4; tries++) {
-        // from the floor, take off beside the platform (never under it); from a ledge, at its edge nearest the next
-        const off = cur ? Math.min(Math.max(mid, cur[0] + 25), cur[0] + cur[2] - 25) : side === 'left' ? x0 + w + 45 : x0 - 45;
-        await walk(off);
-        await wait(10);
-        await run({ type: 'jumpTo', x: mid });
-        const d = await drone();
-        if (d.y < top) break;
-        if (cur && d.y > cur[1]) cur = null; // fell back to the floor
-      }
-      cur = [x0, top, w];
-    }
-  };
-  const toNode = async (nx) => {
-    await walk(960); // back down to the floor first
-    const side = nx.x < 960 ? 'left' : 'right';
-    const floor = 820, rise = floor - (nx.y + 50);
-    if (nx.x === 640 || nx.x === 1280) await climb([nx.x < 960 ? [560, 680, 160] : [1200, 680, 160]], side);
-    else if (rise > 0) await climb(ARENA_LEDGES[side].slice(0, rise / 140), side);
-    await walk(nx.x, { tol: 14 });
-  };
+  // every node stands on the floor (Boss Fix Plan): walk to it, then E
+  const toNode = async (nx) => { await walk(nx.x, { tol: 12 }); };
   if (from <= 9) {
     await card(3000);
     for (let g = 0; g < 12; g++) {
@@ -361,12 +333,8 @@ try {
         return { arg, x: st.x, y: st.y - 50 };
       });
       if (!nx) break;
-      const before = await story(() => window.__tapeoutGame.story.boss.log.length);
       await toNode(nx);
       await press();
-      for (let k = 0; k < 4 && (await story(() => window.__tapeoutGame.story.boss.log.length)) <= before; k++) {
-        await fireAt({ x: nx.x, y: nx.y }, 20);
-      }
       const d = await drone();
       log(`node ${nx.arg}: drone ${d.x.toFixed(0)},${d.y.toFixed(0)} readings ${await story(() => window.__tapeoutGame.story.boss.log.length)}`);
       await wait(150);
@@ -395,7 +363,16 @@ try {
   // 11. Workbench: the two Verilog benches power the exit lift
   if (from <= 10) {
     await walk(480);
-    await station('bench', 'gates', 4500);
+    // the first bench opens behind its card (Boss Fix Plan, item 11)
+    await press();
+    await card(3000);
+    await page.getByTestId('bench').waitFor();
+    await page.waitForTimeout(4500);
+    await story(() => window.__tapeoutAward('gates'));
+    await page.locator('.st-unplug').waitFor();
+    await page.waitForTimeout(900);
+    await page.locator('.st-unplug').click();
+    await page.waitForTimeout(500);
     await walk(760);
     await station('bench', 'half-adder-v', 4500);
     await card(2400);

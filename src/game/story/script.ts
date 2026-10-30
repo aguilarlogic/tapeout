@@ -25,14 +25,17 @@ export const LINES = {
   // 8. First Fight
   clear: 'Clear.',
   // 10. The boss
-  pager: 'Pager. ...read it.',
-  readings: 'Take readings. ...nodes. E or shoot.',
-  oneFits: 'Only one cause fits. ...debug port.',
-  pickCause: 'Pick the cause.',
+  pager: 'Board\'s dark. Five things... could be wrong.',
+  readings: 'Walk to a pylon. E takes a reading.',
+  firstReading: 'Each reading... crosses suspects off. Left side.',
+  oneFits: 'One suspect left. ...debug port, middle.',
+  pickCause: 'Pick the one still standing.',
   angry: 'No... it\'s angry.',
-  shieldDown: 'Shield\'s down. Now!',
+  wrongCause: 'Not that one. ...{min} minutes gone. Look again.',
+  wrongFix: 'Didn\'t hold. ...read why.',
+  shieldDown: 'Shield\'s gone. It\'s fighting back!',
   shieldSoon: 'Shield... back soon.',
-  finish: 'Finish it.',
+  finish: 'Shoot the board. Dodge the sparks.',
   lit: 'The board... lit.',
   sentBack: 'Right part... but we guessed. Again.',
   tooSlow: 'Too slow. ...it went dark again.',
@@ -53,6 +56,13 @@ export const LINES = {
   interview: 'The Interview Room. It opens when you\'re ready for a real panel.',
   level2: 'Level 2 is still being built. Come back soon.',
 };
+
+/** The Workbench's first card (Boss Fix Plan, item 11): what a bench is, before a beginner first types Verilog. */
+export const BENCH_CARD = [
+  'You built these gates with wires. Now write them down as Verilog, the words chip makers use. Written down, a circuit stays fixed.',
+  'Each bench shows a few lines already done. Type the missing lines the same way, then press Run simulation.',
+  'Stuck? Show solution is allowed. You still pass, for fewer stars.',
+];
 
 /** Hints for the wire runs, in TAPEOUT's broken voice before the exit lift. The Logic Lab's own hints follow. */
 export const WIRE_HINT_INTRO = 'Hint...';

@@ -100,7 +100,7 @@ export const TUNING = {
     carryMs: 500, carryBonus: 4, // Carry Shot
     grip: 5, // grab limit with Grip Servos
     bossIntegrity: 120, // max integrity after the boss
-    boss: { hp: 400, storyHp: 0.75, enrageMs: 10000, enrageSpeed: 1.25, bandaidShieldMs: 10000, readCooldownMs: 600 },
+    boss: { hp: 400, storyHp: 0.75, enrageMs: 10000, enrageSpeed: 1.25, bandaidShieldMs: 10000, readCooldownMs: 600, gentleWrongMin: 10, sparkMs: 1600, sparkSpeed: 420, sparkDamage: 8 },
     storyDamage: 0.5, // damage taken on Story difficulty
   },
   /** Drone body art and animation (plan C and D). */
